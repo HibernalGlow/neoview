@@ -122,32 +122,49 @@ impl PageFrameBuilder {
     }
 
     /// 构建双页帧
+    /// 
+    /// 按照 NeeView 的 CreatePageFrame 逻辑：
+    /// 1. 当前页横向 → 独占
+    /// 2. 下一页横向 → 当前页独占（关键修复点）
+    /// 3. 首页/尾页检查（检查当前页或下一页）
+    /// 4. 正常双页
     fn build_double_frame(&self, position: PagePosition) -> Option<PageFrame> {
         let page = self.pages.get(position.index)?.clone();
         let direction = self.context.direction();
 
-        // 检查是否应该单独显示
-        if self.should_display_alone(position.index) {
+        // 1. 当前页横向 → 独占
+        if self.context.is_supported_wide_page && page.is_landscape() {
             let element = PageFrameElement::full(page, PageRange::full_page(position.index));
             return Some(PageFrame::single(element, direction));
         }
 
-        // 尝试获取配对页面
+        // 2. 获取下一页
         let next_index = position.index + 1;
         if next_index >= self.pages.len() {
-            // 没有下一页，单独显示
+            // 没有下一页，当前页独占
             let element = PageFrameElement::full(page, PageRange::full_page(position.index));
             return Some(PageFrame::single(element, direction));
         }
 
-        // 检查下一页是否应该单独显示
-        if self.should_display_alone(next_index) {
-            let element = PageFrameElement::full(page, PageRange::full_page(position.index));
-            return Some(PageFrame::single(element, direction));
-        }
-
-        // 创建双页帧
         let next_page = self.pages.get(next_index)?.clone();
+
+        // 3. 下一页横向 → 当前页独占（关键修复点！）
+        if self.context.is_supported_wide_page && next_page.is_landscape() {
+            let element = PageFrameElement::full(page, PageRange::full_page(position.index));
+            return Some(PageFrame::single(element, direction));
+        }
+
+        // 4. 首页/尾页单独显示（检查当前页或下一页是否为首页/尾页）
+        let is_first = position.index == 0 || next_index == 0;
+        let is_last = position.index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
+        
+        if (self.context.is_supported_single_first && is_first) ||
+           (self.context.is_supported_single_last && is_last) {
+            let element = PageFrameElement::full(page, PageRange::full_page(position.index));
+            return Some(PageFrame::single(element, direction));
+        }
+
+        // 5. 正常双页
         let e1 = PageFrameElement::full(page, PageRange::full_page(position.index));
         let e2 = PageFrameElement::full(next_page, PageRange::full_page(next_index));
 
@@ -155,6 +172,9 @@ impl PageFrameBuilder {
     }
 
     /// 检查页面是否应该单独显示
+    /// 
+    /// 注意：这个方法只检查单个页面，用于 prev_frame_position 等场景
+    /// build_double_frame 和 get_frame_step 使用内联逻辑，因为需要同时检查当前页和下一页
     fn should_display_alone(&self, index: usize) -> bool {
         let page = match self.pages.get(index) {
             Some(p) => p,
@@ -177,6 +197,45 @@ impl PageFrameBuilder {
         }
 
         false
+    }
+
+    /// 检查两个页面是否应该组成双页
+    /// 
+    /// 按照 NeeView 的逻辑，检查：
+    /// 1. 当前页横向 → 不能组成双页
+    /// 2. 下一页横向 → 不能组成双页
+    /// 3. 首页/尾页检查 → 不能组成双页
+    fn can_form_double_page(&self, index: usize, next_index: usize) -> bool {
+        let page = match self.pages.get(index) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // 当前页横向 → 不能组成双页
+        if self.context.is_supported_wide_page && page.is_landscape() {
+            return false;
+        }
+
+        let next_page = match self.pages.get(next_index) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        // 下一页横向 → 不能组成双页
+        if self.context.is_supported_wide_page && next_page.is_landscape() {
+            return false;
+        }
+
+        // 首页/尾页检查
+        let is_first = index == 0 || next_index == 0;
+        let is_last = index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
+        
+        if (self.context.is_supported_single_first && is_first) ||
+           (self.context.is_supported_single_last && is_last) {
+            return false;
+        }
+
+        true
     }
 
     /// 获取下一帧位置
@@ -231,16 +290,17 @@ impl PageFrameBuilder {
                 }
 
                 // 向前查找上一帧的起始位置
-                let mut prev_index = current.index - 1;
+                let prev_index = current.index - 1;
                 
                 // 如果上一页应该单独显示，直接返回
                 if self.should_display_alone(prev_index) {
                     return Some(PagePosition::new(prev_index, 0));
                 }
 
-                // 否则检查是否是双页帧的第二页
-                if prev_index > 0 && !self.should_display_alone(prev_index - 1) {
-                    prev_index -= 1;
+                // 检查上一页是否是双页帧的第二页
+                // 使用 can_form_double_page 检查 prev_index - 1 和 prev_index 是否能组成双页
+                if prev_index > 0 && self.can_form_double_page(prev_index - 1, prev_index) {
+                    return Some(PagePosition::new(prev_index - 1, 0));
                 }
 
                 Some(PagePosition::new(prev_index, 0))
@@ -249,16 +309,49 @@ impl PageFrameBuilder {
     }
 
     /// 获取帧的步长（双页模式下）
+    /// 
+    /// 按照 NeeView 的逻辑，与 build_double_frame 保持一致：
+    /// 1. 当前页横向 → 步进 1
+    /// 2. 下一页横向 → 步进 1
+    /// 3. 首页/尾页检查 → 步进 1
+    /// 4. 正常双页 → 步进 2
     fn get_frame_step(&self, index: usize) -> usize {
-        if self.should_display_alone(index) {
+        let page = match self.pages.get(index) {
+            Some(p) => p,
+            None => return 1,
+        };
+
+        // 1. 当前页横向 → 步进 1
+        if self.context.is_supported_wide_page && page.is_landscape() {
             return 1;
         }
 
+        // 2. 没有下一页 → 步进 1
         let next_index = index + 1;
-        if next_index >= self.pages.len() || self.should_display_alone(next_index) {
+        if next_index >= self.pages.len() {
             return 1;
         }
 
+        let next_page = match self.pages.get(next_index) {
+            Some(p) => p,
+            None => return 1,
+        };
+
+        // 3. 下一页横向 → 步进 1
+        if self.context.is_supported_wide_page && next_page.is_landscape() {
+            return 1;
+        }
+
+        // 4. 首页/尾页单独显示
+        let is_first = index == 0 || next_index == 0;
+        let is_last = index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
+        
+        if (self.context.is_supported_single_first && is_first) ||
+           (self.context.is_supported_single_last && is_last) {
+            return 1;
+        }
+
+        // 5. 正常双页 → 步进 2
         2
     }
 
@@ -329,9 +422,10 @@ impl PageFrameBuilder {
                 }
 
                 // 检查是否是双页帧的第二页
+                // 使用 can_form_double_page 检查 prev_index 和 page_index 是否能组成双页
                 let prev_index = page_index - 1;
-                if !self.should_display_alone(prev_index) {
-                    // 上一页不是单独显示，所以当前页是双页帧的第二页
+                if self.can_form_double_page(prev_index, page_index) {
+                    // 上一页和当前页能组成双页，所以当前页是双页帧的第二页
                     // 返回帧的起始位置
                     return PagePosition::new(prev_index, 0);
                 }

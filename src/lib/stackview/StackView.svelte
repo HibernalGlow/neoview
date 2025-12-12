@@ -441,6 +441,17 @@
 	// 计算帧布局：根据 pageMode 和 isPanorama
 	let frameLayout = $derived<FrameLayout>(isPanorama ? 'panorama' : pageMode);
 
+	// 首页/尾页单独显示设置
+	// 使用 BookSettingSelectMode 解析逻辑（简化版：default = true for first, false for last）
+	let singleFirstPage = $derived(
+		settings.view.pageLayout?.singleFirstPageMode === 'default' ? true :
+		settings.view.pageLayout?.singleFirstPageMode === 'continue' ? false : true
+	);
+	let singleLastPage = $derived(
+		settings.view.pageLayout?.singleLastPageMode === 'default' ? false :
+		settings.view.pageLayout?.singleLastPageMode === 'continue' ? true : false
+	);
+
 	let frameConfig = $derived.by(
 		(): FrameBuildConfig => ({
 			layout: pageMode,
@@ -448,7 +459,11 @@
 			direction: direction,
 			divideLandscape: splitHorizontalPages && pageMode === 'single',
 			treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
-			autoRotate: autoRotateMode
+			autoRotate: autoRotateMode,
+			// 首页/尾页单独显示（参考 NeeView）
+			singleFirstPage: singleFirstPage,
+			singleLastPage: singleLastPage,
+			totalPages: bookStore.totalPages
 		})
 	);
 

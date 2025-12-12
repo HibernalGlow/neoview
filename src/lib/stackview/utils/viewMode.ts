@@ -307,6 +307,10 @@ export interface FrameBuildConfig {
   divideLandscape: boolean;
   treatHorizontalAsDoublePage: boolean;
   autoRotate: AutoRotateMode;
+  // 首页/尾页单独显示（参考 NeeView 的 IsSupportedSingleFirstPage/IsSupportedSingleLastPage）
+  singleFirstPage: boolean;
+  singleLastPage: boolean;
+  totalPages: number;
 }
 
 export interface PageData {
@@ -368,16 +372,21 @@ export function buildFrameImages(
   }
 
   // 双页模式
+  // 按照 NeeView 的 CreatePageFrame 逻辑：
+  // 1. 当前页横向 → 独占
+  // 2. 下一页横向 → 当前页独占
+  // 3. 首页/尾页检查（检查当前页或下一页）
+  // 4. 正常双页
   if (config.layout === 'double') {
     const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
     const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
 
-    // 开启"横向视为双页"时，横向图独占显示
+    // 1. 当前页横向 → 独占显示
     if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
       return [mainImage];
     }
 
-    // 没有下一页：单页显示
+    // 2. 没有下一页 → 单页显示
     if (!nextPage) {
       return [mainImage];
     }
@@ -389,13 +398,23 @@ export function buildFrameImages(
     const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
     const isNextLandscape = hasNextSize && isLandscape(nextSize);
 
-    // 开启"横向视为双页"时的自动双页逻辑：
-    // 下一张是横向图时，当前页单独显示
+    // 3. 下一页横向 → 当前页独占（关键修复点！）
     if (config.treatHorizontalAsDoublePage && isNextLandscape) {
       return [mainImage];
     }
 
-    // 构建第二张图
+    // 4. 首页/尾页单独显示（检查当前页或下一页是否为首页/尾页）
+    const currentIndex = currentPage.pageIndex;
+    const nextIndex = nextPage.pageIndex;
+    const isFirst = currentIndex === 0 || nextIndex === 0;
+    const isLast = config.totalPages > 0 && 
+      (currentIndex === config.totalPages - 1 || nextIndex === config.totalPages - 1);
+    
+    if ((config.singleFirstPage && isFirst) || (config.singleLastPage && isLast)) {
+      return [mainImage];
+    }
+
+    // 5. 正常双页
     const secondImage: FrameImage = {
       url: nextPage.url,
       physicalIndex: nextPage.pageIndex,
@@ -561,6 +580,15 @@ export function getPrevSplitNavigation(
   }
 }
 
+/**
+ * 计算双页模式的翻页步进
+ * 
+ * 按照 NeeView 的逻辑，与 buildFrameImages 保持一致：
+ * 1. 当前页横向 → 步进 1
+ * 2. 下一页横向 → 步进 1
+ * 3. 首页/尾页检查 → 步进 1
+ * 4. 正常双页 → 步进 2
+ */
 export function getPageStep(
   currentPage: PageData,
   nextPage: PageData | null,
@@ -577,11 +605,12 @@ export function getPageStep(
   const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
   const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
 
-  // 开启"横向视为双页"时，横向图独占
+  // 1. 当前页横向 → 步进 1
   if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
     return 1;
   }
 
+  // 2. 没有下一页 → 步进 1
   if (!nextPage) {
     return 1;
   }
@@ -593,14 +622,22 @@ export function getPageStep(
   const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
   const isNextLandscape = hasNextSize && isLandscape(nextSize);
 
-  // 开启"横向视为双页"时的自动双页逻辑
-  if (config.treatHorizontalAsDoublePage) {
-    // 下一张是横向图：步进1
-    if (isNextLandscape) {
-      return 1;
-    }
-    // 尺寸未知时，默认步进2（等待尺寸加载后会重新计算）
+  // 3. 下一页横向 → 步进 1
+  if (config.treatHorizontalAsDoublePage && isNextLandscape) {
+    return 1;
   }
 
+  // 4. 首页/尾页单独显示
+  const currentIndex = currentPage.pageIndex;
+  const nextIndex = nextPage.pageIndex;
+  const isFirst = currentIndex === 0 || nextIndex === 0;
+  const isLast = config.totalPages > 0 && 
+    (currentIndex === config.totalPages - 1 || nextIndex === config.totalPages - 1);
+  
+  if ((config.singleFirstPage && isFirst) || (config.singleLastPage && isLast)) {
+    return 1;
+  }
+
+  // 5. 正常双页 → 步进 2
   return 2;
 }

@@ -239,11 +239,11 @@ impl ProcessRunner {
 }
 ```
 
-### 4. 模型信息
+### 4. ModelRegistry (模型注册表)
 
 ```rust
 /// 模型信息
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelInfo {
     /// 模型名称 (如 "realesrgan-x4plus-anime")
     pub name: String,
@@ -253,24 +253,95 @@ pub struct ModelInfo {
     pub tool: UpscaleTool,
     /// 支持的缩放倍数
     pub supported_scales: Vec<i32>,
+    /// 默认缩放倍数
+    pub default_scale: i32,
     /// 是否支持降噪
     pub supports_denoise: bool,
-    /// 模型目录路径
-    pub model_dir: PathBuf,
+    /// 降噪等级范围 (min, max)
+    pub denoise_range: Option<(i32, i32)>,
+    /// 模型目录路径 (相对于 models_dir)
+    pub model_path: String,
 }
 
-/// 预定义模型列表
-pub const BUILTIN_MODELS: &[ModelInfo] = &[
-    // RealESRGAN 模型
-    ModelInfo { name: "realesrgan-x4plus", tool: UpscaleTool::RealESRGAN, ... },
-    ModelInfo { name: "realesrgan-x4plus-anime", tool: UpscaleTool::RealESRGAN, ... },
-    ModelInfo { name: "realesrgan-animevideov3", tool: UpscaleTool::RealESRGAN, ... },
-    // Waifu2x 模型
-    ModelInfo { name: "waifu2x-cunet", tool: UpscaleTool::Waifu2x, ... },
-    // RealCUGAN 模型
-    ModelInfo { name: "realcugan-se", tool: UpscaleTool::RealCUGAN, ... },
-];
+/// 模型注册表 - 支持动态发现和用户自定义模型
+pub struct ModelRegistry {
+    /// 内置模型
+    builtin_models: Vec<ModelInfo>,
+    /// 用户自定义模型
+    custom_models: Vec<ModelInfo>,
+    /// 模型目录
+    models_dir: PathBuf,
+    /// 用户模型目录
+    user_models_dir: PathBuf,
+}
+
+impl ModelRegistry {
+    /// 创建模型注册表
+    pub fn new(models_dir: PathBuf, user_models_dir: PathBuf) -> Self;
+    
+    /// 扫描模型目录，发现新模型
+    pub fn scan_models(&mut self) -> Result<(), UpscaleError>;
+    
+    /// 获取所有可用模型
+    pub fn get_all_models(&self) -> Vec<&ModelInfo>;
+    
+    /// 根据名称获取模型
+    pub fn get_model(&self, name: &str) -> Option<&ModelInfo>;
+    
+    /// 注册自定义模型
+    pub fn register_custom_model(&mut self, model: ModelInfo) -> Result<(), UpscaleError>;
+    
+    /// 从配置文件加载自定义模型
+    pub fn load_custom_models(&mut self, config_path: &Path) -> Result<(), UpscaleError>;
+    
+    /// 保存自定义模型配置
+    pub fn save_custom_models(&self, config_path: &Path) -> Result<(), UpscaleError>;
+}
 ```
+
+### 模型目录结构
+
+```
+models/
+├── realesrgan/                    # RealESRGAN 模型
+│   ├── realesrgan-x4plus/
+│   │   ├── realesrgan-x4plus.param
+│   │   └── realesrgan-x4plus.bin
+│   ├── realesrgan-x4plus-anime/
+│   └── realesrgan-animevideov3/
+├── waifu2x/                       # Waifu2x 模型
+│   ├── waifu2x-cunet/
+│   └── waifu2x-upconv_7_anime/
+├── realcugan/                     # RealCUGAN 模型
+│   └── realcugan-se/
+└── custom/                        # 用户自定义模型
+    └── my-custom-model/
+        ├── model.param
+        ├── model.bin
+        └── model.json            # 模型配置文件
+```
+
+### 自定义模型配置文件格式 (model.json)
+
+```json
+{
+  "name": "my-custom-model",
+  "display_name": "My Custom Model",
+  "tool": "realesrgan",
+  "supported_scales": [2, 4],
+  "default_scale": 4,
+  "supports_denoise": false,
+  "param_file": "model.param",
+  "bin_file": "model.bin"
+}
+```
+
+### 动态模型发现流程
+
+1. **启动时扫描**: 应用启动时扫描 `models/` 和 `custom/` 目录
+2. **自动识别**: 根据目录结构和文件名推断模型类型
+3. **配置覆盖**: 如果存在 `model.json`，使用配置文件中的信息
+4. **热重载**: 支持运行时重新扫描模型目录
 
 ### 5. 错误类型
 

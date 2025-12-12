@@ -2,116 +2,77 @@
 
 ## Introduction
 
-本文档定义了将 NeoView 图像超分系统从 PyO3 + Python (sr_vulkan) 架构迁移到纯 Rust 实现的需求。目标是消除 Python 运行时依赖，提升性能和部署便捷性，同时保持与现有前端接口的兼容性。
+本文档定义了扩展 sr-vulkan 库以支持新超分模型的需求。当前 sr-vulkan 的模型列表是硬编码的，无法动态添加新模型。目标是 fork sr-vulkan 并修改其源码，使其支持更多模型或动态模型加载。
 
 ## Glossary
 
-- **NeoView**: 本项目的图像查看器应用
-- **超分 (Super Resolution)**: 使用深度学习模型将低分辨率图像放大为高分辨率图像的技术
-- **PyO3**: Rust 与 Python 互操作的库
-- **sr_vulkan**: 当前使用的 Python 超分模块，基于 Vulkan GPU 加速
-- **ncnn**: 腾讯开源的高性能神经网络推理框架，支持 Vulkan GPU 加速
+- **sr-vulkan**: 基于 ncnn 的 Python 超分模块，通过 PyO3 调用
+- **AllModel**: sr-vulkan 中硬编码的模型名称数组
+- **ncnn**: 腾讯开源的高性能神经网络推理框架
 - **RealESRGAN**: 一种流行的图像超分模型
 - **Waifu2x**: 专为动漫图像设计的超分模型
 - **RealCUGAN**: 针对动漫图像优化的超分模型
-- **Tile Processing**: 将大图像分割成小块处理以减少显存占用的技术
-- **UpscaleService**: 后端超分服务，管理任务队列和缓存
+- **param/bin 文件**: ncnn 模型的参数文件和权重文件
 
 ## Requirements
 
 ### Requirement 1
 
-**User Story:** As a developer, I want to replace PyO3/Python dependencies with pure Rust implementation, so that the application has fewer runtime dependencies and easier deployment.
+**User Story:** As a user, I want to use newer super resolution models, so that I can get better upscaling quality for my images.
 
 #### Acceptance Criteria
 
-1. WHEN the application starts THEN the Upscale_System SHALL initialize without requiring Python runtime
-2. WHEN the Upscale_System initializes THEN the Upscale_System SHALL detect available Vulkan GPU devices
-3. WHEN no Vulkan GPU is available THEN the Upscale_System SHALL fall back to CPU processing mode
-4. WHEN the Upscale_System initializes THEN the Upscale_System SHALL load ncnn models from the bundled model directory
+1. WHEN the sr-vulkan library is forked THEN the System SHALL maintain compatibility with existing model loading code
+2. WHEN new models are added to AllModel array THEN the System SHALL correctly map model indices to model types
+3. WHEN a new model is selected THEN the System SHALL load the corresponding param and bin files
 
 ### Requirement 2
 
-**User Story:** As a user, I want the same super resolution models available as before, so that I can continue using my preferred upscaling settings.
+**User Story:** As a developer, I want to easily add new models to sr-vulkan, so that I can keep up with the latest super resolution research.
 
 #### Acceptance Criteria
 
-1. WHEN querying available models THEN the Upscale_System SHALL return a list containing RealESRGAN, Waifu2x, and RealCUGAN model variants
-2. WHEN a model is selected THEN the Upscale_System SHALL support scale factors of 2x and 4x
-3. WHEN using Waifu2x or RealCUGAN models THEN the Upscale_System SHALL support noise reduction levels from -1 to 3
-4. WHEN a model name is provided THEN the Upscale_System SHALL resolve it to the corresponding ncnn model files
+1. WHEN adding a new model THEN the Developer SHALL only need to add the model name to AllModel array
+2. WHEN adding a new model THEN the Developer SHALL place param/bin files in the correct model directory
+3. WHEN the model type is determined THEN the System SHALL use naming convention to identify model category (WAIFU2X, REALCUGAN, REALSR, REALESRGAN)
 
 ### Requirement 3
 
-**User Story:** As a user, I want to upscale images with the same quality as before, so that my viewing experience is not degraded.
+**User Story:** As a user, I want the new models to work with the existing NeoView interface, so that I don't need to learn new workflows.
 
 #### Acceptance Criteria
 
-1. WHEN processing an image THEN the Upscale_System SHALL produce output with visual quality comparable to the Python sr_vulkan implementation
-2. WHEN processing an image THEN the Upscale_System SHALL preserve the original aspect ratio
-3. WHEN processing an image THEN the Upscale_System SHALL output in WebP format with configurable quality
-4. WHEN processing completes THEN the Upscale_System SHALL return the upscaled image data to the caller
+1. WHEN new models are available THEN the System SHALL expose them through the existing get_available_models API
+2. WHEN a new model is used THEN the System SHALL use the same caching and processing pipeline
+3. WHEN model parameters are configured THEN the System SHALL support the same scale and noise level options
 
-### Requirement 4
+## Current Model List (AllModel[])
 
-**User Story:** As a user, I want large images to be processed without running out of GPU memory, so that upscaling works reliably on all my images.
+```cpp
+// Waifu2x models (19 models)
+"WAIFU2X_CUNET_UP1X_DENOISE0X" ... "WAIFU2X_PHOTO_UP2X_DENOISE3X"
 
-#### Acceptance Criteria
+// RealCUGAN models (18 models)  
+"REALCUGAN_PRO_UP2X" ... "REALCUGAN_SE_UP4X_DENOISE3X"
 
-1. WHEN processing a large image THEN the Upscale_System SHALL use tile-based processing to limit memory usage
-2. WHEN tile size is set to 0 THEN the Upscale_System SHALL automatically determine optimal tile size based on available GPU memory
-3. WHEN processing tiles THEN the Upscale_System SHALL seamlessly blend tile boundaries to avoid visible seams
-4. WHEN a custom tile size is specified THEN the Upscale_System SHALL use that tile size for processing
+// RealSR models (1 model)
+"REALSR_DF2K_UP4X"
 
-### Requirement 5
+// RealESRGAN models (5 models)
+"REALESRGAN_ANIMAVIDEOV3_UP2X"
+"REALESRGAN_ANIMAVIDEOV3_UP3X"
+"REALESRGAN_ANIMAVIDEOV3_UP4X"
+"REALESRGAN_X4PLUS_UP4X"
+"REALESRGAN_X4PLUSANIME_UP4X"
+```
 
-**User Story:** As a user, I want upscaling to be fast and responsive, so that I don't have to wait long for results.
+## Proposed New Models to Add
 
-#### Acceptance Criteria
+根据 ncnn-vulkan 生态系统中可用的模型：
 
-1. WHEN a Vulkan GPU is available THEN the Upscale_System SHALL use GPU acceleration for inference
-2. WHEN processing multiple images THEN the Upscale_System SHALL support concurrent processing up to a configurable limit
-3. WHEN a timeout is specified THEN the Upscale_System SHALL cancel processing if the timeout is exceeded
-4. WHEN a job is cancelled THEN the Upscale_System SHALL release resources and return a cancellation status
+1. **RealESRGAN 新模型**
+   - `REALESRGAN_X2PLUS_UP2X` - 2x 放大版本
+   - `REALESRGAN_ANIMEVIDEOV3_UP1X` - 1x 降噪版本
 
-### Requirement 6
-
-**User Story:** As a developer, I want the new implementation to maintain API compatibility, so that existing frontend code continues to work without changes.
-
-#### Acceptance Criteria
-
-1. WHEN the UpscaleService requests upscaling THEN the Upscale_System SHALL accept the same parameters as the current PyO3 implementation
-2. WHEN upscaling completes THEN the Upscale_System SHALL emit the same events as the current implementation
-3. WHEN caching results THEN the Upscale_System SHALL use the same cache path format as the current implementation
-4. WHEN checking cache THEN the Upscale_System SHALL return cached results in the same format as before
-
-### Requirement 7
-
-**User Story:** As a user, I want to be able to cancel ongoing upscale operations, so that I can stop processing when I no longer need the result.
-
-#### Acceptance Criteria
-
-1. WHEN a cancel request is received with a job key THEN the Upscale_System SHALL stop the corresponding processing task
-2. WHEN a task is cancelled THEN the Upscale_System SHALL notify the caller with a cancellation status
-3. WHEN switching books THEN the Upscale_System SHALL cancel all pending tasks for the previous book
-
-### Requirement 8
-
-**User Story:** As a developer, I want comprehensive error handling, so that failures are reported clearly and the system remains stable.
-
-#### Acceptance Criteria
-
-1. WHEN model files are missing THEN the Upscale_System SHALL return a descriptive error message
-2. WHEN GPU initialization fails THEN the Upscale_System SHALL log the error and attempt CPU fallback
-3. WHEN image decoding fails THEN the Upscale_System SHALL return an error with the failure reason
-4. WHEN an unexpected error occurs THEN the Upscale_System SHALL not crash and SHALL return an error status
-
-### Requirement 9
-
-**User Story:** As a developer, I want the upscale module to be well-structured and maintainable, so that future enhancements are easy to implement.
-
-#### Acceptance Criteria
-
-1. WHEN implementing the module THEN the Upscale_System SHALL separate concerns into distinct components (model loading, inference, image processing)
-2. WHEN adding new models THEN the Upscale_System SHALL support adding models without modifying core inference code
-3. WHEN the module is built THEN the Upscale_System SHALL compile without warnings on stable Rust
+2. **其他潜在模型**
+   - 用户自定义模型支持（需要更大改动）

@@ -27,12 +27,18 @@ impl PythonUpscaleModule {
 
             // 检查路径是否已在 sys.path 中
             let mut found = false;
-            for item in sys_path.iter() {
-                if let Ok(path_str) = item.extract::<String>() {
-                    if path_str == module_path_str {
-                        found = true;
-                        break;
+            let mut sys_path_iter = sys_path.iter()?;
+            loop {
+                match sys_path_iter.next() {
+                    Some(Ok(item)) => {
+                        let path_str = item.extract::<String>()?;
+                        if path_str == module_path_str {
+                            found = true;
+                            break;
+                        }
                     }
+                    Some(Err(_)) => break,
+                    None => break,
                 }
             }
 

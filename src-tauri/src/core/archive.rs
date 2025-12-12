@@ -77,7 +77,7 @@ struct CachedImageEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ArchiveMetadata {
+pub struct ArchiveMetadata {
     modified: u64,
     file_size: u64,
 }

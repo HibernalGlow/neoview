@@ -2,16 +2,21 @@
  * DirectoryTreeCache - 目录树内存缓存
  * 全局单例，管理目录内容的内存缓存
  * 减少本地 I/O，提高浏览速度
+ * 
+ * 参考 Spacedrive 架构，支持流式加载
  */
 
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
+import { streamDirectory, type StreamHandle, type StreamComplete } from '$lib/api/filesystem';
 
 interface CacheEntry {
 	items: FsItem[];
 	timestamp: number;
 	loading: boolean;
 	accessCount: number; // 访问计数，用于智能淘汰
+	isComplete: boolean; // 是否完整加载（用于流式加载）
+	streamHandle?: StreamHandle; // 流句柄（用于取消）
 }
 
 interface TreeNode {
@@ -84,13 +89,13 @@ class DirectoryTreeCache {
 		
 		// 开始加载
 		this.loadingPaths.add(key);
-		this.cache.set(key, { items: [], timestamp: now, loading: true, accessCount: 0 });
+		this.cache.set(key, { items: [], timestamp: now, loading: true, accessCount: 0, isComplete: false });
 		
 		try {
 			const items = await FileSystemAPI.browseDirectory(path);
 			
 			// 更新缓存，初始访问计数为1
-			this.cache.set(key, { items, timestamp: Date.now(), loading: false, accessCount: 1 });
+			this.cache.set(key, { items, timestamp: Date.now(), loading: false, accessCount: 1, isComplete: true });
 			this.loadingPaths.delete(key);
 			
 			// 清理过期缓存
@@ -349,6 +354,139 @@ class DirectoryTreeCache {
 			maxSize: this.MAX_CACHE_SIZE,
 			ttl: this.CACHE_TTL
 		};
+	}
+
+	// ============================================================================
+	// 流式加载支持（Spacedrive 风格）
+	// ============================================================================
+
+	/**
+	 * 流式加载目录（边扫描边返回）
+	 * 适用于大型目录，首批数据 100ms 内显示
+	 * 
+	 * @param path 目录路径
+	 * @param onBatch 每批数据的回调
+	 * @param options 流配置选项
+	 * @returns Promise<StreamComplete> 完成信息
+	 */
+	async getDirectoryStreaming(
+		path: string,
+		onBatch?: (items: FsItem[], batchIndex: number, total: number) => void,
+		options?: { batchSize?: number; skipHidden?: boolean }
+	): Promise<StreamComplete> {
+		const key = this.normalizePath(path);
+		const now = Date.now();
+
+		// 检查缓存
+		const cached = this.cache.get(key);
+		if (cached && cached.isComplete && !cached.loading && (now - cached.timestamp < this.CACHE_TTL)) {
+			// 缓存命中，模拟流式返回
+			cached.accessCount = (cached.accessCount || 0) + 1;
+			onBatch?.(cached.items, 0, cached.items.length);
+			return {
+				totalItems: cached.items.length,
+				skippedItems: 0,
+				elapsedMs: 0,
+				fromCache: true
+			};
+		}
+
+		// 取消之前的流（如果有）
+		if (cached?.streamHandle) {
+			await cached.streamHandle.cancel().catch(() => {});
+		}
+
+		// 初始化缓存条目
+		this.loadingPaths.add(key);
+		const entry: CacheEntry = {
+			items: [],
+			timestamp: now,
+			loading: true,
+			accessCount: 1,
+			isComplete: false
+		};
+		this.cache.set(key, entry);
+
+		return new Promise((resolve, reject) => {
+			let totalLoaded = 0;
+
+			streamDirectory(
+				path,
+				{
+					onBatch: (batch) => {
+						// 追加到缓存
+						const cached = this.cache.get(key);
+						if (cached) {
+							cached.items.push(...batch.items);
+							totalLoaded = cached.items.length;
+						}
+						// 通知调用者
+						onBatch?.(batch.items, batch.batchIndex, totalLoaded);
+						// 触发更新回调
+						this.notifyUpdate(path, cached?.items || batch.items);
+					},
+					onProgress: (progress) => {
+						// 可以在这里更新进度 UI
+						console.debug(`📁 流式加载进度: ${progress.loaded} 项, ${progress.elapsedMs}ms`);
+					},
+					onError: (error) => {
+						console.warn(`⚠️ 流式加载错误: ${error.message}`);
+					},
+					onComplete: (complete) => {
+						// 标记完成
+						const cached = this.cache.get(key);
+						if (cached) {
+							cached.loading = false;
+							cached.isComplete = true;
+							cached.timestamp = Date.now();
+							delete cached.streamHandle;
+						}
+						this.loadingPaths.delete(key);
+						this.cleanup();
+						resolve(complete);
+					}
+				},
+				{
+					batchSize: options?.batchSize,
+					skipHidden: options?.skipHidden
+				}
+			)
+				.then((handle) => {
+					// 保存流句柄以便取消
+					const cached = this.cache.get(key);
+					if (cached) {
+						cached.streamHandle = handle;
+					}
+				})
+				.catch((err) => {
+					this.loadingPaths.delete(key);
+					this.cache.delete(key);
+					reject(err);
+				});
+		});
+	}
+
+	/**
+	 * 取消指定路径的流式加载
+	 */
+	async cancelStream(path: string): Promise<void> {
+		const key = this.normalizePath(path);
+		const cached = this.cache.get(key);
+		if (cached?.streamHandle) {
+			await cached.streamHandle.cancel().catch(() => {});
+			delete cached.streamHandle;
+			cached.loading = false;
+		}
+		this.loadingPaths.delete(key);
+	}
+
+	/**
+	 * 检查是否正在流式加载
+	 */
+	isStreaming(path: string): boolean {
+		const key = this.normalizePath(path);
+		const cached = this.cache.get(key);
+		return cached?.loading === true && cached?.streamHandle !== undefined;
 	}
 }
 

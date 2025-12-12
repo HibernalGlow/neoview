@@ -35,6 +35,7 @@ pub mod upscale_settings;
 pub mod video_exts;
 pub mod video_thumbnail;
 pub mod wic_decoder;
+pub mod directory_stream;
 
 pub use book_manager::BookManager;
 pub use image_loader::ImageLoader;

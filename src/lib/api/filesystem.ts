@@ -468,7 +468,7 @@ export async function getImagesFromArchive(archivePath: string): Promise<string[
  * 【已禁用】功能已注释掉
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function preheatArchiveList(archivePath: string): void {
+export function preheatArchiveList(_archivePath: string): void {
   // 功能已禁用
   return;
   
@@ -663,4 +663,291 @@ export async function getArchiveFirstImageBlob(archivePath: string): Promise<str
     console.error('❌ FileSystemAPI: 获取失败:', archivePath, error);
     throw error;
   }
+}
+
+
+// ============================================================================
+// 流式目录加载 API（参考 Spacedrive 架构）
+// ============================================================================
+
+import { Channel } from '@tauri-apps/api/core';
+
+/**
+ * 目录批次数据
+ */
+export interface DirectoryBatch {
+  items: FsItem[];
+  batchIndex: number;
+}
+
+/**
+ * 流进度信息
+ */
+export interface StreamProgress {
+  loaded: number;
+  estimatedTotal?: number;
+  elapsedMs: number;
+}
+
+/**
+ * 流错误信息（非致命）
+ */
+export interface StreamError {
+  message: string;
+  path?: string;
+  skippedCount: number;
+}
+
+/**
+ * 流完成信号
+ */
+export interface StreamComplete {
+  totalItems: number;
+  skippedItems: number;
+  elapsedMs: number;
+  fromCache: boolean;
+}
+
+/**
+ * 流式输出类型
+ */
+export type DirectoryStreamOutput =
+  | { type: 'Batch'; data: DirectoryBatch }
+  | { type: 'Progress'; data: StreamProgress }
+  | { type: 'Error'; data: StreamError }
+  | { type: 'Complete'; data: StreamComplete };
+
+/**
+ * 流配置选项
+ */
+export interface StreamOptions {
+  batchSize?: number;
+  skipHidden?: boolean;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+/**
+ * 流句柄
+ */
+export interface StreamHandle {
+  streamId: string;
+  cancel: () => Promise<void>;
+}
+
+/**
+ * 流式目录加载回调
+ */
+export interface StreamCallbacks {
+  onBatch?: (batch: DirectoryBatch) => void;
+  onProgress?: (progress: StreamProgress) => void;
+  onError?: (error: StreamError) => void;
+  onComplete?: (complete: StreamComplete) => void;
+}
+
+/**
+ * 流式浏览目录（Spacedrive 风格）
+ * 
+ * 使用 Tauri Channel 实现真正的流式数据推送
+ * 边扫描边返回，首批数据 100ms 内显示
+ * 
+ * @param path 目录路径
+ * @param callbacks 回调函数
+ * @param options 流配置选项
+ * @returns StreamHandle 用于取消流
+ */
+export async function streamDirectory(
+  path: string,
+  callbacks: StreamCallbacks,
+  options?: StreamOptions
+): Promise<StreamHandle> {
+  // 创建 Tauri Channel 接收流数据
+  const channel = new Channel<DirectoryStreamOutput>();
+
+  // 设置消息处理
+  channel.onmessage = (output: DirectoryStreamOutput) => {
+    switch (output.type) {
+      case 'Batch':
+        // 过滤排除路径
+        output.data.items = output.data.items.filter(item => !isPathExcluded(item.path));
+        callbacks.onBatch?.(output.data);
+        break;
+      case 'Progress':
+        callbacks.onProgress?.(output.data);
+        break;
+      case 'Error':
+        callbacks.onError?.(output.data);
+        break;
+      case 'Complete':
+        callbacks.onComplete?.(output.data);
+        break;
+    }
+  };
+
+  // 调用后端命令（V2 版本，Spacedrive 风格）
+  const streamId = await invoke<string>('stream_directory_v2', {
+    path,
+    options,
+    channel
+  });
+
+  return {
+    streamId,
+    cancel: async () => {
+      await invoke('cancel_directory_stream_v2', { streamId });
+    }
+  };
+}
+
+/**
+ * 取消指定路径的所有流
+ */
+export async function cancelStreamsForPath(path: string): Promise<number> {
+  return await invoke<number>('cancel_streams_for_path', { path });
+}
+
+/**
+ * 获取活动流数量
+ */
+export async function getActiveStreamCount(): Promise<number> {
+  return await invoke<number>('get_active_stream_count');
+}
+
+/**
+ * 流式加载目录的便捷函数
+ * 返回 Promise，在流完成时 resolve
+ * 
+ * @param path 目录路径
+ * @param onBatch 每批数据的回调
+ * @param options 流配置选项
+ * @returns 完成信息
+ */
+export function streamDirectoryAsync(
+  path: string,
+  onBatch: (items: FsItem[], batchIndex: number) => void,
+  options?: StreamOptions
+): Promise<StreamComplete> {
+  return new Promise((resolve, reject) => {
+    streamDirectory(
+      path,
+      {
+        onBatch: (batch) => {
+          onBatch(batch.items, batch.batchIndex);
+        },
+        onComplete: (complete) => {
+          resolve(complete);
+        },
+        onError: (error) => {
+          console.warn('Stream error:', error.message);
+        }
+      },
+      options
+    ).catch(reject);
+  });
+}
+
+
+// ============================================================================
+// 流式搜索 API
+// ============================================================================
+
+/**
+ * 搜索流输出类型
+ */
+export type SearchStreamOutput =
+  | { type: 'Batch'; data: DirectoryBatch }
+  | { type: 'Progress'; data: StreamProgress }
+  | { type: 'Error'; data: StreamError }
+  | { type: 'Complete'; data: StreamComplete };
+
+/**
+ * 流式搜索目录
+ * 
+ * 边搜索边返回结果，首批结果 200ms 内显示
+ * 
+ * @param path 搜索路径
+ * @param query 搜索关键词
+ * @param callbacks 回调函数
+ * @param options 流配置选项
+ * @returns StreamHandle 用于取消搜索
+ */
+export async function streamSearch(
+  path: string,
+  query: string,
+  callbacks: StreamCallbacks,
+  options?: StreamOptions
+): Promise<StreamHandle> {
+  // 创建 Tauri Channel 接收搜索结果
+  const channel = new Channel<SearchStreamOutput>();
+
+  // 设置消息处理
+  channel.onmessage = (output: SearchStreamOutput) => {
+    switch (output.type) {
+      case 'Batch':
+        // 过滤排除路径
+        output.data.items = output.data.items.filter(item => !isPathExcluded(item.path));
+        callbacks.onBatch?.(output.data);
+        break;
+      case 'Progress':
+        callbacks.onProgress?.(output.data);
+        break;
+      case 'Error':
+        callbacks.onError?.(output.data);
+        break;
+      case 'Complete':
+        callbacks.onComplete?.(output.data);
+        break;
+    }
+  };
+
+  // 调用后端命令
+  const streamId = await invoke<string>('stream_search_v2', {
+    path,
+    query,
+    options,
+    channel
+  });
+
+  return {
+    streamId,
+    cancel: async () => {
+      await invoke('cancel_directory_stream_v2', { streamId });
+    }
+  };
+}
+
+/**
+ * 流式搜索的便捷函数
+ * 返回 Promise，在搜索完成时 resolve
+ * 
+ * @param path 搜索路径
+ * @param query 搜索关键词
+ * @param onResult 每批结果的回调
+ * @param options 流配置选项
+ * @returns 完成信息
+ */
+export function streamSearchAsync(
+  path: string,
+  query: string,
+  onResult: (items: FsItem[], batchIndex: number) => void,
+  options?: StreamOptions
+): Promise<StreamComplete> {
+  return new Promise((resolve, reject) => {
+    streamSearch(
+      path,
+      query,
+      {
+        onBatch: (batch) => {
+          onResult(batch.items, batch.batchIndex);
+        },
+        onComplete: (complete) => {
+          resolve(complete);
+        },
+        onError: (error) => {
+          console.warn('Search error:', error.message);
+        }
+      },
+      options
+    ).catch(reject);
+  });
 }

@@ -15,6 +15,7 @@ mod models;
 mod tray;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
+use core::directory_stream::StreamManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::page_commands::PageManagerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
@@ -141,6 +142,9 @@ pub fn run() {
             app.manage(PageManagerState {
                 manager: Arc::new(tokio::sync::Mutex::new(page_manager)),
             });
+
+            // 初始化流管理器状态
+            app.manage(StreamManagerState::default());
 
             log::info!("🚀 NeoView 初始化完成 (JobEngine workers: {})", num_cores.clamp(2, 8));
 
@@ -441,6 +445,12 @@ pub fn run() {
             commands::ollama_check_status,
             commands::ollama_get_models,
             commands::ollama_generate,
+            // Directory streaming commands (Spacedrive-style V2)
+            commands::stream_commands::stream_directory_v2,
+            commands::stream_commands::cancel_directory_stream_v2,
+            commands::stream_commands::cancel_streams_for_path,
+            commands::stream_commands::get_active_stream_count,
+            commands::stream_commands::stream_search_v2,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

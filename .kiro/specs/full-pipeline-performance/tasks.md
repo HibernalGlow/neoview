@@ -57,7 +57,7 @@
 
 ## 3. Checkpoint - Core Infrastructure Tests
 
-- [ ] 3. Checkpoint - Make sure all tests are passing
+- [x] 3. Checkpoint - Make sure all tests are passing
   - Ensure all tests pass, ask the user if questions arise.
 
 ## 4. Preloader Implementation
@@ -82,7 +82,7 @@
   - **Property 5: Preload Cancellation on Rapid Navigation**
   - **Validates: Requirements 1.5**
 
-- [ ] 4.5 Integrate Preloader with bookStore
+- [x] 4.5 Integrate Preloader with bookStore
   - Hook into page navigation events
   - Update preload queue on page change
   - Detect navigation direction for smarter preloading
@@ -130,12 +130,12 @@
 
 ## 6. Checkpoint - Frontend Services Tests
 
-- [ ] 6. Checkpoint - Make sure all tests are passing
+- [x] 6. Checkpoint - Make sure all tests are passing
   - Ensure all tests pass, ask the user if questions arise.
 
 ## 7. Backend ImageLoader Enhancement
 
-- [ ] 7.1 Implement large image detection
+- [x] 7.1 Implement large image detection
   - Add size threshold check (5MB default)
   - Route large images to background thread
   - Use spawn_blocking for CPU-intensive decoding
@@ -145,7 +145,7 @@
   - **Property 6: Large Image Background Decoding**
   - **Validates: Requirements 2.1**
 
-- [ ] 7.3 Implement decode error handling
+- [x] 7.3 Implement decode error handling
   - Catch decode errors gracefully
   - Return structured error with path and reason
   - Log errors with context
@@ -157,7 +157,7 @@
 
 ## 8. Backend ArchiveExtractor Enhancement
 
-- [ ] 8.1 Implement parallel extraction
+- [x] 8.1 Implement parallel extraction
   - Use rayon for parallel file extraction
   - Configure parallelism based on CPU cores
   - Track extraction progress
@@ -167,7 +167,7 @@
   - **Property 16: Parallel Archive Extraction**
   - **Validates: Requirements 5.3**
 
-- [ ] 8.3 Implement archive caching
+- [x] 8.3 Implement archive caching
   - Cache file list after first extraction
   - Cache extracted images on disk
   - Validate cache on archive mtime change
@@ -177,7 +177,7 @@
   - **Property 17: Archive Cache Hit**
   - **Validates: Requirements 5.4**
 
-- [ ] 8.5 Implement extraction error recovery
+- [x] 8.5 Implement extraction error recovery
   - Skip failed entries and continue
   - Report errors without crashing
   - Return partial results with error list
@@ -187,7 +187,7 @@
   - **Property 18: Archive Extraction Error Recovery**
   - **Validates: Requirements 5.5**
 
-- [ ] 8.7 Optimize first page loading
+- [x] 8.7 Optimize first page loading
   - Prioritize first page extraction
   - Start displaying before full extraction
   - Target 500ms first page display
@@ -199,7 +199,7 @@
 
 ## 9. Checkpoint - Backend Tests
 
-- [ ] 9. Checkpoint - Make sure all tests are passing
+- [x] 9. Checkpoint - Make sure all tests are passing
   - Ensure all tests pass, ask the user if questions arise.
 
 ## 10. IPC Optimization
@@ -214,7 +214,7 @@
   - **Property 12: IPC Request Batching**
   - **Validates: Requirements 4.2**
 
-- [ ] 10.3 Implement streaming for large data
+- [x] 10.3 Implement streaming for large data
   - Use Tauri Channel for large transfers
   - Emit progress events every 100KB
   - Support cancellation during transfer
@@ -236,7 +236,7 @@
 
 ## 11. UI Performance Optimization
 
-- [ ] 11.1 Optimize virtualized list rendering
+- [x] 11.1 Optimize virtualized list rendering
   - Ensure only visible items are rendered
   - Add buffer of 10 items above/below viewport
   - Recycle DOM elements on scroll
@@ -246,7 +246,7 @@
   - **Property 19: Virtualization Render Count**
   - **Validates: Requirements 6.2**
 
-- [ ] 11.3 Optimize sort/filter operations
+- [x] 11.3 Optimize sort/filter operations
   - Use efficient sorting algorithms
   - Implement incremental filtering
   - Target 100ms for 10000 items
@@ -258,19 +258,19 @@
 
 ## 12. Integration and Polish
 
-- [ ] 12.1 Integrate all components
+- [x] 12.1 Integrate all components
   - Wire up ImagePool with Preloader
   - Connect ThumbnailManager with file browser
   - Hook PerfMonitor into all services
   - _Requirements: All_
 
-- [ ] 12.2 Add loading placeholders
+- [x] 12.2 Add loading placeholders
   - Show placeholder during image load
   - Display progress for large images
   - Show error placeholder on failure
   - _Requirements: 2.3, 3.3_
 
-- [ ] 12.3 Implement adaptive configuration
+- [x] 12.3 Implement adaptive configuration
   - Adjust settings based on SystemCapabilities
   - Reduce preload on low-end devices
   - Increase cache on high-end devices
@@ -278,5 +278,5 @@
 
 ## 13. Final Checkpoint
 
-- [ ] 13. Final Checkpoint - Make sure all tests are passing
+- [x] 13. Final Checkpoint - Make sure all tests are passing
   - Ensure all tests pass, ask the user if questions arise.

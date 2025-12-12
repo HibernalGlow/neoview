@@ -133,8 +133,14 @@ export const viewerPageInfoVisible = writable<boolean>(loadFromStorage('viewerPa
 // 子页索引（用于单页模式下的横页分割：0=前半部分, 1=后半部分）
 export const subPageIndex = writable<number>(0);
 
+// 【新增】当前页面是否应该分割（由 StackView 根据实际加载的图片尺寸设置）
+// 这个 store 解决了元数据中没有尺寸信息时无法判断分割的问题
+export const currentPageShouldSplit = writable<boolean>(false);
+
 /**
  * 检查指定页面是否应该启用分割模式
+ * 对于当前页面，优先使用 currentPageShouldSplit（基于实际加载的图片尺寸）
+ * 对于其他页面，使用元数据中的尺寸
  */
 function shouldSplitPage(index: number): boolean {
 	const settings = settingsManager.getSettings();
@@ -151,10 +157,15 @@ function shouldSplitPage(index: number): boolean {
 
 	if (index < 0 || index >= book.pages.length) return false;
 
+	// 【关键修复】对于当前页面，使用 currentPageShouldSplit（基于实际加载的图片尺寸）
+	if (index === bookStore.currentPageIndex) {
+		return get(currentPageShouldSplit);
+	}
+
 	const page = book.pages[index];
 	if (!page) return false;
 
-	// 检查是否为横图 (宽 > 高)
+	// 对于其他页面，使用元数据中的尺寸
 	const w = page.width || 0;
 	const h = page.height || 0;
 	return w > 0 && h > 0 && w > h;

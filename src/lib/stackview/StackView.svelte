@@ -52,7 +52,9 @@
 		zoomLevel,
 		rotationAngle,
 		setZoomLevel,
-		viewerPageInfoVisible
+		viewerPageInfoVisible,
+		currentPageShouldSplit,
+		subPageIndex
 	} from '$lib/stores';
 	import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -482,6 +484,8 @@
 			}
 		}
 		
+		console.log(`📊 getPageData(${index}): width=${width}, height=${height}, isLandscape=${width > height}`);
+		
 		return {
 			url: '',
 			pageIndex: index,
@@ -515,6 +519,9 @@
 	// 追踪上一次的分割状态，用于检测变化
 	let lastSplitPageIndex = $state<number>(-1);
 	let lastIsCurrentPageSplit = $state<boolean>(false);
+	// 标记是否由导航函数设置了 splitHalf（避免被 effect 覆盖）
+	let splitHalfSetByNavigation = $state<boolean>(false);
+	
 	$effect(() => {
 		const currentIndex = bookStore.currentPageIndex;
 		const isSplit = isCurrentPageSplit;
@@ -523,6 +530,8 @@
 		const pageChanged = currentIndex !== lastSplitPageIndex;
 		const splitStateChanged = isSplit !== lastIsCurrentPageSplit;
 		
+		console.log(`🔄 Split effect: pageChanged=${pageChanged}, splitStateChanged=${splitStateChanged}, isSplit=${isSplit}, currentSplitHalf=${currentSplitHalf}, splitHalfSetByNavigation=${splitHalfSetByNavigation}`);
+		
 		if (pageChanged || splitStateChanged) {
 			lastSplitPageIndex = currentIndex;
 			lastIsCurrentPageSplit = isSplit;
@@ -530,17 +539,49 @@
 			if (isSplit) {
 				// 分割页面，根据阅读方向初始化为第一半
 				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
-				// 只有在页面变化时或 currentSplitHalf 为 null 时才初始化
-				// 这样通过分割导航设置的 splitHalf 不会被覆盖
-				if (pageChanged && currentSplitHalf === null) {
-					currentSplitHalf = firstHalf;
-				} else if (splitStateChanged && currentSplitHalf === null) {
-					// 分割状态从 false 变为 true（图片加载后检测到横向）
+				
+				// 如果是导航函数设置的 splitHalf，不要覆盖
+				if (splitHalfSetByNavigation) {
+					console.log(`🔄 Split effect: 保持导航设置的 splitHalf=${currentSplitHalf}`);
+					splitHalfSetByNavigation = false; // 重置标记
+				} else if (currentSplitHalf === null) {
+					// 只有在 currentSplitHalf 为 null 时才初始化
+					console.log(`🔄 Split effect: 初始化 splitHalf=${firstHalf}`);
 					currentSplitHalf = firstHalf;
 				}
 			} else {
 				// 非分割页面
 				currentSplitHalf = null;
+				splitHalfSetByNavigation = false;
+			}
+		}
+	});
+
+	// 【关键】同步 isCurrentPageSplit 到 ui.svelte.ts 的 currentPageShouldSplit store
+	// 这样 ui.svelte.ts 中的 pageRight/pageLeft 函数可以正确判断当前页是否应该分割
+	$effect(() => {
+		const isSplit = isCurrentPageSplit;
+		currentPageShouldSplit.set(isSplit);
+		console.log(`🔄 Sync currentPageShouldSplit: ${isSplit}`);
+	});
+
+	// 【关键】监听 ui.svelte.ts 的 subPageIndex 变化，同步到 currentSplitHalf
+	// 这样 ui.svelte.ts 的 pageRight/pageLeft 设置的 subPageIndex 可以影响渲染
+	$effect(() => {
+		const sub = $subPageIndex;
+		const isSplit = isCurrentPageSplit;
+		
+		if (isSplit) {
+			// subPageIndex: 0 = 第一半, 1 = 第二半
+			// LTR: 第一半 = left, 第二半 = right
+			// RTL: 第一半 = right, 第二半 = left
+			const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+			const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+			const newHalf = sub === 0 ? firstHalf : secondHalf;
+			
+			if (currentSplitHalf !== newHalf) {
+				console.log(`🔄 Sync from subPageIndex: ${sub} -> currentSplitHalf: ${newHalf}`);
+				currentSplitHalf = newHalf;
 			}
 		}
 	});
@@ -714,39 +755,65 @@
 
 	function handlePrevPage() {
 		console.log(
-			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}`
+			`⬅️ handlePrevPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}, isCurrentPageSplit=${isCurrentPageSplit}`
 		);
 		resetScrollPosition();
 
 		// 单页模式下启用分割时，使用分割导航
 		if (pageMode === 'single' && splitHorizontalPages) {
-			const nav = getPrevSplitNavigation(
-				bookStore.currentPageIndex,
-				currentSplitHalf,
-				bookStore.totalPages,
-				direction,
-				getPageData,
-				true
-			);
-			console.log(`⬅️ handlePrevPage (split): nav=`, nav);
-			
-			if (nav.step > 0) {
-				if (nav.pageIndex !== bookStore.currentPageIndex) {
-					// 跳到不同页面
-					currentSplitHalf = nav.splitHalf;
-					lastSplitPageIndex = nav.pageIndex;
-					bookStore.navigateToPage(nav.pageIndex);
+			// 【关键修复】直接使用 isCurrentPageSplit 判断当前页是否分割
+			if (isCurrentPageSplit) {
+				// 当前页是分割页
+				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+				const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+				
+				console.log(`⬅️ handlePrevPage (split): currentSplitHalf=${currentSplitHalf}, firstHalf=${firstHalf}, secondHalf=${secondHalf}`);
+				
+				if (currentSplitHalf === secondHalf) {
+					// 当前显示第二半，上一步显示第一半
+					splitHalfSetByNavigation = true;
+					currentSplitHalf = firstHalf;
+					console.log(`⬅️ handlePrevPage: 切换到第一半 ${firstHalf}`);
+					return;
 				} else {
-					// 同一页面，切换半边
-					currentSplitHalf = nav.splitHalf;
+					// 当前显示第一半或null，跳到上一页
+					const prevIndex = bookStore.currentPageIndex - 1;
+					if (prevIndex < 0) {
+						if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+							showInfoToast('已经是第一页');
+						}
+						return;
+					}
+					// 检查上一页是否也是分割页
+					const prevPage = getPageData(prevIndex);
+					const prevIsSplit = prevPage && shouldSplitPage(prevPage, true);
+					splitHalfSetByNavigation = true;
+					currentSplitHalf = prevIsSplit ? secondHalf : null;
+					lastSplitPageIndex = prevIndex;
+					console.log(`⬅️ handlePrevPage: 跳到上一页 ${prevIndex}, splitHalf=${currentSplitHalf}`);
+					bookStore.navigateToPage(prevIndex);
+					return;
 				}
 			} else {
-				// 已经是第一页，显示边界提示
-				if (settings.view?.switchToast?.enableBoundaryToast !== false) {
-					showInfoToast('已经是第一页');
+				// 当前页不是分割页，正常跳到上一页
+				const prevIndex = bookStore.currentPageIndex - 1;
+				if (prevIndex < 0) {
+					if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+						showInfoToast('已经是第一页');
+					}
+					return;
 				}
+				// 检查上一页是否是分割页
+				const prevPage = getPageData(prevIndex);
+				const prevIsSplit = prevPage && shouldSplitPage(prevPage, true);
+				const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+				splitHalfSetByNavigation = true;
+				currentSplitHalf = prevIsSplit ? secondHalf : null;
+				lastSplitPageIndex = prevIndex;
+				console.log(`⬅️ handlePrevPage: 跳到上一页 ${prevIndex}, splitHalf=${currentSplitHalf}`);
+				bookStore.navigateToPage(prevIndex);
+				return;
 			}
-			return;
 		}
 
 		// 直接使用 pageStep 翻页
@@ -764,39 +831,66 @@
 
 	function handleNextPage() {
 		console.log(
-			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}`
+			`➡️ handleNextPage: pageMode=${pageMode}, pageStep=${pageStep}, currentIndex=${bookStore.currentPageIndex}, splitHalf=${currentSplitHalf}, isCurrentPageSplit=${isCurrentPageSplit}`
 		);
 		resetScrollPosition();
 
 		// 单页模式下启用分割时，使用分割导航
 		if (pageMode === 'single' && splitHorizontalPages) {
-			const nav = getNextSplitNavigation(
-				bookStore.currentPageIndex,
-				currentSplitHalf,
-				bookStore.totalPages,
-				direction,
-				getPageData,
-				true
-			);
-			console.log(`➡️ handleNextPage (split): nav=`, nav);
-			
-			if (nav.step > 0) {
-				if (nav.pageIndex !== bookStore.currentPageIndex) {
-					// 跳到不同页面
-					currentSplitHalf = nav.splitHalf;
-					lastSplitPageIndex = nav.pageIndex;
-					bookStore.navigateToPage(nav.pageIndex);
+			// 【关键修复】直接使用 isCurrentPageSplit 判断当前页是否分割
+			// 而不是依赖 getNextSplitNavigation 重新计算（可能因为尺寸问题返回错误结果）
+			if (isCurrentPageSplit) {
+				// 当前页是分割页
+				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+				const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
+				
+				console.log(`➡️ handleNextPage (split): currentSplitHalf=${currentSplitHalf}, firstHalf=${firstHalf}, secondHalf=${secondHalf}`);
+				
+				if (currentSplitHalf === null || currentSplitHalf === firstHalf) {
+					// 当前显示第一半，下一步显示第二半
+					splitHalfSetByNavigation = true;
+					currentSplitHalf = secondHalf;
+					console.log(`➡️ handleNextPage: 切换到第二半 ${secondHalf}`);
+					return;
 				} else {
-					// 同一页面，切换半边
-					currentSplitHalf = nav.splitHalf;
+					// 当前显示第二半，跳到下一页
+					const nextIndex = bookStore.currentPageIndex + 1;
+					if (nextIndex >= bookStore.totalPages) {
+						if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+							showInfoToast('已经是最后一页');
+						}
+						return;
+					}
+					// 检查下一页是否也是分割页
+					const nextPage = getPageData(nextIndex);
+					const nextIsSplit = nextPage && shouldSplitPage(nextPage, true);
+					splitHalfSetByNavigation = true;
+					currentSplitHalf = nextIsSplit ? firstHalf : null;
+					lastSplitPageIndex = nextIndex;
+					console.log(`➡️ handleNextPage: 跳到下一页 ${nextIndex}, splitHalf=${currentSplitHalf}`);
+					bookStore.navigateToPage(nextIndex);
+					return;
 				}
 			} else {
-				// 已经是最后一页，显示边界提示
-				if (settings.view?.switchToast?.enableBoundaryToast !== false) {
-					showInfoToast('已经是最后一页');
+				// 当前页不是分割页，正常跳到下一页
+				const nextIndex = bookStore.currentPageIndex + 1;
+				if (nextIndex >= bookStore.totalPages) {
+					if (settings.view?.switchToast?.enableBoundaryToast !== false) {
+						showInfoToast('已经是最后一页');
+					}
+					return;
 				}
+				// 检查下一页是否是分割页
+				const nextPage = getPageData(nextIndex);
+				const nextIsSplit = nextPage && shouldSplitPage(nextPage, true);
+				const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
+				splitHalfSetByNavigation = true;
+				currentSplitHalf = nextIsSplit ? firstHalf : null;
+				lastSplitPageIndex = nextIndex;
+				console.log(`➡️ handleNextPage: 跳到下一页 ${nextIndex}, splitHalf=${currentSplitHalf}`);
+				bookStore.navigateToPage(nextIndex);
+				return;
 			}
-			return;
 		}
 
 		// 直接使用 pageStep 翻页

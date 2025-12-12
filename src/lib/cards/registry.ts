@@ -205,20 +205,6 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'properties',
 		canHide: false,
 	},
-	'aiTags': {
-		id: 'aiTags',
-		title: 'AI 标签推断',
-		icon: Bot,
-		defaultPanel: 'ai',
-		canHide: true,
-	},
-	'aiApiConfig': {
-		id: 'aiApiConfig',
-		title: 'AI API 配置',
-		icon: Settings,
-		defaultPanel: 'ai',
-		canHide: true,
-	},
 	'bookSettings': {
 		id: 'bookSettings',
 		title: '本书设置',
@@ -409,6 +395,20 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 
 	// ==================== AI 面板卡片 ====================
+	'aiTags': {
+		id: 'aiTags',
+		title: 'AI 标签推断',
+		icon: Bot,
+		defaultPanel: 'ai',
+		canHide: true,
+	},
+	'aiApiConfig': {
+		id: 'aiApiConfig',
+		title: 'AI API 配置',
+		icon: Settings,
+		defaultPanel: 'ai',
+		canHide: true,
+	},
 	'aiTitleTranslation': {
 		id: 'aiTitleTranslation',
 		title: '标题翻译',

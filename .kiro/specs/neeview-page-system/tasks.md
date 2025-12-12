@@ -1,0 +1,307 @@
+# Implementation Plan
+
+## Phase 1: 后端 JobEngine 模块
+
+- [ ] 1. 创建 JobEngine 基础结构
+  - [ ] 1.1 创建 `src-tauri/src/core/job_engine/mod.rs` 模块入口
+    - 定义 JobEngine 结构体和公共接口
+    - 实现 new(), submit(), submit_batch(), cancel_book(), shutdown()
+    - _Requirements: 1.1, 1.5_
+  - [ ] 1.2 实现 `job.rs` 任务定义
+    - 定义 JobPriority 枚举 (Thumbnail=10, Preload=50, CurrentPage=90, Urgent=100)
+    - 定义 JobCategory 枚举
+    - 定义 Job 结构体 (key, priority, category, executor)
+    - _Requirements: 1.1_
+  - [ ] 1.3 实现 `scheduler.rs` 优先级调度器
+    - 实现 BinaryHeap 优先级队列
+    - 实现 enqueue() 自动取消相同 key 的旧任务
+    - 实现 dequeue() 按优先级范围获取任务
+    - 实现 cancel_by_prefix() 批量取消
+    - _Requirements: 1.2, 1.3, 1.4_
+  - [ ]* 1.4 编写 JobScheduler 属性测试
+    - **Property 1: Job Priority Ordering**
+    - **Validates: Requirements 1.2**
+  - [ ]* 1.5 编写 Job Deduplication 属性测试
+    - **Property 2: Job Deduplication**
+    - **Validates: Requirements 1.3**
+  - [ ] 1.6 实现 `worker.rs` 工作线程
+    - 实现 JobWorker 结构体
+    - Primary Worker 只处理 priority >= 10
+    - Secondary Worker 处理所有任务
+    - 实现 run() 主循环
+    - _Requirements: 1.6, 1.7_
+  - [ ]* 1.7 编写 Worker Priority Filtering 属性测试
+    - **Property 3: Worker Priority Filtering**
+    - **Validates: Requirements 1.6, 1.7**
+
+- [ ] 2. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 2: 后端 MemoryPool 模块
+
+- [ ] 3. 创建 MemoryPool 智能缓存
+  - [ ] 3.1 创建 `src-tauri/src/core/page_manager/memory_pool.rs`
+    - 定义 PageKey 结构体 (book_path, page_index)
+    - 定义 CachedPage 结构体 (data, page_index, size, last_accessed, is_locked)
+    - 实现 MemoryPool 结构体
+    - _Requirements: 2.1_
+  - [ ] 3.2 实现距离驱逐策略
+    - 实现 evict_priority() 计算驱逐优先级
+    - 实现 evict_one() 驱逐单个页面
+    - 考虑阅读方向 (direction)
+    - _Requirements: 2.2, 2.3_
+  - [ ]* 3.3 编写 Distance-Based Eviction 属性测试
+    - **Property 4: Distance-Based Eviction**
+    - **Validates: Requirements 2.2, 2.3**
+  - [ ] 3.4 实现页面锁定机制
+    - 实现 lock() 和 unlock() 方法
+    - 驱逐时跳过锁定页面
+    - _Requirements: 2.4_
+  - [ ]* 3.5 编写 Page Lock Protection 属性测试
+    - **Property 5: Page Lock Protection**
+    - **Validates: Requirements 2.4**
+  - [ ] 3.6 实现缓存清理
+    - 实现 clear_book() 清除指定书籍缓存
+    - 实现 stats() 获取统计信息
+    - _Requirements: 2.5_
+
+- [ ] 4. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 3: 后端 PageFrame 模块
+
+- [ ] 5. 创建 PageFrame 核心类型
+  - [ ] 5.1 创建 `src-tauri/src/core/page_frame/position.rs`
+    - 定义 PagePosition 结构体 (index, part)
+    - 实现 next(), prev() 方法
+    - _Requirements: 4.1_
+  - [ ] 5.2 创建 `src-tauri/src/core/page_frame/range.rs`
+    - 定义 PageRange 结构体 (min, max)
+    - 实现 is_one_page(), next(), merge() 方法
+    - _Requirements: 4.2_
+  - [ ] 5.3 创建 `src-tauri/src/core/page_frame/page.rs`
+    - 定义 Page 结构体 (index, path, inner_path, name, size, width, height, aspect_ratio)
+    - 实现 is_landscape() 方法
+    - _Requirements: 3.1_
+  - [ ] 5.4 创建 `src-tauri/src/core/page_frame/element.rs`
+    - 定义 PageFrameElement 结构体
+    - 实现 width(), height(), is_landscape() 方法
+    - 支持 crop_rect 裁剪区域
+    - _Requirements: 3.2_
+  - [ ] 5.5 创建 `src-tauri/src/core/page_frame/frame.rs`
+    - 定义 PageFrame 结构体 (elements, frame_range, direction, angle, scale, size)
+    - 实现 single(), double() 构造方法
+    - 实现 contains(), get_directed_elements() 方法
+    - _Requirements: 3.2_
+
+- [ ] 6. 实现 PageFrameBuilder
+  - [ ] 6.1 创建 `src-tauri/src/core/page_frame/builder.rs`
+    - 定义 PageFrameBuilder 结构体
+    - 定义 PageFrameContext 配置结构体
+    - _Requirements: 3.3, 3.4, 3.5, 3.6_
+  - [ ] 6.2 实现分割页面逻辑
+    - 检测横向页面 (aspect_ratio > divide_page_rate)
+    - 生成左右两个 PageFrameElement
+    - 计算 crop_rect
+    - _Requirements: 5.1, 5.2_
+  - [ ]* 6.3 编写 Split Page Generation 属性测试
+    - **Property 6: Split Page Generation**
+    - **Validates: Requirements 3.3, 5.1**
+  - [ ] 6.4 实现分割页面方向顺序
+    - LTR: 左半边先显示
+    - RTL: 右半边先显示
+    - _Requirements: 5.3, 5.4_
+  - [ ]* 6.5 编写 Split Page Order 属性测试
+    - **Property 7: Split Page Order by Direction**
+    - **Validates: Requirements 5.3, 5.4**
+  - [ ] 6.6 实现双页配对逻辑
+    - 两个竖向页面组成一帧
+    - 首页/末页单独显示选项
+    - _Requirements: 6.1, 6.5, 6.6_
+  - [ ]* 6.7 编写 Double Page Pairing 属性测试
+    - **Property 8: Double Page Pairing**
+    - **Validates: Requirements 6.1, 6.5, 6.6**
+  - [ ] 6.8 实现横向页面独占逻辑
+    - is_supported_wide_page 启用时横向页面独占
+    - _Requirements: 6.2, 6.3_
+  - [ ]* 6.9 编写 Landscape Page Isolation 属性测试
+    - **Property 9: Landscape Page Isolation**
+    - **Validates: Requirements 6.2, 6.3**
+  - [ ] 6.10 实现虚拟页数计算
+    - 考虑分割页面的额外计数
+    - _Requirements: 4.5_
+  - [ ]* 6.11 编写 Virtual Page Count 属性测试
+    - **Property 10: Virtual Page Count Calculation**
+    - **Validates: Requirements 4.5**
+  - [ ] 6.12 实现导航步长计算
+    - 分割页面步长 0.5
+    - 双页模式步长 1 或 2
+    - _Requirements: 4.3, 4.4_
+  - [ ]* 6.13 编写 Navigation Step 属性测试
+    - **Property 11: Navigation Step Calculation**
+    - **Validates: Requirements 4.3**
+
+- [ ] 7. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 4: 后端 PageContentManager 模块
+
+- [ ] 8. 创建 PageContentManager
+  - [ ] 8.1 创建 `src-tauri/src/core/page_manager/mod.rs`
+    - 定义 PageContentManager 结构体
+    - 集成 JobEngine 和 MemoryPool
+    - _Requirements: 1.1, 2.1_
+  - [ ] 8.2 实现 open_book() 方法
+    - 清除旧书籍缓存
+    - 加载新书籍页面列表
+    - 初始化 BookContext
+    - _Requirements: 3.1_
+  - [ ] 8.3 实现 goto_position() 方法
+    - 提交当前页加载任务 (CurrentPage 优先级)
+    - 更新阅读方向
+    - 返回 PageFrame 信息
+    - _Requirements: 4.6_
+  - [ ] 8.4 实现预加载管道
+    - 前向预加载 5 页
+    - 后向预加载 2 页
+    - 取消不在窗口内的预加载
+    - _Requirements: 8.1, 8.2, 8.3_
+  - [ ]* 8.5 编写 Preload Window 属性测试
+    - **Property 14: Preload Window Management**
+    - **Validates: Requirements 8.1, 8.2**
+  - [ ] 8.6 实现 get_page_data() 方法
+    - 从缓存获取或等待加载
+    - 返回二进制数据
+    - _Requirements: 8.4_
+  - [ ]* 8.7 编写 Cache Hit Performance 属性测试
+    - **Property 15: Cache Hit Performance**
+    - **Validates: Requirements 8.4**
+
+- [ ] 9. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 5: 后端 ContentSizeCalculator
+
+- [ ] 10. 实现 ContentSizeCalculator
+  - [ ] 10.1 创建 `src-tauri/src/core/page_frame/calculator.rs`
+    - 定义 ContentSizeCalculator 结构体
+    - 定义 StretchMode 枚举
+    - _Requirements: 9.1_
+  - [ ] 10.2 实现各种 StretchMode 计算
+    - Uniform: 适应视口
+    - UniformToFill: 填充视口
+    - UniformToVertical: 适应高度
+    - UniformToHorizontal: 适应宽度
+    - _Requirements: 9.2, 9.3, 9.4, 9.5_
+  - [ ]* 10.3 编写 Stretch Mode 属性测试
+    - **Property 12: Stretch Mode Calculation**
+    - **Validates: Requirements 9.2, 9.3, 9.4, 9.5**
+  - [ ] 10.4 实现自动旋转计算
+    - 根据图片和视口方向决定是否旋转
+    - _Requirements: 9.6_
+
+- [ ] 11. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 6: 后端 Tauri Commands
+
+- [ ] 12. 创建 Tauri Commands
+  - [ ] 12.1 创建 `src-tauri/src/commands/page_commands.rs`
+    - 实现 open_book_v2 命令
+    - 实现 goto_position 命令
+    - 实现 get_page_image 命令
+    - 实现 next_frame / prev_frame 命令
+    - _Requirements: 11.1, 11.5_
+  - [ ] 12.2 实现二进制传输
+    - 使用 tauri::ipc::Response 返回二进制数据
+    - 避免 Base64 编码
+    - _Requirements: 11.2_
+  - [ ] 12.3 实现事件推送
+    - page_loaded 事件
+    - page_unloaded 事件
+    - memory_pressure 事件
+    - _Requirements: 11.3_
+  - [ ] 12.4 实现 update_context 命令
+    - 更新 PageFrameContext 配置
+    - 触发帧重新计算
+    - _Requirements: 10.4_
+  - [ ] 12.5 实现设置切换时位置保持
+    - 记录当前物理页面索引
+    - 重新计算帧后导航到正确位置
+    - _Requirements: 10.1, 10.2, 10.3_
+  - [ ]* 12.6 编写 Position Preservation 属性测试
+    - **Property 13: Position Preservation on Setting Change**
+    - **Validates: Requirements 10.1, 10.2, 10.3**
+
+- [ ] 13. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 7: 前端 Store 和 API
+
+- [ ] 14. 创建前端 API 封装
+  - [ ] 14.1 创建 `src/lib/api/pageManager.ts`
+    - 封装 openBook, gotoPosition, getPageImage 等 API
+    - 处理二进制响应转 Blob
+    - _Requirements: 11.1, 11.4_
+  - [ ] 14.2 实现事件监听
+    - 监听 page_loaded, page_unloaded, memory_pressure 事件
+    - _Requirements: 11.3_
+
+- [ ] 15. 创建 PageFrameStore
+  - [ ] 15.1 创建 `src/lib/stores/pageFrame.svelte.ts`
+    - 定义 PageFrameState 状态
+    - 实现 openBook, nextFrame, prevFrame 方法
+    - _Requirements: 11.5_
+  - [ ] 15.2 实现上下文配置管理
+    - 同步 PageFrameContext 到后端
+    - 响应配置变化
+    - _Requirements: 10.4_
+
+## Phase 8: 前端 StackViewer 组件
+
+- [ ] 16. 重构 StackViewer 组件
+  - [ ] 16.1 更新 `src/lib/viewer/StackViewer.svelte`
+    - 集成 PageFrameStore
+    - 实现层叠式渲染 (prev/current/next)
+    - _Requirements: 7.5_
+  - [ ] 16.2 实现分割页面渲染
+    - 使用 CSS clip-path 裁剪
+    - 共享图片缓存
+    - _Requirements: 5.2, 5.5_
+  - [ ] 16.3 实现双页布局
+    - 支持 LTR/RTL 方向
+    - CSS flex-direction 控制顺序
+    - _Requirements: 6.4_
+  - [ ] 16.4 实现无闪烁切换
+    - 预缓存尺寸计算缩放
+    - 原子切换图片和缩放
+    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+
+## Phase 9: 错误处理和集成
+
+- [ ] 17. 实现错误处理
+  - [ ] 17.1 后端错误处理
+    - 定义 PageError 枚举
+    - 实现重试机制 (指数退避)
+    - _Requirements: 12.1, 12.2_
+  - [ ] 17.2 前端错误处理
+    - 显示错误占位符
+    - 不崩溃继续运行
+    - _Requirements: 12.1, 12.5_
+  - [ ] 17.3 内存压力处理
+    - 检测内存压力
+    - 主动释放缓存
+    - _Requirements: 12.4_
+
+- [ ] 18. 集成测试
+  - [ ] 18.1 端到端翻页测试
+    - 打开书籍 → 翻页 → 验证帧内容
+  - [ ] 18.2 设置切换测试
+    - 切换分割模式 → 验证位置保持
+  - [ ] 18.3 性能测试
+    - 预加载命中率
+    - 缓存访问延迟
+
+- [ ] 19. Final Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+

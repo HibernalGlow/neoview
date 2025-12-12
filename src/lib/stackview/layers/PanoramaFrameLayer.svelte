@@ -9,9 +9,13 @@
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
   import type { PanoramaUnit, PanoramaImage } from '../stores/panoramaStore.svelte';
+  import { getPanoramaStore } from '../stores/panoramaStore.svelte';
   import FrameImage from '../components/FrameImage.svelte';
   import '../styles/frameLayer.css';
   import type { WidePageStretch } from '$lib/settings/settingsManager';
+  
+  // 获取全景 store 用于直接触发预加载
+  const panoramaStore = getPanoramaStore();
   
   let {
     units = [],
@@ -37,8 +41,8 @@
   let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
   let preloadTimeout: ReturnType<typeof setTimeout> | null = null;
   
-  // 滚动事件处理 - 触发预加载
-  function handleScroll(e: Event) {
+  // 滚动事件处理 - 直接触发预加载
+  function handleScroll(_e: Event) {
     // 防抖预加载
     if (preloadTimeout) {
       clearTimeout(preloadTimeout);
@@ -51,14 +55,9 @@
       const edgeInfo = checkNearEdge();
       
       if (edgeInfo.needsPreload) {
-        // 触发预加载回调，传递边缘页面索引
-        onScroll?.(new CustomEvent('panorama-scroll', { 
-          detail: { 
-            visiblePageIndex: edgeInfo.targetPageIndex,
-            nearEnd: edgeInfo.nearEnd,
-            nearStart: edgeInfo.nearStart
-          } 
-        }));
+        console.log(`🔄 全景滚动预加载: targetPageIndex=${edgeInfo.targetPageIndex}, nearEnd=${edgeInfo.nearEnd}, nearStart=${edgeInfo.nearStart}`);
+        // 直接调用 panoramaStore 触发预加载，不依赖回调
+        panoramaStore.loadPanorama(edgeInfo.targetPageIndex, pageMode);
       }
     }, 100); // 减少防抖时间，更快响应
   }

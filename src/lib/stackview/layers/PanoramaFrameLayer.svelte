@@ -35,6 +35,76 @@
   
   let containerRef: HTMLDivElement | null = $state(null);
   let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
+  let preloadTimeout: ReturnType<typeof setTimeout> | null = null;
+  
+  // 滚动事件处理 - 触发预加载
+  function handleScroll(e: Event) {
+    // 防抖预加载
+    if (preloadTimeout) {
+      clearTimeout(preloadTimeout);
+    }
+    
+    preloadTimeout = setTimeout(() => {
+      if (!containerRef || units.length === 0) return;
+      
+      // 检测是否接近边缘，需要加载更多
+      const edgeInfo = checkNearEdge();
+      
+      if (edgeInfo.needsPreload) {
+        // 触发预加载回调，传递边缘页面索引
+        onScroll?.(new CustomEvent('panorama-scroll', { 
+          detail: { 
+            visiblePageIndex: edgeInfo.targetPageIndex,
+            nearEnd: edgeInfo.nearEnd,
+            nearStart: edgeInfo.nearStart
+          } 
+        }));
+      }
+    }, 100); // 减少防抖时间，更快响应
+  }
+  
+  // 检测是否接近边缘
+  function checkNearEdge(): { needsPreload: boolean; targetPageIndex: number; nearEnd: boolean; nearStart: boolean } {
+    if (!containerRef || units.length === 0) {
+      return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
+    }
+    
+    const isVertical = orientation === 'vertical';
+    const scrollPos = isVertical ? containerRef.scrollTop : containerRef.scrollLeft;
+    const scrollSize = isVertical ? containerRef.scrollHeight : containerRef.scrollWidth;
+    const clientSize = isVertical ? containerRef.clientHeight : containerRef.clientWidth;
+    
+    // 计算滚动进度
+    const maxScroll = scrollSize - clientSize;
+    if (maxScroll <= 0) {
+      return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
+    }
+    
+    const scrollProgress = scrollPos / maxScroll;
+    
+    // 阈值：接近边缘 20% 时触发预加载
+    const threshold = 0.2;
+    const nearStart = scrollProgress < threshold;
+    const nearEnd = scrollProgress > (1 - threshold);
+    
+    if (nearEnd) {
+      // 接近末尾，预加载后面的页面
+      const lastUnit = units[units.length - 1];
+      const step = pageMode === 'double' ? 2 : 1;
+      const targetPageIndex = lastUnit.startIndex + step;
+      return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
+    }
+    
+    if (nearStart) {
+      // 接近开头，预加载前面的页面
+      const firstUnit = units[0];
+      const step = pageMode === 'double' ? 2 : 1;
+      const targetPageIndex = Math.max(0, firstUnit.startIndex - step);
+      return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
+    }
+    
+    return { needsPreload: false, targetPageIndex: 0, nearEnd: false, nearStart: false };
+  }
   
   // 当前页索引变化时滚动到对应单元（使用防抖）
   $effect(() => {
@@ -197,12 +267,13 @@
 </script>
 
 {#if units.length > 0}
-  <!-- 【性能优化】可滚动容器 -->
+  <!-- 【性能优化】可滚动容器，监听滚动事件触发预加载 -->
   <div 
     bind:this={containerRef}
     class="scroll-frame-container {containerClass}"
     data-layer="PanoramaFrameLayer"
     style:z-index={LayerZIndex.CURRENT_FRAME}
+    onscroll={handleScroll}
   >
     <div class="scroll-frame-content">
       {#each units as unit (unit.id)}

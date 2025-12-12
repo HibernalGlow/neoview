@@ -64,6 +64,7 @@ export function createPanoramaStore() {
   
   /**
    * 加载全景视图 - 使用共享池
+   * 支持动态扩展：滚动时会扩展已加载的范围
    */
   async function loadPanorama(centerIndex: number, pageMode: PageMode) {
     if (!state.enabled) return;
@@ -78,13 +79,36 @@ export function createPanoramaStore() {
     const step = pageMode === 'double' ? 2 : 1;
     const range = state.preloadRange;
     
-    const startUnit = Math.max(0, Math.floor(centerIndex / step) - range);
-    const endUnit = Math.min(Math.ceil(totalPages / step) - 1, Math.floor(centerIndex / step) + range);
+    // 计算新的范围
+    const newStartUnit = Math.max(0, Math.floor(centerIndex / step) - range);
+    const newEndUnit = Math.min(Math.ceil(totalPages / step) - 1, Math.floor(centerIndex / step) + range);
     
-    // 只更新中心索引（如果范围相同）
-    if (lastBuildParams.start === startUnit && 
-        lastBuildParams.end === endUnit && 
-        lastBuildParams.pageMode === pageMode) {
+    // 如果 pageMode 变化，重置
+    if (lastBuildParams.pageMode !== pageMode) {
+      lastBuildParams = { start: -1, end: -1, pageMode };
+    }
+    
+    // 计算扩展后的范围（合并旧范围和新范围）
+    let startUnit: number;
+    let endUnit: number;
+    
+    if (lastBuildParams.start === -1) {
+      // 首次加载
+      startUnit = newStartUnit;
+      endUnit = newEndUnit;
+    } else {
+      // 扩展范围：取并集
+      startUnit = Math.min(lastBuildParams.start, newStartUnit);
+      endUnit = Math.max(lastBuildParams.end, newEndUnit);
+    }
+    
+    // 检查是否需要加载新内容
+    const needsExpansion = startUnit < lastBuildParams.start || 
+                           endUnit > lastBuildParams.end ||
+                           lastBuildParams.start === -1;
+    
+    if (!needsExpansion) {
+      // 范围没有扩展，只更新中心索引
       state.centerIndex = centerIndex;
       return;
     }
@@ -132,6 +156,7 @@ export function createPanoramaStore() {
       state.loading = false;
     }
     
+    // 更新已加载范围
     lastBuildParams = { start: startUnit, end: endUnit, pageMode };
     
     // 后台预加载更多

@@ -776,6 +776,17 @@
 		void pageRight();
 	}
 
+	// 处理全景模式滚动事件 - 触发预加载
+	function handlePanoramaScroll(e: Event) {
+		// 检查是否是自定义事件
+		if (e instanceof CustomEvent && e.detail?.visiblePageIndex !== undefined) {
+			const { visiblePageIndex, nearEnd, nearStart } = e.detail;
+			console.log(`🔄 全景滚动预加载: pageIndex=${visiblePageIndex}, nearEnd=${nearEnd}, nearStart=${nearStart}`);
+			// 触发预加载：以目标页为中心预加载
+			panoramaStore.loadPanorama(visiblePageIndex, pageMode);
+		}
+	}
+
 	// 悬停滚动状态
 	let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
 
@@ -1029,6 +1040,7 @@
 			currentPageIndex={bookStore.currentPageIndex}
 			{viewportSize}
 			{widePageStretch}
+			onScroll={handlePanoramaScroll}
 		/>
 	{:else if useStackRenderer}
 		<!-- 层叠渲染模式：使用 StackViewer（支持双页） -->

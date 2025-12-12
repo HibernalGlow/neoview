@@ -681,11 +681,16 @@
 		}
 	}
 
-	// 更新 MetadataService 中的图像尺寸
+	// 更新图像尺寸到 MetadataService 和 bookStore
 	async function updateMetadataDimensions(width: number, height: number) {
 		const book = bookStore.currentBook;
 		const page = bookStore.currentPage;
+		const pageIndex = bookStore.currentPageIndex;
 		if (!book || !page) return;
+
+		// 【关键修复】同时更新 bookStore.pages 中的尺寸
+		// 这样 getPageStep 可以正确判断页面是否为横向
+		bookStore.updatePageDimensions(pageIndex, { width, height });
 
 		try {
 			const { metadataService } = await import('$lib/services/metadataService');

@@ -556,15 +556,56 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 }
 
 /**
+ * 获取页面的尺寸信息
+ * 优先从 book.pages 获取，如果没有则返回 null
+ * 
+ * 注意：尺寸信息可能是异步加载的，在图片加载完成后才会更新到 book.pages
+ */
+function getPageDimensions(book: typeof bookStore.currentBook, pageIndex: number): { width: number; height: number } | null {
+	if (!book || !book.pages || pageIndex < 0 || pageIndex >= book.pages.length) {
+		return null;
+	}
+	
+	const page = book.pages[pageIndex];
+	if (!page) return null;
+	
+	const width = page.width ?? 0;
+	const height = page.height ?? 0;
+	
+	// 只有当尺寸有效时才返回
+	if (width > 0 && height > 0) {
+		return { width, height };
+	}
+	
+	return null;
+}
+
+/**
+ * 判断页面是否为横向
+ * 如果没有尺寸信息，返回 false（保守策略：假设是竖屏）
+ */
+function isPageLandscape(book: typeof bookStore.currentBook, pageIndex: number): boolean {
+	const dims = getPageDimensions(book, pageIndex);
+	if (!dims) {
+		// 没有尺寸信息时，保守地假设是竖屏
+		// 这样可以避免在尺寸加载前错误地跳过页面
+		return false;
+	}
+	return dims.width > dims.height;
+}
+
+/**
  * 计算翻页步进
+ * 
+ * 核心原则：只有两张竖屏图片才能组成双页，其他情况都是步进 1
  * 
  * 按照 NeeView 的逻辑：
  * 1. 单页模式 → 步进 1
- * 2. 双页模式：
- *    - 当前页横向（且开启横向视为双页）→ 步进 1
- *    - 下一页横向（且开启横向视为双页）→ 步进 1
+ * 2. 双页模式（横向视为双页开启时）：
+ *    - 当前页横向 → 步进 1（当前页独占）
+ *    - 下一页横向 → 步进 1（当前页独占，下一页将独占）
  *    - 首页/尾页单独显示 → 步进 1
- *    - 正常双页 → 步进 2
+ *    - 两张竖屏图片 → 步进 2（正常双页）
  */
 function getPageStep(): number {
 	const snapshot = appState.getSnapshot();
@@ -605,46 +646,54 @@ function getPageStep(): number {
 	if (!currentPage) return 1;
 	
 	// 获取当前页尺寸
-	const currentWidth = currentPage.width ?? 0;
-	const currentHeight = currentPage.height ?? 0;
-	const hasCurrentSize = currentWidth > 0 && currentHeight > 0;
-	const isCurrentLandscape = hasCurrentSize && currentWidth > currentHeight;
+	const currentDims = getPageDimensions(book, currentIndex);
+	const isCurrentLandscape = currentDims ? currentDims.width > currentDims.height : false;
 	
-	// 1. 当前页横向 → 步进 1
+	console.log(`📐 getPageStep: 当前页 ${currentIndex} 尺寸=${currentDims ? `${currentDims.width}x${currentDims.height}` : 'N/A'} 横向=${isCurrentLandscape}`);
+	
+	// 1. 当前页横向 → 步进 1（当前页独占显示）
 	if (treatHorizontalAsDoublePage && isCurrentLandscape) {
+		console.log(`📐 getPageStep: 当前页 ${currentIndex} 是横向，步进 1`);
 		return 1;
 	}
 	
-	// 2. 获取下一页
+	// 2. 获取下一页（用于判断当前帧是否为双页）
 	const nextIndex = currentIndex + 1;
 	if (nextIndex >= book.pages.length) {
+		console.log(`📐 getPageStep: 没有下一页，步进 1`);
 		return 1;
 	}
 	
 	const nextPage = book.pages[nextIndex];
-	if (!nextPage) return 1;
-	
-	// 获取下一页尺寸
-	const nextWidth = nextPage.width ?? 0;
-	const nextHeight = nextPage.height ?? 0;
-	const hasNextSize = nextWidth > 0 && nextHeight > 0;
-	const isNextLandscape = hasNextSize && nextWidth > nextHeight;
-	
-	// 3. 下一页横向 → 步进 1
-	if (treatHorizontalAsDoublePage && isNextLandscape) {
+	if (!nextPage) {
+		console.log(`📐 getPageStep: 下一页数据不存在，步进 1`);
 		return 1;
 	}
 	
-	// 4. 首页/尾页单独显示
+	// 获取下一页尺寸
+	const nextDims = getPageDimensions(book, nextIndex);
+	const isNextLandscape = nextDims ? nextDims.width > nextDims.height : false;
+	
+	console.log(`📐 getPageStep: 下一页 ${nextIndex} 尺寸=${nextDims ? `${nextDims.width}x${nextDims.height}` : 'N/A'} 横向=${isNextLandscape}`);
+	
+	// 3. 下一页横向 → 步进 1（当前页独占，下一页将独占）
+	if (treatHorizontalAsDoublePage && isNextLandscape) {
+		console.log(`📐 getPageStep: 下一页 ${nextIndex} 是横向，当前页独占，步进 1`);
+		return 1;
+	}
+	
+	// 4. 首页/尾页单独显示（检查当前页或下一页是否为首页/尾页）
 	const totalPages = book.pages.length;
 	const isFirst = currentIndex === 0 || nextIndex === 0;
 	const isLast = currentIndex === totalPages - 1 || nextIndex === totalPages - 1;
 	
 	if ((singleFirstPage && isFirst) || (singleLastPage && isLast)) {
+		console.log(`📐 getPageStep: 首页/尾页单独显示，步进 1`);
 		return 1;
 	}
 	
-	// 5. 正常双页 → 步进 2
+	// 5. 两张竖屏图片 → 步进 2（正常双页）
+	console.log(`📐 getPageStep: 正常双页 ${currentIndex}-${nextIndex}，步进 2`);
 	return 2;
 }
 
@@ -698,13 +747,24 @@ export async function pageRight() {
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = get(subPageIndex);
 		const shouldSplit = shouldSplitPage(currentIndex);
+		const currentViewMode = get(viewMode);
 
+		// 获取当前页和下一页的尺寸信息用于调试
+		const book = bookStore.currentBook;
+		const currentPage = book?.pages?.[currentIndex];
+		const nextPage = book?.pages?.[currentIndex + 1];
+		
 		console.log('📖 pageRight:', {
 			currentIndex,
 			currentSub,
 			shouldSplit,
 			splitEnabled: settingsManager.getSettings().view.pageLayout.splitHorizontalPages,
-			viewMode: get(viewMode)
+			treatHorizontalAsDoublePage: settingsManager.getSettings().view.pageLayout?.treatHorizontalAsDoublePage,
+			viewMode: currentViewMode,
+			currentPageSize: currentPage ? `${currentPage.width}x${currentPage.height}` : 'N/A',
+			nextPageSize: nextPage ? `${nextPage.width}x${nextPage.height}` : 'N/A',
+			isCurrentLandscape: currentPage ? (currentPage.width ?? 0) > (currentPage.height ?? 0) : false,
+			isNextLandscape: nextPage ? (nextPage.width ?? 0) > (nextPage.height ?? 0) : false
 		});
 
 		// 如果当前页面支持分割

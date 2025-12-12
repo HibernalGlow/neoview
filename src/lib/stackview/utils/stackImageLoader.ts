@@ -238,6 +238,9 @@ export class StackImageLoader {
     // 缓存尺寸
     if (dimensions) {
       this.dimensionsCache.set(pageIndex, dimensions);
+      // 【关键修复】同步尺寸到 bookStore.pages
+      // 这样 getPageStep 可以正确判断页面是否为横向
+      bookStore.updatePageDimensions(pageIndex, dimensions);
     }
     
     // 后台计算背景色（不阻塞返回）

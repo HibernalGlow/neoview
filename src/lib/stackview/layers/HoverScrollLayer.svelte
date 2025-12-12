@@ -110,11 +110,56 @@
     }
   }
   
+  // 检测鼠标是否在 UI 元素上（边栏、工具栏、设置面板等）
+  function isOverUIElement(e: MouseEvent): boolean {
+    const target = e.target as HTMLElement;
+    if (!target) return false;
+    
+    // 检查是否在以下 UI 元素内
+    const uiSelectors = [
+      '[data-sidebar]',           // 边栏
+      '[data-panel]',             // 面板
+      '[data-toolbar]',           // 工具栏
+      '.settings-panel',          // 设置面板
+      '.sidebar',                 // 边栏
+      '.panel',                   // 面板
+      '.toolbar',                 // 工具栏
+      '.popover',                 // 弹出框
+      '.dialog',                  // 对话框
+      '[role="dialog"]',          // 对话框
+      '[role="menu"]',            // 菜单
+      '.top-toolbar',             // 顶部工具栏
+      '.bottom-toolbar',          // 底部工具栏
+      '.info-panel',              // 信息面板
+      '.folder-panel',            // 文件夹面板
+      'button',                   // 按钮
+      'input',                    // 输入框
+      'select',                   // 选择框
+      '[data-radix-popper-content-wrapper]', // Radix UI 弹出内容
+    ];
+    
+    for (const selector of uiSelectors) {
+      if (target.closest(selector)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   function onMouseMove(e: MouseEvent) {
     if (!enabled) return;
     
     currentMouseX = e.clientX;
     currentMouseY = e.clientY;
+    
+    // 如果鼠标在 UI 元素上，停止滚动
+    if (isOverUIElement(e)) {
+      if (isHovering) {
+        isHovering = false;
+      }
+      return;
+    }
     
     // 检测是否在目标区域内
     if (cachedRect) {

@@ -110,100 +110,7 @@ export async function getBookInfo(): Promise<BookInfo | null> {
 }
 
 /**
- * 将 base64 字符串解码为 ArrayBuffer（回退方案）
- */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-	const binaryString = atob(base64);
-	const bytes = new Uint8Array(binaryString.length);
-	for (let i = 0; i < binaryString.length; i++) {
-		bytes[i] = binaryString.charCodeAt(i);
-	}
-	return bytes.buffer;
-}
-
-// 是否启用二进制 IPC（可通过设置控制）
-let useBinaryIpc = true;
-
-/**
- * 安全地将各种类型转换为 ArrayBuffer
- * Tauri 2.0 的二进制 IPC 可能返回多种格式
- */
-function toArrayBuffer(data: unknown): ArrayBuffer | null {
-	// 1. 标准 ArrayBuffer
-	if (data instanceof ArrayBuffer) {
-		return data.byteLength > 0 ? data : null;
-	}
-	
-	// 2. Uint8Array 或其他 TypedArray
-	if (ArrayBuffer.isView(data)) {
-		const view = data as Uint8Array;
-		if (view.byteLength === 0) return null;
-		// 创建副本，避免共享 buffer 问题
-		const copy = new Uint8Array(view.byteLength);
-		copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-		return copy.buffer;
-	}
-	
-	// 3. 普通数组（number[]）
-	if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'number') {
-		return new Uint8Array(data).buffer;
-	}
-	
-	// 4. 带有 data 属性的对象（Tauri 可能的包装格式）
-	if (data && typeof data === 'object' && 'data' in data) {
-		return toArrayBuffer((data as { data: unknown }).data);
-	}
-	
-	// 5. 带有 buffer 属性的对象
-	if (data && typeof data === 'object' && 'buffer' in data) {
-		const bufferData = (data as { buffer: unknown }).buffer;
-		if (bufferData instanceof ArrayBuffer) {
-			return bufferData.byteLength > 0 ? bufferData : null;
-		}
-	}
-	
-	return null;
-}
-
-/**
- * 获取页面数据，支持二进制 IPC 和 base64 两种模式
- * 优先使用二进制 IPC（性能更好），失败时自动回退到 base64（稳定可靠）
- */
-async function getPageBuffer(command: string, index: number): Promise<ArrayBuffer> {
-	if (useBinaryIpc) {
-		try {
-			// 尝试使用二进制 IPC
-			const result = await invoke(command, { index });
-			
-			// 尝试转换为 ArrayBuffer
-			const buffer = toArrayBuffer(result);
-			if (buffer) {
-				return buffer;
-			}
-			
-			// 调试：打印实际返回的类型
-			console.warn('⚠️ 二进制 IPC 返回格式异常，切换到 base64 模式', {
-				type: typeof result,
-				constructor: result?.constructor?.name,
-				isArrayBuffer: result instanceof ArrayBuffer,
-				isUint8Array: result instanceof Uint8Array,
-				isArray: Array.isArray(result),
-				keys: result && typeof result === 'object' ? Object.keys(result) : null
-			});
-			useBinaryIpc = false;
-		} catch (err) {
-			console.warn('⚠️ 二进制 IPC 失败，切换到 base64 模式:', err);
-			useBinaryIpc = false;
-		}
-	}
-	
-	// 使用 base64 模式（稳定可靠）
-	const base64 = await invoke<string>(`${command}_base64`, { index });
-	return base64ToArrayBuffer(base64);
-}
-
-/**
- * 跳转到指定页面（优先二进制 IPC，失败回退 base64）
+ * 跳转到指定页面（使用二进制 IPC 传输）
  * 
  * 后端自动：
  * - 检查缓存
@@ -214,17 +121,19 @@ async function getPageBuffer(command: string, index: number): Promise<ArrayBuffe
  */
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
-	const buffer = await getPageBuffer('pm_goto_page', index);
+	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
+	const buffer = await invoke<ArrayBuffer>('pm_goto_page', { index });
 	return new Blob([buffer]);
 }
 
 /**
- * 获取页面数据（不改变当前页，优先二进制 IPC，失败回退 base64）
+ * 获取页面数据（不改变当前页，使用二进制 IPC 传输）
  * 
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
-	const buffer = await getPageBuffer('pm_get_page', index);
+	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
+	const buffer = await invoke<ArrayBuffer>('pm_get_page', { index });
 	return new Blob([buffer]);
 }
 
@@ -232,14 +141,16 @@ export async function getPage(index: number): Promise<Blob> {
  * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
-	return getPageBuffer('pm_goto_page', index);
+	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
+	return invoke<ArrayBuffer>('pm_goto_page', { index });
 }
 
 /**
  * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
-	return getPageBuffer('pm_get_page', index);
+	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
+	return invoke<ArrayBuffer>('pm_get_page', { index });
 }
 
 /**

@@ -7,6 +7,8 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
 	plugins: [svelte({ compilerOptions: { runes: true } }), tailwindcss()],
+	// 确保 Release 版本的资源路径正确
+	base: './',
 	resolve: {
 		alias: {
 			$lib: path.resolve('./src/lib')

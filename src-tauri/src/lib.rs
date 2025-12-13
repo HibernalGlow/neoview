@@ -38,6 +38,35 @@ use tauri::Manager;
 #[allow(clippy::missing_panics_doc)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 设置 panic hook 以捕获崩溃信息
+    std::panic::set_hook(Box::new(|panic_info| {
+        let msg = format!("PANIC: {}", panic_info);
+        log::error!("{}", msg);
+        
+        // 尝试写入日志文件
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            let log_path = std::path::PathBuf::from(app_data)
+                .join("NeoView")
+                .join("logs")
+                .join("panic.log");
+            if let Some(parent) = log_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+            let log_entry = format!("[{}] {}\n", timestamp, msg);
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .and_then(|mut file| {
+                    use std::io::Write;
+                    file.write_all(log_entry.as_bytes())
+                });
+        }
+        
+        // 显示错误对话框
+        core::startup_init::show_startup_error_dialog("NeoView 崩溃", &msg);
+    }));
 
     tauri::Builder::default()
         .plugin(
@@ -475,6 +504,44 @@ pub fn run() {
             // Metadata commands
             commands::metadata_commands::get_image_metadata,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // 记录应用事件
+            match &event {
+                tauri::RunEvent::Ready => {
+                    log::info!("🎉 应用就绪");
+                    if let Ok(app_data) = app_handle.path().app_data_dir() {
+                        core::startup_init::write_startup_log(&app_data, "步骤17: 应用就绪 (Ready)");
+                    }
+                }
+                tauri::RunEvent::ExitRequested { api, code, .. } => {
+                    log::info!("📤 应用退出请求, code: {:?}", code);
+                    if let Ok(app_data) = app_handle.path().app_data_dir() {
+                        core::startup_init::write_startup_log(&app_data, &format!("应用退出请求, code: {:?}", code));
+                    }
+                }
+                tauri::RunEvent::WindowEvent { label, event, .. } => {
+                    match event {
+                        tauri::WindowEvent::CloseRequested { .. } => {
+                            log::info!("🪟 窗口 {} 关闭请求", label);
+                        }
+                        tauri::WindowEvent::Destroyed => {
+                            log::info!("🪟 窗口 {} 已销毁", label);
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                core::startup_init::write_startup_log(&app_data, &format!("窗口 {} 已销毁", label));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                tauri::RunEvent::WebviewEvent { label, event, .. } => {
+                    log::info!("🌐 WebView 事件: {} - {:?}", label, event);
+                    if let Ok(app_data) = app_handle.path().app_data_dir() {
+                        core::startup_init::write_startup_log(&app_data, &format!("WebView 事件: {} - {:?}", label, event));
+                    }
+                }
+                _ => {}
+            }
+        });
 }

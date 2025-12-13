@@ -100,21 +100,17 @@ pub async fn pm_get_page(
     Ok(tauri::ipc::Response::new(data))
 }
 
-// ===== Base64 版本（已废弃，保留用于兼容旧版本） =====
-// 推荐使用 pm_goto_page / pm_get_page 的二进制 IPC 版本
+// ===== Base64 版本（用于 postMessage 回退时优化传输） =====
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 
-/// 跳转到指定页面（Base64 编码）
-/// 
-/// **已废弃**: 请使用 `pm_goto_page` 的二进制 IPC 版本，性能更好
+/// 跳转到指定页面（Base64 编码，用于 postMessage 优化）
 #[tauri::command]
-#[deprecated(note = "使用 pm_goto_page 的二进制 IPC 版本")]
 pub async fn pm_goto_page_base64(
     index: usize,
     state: State<'_, PageManagerState>,
 ) -> Result<String, String> {
-    log::debug!("📄 [PageCommand] goto_page_base64: {index}");
+    log::debug!("📄 [PageCommand] goto_page_base64: {}", index);
 
     let mut manager = state.manager.lock().await;
     let (data, result) = manager.goto_page(index).await?;
@@ -129,16 +125,13 @@ pub async fn pm_goto_page_base64(
     Ok(STANDARD.encode(&data))
 }
 
-/// 获取页面数据（Base64 编码）
-/// 
-/// **已废弃**: 请使用 `pm_get_page` 的二进制 IPC 版本，性能更好
+/// 获取页面数据（Base64 编码，用于 postMessage 优化）
 #[tauri::command]
-#[deprecated(note = "使用 pm_get_page 的二进制 IPC 版本")]
 pub async fn pm_get_page_base64(
     index: usize,
     state: State<'_, PageManagerState>,
 ) -> Result<String, String> {
-    log::debug!("📄 [PageCommand] get_page_base64: {index}");
+    log::debug!("📄 [PageCommand] get_page_base64: {}", index);
 
     let mut manager = state.manager.lock().await;
     let (data, _result) = manager.get_page(index).await?;
@@ -269,7 +262,7 @@ fn sort_by_distance_from_center(indices: &mut [usize], center: usize) {
 /// 接受需要生成的页面索引列表和当前页面索引
 /// 按照与当前页的距离排序后生成，距离近的优先
 /// 前端负责过滤已缓存的页面，避免重复生成
-#[tauri::command]   
+#[tauri::command]
 pub async fn pm_preload_thumbnails(
     indices: Vec<usize>,
     center_index: Option<usize>,  // 新增：当前页面索引，用于优先级排序

@@ -25,6 +25,8 @@ pub struct ThumbnailState {
 }
 
 /// 初始化缩略图管理器
+/// 注意：ThumbnailState 已在 lib.rs 启动时初始化，此函数现在仅用于兼容性
+/// 如果需要更新配置（如缩略图尺寸），可以在此处实现
 #[tauri::command]
 pub async fn init_thumbnail_manager(
     app: tauri::AppHandle,
@@ -32,6 +34,16 @@ pub async fn init_thumbnail_manager(
     _root_path: String,
     size: u32,
 ) -> Result<(), String> {
+    // ThumbnailState 已在 lib.rs 启动时初始化
+    // 检查状态是否存在
+    if app.try_state::<ThumbnailState>().is_some() {
+        println!("📁 ThumbnailState 已在启动时初始化，跳过重复初始化 (size: {})", size);
+        return Ok(());
+    }
+    
+    // 如果状态不存在（理论上不应该发生），则进行初始化
+    println!("⚠️ ThumbnailState 未找到，进行初始化...");
+    
     // 使用前端传入的缩略图根目录（前端已做路径规范化），并在此处再做一层兜底：
     // - 如果为空字符串
     // - 或者不是绝对路径

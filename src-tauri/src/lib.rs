@@ -15,6 +15,7 @@ mod models;
 mod tray;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
+use commands::thumbnail_commands::ThumbnailState;
 use core::directory_stream::StreamManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::page_commands::PageManagerState;
@@ -23,10 +24,13 @@ use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_service_commands::UpscaleServiceState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use core::blob_registry::BlobRegistry;
 use core::job_engine::{JobEngine, JobEngineConfig};
 use core::page_manager::PageContentManager;
 use core::background_scheduler::BackgroundTaskScheduler;
 use core::cache_index_db::CacheIndexDb;
+use core::thumbnail_db::ThumbnailDb;
+use core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
 use core::{ArchiveManager, BookManager, FsManager, ImageLoader};
 use std::path::PathBuf;
@@ -200,6 +204,31 @@ pub fn run() {
             let dimension_cache_path = app_data_root.join("dimension_cache.json");
             app.manage(core::DimensionScannerState::new(dimension_cache_path));
             log::info!("📐 尺寸扫描器初始化完成");
+
+            // 🖼️ 初始化 ThumbnailState（在启动时初始化，避免 state() 调用 panic）
+            let thumbnail_db_path = app_data_root.join("thumbnails.db");
+            let thumbnail_db = Arc::new(ThumbnailDb::new(thumbnail_db_path));
+            
+            // 创建生成器配置（根据 CPU 核心数动态调整）
+            let thumb_thread_pool_size = (num_cores * 4).clamp(16, 32);
+            let thumb_archive_concurrency = (num_cores * 2).clamp(4, 12);
+            let thumb_config = ThumbnailGeneratorConfig {
+                max_width: 256,  // 默认尺寸，前端可通过 init_thumbnail_manager 重新配置
+                max_height: 256,
+                thread_pool_size: thumb_thread_pool_size,
+                archive_concurrency: thumb_archive_concurrency,
+            };
+            let thumbnail_generator = Arc::new(Mutex::new(
+                ThumbnailGenerator::new(Arc::clone(&thumbnail_db), thumb_config)
+            ));
+            let blob_registry = Arc::new(BlobRegistry::new(1000));
+            
+            app.manage(ThumbnailState {
+                db: thumbnail_db,
+                generator: thumbnail_generator,
+                blob_registry,
+            });
+            log::info!("🖼️ ThumbnailState 初始化完成");
 
             Ok(())
         })

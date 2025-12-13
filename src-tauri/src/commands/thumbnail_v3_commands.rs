@@ -87,17 +87,10 @@ pub async fn init_thumbnail_service_v3(
     // 保存到应用状态
     app.manage(ThumbnailServiceV3State { service });
     
-    // 同时初始化 ThumbnailState（供 rating 命令使用）
-    // 创建 BlobRegistry（用于管理 blob URL）
-    let blob_registry = Arc::new(BlobRegistry::new(1000)); // 最多缓存 1000 个缩略图
+    // ThumbnailState 已在 lib.rs 启动时初始化，这里不再重复注册
+    // 如果需要更新配置，可以通过其他方式实现
     
-    app.manage(ThumbnailState {
-        db,
-        generator,
-        blob_registry,
-    });
-    
-    log_info!("✅ ThumbnailServiceV3 + ThumbnailState 初始化完成");
+    log_info!("✅ ThumbnailServiceV3 初始化完成 (ThumbnailState 已在启动时初始化)");
     Ok(())
 }
 

@@ -100,16 +100,14 @@ pub async fn pm_get_page(
     Ok(tauri::ipc::Response::new(data))
 }
 
-// ===== Base64 版本（已废弃，保留用于兼容旧版本） =====
-// 推荐使用 pm_goto_page / pm_get_page 的二进制 IPC 版本
+// ===== Base64 版本（作为二进制 IPC 的安全回退） =====
+// 前端优先使用 pm_goto_page / pm_get_page 的二进制 IPC 版本
+// 如果二进制 IPC 失败，自动回退到 base64 版本确保图片能正常显示
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 
-/// 跳转到指定页面（Base64 编码）
-/// 
-/// **已废弃**: 请使用 `pm_goto_page` 的二进制 IPC 版本，性能更好
+/// 跳转到指定页面（Base64 编码，作为二进制 IPC 的回退方案）
 #[tauri::command]
-#[deprecated(note = "使用 pm_goto_page 的二进制 IPC 版本")]
 pub async fn pm_goto_page_base64(
     index: usize,
     state: State<'_, PageManagerState>,
@@ -129,11 +127,8 @@ pub async fn pm_goto_page_base64(
     Ok(STANDARD.encode(&data))
 }
 
-/// 获取页面数据（Base64 编码）
-/// 
-/// **已废弃**: 请使用 `pm_get_page` 的二进制 IPC 版本，性能更好
+/// 获取页面数据（Base64 编码，作为二进制 IPC 的回退方案）
 #[tauri::command]
-#[deprecated(note = "使用 pm_get_page 的二进制 IPC 版本")]
 pub async fn pm_get_page_base64(
     index: usize,
     state: State<'_, PageManagerState>,

@@ -110,7 +110,39 @@ export async function getBookInfo(): Promise<BookInfo | null> {
 }
 
 /**
- * 跳转到指定页面（使用二进制 IPC 传输）
+ * 将 base64 字符串解码为 ArrayBuffer（回退方案）
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+	const binaryString = atob(base64);
+	const bytes = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes.buffer;
+}
+
+/**
+ * 安全获取页面数据，优先使用二进制 IPC，失败时回退到 base64
+ */
+async function safeGetPageBuffer(command: string, index: number): Promise<ArrayBuffer> {
+	try {
+		// 优先使用二进制 IPC（性能更好）
+		const buffer = await invoke<ArrayBuffer>(command, { index });
+		// 验证返回的是有效的 ArrayBuffer
+		if (buffer instanceof ArrayBuffer && buffer.byteLength > 0) {
+			return buffer;
+		}
+		throw new Error('Invalid ArrayBuffer response');
+	} catch (err) {
+		// 回退到 base64 版本（兼容性更好）
+		console.warn(`⚠️ 二进制 IPC 失败，回退到 base64: ${command}`, err);
+		const base64 = await invoke<string>(`${command}_base64`, { index });
+		return base64ToArrayBuffer(base64);
+	}
+}
+
+/**
+ * 跳转到指定页面（优先二进制 IPC，失败回退 base64）
  * 
  * 后端自动：
  * - 检查缓存
@@ -121,19 +153,17 @@ export async function getBookInfo(): Promise<BookInfo | null> {
  */
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
-	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
-	const buffer = await invoke<ArrayBuffer>('pm_goto_page', { index });
+	const buffer = await safeGetPageBuffer('pm_goto_page', index);
 	return new Blob([buffer]);
 }
 
 /**
- * 获取页面数据（不改变当前页，使用二进制 IPC 传输）
+ * 获取页面数据（不改变当前页，优先二进制 IPC，失败回退 base64）
  * 
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
-	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
-	const buffer = await invoke<ArrayBuffer>('pm_get_page', { index });
+	const buffer = await safeGetPageBuffer('pm_get_page', index);
 	return new Blob([buffer]);
 }
 
@@ -141,16 +171,14 @@ export async function getPage(index: number): Promise<Blob> {
  * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
-	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
-	return invoke<ArrayBuffer>('pm_goto_page', { index });
+	return safeGetPageBuffer('pm_goto_page', index);
 }
 
 /**
  * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
-	// 使用 Tauri 官方二进制 IPC，直接返回 ArrayBuffer
-	return invoke<ArrayBuffer>('pm_get_page', { index });
+	return safeGetPageBuffer('pm_get_page', index);
 }
 
 /**

@@ -50,14 +50,27 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_x::init())
         .setup(|app| {
+            // 🚀 启动初始化：确保所有必需目录存在
+            let startup_diagnostics = match core::startup_init::ensure_app_directories(app.handle()) {
+                Ok(diag) => {
+                    core::startup_init::write_startup_log(&diag.app_data_path, "NeoView 启动中...");
+                    diag
+                }
+                Err(e) => {
+                    log::error!("❌ 启动初始化失败: {e}");
+                    // 使用临时目录作为最后手段
+                    core::startup_init::StartupDiagnostics {
+                        app_data_path: std::env::temp_dir().join("neoview_data"),
+                        used_fallback: true,
+                        directories_created: Vec::new(),
+                    }
+                }
+            };
+            let app_data_root = startup_diagnostics.app_data_path.clone();
+
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
-
-            let app_data_root = app
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
             app.manage(FsState {
                 fs_manager: Arc::new(Mutex::new(fs_manager)),
@@ -71,7 +84,8 @@ pub fn run() {
             // 优化：增加 SQLite 缓存 TTL
             // directory_ttl: 300s -> 600s (10分钟)
             // thumbnail_ttl: 3600s -> 7200s (2小时)
-            let cache_index_db = CacheIndexDb::new(
+            // 使用 new_with_recovery 以支持数据库损坏时自动恢复
+            let cache_index_db = CacheIndexDb::new_with_recovery(
                 app_data_root.join("directory_cache.db"),
                 Duration::from_secs(600),
                 Duration::from_secs(7200),
@@ -148,9 +162,10 @@ pub fn run() {
 
             log::info!("🚀 NeoView 初始化完成 (JobEngine workers: {})", num_cores.clamp(2, 8));
 
-            // 初始化系统托盘
-            tray::init_tray(app.handle())?;
-            log::info!("📌 系统托盘初始化完成");
+            // 初始化系统托盘（使用安全版本，失败不会导致应用崩溃）
+            if let Err(e) = tray::init_tray_safe(app.handle()) {
+                log::warn!("⚠️ 托盘初始化返回错误: {e}");
+            }
 
             // 初始化尺寸扫描器状态
             let dimension_cache_path = app_data_root.join("dimension_cache.json");

@@ -74,6 +74,75 @@ impl CacheIndexDb {
         }
     }
 
+    /// 带恢复功能的数据库初始化
+    /// 如果数据库损坏或无法打开，会自动备份并重建
+    pub fn new_with_recovery(
+        db_path: PathBuf,
+        directory_ttl: Duration,
+        thumbnail_ttl: Duration,
+    ) -> Self {
+        let instance = Self::new(db_path.clone(), directory_ttl, thumbnail_ttl);
+        
+        // 尝试打开数据库，如果失败则尝试恢复
+        if let Err(e) = instance.open_with_retry(3) {
+            log::warn!("⚠️ 数据库打开失败: {e}，尝试恢复...");
+            
+            // 备份旧数据库
+            if db_path.exists() {
+                let backup_path = db_path.with_extension("db.bak");
+                if let Err(backup_err) = std::fs::rename(&db_path, &backup_path) {
+                    log::warn!("⚠️ 无法备份旧数据库: {backup_err}，直接删除");
+                    let _ = std::fs::remove_file(&db_path);
+                } else {
+                    log::info!("📦 旧数据库已备份到: {}", backup_path.display());
+                }
+                
+                // 同时删除 WAL 和 SHM 文件
+                let wal_path = db_path.with_extension("db-wal");
+                let shm_path = db_path.with_extension("db-shm");
+                let _ = std::fs::remove_file(&wal_path);
+                let _ = std::fs::remove_file(&shm_path);
+            }
+            
+            // 重新创建实例
+            let new_instance = Self::new(db_path, directory_ttl, thumbnail_ttl);
+            if let Err(e2) = new_instance.open() {
+                log::error!("❌ 数据库恢复失败: {e2}");
+            } else {
+                log::info!("✅ 数据库已重建");
+            }
+            return new_instance;
+        }
+        
+        log::info!("✅ 数据库初始化成功: {}", db_path.display());
+        instance
+    }
+
+    /// 带重试的数据库打开
+    fn open_with_retry(&self, max_retries: u32) -> SqliteResult<()> {
+        let mut last_error = None;
+        
+        for attempt in 1..=max_retries {
+            match self.open() {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    log::warn!("⚠️ 数据库打开尝试 {attempt}/{max_retries} 失败: {e}");
+                    last_error = Some(e);
+                    
+                    // 等待一小段时间后重试
+                    std::thread::sleep(Duration::from_millis(100 * u64::from(attempt)));
+                }
+            }
+        }
+        
+        Err(last_error.unwrap_or_else(|| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
+                Some("未知错误".to_string()),
+            )
+        }))
+    }
+
     fn open(&self) -> SqliteResult<()> {
         let mut conn_guard = self.connection.lock().unwrap();
         if conn_guard.is_some() {
@@ -86,6 +155,7 @@ impl CacheIndexDb {
 
         let conn = Connection::open(&self.db_path)?;
         // SQLite 极致性能优化
+        // busy_timeout 设置为 5000ms 以处理并发访问
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;

@@ -55,6 +55,7 @@ export interface ExtendedSettingsData {
     searchHistory?: Record<string, unknown>;
     upscalePanelSettings?: unknown;
     insightsCardsSettings?: unknown;
+    cardConfigs?: unknown; // 各面板卡片配置（顺序、展开状态、可见性）
     folderPanelSettings?: {
         homePath?: string;
         panelState?: unknown;
@@ -391,6 +392,21 @@ class SettingsManager {
                 extended.insightsCardsSettings = insightsCardsSettings;
             }
 
+            // 各面板卡片配置（使用版本化的存储键）
+            // 遍历查找当前版本的卡片配置
+            if (typeof window !== 'undefined' && window.localStorage) {
+                for (let i = 0; i < window.localStorage.length; i++) {
+                    const key = window.localStorage.key(i);
+                    if (key && key.startsWith('neoview_card_configs_v')) {
+                        const cardConfigs = this.readJsonFromLocalStorage(key);
+                        if (cardConfigs) {
+                            extended.cardConfigs = { key, data: cardConfigs };
+                        }
+                        break;
+                    }
+                }
+            }
+
             // 文件夹面板设置
             if (typeof window !== 'undefined' && window.localStorage) {
                 const homePath = window.localStorage.getItem('neoview-homepage-path');
@@ -587,6 +603,18 @@ class SettingsManager {
                 window.localStorage.setItem('neoview-insights-cards', JSON.stringify(extended.insightsCardsSettings));
             } catch (error) {
                 console.error('导入洞察面板设置失败:', error);
+            }
+        }
+
+        // 各面板卡片配置
+        if (modules.panelsLayout && extended.cardConfigs && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                const cardConfigsData = extended.cardConfigs as { key: string; data: unknown };
+                if (cardConfigsData.key && cardConfigsData.data) {
+                    window.localStorage.setItem(cardConfigsData.key, JSON.stringify(cardConfigsData.data));
+                }
+            } catch (error) {
+                console.error('导入面板卡片配置失败:', error);
             }
         }
 

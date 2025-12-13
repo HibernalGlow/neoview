@@ -70,20 +70,21 @@ impl EbookManager {
         let doc = EpubDoc::new(path)
             .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
 
-        let title = doc.mdata("title");
-        let author = doc.mdata("creator");
+        // epub crate 的 mdata 返回 Option<&MetadataItem>，需要转换为 String
+        let title = doc.mdata("title").map(|m| m.value.clone());
+        let author = doc.mdata("creator").map(|m| m.value.clone());
 
         // 收集所有图片资源
+        // ResourceItem 是结构体，包含 path 和 mime 字段
         let mut images = Vec::new();
-        for (id, (resource_path, mime)) in doc.resources.iter() {
-            if mime.starts_with("image/") {
+        for (_id, resource) in doc.resources.iter() {
+            if resource.mime.starts_with("image/") {
                 images.push(EbookResource {
-                    path: resource_path.to_string_lossy().to_string(),
-                    mime_type: mime.clone(),
+                    path: resource.path.to_string_lossy().to_string(),
+                    mime_type: resource.mime.clone(),
                     is_image: true,
                 });
             }
-            let _ = id; // 避免 unused 警告
         }
 
         // 按路径排序
@@ -114,8 +115,8 @@ impl EbookManager {
         // 查找资源的 MIME 类型
         let mime = doc.resources
             .iter()
-            .find(|(_, (p, _))| p.to_string_lossy() == resource_path)
-            .map(|(_, (_, m))| m.clone())
+            .find(|(_, resource)| resource.path.to_string_lossy() == resource_path)
+            .map(|(_, resource)| resource.mime.clone())
             .unwrap_or_else(|| "application/octet-stream".to_string());
 
         // 获取资源数据
@@ -132,8 +133,8 @@ impl EbookManager {
 
         let mut images: Vec<String> = doc.resources
             .iter()
-            .filter(|(_, (_, mime))| mime.starts_with("image/"))
-            .map(|(_, (p, _))| p.to_string_lossy().to_string())
+            .filter(|(_, resource)| resource.mime.starts_with("image/"))
+            .map(|(_, resource)| resource.path.to_string_lossy().to_string())
             .collect();
 
         images.sort();

@@ -11,6 +11,18 @@ export * from './fileBrowser.svelte';
 export * from './infoPanel.svelte';
 export * from './insightsPanel.svelte';
 
+// Store 工具函数
+export {
+	createPersistedState,
+	createState,
+	createAsyncStore,
+	type PersistedStateOptions,
+	type PersistedState,
+	type AsyncStoreOptions,
+	type AsyncStore,
+	type AsyncState
+} from './utils';
+
 // 新版侧边栏配置 - sidebarConfig.svelte.ts (完全替代旧的 panels.svelte)
 export {
 	sidebarConfigStore,

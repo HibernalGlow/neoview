@@ -162,7 +162,8 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 				loadingIndices.add(idx);
 			}
 
-			const indices = await preloadThumbnails(needLoad, THUMBNAIL_MAX_SIZE);
+			// 传递 centerIndex 给后端，让后端按距离排序（中央优先策略）
+			const indices = await preloadThumbnails(needLoad, centerIndex, THUMBNAIL_MAX_SIZE);
 
 			// 检查版本，如果已被取消则忽略
 			if (currentVersion !== preloadVersion) {

@@ -240,32 +240,13 @@ pub async fn pm_set_large_file_threshold(
 
 // ===== 缩略图命令 =====
 
-/// 按距离中心的距离排序索引（中央优先策略）
-/// 
-/// 排序规则：
-/// 1. 按与 center 的绝对距离升序
-/// 2. 距离相同时，较大的索引（前向）优先
-fn sort_by_distance_from_center(indices: &mut [usize], center: usize) {
-    indices.sort_by(|a, b| {
-        let dist_a = (*a as isize - center as isize).unsigned_abs();
-        let dist_b = (*b as isize - center as isize).unsigned_abs();
-        
-        match dist_a.cmp(&dist_b) {
-            std::cmp::Ordering::Equal => b.cmp(a), // 距离相同时，大的优先（前向优先）
-            other => other,
-        }
-    });
-}
-
 /// 预加载缩略图（异步，通过事件推送结果）
 /// 
-/// 接受需要生成的页面索引列表和当前页面索引
-/// 按照与当前页的距离排序后生成，距离近的优先
+/// 接受需要生成的页面索引列表，生成后通过 "thumbnail-ready" 事件推送到前端
 /// 前端负责过滤已缓存的页面，避免重复生成
 #[tauri::command]
 pub async fn pm_preload_thumbnails(
     indices: Vec<usize>,
-    center_index: Option<usize>,  // 新增：当前页面索引，用于优先级排序
     max_size: Option<u32>,
     app: AppHandle,
     state: State<'_, PageManagerState>,
@@ -283,12 +264,7 @@ pub async fn pm_preload_thumbnails(
         return Ok(vec![]);
     }
     
-    // 按距离中心排序（中央优先策略）
-    let mut pages_to_load = indices.clone();
-    if let Some(center) = center_index {
-        sort_by_distance_from_center(&mut pages_to_load, center);
-        log::debug!("🖼️ [PageCommand] 按距离中心 {} 排序后: {:?}", center, pages_to_load);
-    }
+    let pages_to_load = indices.clone();
     
     log::debug!("🖼️ [PageCommand] preload_thumbnails: loading {} pages: {:?}",
         pages_to_load.len(), pages_to_load);

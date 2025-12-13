@@ -184,9 +184,6 @@
 	let topToolbarOpacity = $derived(settings.panels?.topToolbarOpacity ?? 85);
 	let topToolbarBlur = $derived(settings.panels?.topToolbarBlur ?? 12);
 
-	// 渲染器模式
-	let rendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
-
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
@@ -347,26 +344,6 @@
 	function toggleHoverScroll() {
 		const next = !(settings.image.hoverScrollEnabled ?? true);
 		settingsManager.updateNestedSettings('image', { hoverScrollEnabled: next });
-	}
-
-	// 切换渲染器模式
-	function toggleRendererMode() {
-		const newMode = rendererMode === 'stack' ? 'standard' : 'stack';
-		settingsManager.updateNestedSettings('view', {
-			renderer: {
-				...settings.view.renderer,
-				mode: newMode
-			}
-		});
-		showToast({
-			title: '渲染模式',
-			description:
-				newMode === 'stack'
-					? '已切换到 StackViewer（槽位系统）'
-					: '已切换到 Layer 系统（标准模式）',
-			variant: 'info',
-			duration: 2000
-		});
 	}
 
 	let isVisible = $state(false);

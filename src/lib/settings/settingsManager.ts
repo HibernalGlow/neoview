@@ -16,8 +16,8 @@ export type BookSettingSelectMode = 'default' | 'continue' | 'restoreOrDefault' 
 
 export type AutoRotateMode = 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight';
 
-/** 渲染器模式：standard = 标准单图替换，stack = 层叠预加载 */
-export type RendererMode = 'standard' | 'stack';
+/** 渲染器模式：standard = 标准模式（CurrentFrameLayer） */
+export type RendererMode = 'standard';
 
 /** 宽页拉伸模式：双页模式下不同尺寸图片的对齐方式 */
 export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
@@ -325,7 +325,7 @@ const defaultSettings: NeoViewSettings = {
       pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
     },
     renderer: {
-      mode: 'stack', // 默认使用层叠模式，更流畅
+      mode: 'standard', // 默认使用标准模式（CurrentFrameLayer）
       useViewerJS: false // ViewerJS 增强模式默认关闭
     },
     sidebarControl: {

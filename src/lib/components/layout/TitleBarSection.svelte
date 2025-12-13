@@ -68,25 +68,6 @@
 		settings = newSettings;
 	});
 
-	// 渲染器模式
-	let rendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
-	function toggleRendererMode() {
-		const newMode = rendererMode === 'stack' ? 'standard' : 'stack';
-		settingsManager.updateNestedSettings('view', {
-			renderer: {
-				...settings.view.renderer,
-				mode: newMode
-			}
-		});
-		showToast({
-			title: '渲染模式',
-			description:
-				newMode === 'stack' ? '已切换到 StackViewer（槽位系统）' : '已切换到 Layer 系统（标准）',
-			variant: 'info',
-			duration: 2000
-		});
-	}
-
 	// 主题相关
 	interface QuickThemeConfig {
 		name: string;
@@ -506,22 +487,18 @@
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<!-- 渲染器模式切换（弹出菜单） -->
+		<!-- 渲染设置（弹出菜单） -->
 		<DropdownMenu.Root>
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					<DropdownMenu.Trigger>
 						<Button
-							variant={rendererMode === 'stack' ? 'default' : 'ghost'}
+							variant="ghost"
 							size="icon"
 							class="h-6 w-6"
 							style="pointer-events: auto;"
 						>
-							{#if rendererMode === 'stack'}
-								<Layers class="h-4 w-4" />
-							{:else}
-								<Square class="h-4 w-4" />
-							{/if}
+							<Layers class="h-4 w-4" />
 						</Button>
 					</DropdownMenu.Trigger>
 				</Tooltip.Trigger>
@@ -531,23 +508,6 @@
 			</Tooltip.Root>
 
 			<DropdownMenu.Content side="bottom" align="end" class="w-56">
-				<DropdownMenu.Label>渲染器模式</DropdownMenu.Label>
-				<DropdownMenu.Item onclick={toggleRendererMode}>
-					<div class="flex w-full items-center justify-between">
-						<div class="flex items-center gap-2">
-							{#if rendererMode === 'stack'}
-								<Layers class="h-4 w-4" />
-								<span>StackViewer（槽位）</span>
-							{:else}
-								<Square class="h-4 w-4" />
-								<span>Layer 系统（标准）</span>
-							{/if}
-						</div>
-						<span class="text-muted-foreground text-xs">点击切换</span>
-					</div>
-				</DropdownMenu.Item>
-
-				<DropdownMenu.Separator />
 				<DropdownMenu.Label>数据源</DropdownMenu.Label>
 				<DropdownMenu.Item onclick={() => loadModeStore.toggleDataSource()}>
 					<div class="flex w-full items-center justify-between">

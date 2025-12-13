@@ -29,7 +29,7 @@ let rendererTestCount = $state<number>(10);
 
 let settings = $state(settingsManager.getSettings());
 settingsManager.addListener((s) => { settings = s; });
-const currentRendererMode = $derived(settings.view.renderer?.mode ?? 'stack');
+const currentRendererMode = $derived(settings.view.renderer?.mode ?? 'standard');
 const viewerJSEnabled = $derived(settings.view.renderer?.useViewerJS ?? false);
 
 async function selectRendererArchive() {

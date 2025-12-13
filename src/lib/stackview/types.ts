@@ -1,5 +1,5 @@
 /**
- * StackViewer 类型定义
+ * StackView 类型定义
  */
 
 /** 旋转角度 */

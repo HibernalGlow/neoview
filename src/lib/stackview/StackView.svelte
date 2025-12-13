@@ -16,7 +16,6 @@
 		SidebarControlLayer
 	} from './layers';
 	import HoverScrollLayer from './layers/HoverScrollLayer.svelte';
-	import StackViewer from '$lib/viewer/StackViewer.svelte';
 	import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
 	import {
 		isLandscape,
@@ -420,12 +419,6 @@
 		if (!filename) return false;
 		return isVideoFile(filename);
 	});
-
-	// 渲染器模式
-	let useStackRenderer = $derived((settings.view.renderer?.mode ?? 'stack') === 'stack');
-
-	// StackViewer 组件引用
-	let stackViewerRef: StackViewer | null = null;
 
 	// 视频容器引用
 	let videoContainerRef: any = null;
@@ -1041,22 +1034,6 @@
 			{viewportSize}
 			{widePageStretch}
 			onScroll={handlePanoramaScroll}
-		/>
-	{:else if useStackRenderer}
-		<!-- 层叠渲染模式：使用 StackViewer（支持双页） -->
-		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
-		<StackViewer
-			bind:this={stackViewerRef}
-			showUpscale={true}
-			transitionDuration={150}
-			scale={manualScale}
-			{rotation}
-			{viewportSize}
-			useCanvas={false}
-			pageMode={effectivePageMode}
-			{direction}
-			{alignMode}
-			onImageLoad={handleImageLoad}
 		/>
 	{:else}
 		<!-- 标准模式：显示当前帧 -->

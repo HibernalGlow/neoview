@@ -2,6 +2,9 @@
 //! 导出所有核心功能模块
 
 pub mod archive;
+pub mod archive_index;
+pub mod archive_index_builder;
+pub mod stream_transfer;
 pub mod ebook;
 pub mod job_engine;
 pub mod page_frame;

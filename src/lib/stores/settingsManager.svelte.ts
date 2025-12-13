@@ -66,6 +66,13 @@ export interface ExtendedSettingsData {
     };
     performanceSettings?: TauriPerformanceSettings;
     folderRatings?: unknown; // EMM 文件夹平均评分缓存
+    excludedPaths?: string[]; // 排除路径列表
+    voiceControl?: unknown; // 语音控制配置
+    virtualPanelSettings?: {
+        history?: unknown; // 历史面板设置
+        bookmark?: unknown; // 书签面板设置
+    };
+    panelViewModes?: Record<string, string>; // 各面板视图模式
 }
 
 export interface FullExportPayload {
@@ -444,6 +451,63 @@ class SettingsManager {
                         extended.folderRatings = rawFolderRatings;
                     }
                 }
+
+                // 导出排除路径
+                const rawExcludedPaths = window.localStorage.getItem('neoview-excluded-paths');
+                if (rawExcludedPaths) {
+                    try {
+                        extended.excludedPaths = JSON.parse(rawExcludedPaths);
+                    } catch {
+                        // ignore
+                    }
+                }
+
+                // 导出语音控制配置
+                const rawVoiceControl = window.localStorage.getItem('neoview-voice-control');
+                if (rawVoiceControl) {
+                    try {
+                        extended.voiceControl = JSON.parse(rawVoiceControl);
+                    } catch {
+                        // ignore
+                    }
+                }
+
+                // 导出虚拟面板设置（历史/书签面板）
+                const rawHistoryPanelSettings = window.localStorage.getItem('neoview-history-panel-settings');
+                const rawBookmarkPanelSettings = window.localStorage.getItem('neoview-bookmark-panel-settings');
+                if (rawHistoryPanelSettings || rawBookmarkPanelSettings) {
+                    extended.virtualPanelSettings = {};
+                    if (rawHistoryPanelSettings) {
+                        try {
+                            extended.virtualPanelSettings.history = JSON.parse(rawHistoryPanelSettings);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                    if (rawBookmarkPanelSettings) {
+                        try {
+                            extended.virtualPanelSettings.bookmark = JSON.parse(rawBookmarkPanelSettings);
+                        } catch {
+                            // ignore
+                        }
+                    }
+                }
+
+                // 导出各面板视图模式
+                const panelViewModes: Record<string, string> = {};
+                for (let i = 0; i < window.localStorage.length; i++) {
+                    const key = window.localStorage.key(i);
+                    if (key && key.startsWith('neoview-panel-viewmode-')) {
+                        const panelId = key.replace('neoview-panel-viewmode-', '');
+                        const value = window.localStorage.getItem(key);
+                        if (value) {
+                            panelViewModes[panelId] = value;
+                        }
+                    }
+                }
+                if (Object.keys(panelViewModes).length > 0) {
+                    extended.panelViewModes = panelViewModes;
+                }
             }
 
             payload.extended = extended;
@@ -742,6 +806,49 @@ class SettingsManager {
                 });
             } catch (error) {
                 console.error('导入文件夹评分缓存失败:', error);
+            }
+        }
+
+        // 排除路径
+        if (modules.uiState && extended.excludedPaths && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('neoview-excluded-paths', JSON.stringify(extended.excludedPaths));
+            } catch (error) {
+                console.error('导入排除路径失败:', error);
+            }
+        }
+
+        // 语音控制配置
+        if (modules.uiState && extended.voiceControl && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('neoview-voice-control', JSON.stringify(extended.voiceControl));
+            } catch (error) {
+                console.error('导入语音控制配置失败:', error);
+            }
+        }
+
+        // 虚拟面板设置（历史/书签面板）
+        if (modules.panelsLayout && extended.virtualPanelSettings && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                if (extended.virtualPanelSettings.history) {
+                    window.localStorage.setItem('neoview-history-panel-settings', JSON.stringify(extended.virtualPanelSettings.history));
+                }
+                if (extended.virtualPanelSettings.bookmark) {
+                    window.localStorage.setItem('neoview-bookmark-panel-settings', JSON.stringify(extended.virtualPanelSettings.bookmark));
+                }
+            } catch (error) {
+                console.error('导入虚拟面板设置失败:', error);
+            }
+        }
+
+        // 各面板视图模式
+        if (modules.panelsLayout && extended.panelViewModes && typeof window !== 'undefined' && window.localStorage) {
+            try {
+                for (const [panelId, mode] of Object.entries(extended.panelViewModes)) {
+                    window.localStorage.setItem(`neoview-panel-viewmode-${panelId}`, mode);
+                }
+            } catch (error) {
+                console.error('导入面板视图模式失败:', error);
             }
         }
 

@@ -1,7 +1,8 @@
-//! NeoView - Image Loader
+//! `NeoView` - Image Loader
 //! 图像加载和处理模块
 
 use super::image_cache::ImageCache;
+use super::image_decoder::{UnifiedDecoder, ImageDecoder};
 use image::{GenericImageView, ImageFormat};
 use std::fs;
 use std::io::Cursor;
@@ -52,12 +53,12 @@ impl ImageLoader {
             let ext_lower = ext.to_lowercase();
             if ext_lower == "jxl" {
                 // JXL 解码图像（浏览器不原生支持，需要转换）
-                let img = self.decode_jxl_image(&image_data)?;
+                let img = self.decode_image_unified(&image_data, &ext_lower)?;
 
                 // 编码为 PNG
                 let mut png_data = Vec::new();
                 img.write_to(&mut Cursor::new(&mut png_data), ImageFormat::Png)
-                    .map_err(|e| format!("Failed to encode PNG: {}", e))?;
+                    .map_err(|e| format!("Failed to encode PNG: {e}"))?;
 
                 return Ok(png_data);
             }
@@ -90,8 +91,9 @@ impl ImageLoader {
 
         // 检查是否为 JXL 文件
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if ext.to_lowercase() == "jxl" {
-                let image = self.decode_jxl_image(&image_data)?;
+            let ext_lower = ext.to_lowercase();
+            if ext_lower == "jxl" {
+                let image = self.decode_image_unified(&image_data, &ext_lower)?;
                 return Ok(image.dimensions());
             }
         }
@@ -146,8 +148,9 @@ impl ImageLoader {
 
         // 检查是否为 JXL 文件
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if ext.to_lowercase() == "jxl" {
-                let img = self.decode_jxl_image(&image_data)?;
+            let ext_lower = ext.to_lowercase();
+            if ext_lower == "jxl" {
+                let img = self.decode_image_unified(&image_data, &ext_lower)?;
                 return self.create_thumbnail_from_image(img, max_width, max_height);
             }
         }
@@ -186,73 +189,13 @@ impl ImageLoader {
         self.create_thumbnail_from_image(img, max_width, max_height)
     }
 
-    /// 解码 JXL 图像
-    fn decode_jxl_image(&self, image_data: &[u8]) -> Result<image::DynamicImage, String> {
-        use jxl_oxide::JxlImage;
-
-        // 使用 JxlImage::builder() 读取
-        let mut reader = Cursor::new(image_data);
-        let jxl_image = JxlImage::builder()
-            .read(&mut reader)
-            .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-
-        // 渲染第一帧
-        let render = jxl_image
-            .render_frame(0)
-            .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-
-        // 获取帧缓冲区
-        let fb = render.image_all_channels();
-        let width = fb.width() as u32;
-        let height = fb.height() as u32;
-        let channels = fb.channels();
-
-        // 获取原始像素数据 (f32, 范围 0.0-1.0)
-        let float_buf = fb.buf();
-
-        // 如果是灰度图
-        if channels == 1 {
-            let gray_data: Vec<u8> = float_buf
-                .iter()
-                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-                .collect();
-
-            let gray_img = image::GrayImage::from_raw(width, height, gray_data)
-                .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
-            return Ok(image::DynamicImage::ImageLuma8(gray_img));
-        }
-
-        // RGB 或 RGBA
-        if channels == 3 {
-            // RGB
-            let rgb_data: Vec<u8> = float_buf
-                .iter()
-                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-                .collect();
-
-            let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
-                .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
-            return Ok(image::DynamicImage::ImageRgb8(rgb_img));
-        } else if channels >= 4 {
-            // RGBA (取前4个通道)
-            let rgba_data: Vec<u8> = float_buf
-                .chunks(channels)
-                .flat_map(|chunk| {
-                    vec![
-                        (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
-                        (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
-                        (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
-                        (chunk.get(3).copied().unwrap_or(1.0).clamp(0.0, 1.0) * 255.0) as u8,
-                    ]
-                })
-                .collect();
-
-            let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
-                .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
-            return Ok(image::DynamicImage::ImageRgba8(rgba_img));
-        }
-
-        Err(format!("Unsupported channel count: {}", channels))
+    /// 使用 UnifiedDecoder 解码图像
+    fn decode_image_unified(&self, image_data: &[u8], ext: &str) -> Result<image::DynamicImage, String> {
+        let decoder = UnifiedDecoder::with_format(ext);
+        let decoded = decoder.decode(image_data)
+            .map_err(|e| format!("解码失败: {e}"))?;
+        decoded.to_dynamic_image()
+            .map_err(|e| format!("转换失败: {e}"))
     }
 
     /// 从已解码的图像创建缩略图

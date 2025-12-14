@@ -1,11 +1,8 @@
 //! 图片加载模式模块
 //! 支持 Raw（原始字节）和 Bitmap（像素数据）两种模式
 
+use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-
-#[cfg(target_os = "windows")]
-use crate::core::wic_decoder::{decode_image_from_memory_with_wic, wic_result_to_dynamic_image};
 
 /// 图片加载模式
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -93,90 +90,32 @@ pub fn load_image_unified(
     }
 }
 
-/// 使用 WIC 解码为 Bitmap
-#[cfg(target_os = "windows")]
+/// 使用 UnifiedDecoder 解码为 Bitmap
 fn decode_to_bitmap(data: &[u8]) -> Result<ImageLoadResult, String> {
-    let wic_result = decode_image_from_memory_with_wic(data)?;
-    
-    // WIC 返回 BGRA，转换为 RGBA
-    let mut rgba = wic_result.pixels;
-    for chunk in rgba.chunks_exact_mut(4) {
-        chunk.swap(0, 2); // B <-> R
-    }
+    let decoder = UnifiedDecoder::new();
+    let decoded = decoder.decode(data)
+        .map_err(|e| format!("解码失败: {e}"))?;
     
     Ok(ImageLoadResult::Bitmap {
-        data: rgba,
-        width: wic_result.width,
-        height: wic_result.height,
-    })
-}
-
-#[cfg(not(target_os = "windows"))]
-fn decode_to_bitmap(data: &[u8]) -> Result<ImageLoadResult, String> {
-    use image::GenericImageView;
-    
-    let img = image::load_from_memory(data)
-        .map_err(|e| format!("解码失败: {}", e))?;
-    
-    let (width, height) = img.dimensions();
-    let rgba = img.to_rgba8().into_raw();
-    
-    Ok(ImageLoadResult::Bitmap {
-        data: rgba,
-        width,
-        height,
+        data: decoded.pixels,
+        width: decoded.width,
+        height: decoded.height,
     })
 }
 
 /// 带缩放的 Bitmap 加载（用于大图优化）
-#[cfg(target_os = "windows")]
 pub fn load_image_bitmap_scaled(
     data: &[u8],
     max_width: u32,
     max_height: u32,
 ) -> Result<ImageLoadResult, String> {
-    use crate::core::wic_decoder::decode_and_scale_with_wic;
-    
-    let wic_result = decode_and_scale_with_wic(data, max_width, max_height)?;
-    
-    // BGRA -> RGBA
-    let mut rgba = wic_result.pixels;
-    for chunk in rgba.chunks_exact_mut(4) {
-        chunk.swap(0, 2);
-    }
+    let decoder = UnifiedDecoder::new();
+    let decoded = decoder.decode_with_scale(data, max_width, max_height)
+        .map_err(|e| format!("解码缩放失败: {e}"))?;
     
     Ok(ImageLoadResult::Bitmap {
-        data: rgba,
-        width: wic_result.width,
-        height: wic_result.height,
-    })
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn load_image_bitmap_scaled(
-    data: &[u8],
-    max_width: u32,
-    max_height: u32,
-) -> Result<ImageLoadResult, String> {
-    use image::GenericImageView;
-    
-    let img = image::load_from_memory(data)
-        .map_err(|e| format!("解码失败: {}", e))?;
-    
-    let (orig_w, orig_h) = img.dimensions();
-    let scale = (max_width as f32 / orig_w as f32)
-        .min(max_height as f32 / orig_h as f32)
-        .min(1.0);
-    
-    let new_w = (orig_w as f32 * scale) as u32;
-    let new_h = (orig_h as f32 * scale) as u32;
-    
-    let resized = img.thumbnail(new_w, new_h);
-    let rgba = resized.to_rgba8().into_raw();
-    
-    Ok(ImageLoadResult::Bitmap {
-        data: rgba,
-        width: new_w,
-        height: new_h,
+        data: decoded.pixels,
+        width: decoded.width,
+        height: decoded.height,
     })
 }

@@ -2,6 +2,7 @@
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
 use crate::core::archive_manager;
+use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::video_exts;
 use image::{DynamicImage, GenericImageView, ImageFormat};
@@ -13,9 +14,6 @@ use std::sync::Arc;
 use threadpool::ThreadPool;
 use unrar;
 use sevenz_rust;
-
-#[cfg(target_os = "windows")]
-use crate::core::wic_decoder::{decode_image_from_memory_with_wic, wic_result_to_dynamic_image};
 
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
@@ -94,88 +92,13 @@ impl ThumbnailGenerator {
         }
     }
 
-    /// 解码 JXL 图像
-    fn decode_jxl_image(image_data: &[u8]) -> Result<DynamicImage, String> {
-        use jxl_oxide::JxlImage;
-
-        let mut reader = Cursor::new(image_data);
-        let jxl_image = JxlImage::builder()
-            .read(&mut reader)
-            .map_err(|e| format!("Failed to decode JXL: {}", e))?;
-
-        let render = jxl_image
-            .render_frame(0)
-            .map_err(|e| format!("Failed to render JXL frame: {}", e))?;
-
-        let fb = render.image_all_channels();
-        let width = fb.width() as u32;
-        let height = fb.height() as u32;
-        let channels = fb.channels();
-        let float_buf = fb.buf();
-
-        // 转换为 DynamicImage
-        let img = if channels == 1 {
-            let gray_data: Vec<u8> = float_buf
-                .iter()
-                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-                .collect();
-
-            let gray_img = image::GrayImage::from_raw(width, height, gray_data)
-                .ok_or_else(|| "Failed to create gray image from JXL data".to_string())?;
-            DynamicImage::ImageLuma8(gray_img)
-        } else if channels == 3 {
-            let rgb_data: Vec<u8> = float_buf
-                .iter()
-                .map(|&v| (v.clamp(0.0, 1.0) * 255.0) as u8)
-                .collect();
-
-            let rgb_img = image::RgbImage::from_raw(width, height, rgb_data)
-                .ok_or_else(|| "Failed to create RGB image from JXL data".to_string())?;
-            DynamicImage::ImageRgb8(rgb_img)
-        } else {
-            let rgba_data: Vec<u8> = float_buf
-                .chunks(channels)
-                .flat_map(|chunk| {
-                    vec![
-                        (chunk[0].clamp(0.0, 1.0) * 255.0) as u8,
-                        (chunk[1].clamp(0.0, 1.0) * 255.0) as u8,
-                        (chunk[2].clamp(0.0, 1.0) * 255.0) as u8,
-                        if channels > 3 {
-                            (chunk[3].clamp(0.0, 1.0) * 255.0) as u8
-                        } else {
-                            255
-                        },
-                    ]
-                })
-                .collect();
-
-            let rgba_img = image::RgbaImage::from_raw(width, height, rgba_data)
-                .ok_or_else(|| "Failed to create RGBA image from JXL data".to_string())?;
-            DynamicImage::ImageRgba8(rgba_img)
-        };
-
-        Ok(img)
-    }
-
-    /// 使用 WIC 解码 AVIF 图像（Windows 专用，需要安装 AV1 扩展）
-    #[cfg(target_os = "windows")]
-    fn decode_avif_with_wic(image_data: &[u8]) -> Result<DynamicImage, String> {
-        let result = decode_image_from_memory_with_wic(image_data)?;
-        wic_result_to_dynamic_image(result)
-    }
-
-    /// 解码 AVIF 图像（跨平台，优先使用 WIC）
-    fn decode_avif_image(image_data: &[u8]) -> Result<DynamicImage, String> {
-        // Windows: 优先使用 WIC（硬件加速）
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(img) = Self::decode_avif_with_wic(image_data) {
-                return Ok(img);
-            }
-        }
-        
-        // 回退到 image crate
-        Self::decode_image_safe(image_data)
+    /// 使用 UnifiedDecoder 解码图像
+    fn decode_image_unified(image_data: &[u8], ext: &str) -> Result<DynamicImage, String> {
+        let decoder = UnifiedDecoder::with_format(ext);
+        let decoded = decoder.decode(image_data)
+            .map_err(|e| format!("解码失败: {e}"))?;
+        decoded.to_dynamic_image()
+            .map_err(|e| format!("转换失败: {e}"))
     }
 
     /// 从图像生成 webp 缩略图
@@ -202,48 +125,31 @@ impl ThumbnailGenerator {
         Ok(output)
     }
 
-    /// 使用 WIC 内置缩放生成 WebP 缩略图（高性能版本）
-    /// 避免全尺寸解码，直接在 WIC 层面缩放
-    #[cfg(target_os = "windows")]
-    fn generate_webp_with_wic_fast(image_data: &[u8], config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
-        use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
-        
-        // 使用 WIC 内置缩放器直接输出小尺寸图像
-        let result = decode_and_scale_with_wic(image_data, config.max_width, config.max_height)?;
-        let img = wic_result_to_dynamic_image(result)?;
+    /// 使用 UnifiedDecoder 内置缩放生成 WebP 缩略图（高性能版本）
+    fn generate_webp_with_unified_decoder(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
+        let decoder = UnifiedDecoder::with_format(ext);
+        let decoded = decoder.decode_with_scale(image_data, config.max_width, config.max_height)
+            .map_err(|e| format!("解码缩放失败: {e}"))?;
+        let img = decoded.to_dynamic_image()
+            .map_err(|e| format!("转换失败: {e}"))?;
         
         let mut output = Vec::new();
         img.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP)
-            .map_err(|e| format!("WebP 编码失败: {}", e))?;
+            .map_err(|e| format!("WebP 编码失败: {e}"))?;
         Ok(output)
     }
 
-    #[cfg(not(target_os = "windows"))]
-    fn generate_webp_with_wic_fast(_image_data: &[u8], _config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
-        Err("WIC 仅在 Windows 上可用".to_string())
-    }
-
     /// 从图像数据生成 WebP 缩略图（统一接口）
-    /// 优先使用 WIC 内置缩放（Windows 24H2 支持 JXL），失败时回退到传统方法
+    /// 使用 UnifiedDecoder 自动选择最优后端
     fn generate_webp_from_image_data(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Option<Vec<u8>> {
-        let is_jxl = ext == "jxl";
-        
-        // 所有格式优先使用 WIC 内置缩放（包括 JXL，Windows 24H2 已支持）
-        Self::generate_webp_with_wic_fast(image_data, config)
+        // 使用 UnifiedDecoder 统一处理所有格式
+        Self::generate_webp_with_unified_decoder(image_data, ext, config)
             .ok()
             .or_else(|| {
-                // WIC 失败，根据格式选择回退方法
-                if is_jxl {
-                    // JXL 回退到 jxl_oxide
-                    Self::decode_jxl_image(image_data)
-                        .ok()
-                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
-                } else {
-                    // 其他格式回退到 image crate
-                    Self::decode_image_safe(image_data)
-                        .ok()
-                        .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
-                }
+                // 回退到传统方法
+                Self::decode_image_safe(image_data)
+                    .ok()
+                    .and_then(|img| Self::generate_webp_thumbnail_fallback(&img, config).ok())
             })
     }
 
@@ -882,31 +788,8 @@ impl ThumbnailGenerator {
                     let (image_data, next_archive) = header.read()
                         .map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
                     
-                    let lower_name = name.to_lowercase();
-                    let is_jxl = lower_name.ends_with(".jxl");
-                    
-                    // 同步生成 webp 缩略图
-                    // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
-                    let webp_data = if is_jxl {
-                        // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
-                        Self::decode_jxl_image(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
-                    } else {
-                        // 所有其他格式：优先使用 WIC 内置缩放
-                        Self::generate_webp_with_wic_fast(&image_data, &self.config)
-                            .ok()
-                            .or_else(|| {
-                                // WIC 失败，回退到传统方法
-                                Self::decode_image_safe(&image_data)
-                                    .ok()
-                                    .and_then(|img| {
-                                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                                    })
-                            })
-                    };
+                    // 使用 UnifiedDecoder 统一处理所有格式
+                    let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
                     
                     if let Some(data) = webp_data {
                         // 保存到数据库
@@ -1001,31 +884,15 @@ impl ThumbnailGenerator {
         }
         
         if let Some((name, image_data)) = found_image_data {
-            let lower_name = name.to_lowercase();
-            let is_jxl = lower_name.ends_with(".jxl");
+            // 获取扩展名
+            let ext = Path::new(&name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+                .unwrap_or_default();
             
-            // 同步生成 webp 缩略图
-            // 优先使用 WIC 内置缩放（高性能），失败时回退到传统方法
-            let webp_data = if is_jxl {
-                // JXL 使用 jxl_oxide 解码（WIC 可能不支持）
-                Self::decode_jxl_image(&image_data)
-                    .ok()
-                    .and_then(|img| {
-                        Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                    })
-            } else {
-                // 所有其他格式：优先使用 WIC 内置缩放
-                Self::generate_webp_with_wic_fast(&image_data, &self.config)
-                    .ok()
-                    .or_else(|| {
-                        // WIC 失败，回退到传统方法
-                        Self::decode_image_safe(&image_data)
-                            .ok()
-                            .and_then(|img| {
-                                Self::generate_webp_thumbnail_fallback(&img, &self.config).ok()
-                            })
-                    })
-            };
+            // 使用 UnifiedDecoder 统一处理所有格式
+            let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
             
             if let Some(data) = webp_data {
                 // 保存到数据库

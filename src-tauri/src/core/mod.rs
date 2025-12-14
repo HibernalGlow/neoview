@@ -2,6 +2,7 @@
 //! 导出所有核心功能模块
 
 pub mod archive;
+pub mod image_decoder;
 pub mod archive_index;
 pub mod archive_index_builder;
 pub mod stream_transfer;

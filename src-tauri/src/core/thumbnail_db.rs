@@ -507,6 +507,9 @@ impl ThumbnailDb {
             }
         });
 
+        // 注意：缩略图已经是 WebP 格式（高度压缩），不再使用 LZ4 二次压缩
+        // WebP 对 LZ4 的压缩率极低（1-5%），反而增加 CPU 开销
+
         // 使用 prepare + execute 避免 "Execute returned results" 错误
         let mut stmt = conn.prepare(
             "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, category, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"

@@ -67,6 +67,8 @@
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { windowManager } from '$lib/core/windows/windowManager';
+	// CLI 路径处理工具 (Requirements: 4.1, 4.2, 4.3, 4.4)
+	import { normalizePath, validatePath, getPathType } from '$lib/utils/pathUtils';
 
 	let loading = $state(false);
 
@@ -264,6 +266,7 @@
 		}
 
 		// CLI 启动参数处理（类似 NeeView 的 FirstLoader）
+		// Requirements: 1.1, 1.2, 1.3, 1.4, 4.1, 4.2, 4.3, 4.4
 		try {
 			const matches = await getMatches();
 			const arg = matches.args?.path?.value as string | string[] | undefined;
@@ -271,14 +274,57 @@
 				typeof arg === 'string' ? arg : Array.isArray(arg) && arg.length > 0 ? arg[0] : undefined;
 
 			if (cliPath) {
-				console.log('📂 CLI 启动: 打开路径:', cliPath);
-				const meta = await getFileMetadata(cliPath);
-				console.log('📂 CLI 启动: 文件元数据:', meta);
-				// 强制在应用内打开，不使用系统默认程序
-				await openFileSystemItem(cliPath, meta.isDir, { forceInApp: true });
+				console.log('📂 CLI 启动: 原始路径:', cliPath);
+				
+				// 1. 规范化路径（处理相对路径、空格、特殊字符）
+				let normalizedPath: string;
+				try {
+					normalizedPath = await normalizePath(cliPath);
+					console.log('📂 CLI 启动: 规范化路径:', normalizedPath);
+				} catch (normalizeError) {
+					console.error('❌ CLI 路径规范化失败:', normalizeError);
+					showErrorToast('路径无效', `无法解析路径: ${cliPath}`);
+					return;
+				}
+				
+				// 2. 验证路径是否存在
+				const exists = await validatePath(normalizedPath);
+				if (!exists) {
+					console.error('❌ CLI 路径不存在:', normalizedPath);
+					showErrorToast('路径不存在', normalizedPath);
+					return;
+				}
+				
+				// 3. 获取路径类型
+				const pathType = await getPathType(normalizedPath);
+				console.log('📂 CLI 启动: 路径类型:', pathType);
+				
+				// 4. 根据路径类型打开
+				switch (pathType) {
+					case 'directory':
+						// 文件夹：作为书籍打开
+						console.log('📂 CLI: 打开文件夹作为书籍');
+						await bookStore.openDirectoryAsBook(normalizedPath);
+						break;
+					case 'archive':
+						// 压缩包：作为书籍打开
+						console.log('📦 CLI: 打开压缩包作为书籍');
+						await bookStore.openBook(normalizedPath);
+						break;
+					case 'file':
+						// 普通文件：通过 openFileSystemItem 处理
+						console.log('📄 CLI: 打开文件');
+						const meta = await getFileMetadata(normalizedPath);
+						await openFileSystemItem(normalizedPath, meta.isDir, { forceInApp: true });
+						break;
+					default:
+						console.error('❌ CLI: 无效的路径类型');
+						showErrorToast('无法打开', '不支持的文件类型');
+				}
 			}
 		} catch (error) {
 			console.error('❌ CLI 启动失败:', error);
+			showErrorToast('启动失败', error instanceof Error ? error.message : '未知错误');
 		}
 
 		// 初始化全屏状态同步（Requirements: 1.1, 1.2）

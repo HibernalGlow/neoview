@@ -1,3 +1,9 @@
+/**
+ * 文件系统导航工具
+ * 用于打开文件、文件夹、压缩包等
+ * Requirements: 1.1, 1.2, 1.3, 1.4
+ */
+
 import { bookStore } from '$lib/stores/book.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { setActivePanelTab } from '$lib/stores';
@@ -5,11 +11,16 @@ import { isVideoFile } from '$lib/utils/videoUtils';
 import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 
 /**
+ * 支持的图片扩展名
+ */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff', 'tif', 'ico', 'svg'];
+
+/**
  * 判断是否为图片文件
  */
 function isImageFile(path: string): boolean {
     const ext = path.split('.').pop()?.toLowerCase() || '';
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff', 'tif', 'ico', 'svg'].includes(ext);
+    return IMAGE_EXTENSIONS.includes(ext);
 }
 
 /**
@@ -133,6 +144,7 @@ export async function openFileSystemItem(
                 }
             } else {
                 // 如果强制在应用内打开，尝试作为普通文件夹书籍的一部分打开
+                // Requirements: 1.1 - 不使用系统默认程序
                 if (forceInApp) {
                     console.log('📁 forceInApp: attempting to open via parent folder book', path);
                     let parentDir = path;
@@ -142,15 +154,24 @@ export async function openFileSystemItem(
                     if (lastSeparator > 0) {
                         parentDir = path.substring(0, lastSeparator);
                     }
-                    await bookStore.openDirectoryAsBook(parentDir);
-                    await bookStore.navigateToImage(path);
+                    try {
+                        await bookStore.openDirectoryAsBook(parentDir);
+                        await bookStore.navigateToImage(path);
+                    } catch (bookError) {
+                        console.error('❌ forceInApp: 打开父文件夹失败:', bookError);
+                        // 即使失败也不调用系统默认程序，保持 forceInApp 语义
+                        throw new Error(`无法在应用内打开文件: ${path}`);
+                    }
                 } else {
                     // Open with system default application (for unsupported file types)
+                    // 注意：CLI 启动时不会走到这里，因为 forceInApp=true
                     await FileSystemAPI.openWithSystem(path);
                 }
             }
         } catch (err) {
             console.error('Failed to open file:', err);
+            // 重新抛出错误，让调用者处理
+            throw err;
         }
     }
 }

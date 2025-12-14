@@ -323,17 +323,47 @@
 						await new Promise(resolve => requestAnimationFrame(resolve));
 						console.log('📂 CLI: DOM 更新完成');
 						break;
-					case 'archive':
-						// 压缩包：作为书籍打开（在 viewer 中）
-						console.log('📦 CLI: 打开压缩包作为书籍');
+					case 'archive': {
+						// 压缩包：在 viewer 中打开，同时在 folder 面板中定位到压缩包所在文件夹
+						console.log('📦 CLI: 打开压缩包作为书籍:', normalizedPath);
+						
+						// 1. 获取压缩包所在的父文件夹
+						const archiveParentDir = normalizedPath.substring(0, Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/')));
+						console.log('📦 CLI: 压缩包所在文件夹:', archiveParentDir);
+						
+						// 2. 在 folder 面板中创建新标签页，定位到父文件夹
+						if (archiveParentDir) {
+							setActivePanelTab('folder');
+							folderTabActions.createTab(archiveParentDir);
+							// 等待一帧让 Svelte 更新 DOM
+							await new Promise(resolve => requestAnimationFrame(resolve));
+						}
+						
+						// 3. 在 viewer 中打开压缩包
 						await bookStore.openBook(normalizedPath);
 						break;
-					case 'file':
-						// 普通文件：通过 openFileSystemItem 处理
-						console.log('📄 CLI: 打开文件');
+					}
+					case 'file': {
+						// 普通文件：在 viewer 中打开，同时在 folder 面板中定位到文件所在文件夹
+						console.log('📄 CLI: 打开文件:', normalizedPath);
+						
+						// 1. 获取文件所在的父文件夹
+						const parentDir = normalizedPath.substring(0, Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/')));
+						console.log('📄 CLI: 文件所在文件夹:', parentDir);
+						
+						// 2. 在 folder 面板中创建新标签页，定位到父文件夹
+						if (parentDir) {
+							setActivePanelTab('folder');
+							folderTabActions.createTab(parentDir);
+							// 等待一帧让 Svelte 更新 DOM
+							await new Promise(resolve => requestAnimationFrame(resolve));
+						}
+						
+						// 3. 在 viewer 中打开文件
 						const meta = await getFileMetadata(normalizedPath);
 						await openFileSystemItem(normalizedPath, meta.isDir, { forceInApp: true });
 						break;
+					}
 					default:
 						console.error('❌ CLI: 无效的路径类型');
 						showErrorToast('无法打开', '不支持的文件类型');

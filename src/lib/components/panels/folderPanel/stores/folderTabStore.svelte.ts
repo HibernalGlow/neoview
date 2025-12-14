@@ -157,11 +157,14 @@ const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
 export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
 // 面包屑位置：上下左右
 export type BreadcrumbPosition = 'top' | 'left' | 'right' | 'bottom';
+// 工具栏位置：上下左右
+export type ToolbarPosition = 'top' | 'left' | 'right' | 'bottom';
 
 interface SharedTabBarSettings {
 	tabBarLayout: TabBarLayout;
 	tabBarWidth: number; // 左右布局时的宽度
 	breadcrumbPosition: BreadcrumbPosition; // 面包屑位置
+	toolbarPosition: ToolbarPosition; // 工具栏位置
 }
 
 function loadSharedTabBarSettings(): SharedTabBarSettings {
@@ -172,7 +175,8 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 			return {
 				tabBarLayout: parsed.tabBarLayout ?? 'top',
 				tabBarWidth: parsed.tabBarWidth ?? 160,
-				breadcrumbPosition: parsed.breadcrumbPosition ?? 'top'
+				breadcrumbPosition: parsed.breadcrumbPosition ?? 'top',
+				toolbarPosition: parsed.toolbarPosition ?? 'top'
 			};
 		}
 	} catch (e) {
@@ -181,7 +185,8 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 	return {
 		tabBarLayout: 'top',
 		tabBarWidth: 160,
-		breadcrumbPosition: 'top'
+		breadcrumbPosition: 'top',
+		toolbarPosition: 'top'
 	};
 }
 
@@ -599,6 +604,8 @@ export const tabBarLayout = writable<TabBarLayout>(sharedTabBarSettings.tabBarLa
 export const tabBarWidth = writable<number>(sharedTabBarSettings.tabBarWidth);
 // 面包屑位置
 export const breadcrumbPosition = writable<BreadcrumbPosition>(sharedTabBarSettings.breadcrumbPosition);
+// 工具栏位置
+export const toolbarPosition = writable<ToolbarPosition>(sharedTabBarSettings.toolbarPosition);
 
 // ============ Actions ============
 
@@ -928,6 +935,22 @@ export const folderTabActions = {
 	 */
 	getBreadcrumbPosition(): BreadcrumbPosition {
 		return sharedTabBarSettings.breadcrumbPosition;
+	},
+
+	/**
+	 * 设置工具栏位置
+	 */
+	setToolbarPosition(position: ToolbarPosition) {
+		sharedTabBarSettings.toolbarPosition = position;
+		saveSharedTabBarSettings(sharedTabBarSettings);
+		toolbarPosition.set(position);
+	},
+
+	/**
+	 * 获取工具栏位置
+	 */
+	getToolbarPosition(): ToolbarPosition {
+		return sharedTabBarSettings.toolbarPosition;
 	},
 
 	/**

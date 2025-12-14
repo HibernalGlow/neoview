@@ -25,7 +25,8 @@
 		isVirtualPath,
 		tabBarLayout,
 		tabBarWidth,
-		breadcrumbPosition
+		breadcrumbPosition,
+		toolbarPosition
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
 	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
@@ -207,16 +208,37 @@
 		{/if}
 
 		<!-- 主内容区（工具栏+文件列表） -->
-		<div class="flex flex-1 flex-col min-w-0 min-h-0">
-			<ToolbarCard
-				onRefresh={actions.handleRefresh}
-				onGoBack={actions.handleGoBack}
-				onGoForward={actions.handleGoForward}
-				onGoUp={actions.handleGoUp}
-				onGoHome={actions.handleGoHome}
-				onSetHome={actions.handleSetHome}
-				onBatchDelete={actions.handleBatchDelete}
-			/>
+		<div class="flex flex-1 min-w-0 min-h-0 {$toolbarPosition === 'left' || $toolbarPosition === 'right' ? 'flex-row' : 'flex-col'}">
+			<!-- 工具栏在左侧 -->
+			{#if $toolbarPosition === 'left'}
+				<div class="border-r border-border/50 shrink-0">
+					<ToolbarCard
+						onRefresh={actions.handleRefresh}
+						onGoBack={actions.handleGoBack}
+						onGoForward={actions.handleGoForward}
+						onGoUp={actions.handleGoUp}
+						onGoHome={actions.handleGoHome}
+						onSetHome={actions.handleSetHome}
+						onBatchDelete={actions.handleBatchDelete}
+						vertical={true}
+					/>
+				</div>
+			{/if}
+
+			<!-- 工具栏在顶部 -->
+			{#if $toolbarPosition === 'top'}
+				<ToolbarCard
+					onRefresh={actions.handleRefresh}
+					onGoBack={actions.handleGoBack}
+					onGoForward={actions.handleGoForward}
+					onGoUp={actions.handleGoUp}
+					onGoHome={actions.handleGoHome}
+					onSetHome={actions.handleSetHome}
+					onBatchDelete={actions.handleBatchDelete}
+				/>
+			{/if}
+
+			<!-- 文件列表 -->
 			<FileListCard
 				onItemOpen={actions.handleItemOpen}
 				onItemDelete={actions.handleDelete}
@@ -225,6 +247,37 @@
 				onOpenInNewTab={actions.handleOpenInNewTab}
 				onNavigate={actions.handleNavigate}
 			/>
+
+			<!-- 工具栏在底部 -->
+			{#if $toolbarPosition === 'bottom'}
+				<div class="border-t border-border/50">
+					<ToolbarCard
+						onRefresh={actions.handleRefresh}
+						onGoBack={actions.handleGoBack}
+						onGoForward={actions.handleGoForward}
+						onGoUp={actions.handleGoUp}
+						onGoHome={actions.handleGoHome}
+						onSetHome={actions.handleSetHome}
+						onBatchDelete={actions.handleBatchDelete}
+					/>
+				</div>
+			{/if}
+
+			<!-- 工具栏在右侧 -->
+			{#if $toolbarPosition === 'right'}
+				<div class="border-l border-border/50 shrink-0">
+					<ToolbarCard
+						onRefresh={actions.handleRefresh}
+						onGoBack={actions.handleGoBack}
+						onGoForward={actions.handleGoForward}
+						onGoUp={actions.handleGoUp}
+						onGoHome={actions.handleGoHome}
+						onSetHome={actions.handleSetHome}
+						onBatchDelete={actions.handleBatchDelete}
+						vertical={true}
+					/>
+				</div>
+			{/if}
 		</div>
 
 		<!-- 标签栏在底部 -->

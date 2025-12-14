@@ -146,9 +146,11 @@ interface Props {
 	onToggleRandomTagBar?: () => void;
 	/** 虚拟模式类型，用于显示正确的排序标签 */
 	virtualMode?: 'bookmark' | 'history' | null;
+	/** 是否垂直布局（左右位置时使用） */
+	vertical?: boolean;
 }
 
-let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar, virtualMode = null }: Props = $props();
+let { onRefresh, onToggleFolderTree, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onToggleDeleteStrategy, onToggleInlineTree, showRandomTagBar = false, onToggleRandomTagBar, virtualMode = null, vertical = false }: Props = $props();
 
 // ==================== 根据模式选择状态 ====================
 // 虚拟模式使用独立的 virtualPanelSettingsStore，非虚拟模式使用全局 store
@@ -645,9 +647,9 @@ async function handleReloadSelectedThumbnails() {
 }
 </script>
 
-<div class="flex flex-wrap items-center gap-1 px-2 py-1.5">
+<div class={vertical ? "flex flex-col items-center gap-1 px-1 py-2 h-full overflow-y-auto" : "flex flex-wrap items-center gap-1 px-2 py-1.5"}>
 	<!-- 导航按钮组 -->
-	<div class="flex items-center gap-0.5">
+	<div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
 		{#if !virtualMode}
 			<!-- 普通文件夹模式：显示所有导航按钮 -->
 			<Tooltip.Root>
@@ -732,7 +734,7 @@ async function handleReloadSelectedThumbnails() {
 	</div>
 
 	<!-- 分隔 -->
-	<div class="bg-border mx-1 h-5 w-px"></div>
+	<div class={vertical ? "bg-border my-1 w-5 h-px" : "bg-border mx-1 h-5 w-px"}></div>
 
 	<!-- 同步文件夹按钮（仅在书签/历史模式下显示） -->
 	{#if virtualMode}
@@ -817,10 +819,10 @@ async function handleReloadSelectedThumbnails() {
 	</Tooltip.Root>
 
 	<!-- 弹性空间 -->
-	<div class="flex-1"></div>
+	<div class={vertical ? "h-2" : "flex-1"}></div>
 
 	<!-- 功能按钮组 -->
-	<div class="flex items-center gap-0.5">
+	<div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button

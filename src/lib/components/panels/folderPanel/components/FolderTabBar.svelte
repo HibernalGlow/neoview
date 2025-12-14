@@ -17,7 +17,6 @@
 		ChevronRight,
 		ClipboardCopy,
 		RotateCcw,
-		Check,
 		PanelTop,
 		PanelBottom,
 		PanelLeft,
@@ -41,8 +40,10 @@
 		recentlyClosedTabs,
 		tabBarLayout,
 		breadcrumbPosition,
+		toolbarPosition,
 		type TabBarLayout,
-		type BreadcrumbPosition
+		type BreadcrumbPosition,
+		type ToolbarPosition
 	} from '../stores/folderTabStore.svelte';
 
 	// 根据路径获取图标类型
@@ -147,6 +148,10 @@
 
 	function handleSetBreadcrumbPosition(position: BreadcrumbPosition) {
 		folderTabActions.setBreadcrumbPosition(position);
+	}
+
+	function handleSetToolbarPosition(position: ToolbarPosition) {
+		folderTabActions.setToolbarPosition(position);
 	}
 
 	// 中键点击关闭
@@ -392,6 +397,45 @@
 						size="icon"
 						class="h-7 w-7"
 						onclick={() => handleSetBreadcrumbPosition('right')}
+					>
+						<PanelRight class="h-4 w-4" />
+					</Button>
+				</div>
+
+				<!-- 工具栏位置选项（用图标显示4个方向） -->
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>工具栏位置</DropdownMenu.Label>
+				<DropdownMenu.Separator />
+				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$toolbarPosition === 'top' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetToolbarPosition('top')}
+					>
+						<PanelTop class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$toolbarPosition === 'bottom' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetToolbarPosition('bottom')}
+					>
+						<PanelBottom class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$toolbarPosition === 'left' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetToolbarPosition('left')}
+					>
+						<PanelLeft class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$toolbarPosition === 'right' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetToolbarPosition('right')}
 					>
 						<PanelRight class="h-4 w-4" />
 					</Button>

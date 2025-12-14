@@ -33,8 +33,10 @@
 		onGoHome: () => void;
 		onSetHome: () => void;
 		onBatchDelete: () => void;
+		/** 是否垂直布局（左右位置时使用） */
+		vertical?: boolean;
 	}
-	let { onRefresh, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onBatchDelete }: Props = $props();
+	let { onRefresh, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onBatchDelete, vertical = false }: Props = $props();
 
 	// ==================== Context ====================
 	const ctx = getFolderContext();
@@ -177,6 +179,7 @@
 	showRandomTagBar={ctx.showRandomTagBar}
 	onToggleRandomTagBar={handleToggleRandomTagBar}
 	virtualMode={virtualMode}
+	{vertical}
 />
 
 <!-- 搜索栏 -->

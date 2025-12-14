@@ -1,0 +1,143 @@
+# Implementation Plan
+
+- [x] 1. 创建 CardWindowTabStore 核心状态管理
+  - [x] 1.1 创建 `src/lib/stores/cardWindowTabStore.svelte.ts` 文件
+    - 定义 CardTab 和 CardWindowTabState 接口
+    - 实现 CardWindowTabStore 类，使用 Svelte 5 Runes
+    - 实现 addTab、removeTab、setActiveTab、moveTab、duplicateTab 方法
+    - 实现 nextTab、previousTab 导航方法
+    - 实现 toConfig、fromConfig 序列化方法
+    - _Requirements: 2.1, 2.2, 2.3, 2.5, 3.3, 6.2, 6.3, 8.2, 8.3_
+  - [ ]* 1.2 编写属性测试：标签页状态一致性
+    - **Property 2: Tab store state consistency**
+    - **Validates: Requirements 2.1, 2.2**
+  - [ ]* 1.3 编写属性测试：标签页关闭保持有效状态
+    - **Property 3: Tab closure maintains valid state**
+    - **Validates: Requirements 2.3**
+  - [ ]* 1.4 编写属性测试：标签页重排序保留所有标签
+    - **Property 4: Tab reordering preserves all tabs**
+    - **Validates: Requirements 2.5**
+  - [ ]* 1.5 编写属性测试：添加卡片增加标签数
+    - **Property 5: Add card increases tab count**
+    - **Validates: Requirements 3.3**
+  - [ ]* 1.6 编写属性测试：标签页循环切换
+    - **Property 11: Tab cycling wraps correctly**
+    - **Validates: Requirements 6.2**
+  - [ ]* 1.7 编写属性测试：反向标签页循环切换
+    - **Property 12: Reverse tab cycling wraps correctly**
+    - **Validates: Requirements 6.3**
+  - [ ]* 1.8 编写属性测试：标签页复制创建新ID
+    - **Property 14: Tab duplication creates new ID**
+    - **Validates: Requirements 8.2, 8.3**
+
+- [x] 2. 创建 CardWindowManager 窗口管理器
+  - [x] 2.1 创建 `src/lib/core/windows/cardWindowManager.ts` 文件
+    - 定义 CardWindowConfig 和 CardTabConfig 接口
+    - 实现 CardWindowManager 类
+    - 实现 createCardWindow 方法，使用 Tauri WebviewWindow API
+    - 实现 addTabToWindow、closeCardWindow 方法
+    - 实现 getAllCardWindows、moveTabBetweenWindows 方法
+    - _Requirements: 1.2, 1.4, 4.1, 4.2, 4.3, 4.4_
+  - [ ]* 2.2 编写属性测试：窗口创建包含请求的卡片
+    - **Property 1: Window creation contains requested card**
+    - **Validates: Requirements 1.2**
+  - [ ]* 2.3 编写属性测试：跨窗口标签转移保持计数
+    - **Property 7: Cross-window tab transfer preserves count**
+    - **Validates: Requirements 4.2**
+  - [ ]* 2.4 编写属性测试：标签转移保持卡片身份
+    - **Property 8: Tab transfer preserves card identity**
+    - **Validates: Requirements 4.3**
+
+- [x] 3. 实现持久化和恢复功能
+  - [x] 3.1 在 CardWindowManager 中添加持久化逻辑
+    - 实现 saveConfigs 方法，保存到 localStorage
+    - 实现 loadConfigs 方法，从 localStorage 加载
+    - 实现 restoreWindows 方法，恢复之前的窗口
+    - 添加配置版本管理和迁移逻辑
+    - _Requirements: 5.1, 5.2, 5.3, 5.4_
+  - [ ]* 3.2 编写属性测试：持久化往返一致性
+    - **Property 9: Persistence round-trip consistency**
+    - **Validates: Requirements 5.1, 5.2**
+  - [ ]* 3.3 编写属性测试：恢复时过滤无效卡片
+    - **Property 10: Restoration filters invalid cards**
+    - **Validates: Requirements 5.4**
+
+- [x] 4. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. 创建 CardWindow 页面组件
+  - [x] 5.1 创建 `src/routes/cardwindow/[windowId]/+page.svelte` 路由
+    - 实现窗口标题栏（最小化、最大化、关闭按钮）
+    - 集成 CardWindowTabStore 获取标签页状态
+    - 实现标签页内容区域，使用 CardRenderer 渲染卡片
+    - 添加键盘快捷键监听（Ctrl+W, Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+T）
+    - _Requirements: 1.3, 2.2, 6.1, 6.2, 6.3, 6.4_
+
+- [x] 6. 创建 TabBar 组件
+  - [x] 6.1 创建 `src/lib/components/cardwindow/TabBar.svelte`
+    - 实现标签页列表渲染，显示标题和图标
+    - 实现标签页点击切换
+    - 实现标签页关闭按钮
+    - 实现"添加卡片"按钮和下拉菜单
+    - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2_
+  - [ ]* 6.2 编写属性测试：可用卡片匹配注册表
+    - **Property 6: Available cards match registry**
+    - **Validates: Requirements 3.2**
+
+- [x] 7. 实现标签页拖拽功能
+  - [x] 7.1 在 TabBar 中添加拖拽排序支持
+    - 使用 HTML5 Drag and Drop API
+    - 实现拖拽开始、拖拽中、拖拽结束处理
+    - 实现拖拽预览和放置指示器
+    - _Requirements: 2.5, 7.1, 7.2_
+  - [x] 7.2 实现拖拽到窗口外创建新窗口
+    - 检测拖拽离开窗口边界
+    - 调用 CardWindowManager 创建新窗口
+    - _Requirements: 4.1, 7.3_
+  - [x] 7.3 实现跨窗口拖拽标签页
+    - 使用 Tauri 事件系统进行窗口间通信
+    - 实现拖拽到其他窗口的标签栏
+    - _Requirements: 4.2, 4.3_
+  - [ ]* 7.4 编写属性测试：拖拽取消保持顺序
+    - **Property 13: Drag cancel preserves order**
+    - **Validates: Requirements 7.4**
+
+- [x] 8. 添加卡片头部右键菜单
+  - [x] 8.1 创建 `src/lib/components/cards/CardHeaderContextMenu.svelte`
+    - 实现右键菜单组件
+    - 添加"在新窗口打开"选项
+    - 添加"复制标签页"选项（用于已在卡片窗口中的卡片）
+    - _Requirements: 1.1, 8.1_
+  - [x] 8.2 修改 CollapsibleCard 组件集成右键菜单
+    - 在卡片头部添加右键事件监听
+    - 显示 CardHeaderContextMenu
+    - _Requirements: 1.1_
+
+- [x] 9. 实现标签页右键菜单
+  - [x] 9.1 创建 `src/lib/components/cardwindow/TabContextMenu.svelte`
+    - 实现标签页右键菜单
+    - 添加"复制标签页"选项
+    - 添加"关闭标签页"选项
+    - 添加"关闭其他标签页"选项
+    - _Requirements: 8.1, 8.2_
+
+- [x] 10. Checkpoint - 确保所有测试通过
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 11. 集成和完善
+  - [x] 11.1 在应用启动时恢复卡片窗口
+    - 在 App.svelte 或 main.ts 中调用 restoreWindows
+    - 处理恢复失败的情况
+    - _Requirements: 5.2_
+  - [x] 11.2 添加窗口关闭时的清理逻辑
+    - 监听窗口关闭事件
+    - 更新持久化配置
+    - _Requirements: 5.3_
+  - [x] 11.3 处理最后一个标签页关闭时关闭窗口
+    - 在 removeTab 中检查标签页数量
+    - 调用窗口关闭逻辑
+    - _Requirements: 2.4_
+
+- [x] 12. Final Checkpoint - 确保所有测试通过
+
+  - Ensure all tests pass, ask the user if questions arise.

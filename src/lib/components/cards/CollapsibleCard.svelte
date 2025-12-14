@@ -2,11 +2,14 @@
 /**
  * CollapsibleCard - 通用可折叠卡片容器
  * 从 cardConfig 读取展开状态，支持拖拽手柄和移动按钮
+ * 支持右键菜单在新窗口打开卡片
+ * Requirements: 1.1
  */
 import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
 import { cardRegistry } from '$lib/cards/registry';
-import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw, EyeOff } from '@lucide/svelte';
+import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw, EyeOff, ExternalLink } from '@lucide/svelte';
 import { slide } from 'svelte/transition';
+import { openCardInNewWindow } from '$lib/core/windows/cardWindowManager';
 
 interface Props {
 	id: string;
@@ -117,12 +120,20 @@ function hideCard(e: MouseEvent) {
 	e.stopPropagation();
 	if (canHide) cardConfigStore.setCardVisible(panelId, id, false);
 }
+
+// 在新窗口打开卡片
+async function handleOpenInNewWindow(e: MouseEvent) {
+	e.stopPropagation();
+	await openCardInNewWindow(id);
+}
 </script>
 
 <div class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}
-		<div class="flex items-center justify-between {compact ? 'px-2 py-1' : 'px-3 py-2'} {orientation === 'horizontal' ? 'flex-col border-r py-2 px-1' : ''}">
+		<div 
+			class="flex items-center justify-between {compact ? 'px-2 py-1' : 'px-3 py-2'} {orientation === 'horizontal' ? 'flex-col border-r py-2 px-1' : ''}"
+		>
 			<button
 				type="button"
 				class="flex items-center gap-1.5 text-left {orientation === 'horizontal' ? 'flex-col' : ''}"
@@ -142,6 +153,15 @@ function hideCard(e: MouseEvent) {
 			</button>
 			
 			<div class="group/buttons flex items-center gap-0.5 {orientation === 'horizontal' ? 'flex-col mt-1' : ''}">
+				<!-- 在新窗口打开按钮（悬停按钮区域显示） -->
+				<button
+					type="button"
+					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/buttons:opacity-100 hover:bg-primary/20 hover:text-primary transition-opacity"
+					onclick={handleOpenInNewWindow}
+					title="在新窗口打开"
+				>
+					<ExternalLink class="h-3 w-3" />
+				</button>
 				<!-- 隐藏卡片按钮（悬停按钮区域显示） -->
 				{#if canHide}
 					<button
@@ -235,4 +255,5 @@ function hideCard(e: MouseEvent) {
 			</div>
 		{/if}
 	{/if}
+
 </div>

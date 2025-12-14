@@ -68,6 +68,7 @@
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { windowManager } from '$lib/core/windows/windowManager';
+	import { initCardWindowSystem, restoreCardWindows } from '$lib/core/windows/cardWindowManager';
 	// CLI 路径处理工具 (Requirements: 4.1, 4.2, 4.3, 4.4)
 	import { normalizePath, validatePath, getPathType } from '$lib/utils/pathUtils';
 	// Folder Panel 标签页管理
@@ -248,6 +249,16 @@
 	onMount(async () => {
 		// 加载空页面设置
 		loadEmptySettings();
+		
+		// 初始化卡片窗口系统
+		try {
+			await initCardWindowSystem();
+			// 注意：不在主窗口启动时恢复卡片窗口，避免干扰用户
+			// 用户可以通过右键菜单手动打开卡片窗口
+			console.log('✅ 卡片窗口系统初始化成功');
+		} catch (error) {
+			console.error('❌ 卡片窗口系统初始化失败:', error);
+		}
 		
 		// 初始化默认上下文为图片浏览模式
 		keyBindingsStore.setContexts(['global', 'viewer']);

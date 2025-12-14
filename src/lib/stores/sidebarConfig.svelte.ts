@@ -154,6 +154,18 @@ export const PANEL_DEFINITIONS = {
 		canMove: true,
 		canHide: true,
 		supportsCards: true
+	},
+	// 卡片窗口（独立窗口使用）
+	cardwindow: {
+		title: '卡片窗口',
+		icon: File,
+		emoji: '🪟',
+		defaultPosition: 'floating' as PanelPosition,
+		defaultVisible: false,
+		defaultOrder: 100,
+		canMove: false,
+		canHide: false,
+		supportsCards: true
 	}
 } as const;
 

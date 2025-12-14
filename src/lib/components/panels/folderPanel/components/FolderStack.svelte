@@ -779,10 +779,13 @@
 			console.log('[FolderStack] 找到待聚焦文件, index:', targetIndex, 'path:', focusPath);
 			// 设置 selectedIndex
 			layers[activeIndex].selectedIndex = targetIndex;
-			// 触发滚动
-			scrollToSelectedToken++;
 			// 同时添加到选中列表（高亮显示）
 			globalStore.selectItem(focusPath, false, targetIndex);
+			// 延迟触发滚动，确保虚拟列表完全渲染后再滚动居中
+			setTimeout(() => {
+				scrollToSelectedToken++;
+				console.log('[FolderStack] 触发滚动到选中项, token:', scrollToSelectedToken);
+			}, 250);
 		} else {
 			console.log('[FolderStack] 未找到待聚焦文件:', focusPath);
 		}

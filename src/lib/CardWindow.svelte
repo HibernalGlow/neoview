@@ -11,7 +11,7 @@
 	import { getOrCreateTabStore, type CardWindowTabStore } from '$lib/stores/cardWindowTabStore.svelte';
 	import { cardWindowManager } from '$lib/core/windows/cardWindowManager';
 	import TabBar from '$lib/components/cardwindow/TabBar.svelte';
-	import CardRenderer from '$lib/cards/CardRenderer.svelte';
+	import CardWindowContent from '$lib/components/cardwindow/CardWindowContent.svelte';
 
 	// 标签页 store
 	let tabStore = $state<CardWindowTabStore | null>(null);
@@ -238,7 +238,7 @@
 	<div class="flex-1 overflow-hidden">
 		{#if activeCardId}
 			<div class="h-full overflow-auto p-2">
-				<CardRenderer cardId={activeCardId} panelId="cardwindow" />
+				<CardWindowContent cardId={activeCardId} />
 			</div>
 		{:else}
 			<div class="h-full flex items-center justify-center text-muted-foreground">

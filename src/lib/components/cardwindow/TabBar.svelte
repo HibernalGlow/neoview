@@ -4,8 +4,7 @@
 	 * 支持标签页切换、关闭、拖拽排序和添加新卡片
 	 * Requirements: 2.1, 2.2, 2.3, 2.5, 3.1, 3.2, 7.1, 7.2
 	 */
-	import { X, Plus, ChevronDown, GripVertical } from '@lucide/svelte';
-	import { Button } from '$lib/components/ui/button';
+	import { X, Plus, GripVertical } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { cardRegistry } from '$lib/cards/registry';
 	import type { CardTab } from '$lib/stores/cardWindowTabStore.svelte';
@@ -219,16 +218,8 @@
 
 	<!-- 添加卡片按钮 -->
 	<DropdownMenu.Root bind:open={showAddCardDropdown}>
-		<DropdownMenu.Trigger asChild let:builder>
-			<Button
-				builders={[builder]}
-				variant="ghost"
-				size="icon"
-				class="h-7 w-7 shrink-0"
-				title="添加卡片 (Ctrl+T)"
-			>
-				<Plus class="h-4 w-4" />
-			</Button>
+		<DropdownMenu.Trigger class="h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground" title="添加卡片 (Ctrl+T)">
+			<Plus class="h-4 w-4" />
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content class="w-56 max-h-80 overflow-y-auto">
 			{#each Object.entries(cardGroups) as [panelId, cards]}

@@ -2,7 +2,7 @@
 	/**
 	 * FolderTabBar - 文件面板页签栏
 	 * 使用 shadcn Tabs 组件实现多页签管理
-	 * 支持右键菜单：关闭、关闭其他、关闭左侧/右侧、固定、复制路径等
+	 * 点击图标触发下拉菜单：关闭、关闭其他、关闭左侧/右侧、固定、复制路径等
 	 */
 	import {
 		X,
@@ -22,11 +22,12 @@
 		PanelBottom,
 		PanelLeft,
 		PanelRight,
-		Crosshair
+		Crosshair,
+		ChevronDown
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import * as ContextMenu from '$lib/components/ui/context-menu';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -65,7 +66,6 @@
 	function canCloseTab(tabId: string): boolean {
 		const tab = $allTabs.find((t) => t.id === tabId);
 		if (!tab) return false;
-		// 固定标签页可以关闭，非固定标签页需要至少保留一个
 		if (tab.pinned) return true;
 		return unpinnedCount > 1;
 	}
@@ -160,159 +160,170 @@
 </script>
 
 <Tabs.Root value={$activeTabId} onValueChange={handleTabChange} class="w-full">
-	<div class={isVertical ? 'flex flex-col items-start gap-1 px-1 py-1' : 'flex items-start gap-1 px-1 py-1'}>
+	<div
+		class={isVertical
+			? 'flex flex-col items-start gap-1 px-1 py-1'
+			: 'flex items-start gap-1 px-1 py-1'}
+	>
 		<!-- 页签列表 -->
-		<Tabs.List class={isVertical 
-			? 'flex flex-col h-auto gap-1 bg-transparent p-0 w-full' 
-			: 'flex h-auto flex-wrap gap-1 bg-transparent p-0'}>
+		<Tabs.List
+			class={isVertical
+				? 'flex flex-col h-auto gap-1 bg-transparent p-0 w-full'
+				: 'flex h-auto flex-wrap gap-1 bg-transparent p-0'}
+		>
 			{#each $allTabs as tab (tab.id)}
-				<ContextMenu.Root>
-					<ContextMenu.Trigger>
-						<Tabs.Trigger
-							value={tab.id}
-							class={isVertical
-								? 'group h-7 w-full gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm justify-start'
-								: 'group h-7 max-w-[160px] min-w-[80px] gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm'}
-							onauxclick={(e) => handleMiddleClick(tab.id, e)}
-							title={tab.currentPath || tab.title}
+				<Tabs.Trigger
+					value={tab.id}
+					class={isVertical
+						? 'group h-7 w-full gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm justify-start'
+						: 'group h-7 max-w-[180px] min-w-[80px] gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm'}
+					onauxclick={(e) => handleMiddleClick(tab.id, e)}
+					title={tab.currentPath || tab.title}
+				>
+					<!-- 点击图标触发下拉菜单 -->
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger
+							class="flex items-center justify-center shrink-0 hover:bg-accent rounded p-0.5 -ml-1"
+							onclick={(e: MouseEvent) => e.stopPropagation()}
 						>
-							<!-- 固定图标 -->
 							{#if tab.pinned}
-								<Pin class="h-3 w-3 shrink-0 text-blue-500" />
+								<Pin class="h-3 w-3 text-blue-500" />
 							{:else if getTabIconType(tab.currentPath) === 'bookmark'}
-								<Bookmark class="h-3.5 w-3.5 shrink-0 text-amber-500" />
+								<Bookmark class="h-3.5 w-3.5 text-amber-500" />
 							{:else if getTabIconType(tab.currentPath) === 'history'}
-								<Clock class="h-3.5 w-3.5 shrink-0 text-blue-500" />
+								<Clock class="h-3.5 w-3.5 text-blue-500" />
 							{:else}
-								<Folder class="h-3.5 w-3.5 shrink-0" />
+								<Folder class="h-3.5 w-3.5" />
 							{/if}
-							<span class="flex-1 truncate text-left">{tab.title}</span>
-							{#if canCloseTab(tab.id)}
-								<span
-									class="hover:bg-destructive/20 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-60 group-hover:hover:opacity-100"
-									onclick={(e) => handleCloseTab(tab.id, e)}
-									onkeydown={(e) => e.key === 'Enter' && handleCloseTab(tab.id)}
-									role="button"
-									tabindex="0"
-									title="关闭页签"
-								>
-									<X class="h-3 w-3" />
-								</span>
+							<ChevronDown class="h-2.5 w-2.5 opacity-50" />
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content class="w-56">
+							<!-- 复制操作 -->
+							<DropdownMenu.Item onclick={() => handleDuplicateTab(tab.id)}>
+								<Copy class="mr-2 h-4 w-4" />
+								复制页签
+							</DropdownMenu.Item>
+							{#if !isVirtualPath(tab.currentPath)}
+								<DropdownMenu.Item onclick={() => handleCopyPath(tab.currentPath)}>
+									<ClipboardCopy class="mr-2 h-4 w-4" />
+									复制路径
+								</DropdownMenu.Item>
 							{/if}
-						</Tabs.Trigger>
-					</ContextMenu.Trigger>
-					<ContextMenu.Content class="w-56">
-						<!-- 复制操作 -->
-						<ContextMenu.Item onclick={() => handleDuplicateTab(tab.id)}>
-							<Copy class="mr-2 h-4 w-4" />
-							复制页签
-						</ContextMenu.Item>
-						{#if !isVirtualPath(tab.currentPath)}
-							<ContextMenu.Item onclick={() => handleCopyPath(tab.currentPath)}>
-								<ClipboardCopy class="mr-2 h-4 w-4" />
-								复制路径
-							</ContextMenu.Item>
-						{/if}
 
-						<ContextMenu.Separator />
+							<DropdownMenu.Separator />
 
-						<!-- 固定操作 -->
-						<ContextMenu.Item onclick={() => handleTogglePinned(tab.id)}>
-							{#if tab.pinned}
-								<PinOff class="mr-2 h-4 w-4" />
-								取消固定
-							{:else}
-								<Pin class="mr-2 h-4 w-4" />
-								固定页签
+							<!-- 固定操作 -->
+							<DropdownMenu.Item onclick={() => handleTogglePinned(tab.id)}>
+								{#if tab.pinned}
+									<PinOff class="mr-2 h-4 w-4" />
+									取消固定
+								{:else}
+									<Pin class="mr-2 h-4 w-4" />
+									固定页签
+								{/if}
+							</DropdownMenu.Item>
+
+							<!-- 定位当前文件 -->
+							{#if $activeTab?.focusedItem}
+								<DropdownMenu.Item onclick={handleScrollToFocused}>
+									<Crosshair class="mr-2 h-4 w-4" />
+									定位当前文件
+								</DropdownMenu.Item>
 							{/if}
-						</ContextMenu.Item>
 
-						<!-- 定位当前文件 -->
-						{#if $activeTab?.focusedItem}
-							<ContextMenu.Item onclick={handleScrollToFocused}>
-								<Crosshair class="mr-2 h-4 w-4" />
-								定位当前文件
-							</ContextMenu.Item>
-						{/if}
+							<DropdownMenu.Separator />
 
-						<ContextMenu.Separator />
-
-						<!-- 标签栏位置子菜单 -->
-						<ContextMenu.Sub>
-							<ContextMenu.SubTrigger>
-								<PanelTop class="mr-2 h-4 w-4" />
-								标签栏位置
-							</ContextMenu.SubTrigger>
-							<ContextMenu.SubContent>
-								<ContextMenu.Item onclick={() => handleSetTabBarLayout('top')}>
+							<!-- 标签栏位置子菜单 -->
+							<DropdownMenu.Sub>
+								<DropdownMenu.SubTrigger>
 									<PanelTop class="mr-2 h-4 w-4" />
-									上
-									{#if $tabBarLayout === 'top'}
-										<Check class="ml-auto h-4 w-4" />
-									{/if}
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => handleSetTabBarLayout('bottom')}>
-									<PanelBottom class="mr-2 h-4 w-4" />
-									下
-									{#if $tabBarLayout === 'bottom'}
-										<Check class="ml-auto h-4 w-4" />
-									{/if}
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => handleSetTabBarLayout('left')}>
-									<PanelLeft class="mr-2 h-4 w-4" />
-									左
-									{#if $tabBarLayout === 'left'}
-										<Check class="ml-auto h-4 w-4" />
-									{/if}
-								</ContextMenu.Item>
-								<ContextMenu.Item onclick={() => handleSetTabBarLayout('right')}>
-									<PanelRight class="mr-2 h-4 w-4" />
-									右
-									{#if $tabBarLayout === 'right'}
-										<Check class="ml-auto h-4 w-4" />
-									{/if}
-								</ContextMenu.Item>
-							</ContextMenu.SubContent>
-						</ContextMenu.Sub>
+									标签栏位置
+								</DropdownMenu.SubTrigger>
+								<DropdownMenu.SubContent>
+									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('top')}>
+										<PanelTop class="mr-2 h-4 w-4" />
+										上
+										{#if $tabBarLayout === 'top'}
+											<Check class="ml-auto h-4 w-4" />
+										{/if}
+									</DropdownMenu.Item>
+									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('bottom')}>
+										<PanelBottom class="mr-2 h-4 w-4" />
+										下
+										{#if $tabBarLayout === 'bottom'}
+											<Check class="ml-auto h-4 w-4" />
+										{/if}
+									</DropdownMenu.Item>
+									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('left')}>
+										<PanelLeft class="mr-2 h-4 w-4" />
+										左
+										{#if $tabBarLayout === 'left'}
+											<Check class="ml-auto h-4 w-4" />
+										{/if}
+									</DropdownMenu.Item>
+									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('right')}>
+										<PanelRight class="mr-2 h-4 w-4" />
+										右
+										{#if $tabBarLayout === 'right'}
+											<Check class="ml-auto h-4 w-4" />
+										{/if}
+									</DropdownMenu.Item>
+								</DropdownMenu.SubContent>
+							</DropdownMenu.Sub>
 
-						<ContextMenu.Separator />
+							<DropdownMenu.Separator />
 
-						<!-- 关闭操作 -->
-						{#if canCloseTab(tab.id)}
-							<ContextMenu.Item onclick={() => handleCloseTab(tab.id)}>
-								<X class="mr-2 h-4 w-4" />
-								关闭
-							</ContextMenu.Item>
-						{/if}
-						{#if hasClosableOthers(tab.id)}
-							<ContextMenu.Item onclick={() => handleCloseOthers(tab.id)}>
-								<X class="mr-2 h-4 w-4" />
-								关闭其他
-							</ContextMenu.Item>
-						{/if}
-						{#if hasClosableLeft(tab.id)}
-							<ContextMenu.Item onclick={() => handleCloseLeft(tab.id)}>
-								<ChevronLeft class="mr-2 h-4 w-4" />
-								关闭左侧
-							</ContextMenu.Item>
-						{/if}
-						{#if hasClosableRight(tab.id)}
-							<ContextMenu.Item onclick={() => handleCloseRight(tab.id)}>
-								<ChevronRight class="mr-2 h-4 w-4" />
-								关闭右侧
-							</ContextMenu.Item>
-						{/if}
+							<!-- 关闭操作 -->
+							{#if canCloseTab(tab.id)}
+								<DropdownMenu.Item onclick={() => handleCloseTab(tab.id)}>
+									<X class="mr-2 h-4 w-4" />
+									关闭
+								</DropdownMenu.Item>
+							{/if}
+							{#if hasClosableOthers(tab.id)}
+								<DropdownMenu.Item onclick={() => handleCloseOthers(tab.id)}>
+									<X class="mr-2 h-4 w-4" />
+									关闭其他
+								</DropdownMenu.Item>
+							{/if}
+							{#if hasClosableLeft(tab.id)}
+								<DropdownMenu.Item onclick={() => handleCloseLeft(tab.id)}>
+									<ChevronLeft class="mr-2 h-4 w-4" />
+									关闭左侧
+								</DropdownMenu.Item>
+							{/if}
+							{#if hasClosableRight(tab.id)}
+								<DropdownMenu.Item onclick={() => handleCloseRight(tab.id)}>
+									<ChevronRight class="mr-2 h-4 w-4" />
+									关闭右侧
+								</DropdownMenu.Item>
+							{/if}
 
-						<!-- 重新打开 -->
-						{#if $recentlyClosedTabs.length > 0}
-							<ContextMenu.Separator />
-							<ContextMenu.Item onclick={handleReopenClosed}>
-								<RotateCcw class="mr-2 h-4 w-4" />
-								重新打开关闭的页签
-							</ContextMenu.Item>
-						{/if}
-					</ContextMenu.Content>
-				</ContextMenu.Root>
+							<!-- 重新打开 -->
+							{#if $recentlyClosedTabs.length > 0}
+								<DropdownMenu.Separator />
+								<DropdownMenu.Item onclick={handleReopenClosed}>
+									<RotateCcw class="mr-2 h-4 w-4" />
+									重新打开关闭的页签
+								</DropdownMenu.Item>
+							{/if}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+
+					<span class="flex-1 truncate text-left">{tab.title}</span>
+					{#if canCloseTab(tab.id)}
+						<span
+							class="hover:bg-destructive/20 flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-60 group-hover:hover:opacity-100"
+							onclick={(e) => handleCloseTab(tab.id, e)}
+							onkeydown={(e) => e.key === 'Enter' && handleCloseTab(tab.id)}
+							role="button"
+							tabindex="0"
+							title="关闭页签"
+						>
+							<X class="h-3 w-3" />
+						</span>
+					{/if}
+				</Tabs.Trigger>
 			{/each}
 		</Tabs.List>
 

@@ -55,8 +55,8 @@
 	externalPath={ctx.isVirtualInstance ? ctx.initialPath : undefined}
 />
 
-<!-- 页签栏（非虚拟实例使用全局 FolderTabBar） -->
-{#if ctx.displayTabs.length > 1 && !ctx.isVirtualInstance}
+<!-- 页签栏（非虚拟实例使用全局 FolderTabBar，始终显示以支持右键菜单） -->
+{#if !ctx.isVirtualInstance}
 	<FolderTabBar homePath={ctx.homePath} />
 {/if}
 

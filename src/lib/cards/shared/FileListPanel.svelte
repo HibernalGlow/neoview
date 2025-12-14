@@ -23,7 +23,8 @@
 	import { createFolderContext, type PanelMode } from '../folder/context/FolderContext.svelte';
 	import {
 		folderTabActions,
-		isVirtualPath
+		isVirtualPath,
+		tabBarLayout
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
@@ -150,31 +151,110 @@
 	});
 </script>
 
-<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
-	<!-- 面包屑 + 页签卡片 -->
-	<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
-
-	<!-- 工具栏卡片 -->
-	<ToolbarCard
-		onRefresh={actions.handleRefresh}
-		onGoBack={actions.handleGoBack}
-		onGoForward={actions.handleGoForward}
-		onGoUp={actions.handleGoUp}
-		onGoHome={actions.handleGoHome}
-		onSetHome={actions.handleSetHome}
-		onBatchDelete={actions.handleBatchDelete}
-	/>
-
-	<!-- 文件列表卡片 -->
-	<FileListCard
-		onItemOpen={actions.handleItemOpen}
-		onItemDelete={actions.handleDelete}
-		onItemContextMenu={actions.handleContextMenu}
-		onOpenFolderAsBook={actions.handleOpenFolderAsBook}
-		onOpenInNewTab={actions.handleOpenInNewTab}
-		onNavigate={actions.handleNavigate}
-	/>
-</div>
+{#if $tabBarLayout === 'left'}
+	<!-- 左侧标签栏布局 -->
+	<div class="bg-muted/10 flex h-full overflow-hidden">
+		<!-- 左侧标签栏 -->
+		<div class="flex flex-col border-r border-border/50 w-40 shrink-0">
+			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+		</div>
+		<!-- 主内容区 -->
+		<div class="flex flex-1 flex-col min-w-0">
+			<ToolbarCard
+				onRefresh={actions.handleRefresh}
+				onGoBack={actions.handleGoBack}
+				onGoForward={actions.handleGoForward}
+				onGoUp={actions.handleGoUp}
+				onGoHome={actions.handleGoHome}
+				onSetHome={actions.handleSetHome}
+				onBatchDelete={actions.handleBatchDelete}
+			/>
+			<FileListCard
+				onItemOpen={actions.handleItemOpen}
+				onItemDelete={actions.handleDelete}
+				onItemContextMenu={actions.handleContextMenu}
+				onOpenFolderAsBook={actions.handleOpenFolderAsBook}
+				onOpenInNewTab={actions.handleOpenInNewTab}
+				onNavigate={actions.handleNavigate}
+			/>
+		</div>
+	</div>
+{:else if $tabBarLayout === 'right'}
+	<!-- 右侧标签栏布局 -->
+	<div class="bg-muted/10 flex h-full overflow-hidden">
+		<!-- 主内容区 -->
+		<div class="flex flex-1 flex-col min-w-0">
+			<ToolbarCard
+				onRefresh={actions.handleRefresh}
+				onGoBack={actions.handleGoBack}
+				onGoForward={actions.handleGoForward}
+				onGoUp={actions.handleGoUp}
+				onGoHome={actions.handleGoHome}
+				onSetHome={actions.handleSetHome}
+				onBatchDelete={actions.handleBatchDelete}
+			/>
+			<FileListCard
+				onItemOpen={actions.handleItemOpen}
+				onItemDelete={actions.handleDelete}
+				onItemContextMenu={actions.handleContextMenu}
+				onOpenFolderAsBook={actions.handleOpenFolderAsBook}
+				onOpenInNewTab={actions.handleOpenInNewTab}
+				onNavigate={actions.handleNavigate}
+			/>
+		</div>
+		<!-- 右侧标签栏 -->
+		<div class="flex flex-col border-l border-border/50 w-40 shrink-0">
+			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+		</div>
+	</div>
+{:else if $tabBarLayout === 'bottom'}
+	<!-- 底部标签栏布局 -->
+	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
+		<ToolbarCard
+			onRefresh={actions.handleRefresh}
+			onGoBack={actions.handleGoBack}
+			onGoForward={actions.handleGoForward}
+			onGoUp={actions.handleGoUp}
+			onGoHome={actions.handleGoHome}
+			onSetHome={actions.handleSetHome}
+			onBatchDelete={actions.handleBatchDelete}
+		/>
+		<FileListCard
+			onItemOpen={actions.handleItemOpen}
+			onItemDelete={actions.handleDelete}
+			onItemContextMenu={actions.handleContextMenu}
+			onOpenFolderAsBook={actions.handleOpenFolderAsBook}
+			onOpenInNewTab={actions.handleOpenInNewTab}
+			onNavigate={actions.handleNavigate}
+		/>
+		<!-- 底部标签栏 -->
+		<div class="border-t border-border/50">
+			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+		</div>
+	</div>
+{:else}
+	<!-- 默认顶部标签栏布局 -->
+	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
+		<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+		<ToolbarCard
+			onRefresh={actions.handleRefresh}
+			onGoBack={actions.handleGoBack}
+			onGoForward={actions.handleGoForward}
+			onGoUp={actions.handleGoUp}
+			onGoHome={actions.handleGoHome}
+			onSetHome={actions.handleSetHome}
+			onBatchDelete={actions.handleBatchDelete}
+		/>
+		<FileListCard
+			onItemOpen={actions.handleItemOpen}
+			onItemDelete={actions.handleDelete}
+			onItemContextMenu={actions.handleContextMenu}
+			onOpenFolderAsBook={actions.handleOpenFolderAsBook}
+			onOpenInNewTab={actions.handleOpenInNewTab}
+			onNavigate={actions.handleNavigate}
+		/>
+	</div>
+{/if}
 
 <!-- 右键菜单 -->
 <FolderContextMenu

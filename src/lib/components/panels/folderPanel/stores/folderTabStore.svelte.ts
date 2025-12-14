@@ -29,10 +29,48 @@ export interface FolderStackLayer {
 	scrollTop: number;
 }
 
+// ============ Recently Closed Tabs ============
+// 最近关闭的标签页列表
+export interface RecentlyClosedTab {
+	path: string;
+	title: string;
+	closedAt: number;
+}
+
+const MAX_RECENTLY_CLOSED = 10;
+const RECENTLY_CLOSED_STORAGE_KEY = 'neoview-recently-closed-tabs';
+
+// 加载最近关闭的标签页
+function loadRecentlyClosedTabs(): RecentlyClosedTab[] {
+	try {
+		const saved = localStorage.getItem(RECENTLY_CLOSED_STORAGE_KEY);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to load recently closed tabs:', e);
+	}
+	return [];
+}
+
+// 保存最近关闭的标签页
+function saveRecentlyClosedTabs(tabs: RecentlyClosedTab[]) {
+	try {
+		localStorage.setItem(RECENTLY_CLOSED_STORAGE_KEY, JSON.stringify(tabs));
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to save recently closed tabs:', e);
+	}
+}
+
+// 最近关闭的标签页 store
+const recentlyClosedTabsStore = writable<RecentlyClosedTab[]>(loadRecentlyClosedTabs());
+
 export interface FolderTabState {
 	id: string;
 	// 显示名称
 	title: string;
+	// 是否固定
+	pinned: boolean;
 	// 当前路径
 	currentPath: string;
 	// 文件列表
@@ -112,6 +150,40 @@ export interface FolderTabState {
 const TAB_STORAGE_KEY = 'neoview-folder-tabs';
 const SHARED_TREE_SETTINGS_KEY = 'neoview-folder-tree-shared';
 const SHARED_SORT_SETTINGS_KEY = 'neoview-folder-sort-shared';
+const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
+
+// ============ Shared Tab Bar Settings ============
+// 标签栏位置设置
+export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
+
+interface SharedTabBarSettings {
+	tabBarLayout: TabBarLayout;
+}
+
+function loadSharedTabBarSettings(): SharedTabBarSettings {
+	try {
+		const saved = localStorage.getItem(SHARED_TAB_BAR_SETTINGS_KEY);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to load shared tab bar settings:', e);
+	}
+	return {
+		tabBarLayout: 'top'
+	};
+}
+
+function saveSharedTabBarSettings(settings: SharedTabBarSettings) {
+	try {
+		localStorage.setItem(SHARED_TAB_BAR_SETTINGS_KEY, JSON.stringify(settings));
+	} catch (e) {
+		console.error('[FolderTabStore] Failed to save shared tab bar settings:', e);
+	}
+}
+
+// 加载共享标签栏设置
+const sharedTabBarSettings = loadSharedTabBarSettings();
 
 // ============ Shared Folder Tree Settings ============
 // 这些设置在所有文件夹面板页签之间共享
@@ -289,6 +361,7 @@ function createDefaultTabState(id: string, homePath: string = '', sourceTab?: Fo
 	return {
 		id,
 		title,
+		pinned: false,
 		currentPath: homePath,
 		items: [],
 		selectedItems: new SvelteSet(),
@@ -348,10 +421,11 @@ function loadTabsState(): FolderTabsState | null {
 		const saved = localStorage.getItem(TAB_STORAGE_KEY);
 		if (saved) {
 			const parsed = JSON.parse(saved);
-			// 重建 Set 类型
+			// 重建 Set 类型并确保 pinned 字段存在
 			if (parsed.tabs) {
 				parsed.tabs = parsed.tabs.map((tab: FolderTabState) => ({
 					...tab,
+					pinned: tab.pinned ?? false,
 					selectedItems: new SvelteSet(tab.selectedItems || []),
 					expandedFolders: new SvelteSet(tab.expandedFolders || [])
 				}));
@@ -506,6 +580,12 @@ export const tabPendingFocusPath = derived(activeTab, ($tab) => $tab?.pendingFoc
 export const tabCanGoBackTab = derived(store, ($store) => $store.tabNavHistoryIndex > 0);
 export const tabCanGoForwardTab = derived(store, ($store) => $store.tabNavHistoryIndex < $store.tabNavHistory.length - 1);
 
+// 最近关闭的标签页
+export const recentlyClosedTabs = derived(recentlyClosedTabsStore, ($tabs) => $tabs);
+
+// 标签栏位置
+export const tabBarLayout = writable<TabBarLayout>(sharedTabBarSettings.tabBarLayout);
+
 // ============ Actions ============
 
 function updateActiveTab(updater: (tab: FolderTabState) => FolderTabState) {
@@ -562,12 +642,29 @@ export const folderTabActions = {
 	 */
 	closeTab(tabId: string) {
 		store.update(($store) => {
-			if ($store.tabs.length <= 1) {
-				// 至少保留一个页签
+			// 计算非固定标签页数量
+			const unpinnedCount = $store.tabs.filter(t => !t.pinned).length;
+			const tabToClose = $store.tabs.find(t => t.id === tabId);
+			
+			// 如果要关闭的是非固定标签页，且只剩一个非固定标签页，则不允许关闭
+			if (tabToClose && !tabToClose.pinned && unpinnedCount <= 1) {
 				return $store;
 			}
 
 			const tabIndex = $store.tabs.findIndex((t) => t.id === tabId);
+			
+			// 添加到最近关闭列表（非虚拟路径）
+			if (tabToClose && !isVirtualPath(tabToClose.currentPath)) {
+				recentlyClosedTabsStore.update(($closed) => {
+					const newClosed = [
+						{ path: tabToClose.currentPath, title: tabToClose.title, closedAt: Date.now() },
+						...$closed
+					].slice(0, MAX_RECENTLY_CLOSED);
+					saveRecentlyClosedTabs(newClosed);
+					return newClosed;
+				});
+			}
+			
 			const newTabs = $store.tabs.filter((t) => t.id !== tabId);
 			
 			let newActiveId = $store.activeTabId;
@@ -599,6 +696,192 @@ export const folderTabActions = {
 			saveTabsState(newState);
 			return newState;
 		});
+	},
+
+	/**
+	 * 关闭其他页签（保留目标页签和固定页签）
+	 */
+	closeOthers(tabId: string) {
+		store.update(($store) => {
+			const tabsToClose = $store.tabs.filter(t => t.id !== tabId && !t.pinned);
+			
+			// 添加到最近关闭列表
+			recentlyClosedTabsStore.update(($closed) => {
+				const newEntries = tabsToClose
+					.filter(t => !isVirtualPath(t.currentPath))
+					.map(t => ({ path: t.currentPath, title: t.title, closedAt: Date.now() }));
+				const newClosed = [...newEntries, ...$closed].slice(0, MAX_RECENTLY_CLOSED);
+				saveRecentlyClosedTabs(newClosed);
+				return newClosed;
+			});
+			
+			const newTabs = $store.tabs.filter(t => t.id === tabId || t.pinned);
+			
+			// 确保活动标签页存在
+			let newActiveId = $store.activeTabId;
+			if (!newTabs.some(t => t.id === newActiveId)) {
+				newActiveId = tabId;
+			}
+
+			const newState: FolderTabsState = {
+				tabs: newTabs,
+				activeTabId: newActiveId,
+				tabNavHistory: [newActiveId],
+				tabNavHistoryIndex: 0
+			};
+			saveTabsState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 关闭左侧页签（保留固定页签）
+	 */
+	closeLeft(tabId: string) {
+		store.update(($store) => {
+			const tabIndex = $store.tabs.findIndex(t => t.id === tabId);
+			if (tabIndex <= 0) return $store;
+			
+			const tabsToClose = $store.tabs.slice(0, tabIndex).filter(t => !t.pinned);
+			
+			// 添加到最近关闭列表
+			recentlyClosedTabsStore.update(($closed) => {
+				const newEntries = tabsToClose
+					.filter(t => !isVirtualPath(t.currentPath))
+					.map(t => ({ path: t.currentPath, title: t.title, closedAt: Date.now() }));
+				const newClosed = [...newEntries, ...$closed].slice(0, MAX_RECENTLY_CLOSED);
+				saveRecentlyClosedTabs(newClosed);
+				return newClosed;
+			});
+			
+			const newTabs = $store.tabs.filter((t, i) => i >= tabIndex || t.pinned);
+			
+			// 确保活动标签页存在
+			let newActiveId = $store.activeTabId;
+			if (!newTabs.some(t => t.id === newActiveId)) {
+				newActiveId = tabId;
+			}
+
+			const newState: FolderTabsState = {
+				tabs: newTabs,
+				activeTabId: newActiveId,
+				tabNavHistory: [newActiveId],
+				tabNavHistoryIndex: 0
+			};
+			saveTabsState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 关闭右侧页签（保留固定页签）
+	 */
+	closeRight(tabId: string) {
+		store.update(($store) => {
+			const tabIndex = $store.tabs.findIndex(t => t.id === tabId);
+			if (tabIndex < 0 || tabIndex >= $store.tabs.length - 1) return $store;
+			
+			const tabsToClose = $store.tabs.slice(tabIndex + 1).filter(t => !t.pinned);
+			
+			// 添加到最近关闭列表
+			recentlyClosedTabsStore.update(($closed) => {
+				const newEntries = tabsToClose
+					.filter(t => !isVirtualPath(t.currentPath))
+					.map(t => ({ path: t.currentPath, title: t.title, closedAt: Date.now() }));
+				const newClosed = [...newEntries, ...$closed].slice(0, MAX_RECENTLY_CLOSED);
+				saveRecentlyClosedTabs(newClosed);
+				return newClosed;
+			});
+			
+			const newTabs = $store.tabs.filter((t, i) => i <= tabIndex || t.pinned);
+			
+			// 确保活动标签页存在
+			let newActiveId = $store.activeTabId;
+			if (!newTabs.some(t => t.id === newActiveId)) {
+				newActiveId = tabId;
+			}
+
+			const newState: FolderTabsState = {
+				tabs: newTabs,
+				activeTabId: newActiveId,
+				tabNavHistory: [newActiveId],
+				tabNavHistoryIndex: 0
+			};
+			saveTabsState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 切换页签固定状态
+	 */
+	togglePinned(tabId: string) {
+		store.update(($store) => {
+			const tabs = $store.tabs.map(tab => {
+				if (tab.id === tabId) {
+					return { ...tab, pinned: !tab.pinned };
+				}
+				return tab;
+			});
+			const newState = { ...$store, tabs };
+			saveTabsState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 设置页签固定状态
+	 */
+	setPinned(tabId: string, pinned: boolean) {
+		store.update(($store) => {
+			const tabs = $store.tabs.map(tab => {
+				if (tab.id === tabId) {
+					return { ...tab, pinned };
+				}
+				return tab;
+			});
+			const newState = { ...$store, tabs };
+			saveTabsState(newState);
+			return newState;
+		});
+	},
+
+	/**
+	 * 重新打开最近关闭的页签
+	 */
+	reopenClosedTab(): string | null {
+		const closedTabs = get(recentlyClosedTabsStore);
+		if (closedTabs.length === 0) return null;
+		
+		const [mostRecent, ...rest] = closedTabs;
+		recentlyClosedTabsStore.set(rest);
+		saveRecentlyClosedTabs(rest);
+		
+		// 创建新标签页
+		return this.createTab(mostRecent.path);
+	},
+
+	/**
+	 * 获取最近关闭的页签列表
+	 */
+	getRecentlyClosedTabs(): RecentlyClosedTab[] {
+		return get(recentlyClosedTabsStore);
+	},
+
+	/**
+	 * 设置标签栏位置
+	 */
+	setTabBarLayout(layout: TabBarLayout) {
+		sharedTabBarSettings.tabBarLayout = layout;
+		saveSharedTabBarSettings(sharedTabBarSettings);
+		tabBarLayout.set(layout);
+	},
+
+	/**
+	 * 获取标签栏位置
+	 */
+	getTabBarLayout(): TabBarLayout {
+		return sharedTabBarSettings.tabBarLayout;
 	},
 
 	/**

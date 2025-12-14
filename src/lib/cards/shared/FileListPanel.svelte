@@ -9,7 +9,6 @@
 	import { homeDir } from '@tauri-apps/api/path';
 
 	// 卡片组件
-	import BreadcrumbTabCard from '../folder/cards/BreadcrumbTabCard.svelte';
 	import ToolbarCard from '../folder/cards/ToolbarCard.svelte';
 	import FileListCard from '../folder/cards/FileListCard.svelte';
 
@@ -25,8 +24,11 @@
 		folderTabActions,
 		isVirtualPath,
 		tabBarLayout,
-		tabBarWidth
+		tabBarWidth,
+		breadcrumbPosition
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
+	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
 	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
@@ -160,7 +162,11 @@
 			class="flex flex-col border-r border-border/50 shrink-0 relative"
 			style="width: {$tabBarWidth}px"
 		>
-			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+			<!-- 面包屑跟随标签栏时显示在这里 -->
+			{#if $breadcrumbPosition === 'follow'}
+				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			{/if}
+			<FolderTabBar homePath={ctx.homePath} />
 			<!-- 拖拽调整宽度的手柄 -->
 			<div
 				class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
@@ -185,6 +191,10 @@
 		</div>
 		<!-- 主内容区 -->
 		<div class="flex flex-1 flex-col min-w-0">
+			<!-- 面包屑独立显示在工具栏上方 -->
+			{#if $breadcrumbPosition === 'toolbar'}
+				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			{/if}
 			<ToolbarCard
 				onRefresh={actions.handleRefresh}
 				onGoBack={actions.handleGoBack}
@@ -209,6 +219,10 @@
 	<div class="bg-muted/10 flex h-full overflow-hidden">
 		<!-- 主内容区 -->
 		<div class="flex flex-1 flex-col min-w-0">
+			<!-- 面包屑独立显示在工具栏上方 -->
+			{#if $breadcrumbPosition === 'toolbar'}
+				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			{/if}
 			<ToolbarCard
 				onRefresh={actions.handleRefresh}
 				onGoBack={actions.handleGoBack}
@@ -253,12 +267,20 @@
 					document.addEventListener('mouseup', onMouseUp);
 				}}
 			></div>
-			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+			<!-- 面包屑跟随标签栏时显示在这里 -->
+			{#if $breadcrumbPosition === 'follow'}
+				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			{/if}
+			<FolderTabBar homePath={ctx.homePath} />
 		</div>
 	</div>
 {:else if $tabBarLayout === 'bottom'}
 	<!-- 底部标签栏布局 -->
 	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
+		<!-- 面包屑独立显示在工具栏上方 -->
+		{#if $breadcrumbPosition === 'toolbar'}
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+		{/if}
 		<ToolbarCard
 			onRefresh={actions.handleRefresh}
 			onGoBack={actions.handleGoBack}
@@ -278,13 +300,18 @@
 		/>
 		<!-- 底部标签栏 -->
 		<div class="border-t border-border/50">
-			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+			<!-- 面包屑跟随标签栏时显示在这里 -->
+			{#if $breadcrumbPosition === 'follow'}
+				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			{/if}
+			<FolderTabBar homePath={ctx.homePath} />
 		</div>
 	</div>
 {:else}
 	<!-- 默认顶部标签栏布局 -->
 	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
-		<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+		<FolderTabBar homePath={ctx.homePath} />
 		<ToolbarCard
 			onRefresh={actions.handleRefresh}
 			onGoBack={actions.handleGoBack}

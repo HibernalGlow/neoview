@@ -155,10 +155,13 @@ const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
 // ============ Shared Tab Bar Settings ============
 // 标签栏位置和宽度设置
 export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
+// 面包屑位置：跟随标签栏 / 独立显示在工具栏上方
+export type BreadcrumbPosition = 'follow' | 'toolbar';
 
 interface SharedTabBarSettings {
 	tabBarLayout: TabBarLayout;
 	tabBarWidth: number; // 左右布局时的宽度
+	breadcrumbPosition: BreadcrumbPosition; // 面包屑位置
 }
 
 function loadSharedTabBarSettings(): SharedTabBarSettings {
@@ -168,7 +171,8 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 			const parsed = JSON.parse(saved);
 			return {
 				tabBarLayout: parsed.tabBarLayout ?? 'top',
-				tabBarWidth: parsed.tabBarWidth ?? 160
+				tabBarWidth: parsed.tabBarWidth ?? 160,
+				breadcrumbPosition: parsed.breadcrumbPosition ?? 'follow'
 			};
 		}
 	} catch (e) {
@@ -176,7 +180,8 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 	}
 	return {
 		tabBarLayout: 'top',
-		tabBarWidth: 160
+		tabBarWidth: 160,
+		breadcrumbPosition: 'follow'
 	};
 }
 
@@ -592,6 +597,8 @@ export const recentlyClosedTabs = derived(recentlyClosedTabsStore, ($tabs) => $t
 // 标签栏位置和宽度
 export const tabBarLayout = writable<TabBarLayout>(sharedTabBarSettings.tabBarLayout);
 export const tabBarWidth = writable<number>(sharedTabBarSettings.tabBarWidth);
+// 面包屑位置
+export const breadcrumbPosition = writable<BreadcrumbPosition>(sharedTabBarSettings.breadcrumbPosition);
 
 // ============ Actions ============
 
@@ -905,6 +912,22 @@ export const folderTabActions = {
 	 */
 	getTabBarWidth(): number {
 		return sharedTabBarSettings.tabBarWidth;
+	},
+
+	/**
+	 * 设置面包屑位置
+	 */
+	setBreadcrumbPosition(position: BreadcrumbPosition) {
+		sharedTabBarSettings.breadcrumbPosition = position;
+		saveSharedTabBarSettings(sharedTabBarSettings);
+		breadcrumbPosition.set(position);
+	},
+
+	/**
+	 * 获取面包屑位置
+	 */
+	getBreadcrumbPosition(): BreadcrumbPosition {
+		return sharedTabBarSettings.breadcrumbPosition;
 	},
 
 	/**

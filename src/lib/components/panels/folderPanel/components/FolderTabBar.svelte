@@ -40,7 +40,9 @@
 		getVirtualPathType,
 		recentlyClosedTabs,
 		tabBarLayout,
-		type TabBarLayout
+		breadcrumbPosition,
+		type TabBarLayout,
+		type BreadcrumbPosition
 	} from '../stores/folderTabStore.svelte';
 
 	// 根据路径获取图标类型
@@ -141,6 +143,10 @@
 
 	function handleSetTabBarLayout(layout: TabBarLayout) {
 		folderTabActions.setTabBarLayout(layout);
+	}
+
+	function handleSetBreadcrumbPosition(position: BreadcrumbPosition) {
+		folderTabActions.setBreadcrumbPosition(position);
 	}
 
 	// 中键点击关闭
@@ -345,6 +351,24 @@
 						<Check class="ml-auto h-4 w-4" />
 					{/if}
 				</DropdownMenu.Item>
+
+				<!-- 面包屑位置选项 -->
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>面包屑位置</DropdownMenu.Label>
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item onclick={() => handleSetBreadcrumbPosition('follow')}>
+					跟随标签栏
+					{#if $breadcrumbPosition === 'follow'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={() => handleSetBreadcrumbPosition('toolbar')}>
+					工具栏上方
+					{#if $breadcrumbPosition === 'toolbar'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+
 				<!-- 重新打开关闭的页签 -->
 				{#if $recentlyClosedTabs.length > 0}
 					<DropdownMenu.Separator />

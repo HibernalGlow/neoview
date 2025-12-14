@@ -129,7 +129,8 @@ export async function getPathType(path: string): Promise<PathType> {
         }
 
         return 'file';
-    } catch {
+    } catch (error) {
+        console.error('[pathUtils] getPathType error:', error);
         return 'invalid';
     }
 }

@@ -328,12 +328,15 @@
 
 	// 初始化根层（不添加历史记录，用于历史导航）
 	async function initRootWithoutHistory(path: string) {
+		console.log('[FolderStack] initRootWithoutHistory 开始, path:', path);
 		const layer = await createLayer(path);
+		console.log('[FolderStack] createLayer 完成, layer.path:', layer.path, 'items.length:', layer.items.length);
 		layers = [layer];
 		activeIndex = 0;
 		// 使用 setPath 的第二个参数禁止添加历史记录
 		globalStore.setPath(path, false);
 		globalStore.setItems(layer.items);
+		console.log('[FolderStack] initRootWithoutHistory 完成');
 	}
 
 	// 虚拟路径订阅清理函数
@@ -716,13 +719,39 @@
 	});
 
 	// 每个页签有独立的 FolderStack 实例
-	// 初始化时从 initialPath 加载（只执行一次）
-	let initialized = false;
+	// 初始化时从 initialPath 加载
+	// 使用 tabId 作为初始化标记的 key，确保每个标签页独立初始化
+	let initializedTabId = '';
+	let initializedPath = '';
 	$effect(() => {
-		if (!initialized && initialPath && layers.length === 0) {
-			initialized = true;
-			initRootWithoutHistory(initialPath);
+		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', initialPath, 'initializedTabId:', initializedTabId, 'initializedPath:', initializedPath, 'layers.length:', layers.length);
+		
+		// 如果 initialPath 为空，跳过初始化
+		if (!initialPath) {
+			console.log('[FolderStack] initialPath 为空，跳过初始化');
+			return;
 		}
+		
+		// 当 tabId 变化或 initialPath 变化时，重新加载
+		const needsInit = initializedTabId !== tabId || initializedPath !== initialPath || layers.length === 0;
+		if (!needsInit) {
+			console.log('[FolderStack] 无需初始化，tabId 和 initialPath 未变化');
+			return;
+		}
+		
+		// 检查当前层是否已经是目标路径（避免重复加载）
+		const currentLayerPath = layers[0]?.path;
+		if (currentLayerPath === initialPath) {
+			console.log('[FolderStack] 路径已匹配，跳过初始化:', initialPath);
+			initializedTabId = tabId;
+			initializedPath = initialPath;
+			return;
+		}
+		
+		initializedTabId = tabId;
+		initializedPath = initialPath;
+		console.log('[FolderStack] 开始初始化, 调用 initRootWithoutHistory:', initialPath);
+		initRootWithoutHistory(initialPath);
 	});
 
 	// 尝试穿透文件夹（只有一个子文件时才穿透）

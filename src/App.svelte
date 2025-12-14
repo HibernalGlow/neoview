@@ -33,7 +33,8 @@
 		toggleReadingDirection,
 		toggleSinglePanoramaView,
 		toggleTemporaryFitZoom,
-		initFullscreenState
+		initFullscreenState,
+		setActivePanelTab
 	} from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
 	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video, Settings2 } from '@lucide/svelte';
@@ -69,6 +70,9 @@
 	import { windowManager } from '$lib/core/windows/windowManager';
 	// CLI 路径处理工具 (Requirements: 4.1, 4.2, 4.3, 4.4)
 	import { normalizePath, validatePath, getPathType } from '$lib/utils/pathUtils';
+	// Folder Panel 标签页管理
+	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 
 	let loading = $state(false);
 
@@ -268,10 +272,14 @@
 		// CLI 启动参数处理（类似 NeeView 的 FirstLoader）
 		// Requirements: 1.1, 1.2, 1.3, 1.4, 4.1, 4.2, 4.3, 4.4
 		try {
+			console.log('📂 CLI: 开始解析启动参数...');
 			const matches = await getMatches();
+			console.log('📂 CLI: matches =', JSON.stringify(matches, null, 2));
 			const arg = matches.args?.path?.value as string | string[] | undefined;
+			console.log('📂 CLI: arg =', arg);
 			const cliPath =
 				typeof arg === 'string' ? arg : Array.isArray(arg) && arg.length > 0 ? arg[0] : undefined;
+			console.log('📂 CLI: cliPath =', cliPath);
 
 			if (cliPath) {
 				console.log('📂 CLI 启动: 原始路径:', cliPath);
@@ -296,18 +304,27 @@
 				}
 				
 				// 3. 获取路径类型
+				console.log('📂 CLI 启动: 开始获取路径类型...');
 				const pathType = await getPathType(normalizedPath);
 				console.log('📂 CLI 启动: 路径类型:', pathType);
 				
 				// 4. 根据路径类型打开
+				// 复刻 NeeView 行为：在 folder 卡片中用新标签页打开
 				switch (pathType) {
 					case 'directory':
-						// 文件夹：作为书籍打开
-						console.log('📂 CLI: 打开文件夹作为书籍');
-						await bookStore.openDirectoryAsBook(normalizedPath);
+						// 文件夹：在 folder 卡片中用新标签页打开
+						console.log('📂 CLI: 在 folder 卡片中打开文件夹:', normalizedPath);
+						// 1. 切换到 folder 面板
+						setActivePanelTab('folder');
+						// 2. 创建新标签页（homePath 和 currentPath 都设置为目标路径）
+						const newTabId = folderTabActions.createTab(normalizedPath);
+						console.log('📂 CLI: 新标签页已创建, tabId:', newTabId);
+						// 3. 等待一帧让 Svelte 更新 DOM
+						await new Promise(resolve => requestAnimationFrame(resolve));
+						console.log('📂 CLI: DOM 更新完成');
 						break;
 					case 'archive':
-						// 压缩包：作为书籍打开
+						// 压缩包：作为书籍打开（在 viewer 中）
 						console.log('📦 CLI: 打开压缩包作为书籍');
 						await bookStore.openBook(normalizedPath);
 						break;

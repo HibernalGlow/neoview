@@ -169,9 +169,11 @@ export async function cancelDirectoryStream(streamId: string): Promise<void> {
 
 /**
  * 获取文件元数据
+ * 注意：使用 get_file_metadata 命令，返回完整的 FsItem 类型（包含 isDir 字段）
+ * 而不是 get_file_info 命令（返回 FileInfo 类型，使用 isDirectory 字段）
  */
 export async function getFileMetadata(path: string): Promise<FsItem> {
-  return await invoke<FsItem>('get_file_info', { path });
+  return await invoke<FsItem>('get_file_metadata', { path });
 }
 
 /**

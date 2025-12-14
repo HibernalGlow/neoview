@@ -118,8 +118,20 @@
 					const savedHome = localStorage.getItem('neoview-homepage-path');
 					const defaultHome = propInitialPath || (await homeDir());
 					ctx.homePath = savedHome || defaultHome;
+					
+					// 检查当前活动标签页是否有路径
+					const currentPath = get(ctx.currentPath);
+					const activeTab = folderTabActions.getActiveTab();
+					console.log('[FileListPanel] onMount - currentPath:', currentPath, 'activeTab.currentPath:', activeTab?.currentPath, 'activeTab.homePath:', activeTab?.homePath, 'ctx.homePath:', ctx.homePath);
+					
+					// 如果当前标签页没有路径，设置为 homePath
+					// 这处理首次打开应用的情况
+					if (activeTab && !activeTab.currentPath && !activeTab.homePath) {
+						console.log('[FileListPanel] 首次打开，设置标签页路径为:', ctx.homePath);
+						folderTabActions.setPath(ctx.homePath, false);
+					}
+					
 					folderTabActions.setHomePath(ctx.homePath);
-					ctx.navigationCommand.set({ type: 'init', path: get(ctx.currentPath) || ctx.homePath });
 				}
 				if (!favoriteTagStore.isEMMLoaded()) await favoriteTagStore.loadFromEMM();
 			} catch (err) {

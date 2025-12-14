@@ -281,10 +281,12 @@ function createDefaultTabState(id: string, homePath: string = '', sourceTab?: Fo
 	const treeSettings = sharedTreeSettings;
 	// 获取排序设置
 	const sortSettings = getSortSettingsForNewTab(sourceTab);
+	// 从路径中提取标题
+	const title = homePath ? getDisplayName(homePath) : '新标签页';
 	
 	return {
 		id,
-		title: 'New',
+		title,
 		currentPath: homePath,
 		items: [],
 		selectedItems: new SvelteSet(),
@@ -523,10 +525,17 @@ export const folderTabActions = {
 	 */
 	createTab(homePath: string = ''): string {
 		const newId = generateTabId();
+		console.log('[FolderTabStore] createTab 被调用, homePath:', homePath, 'newId:', newId);
 		store.update(($store) => {
 			// 获取当前活动标签页作为继承排序的源
 			const sourceTab = $store.tabs.find(t => t.id === $store.activeTabId);
 			const newTab = createDefaultTabState(newId, homePath, sourceTab);
+			console.log('[FolderTabStore] 新标签页状态:', {
+				id: newTab.id,
+				title: newTab.title,
+				currentPath: newTab.currentPath,
+				homePath: newTab.homePath
+			});
 			// 截断当前位置之后的标签页历史，然后添加新标签页
 			const newTabNavHistory = $store.tabNavHistory.slice(0, $store.tabNavHistoryIndex + 1);
 			newTabNavHistory.push(newId);

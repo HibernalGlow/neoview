@@ -1,17 +1,84 @@
 //! Thumbnail Database Module
 //! 缩略图数据库模块 - 参考 NeeView 的实现
 //! 使用 SQLite 存储 webp 格式的缩略图 blob
+//! 支持 LZ4 压缩以减少数据库体积
 
 use chrono::{Duration, Local};
+use lz4_flex::{compress_prepend_size, decompress_size_prepended};
 use rusqlite::{params, Connection, Result as SqliteResult};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+
+/// LZ4 压缩魔数 (用于识别压缩数据)
+const LZ4_MAGIC: &[u8] = b"LZ4\x00";
+
+/// 压缩统计信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompressionStats {
+    /// 总条目数
+    pub total_entries: u64,
+    /// 压缩后总大小 (字节)
+    pub compressed_size_bytes: u64,
+    /// 原始总大小 (字节)
+    pub uncompressed_size_bytes: u64,
+    /// 压缩比 (compressed / uncompressed)
+    pub compression_ratio: f64,
+}
 
 /// 缩略图数据库管理器
 pub struct ThumbnailDb {
     connection: Arc<Mutex<Option<Connection>>>,
     db_path: PathBuf,
+    /// 是否启用 LZ4 压缩
+    compression_enabled: AtomicBool,
+    /// 压缩后累计大小
+    compressed_bytes: AtomicU64,
+    /// 原始累计大小
+    uncompressed_bytes: AtomicU64,
+}
+
+/// LZ4 压缩 blob 数据
+/// 返回带有魔数前缀的压缩数据
+fn compress_blob(data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.is_empty() {
+        return Ok(data.to_vec());
+    }
+    
+    let compressed = compress_prepend_size(data);
+    
+    // 添加魔数前缀以标识压缩数据
+    let mut result = Vec::with_capacity(LZ4_MAGIC.len() + compressed.len());
+    result.extend_from_slice(LZ4_MAGIC);
+    result.extend_from_slice(&compressed);
+    
+    Ok(result)
+}
+
+/// LZ4 解压 blob 数据
+/// 自动检测是否为压缩数据
+fn decompress_blob(data: &[u8]) -> Result<Vec<u8>, String> {
+    if data.is_empty() {
+        return Ok(data.to_vec());
+    }
+    
+    // 检查是否有 LZ4 魔数前缀
+    if data.len() > LZ4_MAGIC.len() && &data[..LZ4_MAGIC.len()] == LZ4_MAGIC {
+        // 是压缩数据，解压
+        let compressed_data = &data[LZ4_MAGIC.len()..];
+        decompress_size_prepended(compressed_data)
+            .map_err(|e| format!("LZ4 解压失败: {e}"))
+    } else {
+        // 不是压缩数据，直接返回
+        Ok(data.to_vec())
+    }
+}
+
+/// 检查数据是否已压缩
+fn is_compressed(data: &[u8]) -> bool {
+    data.len() > LZ4_MAGIC.len() && &data[..LZ4_MAGIC.len()] == LZ4_MAGIC
 }
 
 #[derive(Debug, Clone)]
@@ -38,7 +105,73 @@ impl ThumbnailDb {
         Self {
             connection: Arc::new(Mutex::new(None)),
             db_path,
+            compression_enabled: AtomicBool::new(true),
+            compressed_bytes: AtomicU64::new(0),
+            uncompressed_bytes: AtomicU64::new(0),
         }
+    }
+
+    /// 创建新的缩略图数据库管理器（可配置压缩）
+    pub fn new_with_compression(db_path: PathBuf, compression_enabled: bool) -> Self {
+        Self {
+            connection: Arc::new(Mutex::new(None)),
+            db_path,
+            compression_enabled: AtomicBool::new(compression_enabled),
+            compressed_bytes: AtomicU64::new(0),
+            uncompressed_bytes: AtomicU64::new(0),
+        }
+    }
+
+    /// 启用/禁用压缩
+    pub fn set_compression_enabled(&self, enabled: bool) {
+        self.compression_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// 检查压缩是否启用
+    pub fn is_compression_enabled(&self) -> bool {
+        self.compression_enabled.load(Ordering::Relaxed)
+    }
+
+    /// 获取压缩统计信息
+    pub fn get_compression_stats(&self) -> CompressionStats {
+        let compressed = self.compressed_bytes.load(Ordering::Relaxed);
+        let uncompressed = self.uncompressed_bytes.load(Ordering::Relaxed);
+        let ratio = if uncompressed > 0 {
+            compressed as f64 / uncompressed as f64
+        } else {
+            1.0
+        };
+        
+        CompressionStats {
+            total_entries: 0, // 需要从数据库查询
+            compressed_size_bytes: compressed,
+            uncompressed_size_bytes: uncompressed,
+            compression_ratio: ratio,
+        }
+    }
+
+    /// 压缩数据（如果启用）
+    fn maybe_compress(&self, data: &[u8]) -> Vec<u8> {
+        if self.compression_enabled.load(Ordering::Relaxed) && !data.is_empty() {
+            match compress_blob(data) {
+                Ok(compressed) => {
+                    self.uncompressed_bytes.fetch_add(data.len() as u64, Ordering::Relaxed);
+                    self.compressed_bytes.fetch_add(compressed.len() as u64, Ordering::Relaxed);
+                    compressed
+                }
+                Err(e) => {
+                    log::warn!("LZ4 压缩失败，存储原始数据: {e}");
+                    data.to_vec()
+                }
+            }
+        } else {
+            data.to_vec()
+        }
+    }
+
+    /// 解压数据（自动检测）
+    fn maybe_decompress(&self, data: &[u8]) -> Result<Vec<u8>, String> {
+        decompress_blob(data)
     }
 
     /// 打开数据库连接（减少日志输出，避免频繁检查）
@@ -2036,6 +2169,9 @@ impl Clone for ThumbnailDb {
         Self {
             connection: Arc::clone(&self.connection),
             db_path: self.db_path.clone(),
+            compression_enabled: AtomicBool::new(self.compression_enabled.load(Ordering::Relaxed)),
+            compressed_bytes: AtomicU64::new(self.compressed_bytes.load(Ordering::Relaxed)),
+            uncompressed_bytes: AtomicU64::new(self.uncompressed_bytes.load(Ordering::Relaxed)),
         }
     }
 }

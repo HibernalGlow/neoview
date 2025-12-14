@@ -1,14 +1,52 @@
 //! `NeoView` - Image Loader
 //! 图像加载和处理模块
+//! 支持 memmap2 内存映射加载大图
 
 use super::image_cache::ImageCache;
-use super::image_decoder::{UnifiedDecoder, ImageDecoder};
+use super::image_decoder::{ImageDecoder, UnifiedDecoder};
 use image::{GenericImageView, ImageFormat};
-use std::fs;
+use memmap2::Mmap;
+use std::fs::{self, File};
 use std::io::Cursor;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use threadpool::ThreadPool;
+
+/// 默认大文件阈值 (10MB)
+const DEFAULT_LARGE_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;
+
+/// 图像数据源
+#[derive(Debug)]
+pub enum ImageDataSource {
+    /// 内存中的数据
+    Memory(Vec<u8>),
+    /// 内存映射的数据
+    Mmap(Mmap),
+}
+
+impl ImageDataSource {
+    /// 获取数据切片
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Memory(data) => data,
+            Self::Mmap(mmap) => mmap,
+        }
+    }
+
+    /// 获取数据长度
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Memory(data) => data.len(),
+            Self::Mmap(mmap) => mmap.len(),
+        }
+    }
+
+    /// 检查是否为空
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
 
 #[derive(Clone)]
 pub struct ImageLoader {
@@ -16,6 +54,8 @@ pub struct ImageLoader {
     cache: Arc<ImageCache>,
     /// 线程池用于多线程解码
     pub thread_pool: Arc<ThreadPool>,
+    /// 大文件阈值 (字节)，超过此值使用 mmap
+    large_file_threshold: Arc<AtomicU64>,
 }
 
 impl ImageLoader {
@@ -23,6 +63,7 @@ impl ImageLoader {
         Self {
             cache: Arc::new(ImageCache::new(cache_size_mb)),
             thread_pool: Arc::new(ThreadPool::new(num_threads)),
+            large_file_threshold: Arc::new(AtomicU64::new(DEFAULT_LARGE_FILE_THRESHOLD)),
         }
     }
 
@@ -34,6 +75,58 @@ impl ImageLoader {
     /// 更新线程数
     pub fn update_thread_count(&mut self, num_threads: usize) {
         self.thread_pool = Arc::new(ThreadPool::new(num_threads));
+    }
+
+    /// 设置大文件阈值 (MB)
+    pub fn set_large_file_threshold(&self, threshold_mb: u64) {
+        self.large_file_threshold
+            .store(threshold_mb * 1024 * 1024, Ordering::Relaxed);
+    }
+
+    /// 获取大文件阈值 (字节)
+    pub fn get_large_file_threshold(&self) -> u64 {
+        self.large_file_threshold.load(Ordering::Relaxed)
+    }
+
+    /// 使用内存映射加载文件
+    fn load_with_mmap(&self, path: &Path) -> Result<ImageDataSource, String> {
+        let file = File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
+
+        // 安全地创建内存映射
+        let mmap = unsafe { Mmap::map(&file) }.map_err(|e| format!("内存映射失败: {e}"))?;
+
+        Ok(ImageDataSource::Mmap(mmap))
+    }
+
+    /// 传统方式加载文件
+    fn load_traditional(&self, path: &Path) -> Result<ImageDataSource, String> {
+        let data = fs::read(path).map_err(|e| format!("读取文件失败: {e}"))?;
+        Ok(ImageDataSource::Memory(data))
+    }
+
+    /// 智能加载文件（根据大小自动选择加载方式）
+    pub fn load_file_smart(&self, path: &Path) -> Result<ImageDataSource, String> {
+        let metadata = fs::metadata(path).map_err(|e| format!("获取文件元数据失败: {e}"))?;
+
+        let threshold = self.large_file_threshold.load(Ordering::Relaxed);
+
+        if metadata.len() > threshold {
+            // 大文件使用 mmap
+            match self.load_with_mmap(path) {
+                Ok(data) => {
+                    log::debug!("使用 mmap 加载大文件: {} ({} bytes)", path.display(), metadata.len());
+                    Ok(data)
+                }
+                Err(e) => {
+                    // mmap 失败，回退到传统方式
+                    log::warn!("mmap 加载失败，回退到传统方式: {e}");
+                    self.load_traditional(path)
+                }
+            }
+        } else {
+            // 小文件使用传统方式
+            self.load_traditional(path)
+        }
     }
 
     /// 加载图像文件为二进制数据 (带缓存)
@@ -259,5 +352,50 @@ impl ImageLoader {
 impl Default for ImageLoader {
     fn default() -> Self {
         Self::new(512, 4) // 默认 512MB 缓存，4个线程
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_large_file_threshold() {
+        let loader = ImageLoader::default();
+
+        // 默认阈值
+        assert_eq!(loader.get_large_file_threshold(), DEFAULT_LARGE_FILE_THRESHOLD);
+
+        // 更新阈值
+        loader.set_large_file_threshold(20);
+        assert_eq!(loader.get_large_file_threshold(), 20 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_load_small_file() {
+        let loader = ImageLoader::default();
+
+        // 创建小文件
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(b"small test data").unwrap();
+
+        let result = loader.load_file_smart(temp_file.path());
+        assert!(result.is_ok());
+
+        let data = result.unwrap();
+        assert!(!data.is_empty());
+        assert!(matches!(data, ImageDataSource::Memory(_)));
+    }
+
+    #[test]
+    fn test_image_data_source() {
+        let data = vec![1, 2, 3, 4, 5];
+        let source = ImageDataSource::Memory(data.clone());
+
+        assert_eq!(source.len(), 5);
+        assert!(!source.is_empty());
+        assert_eq!(source.as_slice(), &data[..]);
     }
 }

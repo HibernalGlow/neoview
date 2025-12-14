@@ -44,6 +44,9 @@ pub mod wic_decoder;
 pub mod directory_stream;
 pub mod dimension_cache;
 pub mod dimension_scanner;
+// 新增模块
+pub mod lru_image_cache;
+pub mod app_context;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;
@@ -54,3 +57,8 @@ pub use archive::ArchiveManager;
 pub use fs_manager::FsManager;
 // FileIndexer 暂时未使用，注释掉以避免警告
 // pub use file_indexer::FileIndexer;
+
+// 新增导出
+pub use lru_image_cache::{LruImageCache, CacheEntry, CacheStats};
+pub use app_context::{AppContext, AppConfig};
+pub use thumbnail_db::CompressionStats;

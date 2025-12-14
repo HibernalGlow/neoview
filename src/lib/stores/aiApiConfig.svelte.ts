@@ -2,11 +2,12 @@
  * AI API 配置存储
  * 共享给 AI 标签推断、翻译等功能使用
  * 格式与 EMM 的 api_config.json 兼容
- * 使用 openai 和 @google/genai SDK
+ * 使用 TanStack AI SDK（支持 OpenAI 和 Google Gemini）
  */
 import { writable, get } from 'svelte/store';
-import OpenAI from 'openai';
-import { GoogleGenAI } from '@google/genai';
+import { generateText } from 'ai';
+import { createTanStackProvider } from '$lib/ai/tanstackAdapter';
+import { normalizeError, withRetry, getErrorMessage } from '$lib/ai/errorHandler';
 
 // API 提供商配置 - 与 EMM 格式兼容
 export interface AiProvider {
@@ -288,7 +289,7 @@ function createAiApiConfigStore() {
 			}
 		},
 
-		// 调用 AI API (通用) - 使用 SDK
+		// 调用 AI API (通用) - 使用 TanStack AI SDK
 		async chat(
 			messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
 			options?: { jsonMode?: boolean; provider?: AiProvider }
@@ -298,67 +299,58 @@ function createAiApiConfigStore() {
 				throw new Error('没有配置 AI 提供商');
 			}
 
-			if (p.provider === 'gemini') {
-				// 使用 Google GenAI SDK
-				console.log('[aiApiConfig] Using Google GenAI SDK...');
-				const genAI = new GoogleGenAI({ apiKey: p.apiKey });
-				
-				// 合并所有消息为一个 prompt
-				const prompt = messages.map(m => {
-					if (m.role === 'system') return `[System] ${m.content}`;
-					if (m.role === 'assistant') return `[Assistant] ${m.content}`;
-					return m.content;
-				}).join('\n\n');
+			console.log('[aiApiConfig] Using TanStack AI SDK...');
+			console.log('[aiApiConfig] Provider:', p.name, 'Model:', p.model);
 
-				const response = await genAI.models.generateContent({
-					model: p.model,
-					contents: prompt,
-					config: {
-						temperature: p.temperature || 0.3,
-						maxOutputTokens: p.maxTokens || 500,
-						...(options?.jsonMode ? { responseMimeType: 'application/json' } : {})
+			// 创建 TanStack AI 配置
+			const tanstackConfig = createTanStackProvider(p);
+
+			// 合并消息为 prompt（TanStack AI 的 generateText 使用 prompt 或 messages）
+			const systemMessage = messages.find(m => m.role === 'system');
+			const userMessages = messages.filter(m => m.role !== 'system');
+			
+			// 构建 prompt
+			let prompt = '';
+			if (systemMessage) {
+				prompt += `[System] ${systemMessage.content}\n\n`;
+			}
+			prompt += userMessages.map(m => {
+				if (m.role === 'assistant') return `[Assistant] ${m.content}`;
+				return m.content;
+			}).join('\n\n');
+
+			try {
+				// 使用重试机制
+				const result = await withRetry(
+					async () => {
+						const response = await generateText({
+							model: tanstackConfig.model,
+							prompt,
+							temperature: tanstackConfig.temperature,
+							maxTokens: tanstackConfig.maxTokens,
+						});
+
+						if (!response.text) {
+							throw new Error('AI API 返回空内容');
+						}
+
+						return response.text;
+					},
+					{
+						maxRetries: 2,
+						provider: p.name,
+						onRetry: (error, attempt) => {
+							console.warn(`[aiApiConfig] 重试 ${attempt}:`, getErrorMessage(error));
+						},
 					}
-				});
+				);
 
-				if (!response.text) {
-					throw new Error('Gemini API 返回空内容');
-				}
-				return response.text;
-			} else {
-				// 使用 OpenAI SDK (兼容所有 OpenAI-compatible APIs)
-				console.log('[aiApiConfig] Using OpenAI SDK...');
-				// baseURL 不应包含 /chat/completions，SDK 会自动添加
-				let baseURL = p.baseUrl;
-				if (baseURL.endsWith('/chat/completions')) {
-					baseURL = baseURL.slice(0, -'/chat/completions'.length);
-				}
-				console.log('[aiApiConfig] baseURL:', baseURL, 'model:', p.model);
-				
-				const openai = new OpenAI({
-					apiKey: p.apiKey,
-					baseURL,
-					dangerouslyAllowBrowser: true,
-					timeout: 30000,
-					maxRetries: 0
-				});
-
-				const completion = await openai.chat.completions.create({
-					model: p.model,
-					messages: messages.map(m => ({
-						role: m.role,
-						content: m.content
-					})),
-					temperature: p.temperature || 0.3,
-					max_tokens: p.maxTokens || 500,
-					...(options?.jsonMode ? { response_format: { type: 'json_object' as const } } : {})
-				});
-
-				const content = completion.choices[0]?.message?.content;
-				if (!content) {
-					throw new Error('OpenAI API 返回空内容');
-				}
-				console.log('[aiApiConfig] OpenAI SDK call succeeded');
-				return content;
+				console.log('[aiApiConfig] TanStack AI call succeeded');
+				return result;
+			} catch (error) {
+				const aiError = normalizeError(error, p.name);
+				console.error('[aiApiConfig] AI 调用失败:', aiError);
+				throw new Error(getErrorMessage(aiError));
 			}
 		}
 	};

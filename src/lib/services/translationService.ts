@@ -1,12 +1,13 @@
 /**
  * 翻译服务
- * 支持 LibreTranslate 和 Ollama 本地模型
+ * 支持 LibreTranslate、Ollama 本地模型和 TanStack AI（流式翻译）
  */
 
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'svelte-sonner';
 import { Command } from '@tauri-apps/plugin-shell';
+import { translateWithTanStack, isTanStackAvailable } from '$lib/ai/translationIntegration';
 
 // 服务状态缓存
 let ollamaStatusCache: { online: boolean; checkedAt: number } | null = null;
@@ -560,4 +561,92 @@ export async function testConnection(): Promise<TranslationResult> {
 		default:
 			return { success: false, error: '未知的翻译服务类型' };
 	}
+}
+
+
+/**
+ * 使用 TanStack AI 进行流式翻译
+ * 支持实时显示翻译进度
+ * 
+ * @param text 要翻译的文本
+ * @param options 翻译选项
+ * @returns 翻译结果
+ */
+export async function translateTextWithStreaming(
+	text: string,
+	options: {
+		skipCleanup?: boolean;
+		fileExtension?: string;
+		onChunk?: (chunk: string, accumulated: string) => void;
+		onComplete?: (result: string) => void;
+	} = {}
+): Promise<TranslationResult> {
+	const { skipCleanup = false, fileExtension, onChunk, onComplete } = options;
+	const config = aiTranslationStore.getConfig();
+
+	// 检查 TanStack AI 是否可用
+	if (!isTanStackAvailable()) {
+		// 降级到非流式翻译
+		return translateText(text, { skipCleanup, fileExtension });
+	}
+
+	// 根据文件类型获取裁剪规则
+	const patterns = fileExtension
+		? getCleanupPatternsForType(fileExtension, config)
+		: config.titleCleanupPatterns;
+
+	// 应用标题清理
+	let textToTranslate = text;
+	if (!skipCleanup && patterns?.length > 0) {
+		textToTranslate = cleanupTitle(text, patterns);
+		if (!textToTranslate) {
+			return { success: true, translated: text };
+		}
+	}
+
+	// 检查缓存
+	const cached = aiTranslationStore.getCachedTranslation(text);
+	if (cached) {
+		onComplete?.(cached);
+		return { success: true, translated: cached };
+	}
+
+	// 检测源语言
+	let sourceLang = config.sourceLanguage;
+	if (sourceLang === 'auto') {
+		const detected = detectLanguage(textToTranslate);
+		sourceLang = detected === 'unknown' ? 'ja' : detected;
+	}
+
+	// 如果源语言和目标语言相同，不翻译
+	if (sourceLang === config.targetLanguage) {
+		return { success: true, translated: text };
+	}
+
+	// 使用 TanStack AI 流式翻译
+	const result = await translateWithTanStack({
+		text: textToTranslate,
+		sourceLang,
+		targetLang: config.targetLanguage,
+		streaming: true,
+		promptTemplate: config.ollamaPromptTemplate,
+		onChunk,
+		onComplete: (translated) => {
+			// 缓存已在 translateWithTanStack 中处理
+			onComplete?.(translated);
+		},
+	});
+
+	if (result.success && result.translated) {
+		return { success: true, translated: result.translated };
+	}
+
+	return { success: false, error: result.error || '翻译失败' };
+}
+
+/**
+ * 检查是否支持流式翻译
+ */
+export function supportsStreamingTranslation(): boolean {
+	return isTanStackAvailable();
 }

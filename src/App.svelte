@@ -335,8 +335,9 @@
 						if (archiveParentDir) {
 							setActivePanelTab('folder');
 							folderTabActions.createTab(archiveParentDir);
-							// 等待一帧让 Svelte 更新 DOM
-							await new Promise(resolve => requestAnimationFrame(resolve));
+							// 设置待聚焦路径，FolderStack 加载完成后会自动定位并高亮
+							folderTabActions.focusOnPath(normalizedPath);
+							console.log('📦 CLI: 设置待聚焦路径:', normalizedPath);
 						}
 						
 						// 3. 在 viewer 中打开压缩包
@@ -355,8 +356,9 @@
 						if (parentDir) {
 							setActivePanelTab('folder');
 							folderTabActions.createTab(parentDir);
-							// 等待一帧让 Svelte 更新 DOM
-							await new Promise(resolve => requestAnimationFrame(resolve));
+							// 设置待聚焦路径，FolderStack 加载完成后会自动定位并高亮
+							folderTabActions.focusOnPath(normalizedPath);
+							console.log('📄 CLI: 设置待聚焦路径:', normalizedPath);
 						}
 						
 						// 3. 在 viewer 中打开文件

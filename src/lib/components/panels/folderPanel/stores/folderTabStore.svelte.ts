@@ -103,6 +103,8 @@ export interface FolderTabState {
 	thumbnailWidthPercent: number;
 	// 横幅视图宽度百分比 (20-100%)
 	bannerWidthPercent: number;
+	// 待聚焦的文件路径（CLI 打开文件时用于定位并高亮）
+	pendingFocusPath: string | null;
 }
 
 // ============ Initial State ============
@@ -190,7 +192,7 @@ function saveSharedSortSettings(settings: SharedSortSettings) {
 }
 
 // 加载共享设置
-let sharedTreeSettings = loadSharedTreeSettings();
+const sharedTreeSettings = loadSharedTreeSettings();
 const sharedSortSettings = loadSharedSortSettings();
 
 function generateTabId(): string {
@@ -326,7 +328,8 @@ function createDefaultTabState(id: string, homePath: string = '', sourceTab?: Fo
 		stackLayers: [],
 		stackActiveIndex: 0,
 		thumbnailWidthPercent: 20,
-		bannerWidthPercent: 50
+		bannerWidthPercent: 50,
+		pendingFocusPath: null
 	};
 }
 
@@ -495,6 +498,9 @@ export const tabThumbnailWidthPercent = derived(activeTab, ($tab) => $tab?.thumb
 
 // 横幅视图宽度百分比
 export const tabBannerWidthPercent = derived(activeTab, ($tab) => $tab?.bannerWidthPercent || 50);
+
+// 待聚焦的文件路径（CLI 打开文件时用于定位并高亮）
+export const tabPendingFocusPath = derived(activeTab, ($tab) => $tab?.pendingFocusPath || null);
 
 // 标签页导航历史状态
 export const tabCanGoBackTab = derived(store, ($store) => $store.tabNavHistoryIndex > 0);
@@ -1395,6 +1401,21 @@ export const folderTabActions = {
 	 */
 	setFocusedItem(item: FsItem | null) {
 		updateActiveTab((tab) => ({ ...tab, focusedItem: item }));
+	},
+
+	/**
+	 * 设置待聚焦的文件路径（CLI 打开文件时用于定位并高亮）
+	 * FolderStack 会监听此状态，找到对应项目后设置 selectedIndex 并滚动到该位置
+	 */
+	focusOnPath(path: string) {
+		updateActiveTab((tab) => ({ ...tab, pendingFocusPath: path }));
+	},
+
+	/**
+	 * 清除待聚焦的文件路径（FolderStack 处理完成后调用）
+	 */
+	clearPendingFocusPath() {
+		updateActiveTab((tab) => ({ ...tab, pendingFocusPath: null }));
 	},
 
 	// ============ History ============

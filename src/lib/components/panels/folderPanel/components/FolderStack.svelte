@@ -28,6 +28,7 @@
 		tabThumbnailWidthPercent,
 		tabBannerWidthPercent,
 		tabItems,
+		tabPendingFocusPath,
 		isVirtualPath,
 		getVirtualPathType
 	} from '../stores/folderTabStore.svelte';
@@ -754,6 +755,42 @@
 		initRootWithoutHistory(initialPath);
 	});
 
+	// 滚动到选中项的 token（用于触发 VirtualizedFileList 滚动）
+	let scrollToSelectedToken = $state(0);
+
+	// 监听 pendingFocusPath，找到对应项目后设置 selectedIndex 并滚动
+	$effect(() => {
+		const focusPath = $tabPendingFocusPath;
+		if (!focusPath) return;
+		
+		// 只有当前活动页签才处理
+		const currentActiveTabId = get(activeTabId);
+		if (tabId !== currentActiveTabId) return;
+		
+		// 在当前层的 items 中查找目标路径
+		const currentLayer = layers[activeIndex];
+		if (!currentLayer || currentLayer.loading) return;
+		
+		// 获取排序后的显示项目
+		const displayItems = getDisplayItems(currentLayer);
+		const targetIndex = displayItems.findIndex(item => item.path === focusPath);
+		
+		if (targetIndex !== -1) {
+			console.log('[FolderStack] 找到待聚焦文件, index:', targetIndex, 'path:', focusPath);
+			// 设置 selectedIndex
+			layers[activeIndex].selectedIndex = targetIndex;
+			// 触发滚动
+			scrollToSelectedToken++;
+			// 同时添加到选中列表（高亮显示）
+			globalStore.selectItem(focusPath, false, targetIndex);
+		} else {
+			console.log('[FolderStack] 未找到待聚焦文件:', focusPath);
+		}
+		
+		// 清除 pendingFocusPath
+		folderTabActions.clearPendingFocusPath();
+	});
+
 	// 尝试穿透文件夹（只有一个子文件时才穿透）
 	async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
 		try {
@@ -966,6 +1003,7 @@
 						currentPath={layer.path}
 						{thumbnails}
 						selectedIndex={layer.selectedIndex}
+						{scrollToSelectedToken}
 						isCheckMode={effectiveMultiSelectMode}
 						isDeleteMode={effectiveDeleteMode}
 						selectedItems={$selectedItems}

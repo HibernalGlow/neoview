@@ -153,24 +153,30 @@ const SHARED_SORT_SETTINGS_KEY = 'neoview-folder-sort-shared';
 const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
 
 // ============ Shared Tab Bar Settings ============
-// 标签栏位置设置
+// 标签栏位置和宽度设置
 export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
 
 interface SharedTabBarSettings {
 	tabBarLayout: TabBarLayout;
+	tabBarWidth: number; // 左右布局时的宽度
 }
 
 function loadSharedTabBarSettings(): SharedTabBarSettings {
 	try {
 		const saved = localStorage.getItem(SHARED_TAB_BAR_SETTINGS_KEY);
 		if (saved) {
-			return JSON.parse(saved);
+			const parsed = JSON.parse(saved);
+			return {
+				tabBarLayout: parsed.tabBarLayout ?? 'top',
+				tabBarWidth: parsed.tabBarWidth ?? 160
+			};
 		}
 	} catch (e) {
 		console.error('[FolderTabStore] Failed to load shared tab bar settings:', e);
 	}
 	return {
-		tabBarLayout: 'top'
+		tabBarLayout: 'top',
+		tabBarWidth: 160
 	};
 }
 
@@ -583,8 +589,9 @@ export const tabCanGoForwardTab = derived(store, ($store) => $store.tabNavHistor
 // 最近关闭的标签页
 export const recentlyClosedTabs = derived(recentlyClosedTabsStore, ($tabs) => $tabs);
 
-// 标签栏位置
+// 标签栏位置和宽度
 export const tabBarLayout = writable<TabBarLayout>(sharedTabBarSettings.tabBarLayout);
+export const tabBarWidth = writable<number>(sharedTabBarSettings.tabBarWidth);
 
 // ============ Actions ============
 
@@ -882,6 +889,22 @@ export const folderTabActions = {
 	 */
 	getTabBarLayout(): TabBarLayout {
 		return sharedTabBarSettings.tabBarLayout;
+	},
+
+	/**
+	 * 设置标签栏宽度（左右布局时）
+	 */
+	setTabBarWidth(width: number) {
+		sharedTabBarSettings.tabBarWidth = width;
+		saveSharedTabBarSettings(sharedTabBarSettings);
+		tabBarWidth.set(width);
+	},
+
+	/**
+	 * 获取标签栏宽度
+	 */
+	getTabBarWidth(): number {
+		return sharedTabBarSettings.tabBarWidth;
 	},
 
 	/**

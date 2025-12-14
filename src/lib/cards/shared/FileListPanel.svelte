@@ -24,7 +24,8 @@
 	import {
 		folderTabActions,
 		isVirtualPath,
-		tabBarLayout
+		tabBarLayout,
+		tabBarWidth
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
@@ -154,9 +155,33 @@
 {#if $tabBarLayout === 'left'}
 	<!-- 左侧标签栏布局 -->
 	<div class="bg-muted/10 flex h-full overflow-hidden">
-		<!-- 左侧标签栏 -->
-		<div class="flex flex-col border-r border-border/50 w-40 shrink-0">
+		<!-- 左侧标签栏（可调整宽度） -->
+		<div
+			class="flex flex-col border-r border-border/50 shrink-0 relative"
+			style="width: {$tabBarWidth}px"
+		>
 			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
+			<!-- 拖拽调整宽度的手柄 -->
+			<div
+				class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+				role="separator"
+				tabindex="0"
+				onmousedown={(e) => {
+					e.preventDefault();
+					const startX = e.clientX;
+					const startWidth = $tabBarWidth;
+					const onMouseMove = (ev: MouseEvent) => {
+						const newWidth = Math.max(100, Math.min(400, startWidth + ev.clientX - startX));
+						folderTabActions.setTabBarWidth(newWidth);
+					};
+					const onMouseUp = () => {
+						document.removeEventListener('mousemove', onMouseMove);
+						document.removeEventListener('mouseup', onMouseUp);
+					};
+					document.addEventListener('mousemove', onMouseMove);
+					document.addEventListener('mouseup', onMouseUp);
+				}}
+			></div>
 		</div>
 		<!-- 主内容区 -->
 		<div class="flex flex-1 flex-col min-w-0">
@@ -202,8 +227,32 @@
 				onNavigate={actions.handleNavigate}
 			/>
 		</div>
-		<!-- 右侧标签栏 -->
-		<div class="flex flex-col border-l border-border/50 w-40 shrink-0">
+		<!-- 右侧标签栏（可调整宽度） -->
+		<div
+			class="flex flex-col border-l border-border/50 shrink-0 relative"
+			style="width: {$tabBarWidth}px"
+		>
+			<!-- 拖拽调整宽度的手柄 -->
+			<div
+				class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+				role="separator"
+				tabindex="0"
+				onmousedown={(e) => {
+					e.preventDefault();
+					const startX = e.clientX;
+					const startWidth = $tabBarWidth;
+					const onMouseMove = (ev: MouseEvent) => {
+						const newWidth = Math.max(100, Math.min(400, startWidth - (ev.clientX - startX)));
+						folderTabActions.setTabBarWidth(newWidth);
+					};
+					const onMouseUp = () => {
+						document.removeEventListener('mousemove', onMouseMove);
+						document.removeEventListener('mouseup', onMouseUp);
+					};
+					document.addEventListener('mousemove', onMouseMove);
+					document.addEventListener('mouseup', onMouseUp);
+				}}
+			></div>
 			<BreadcrumbTabCard onNavigate={actions.handleNavigate} />
 		</div>
 	</div>

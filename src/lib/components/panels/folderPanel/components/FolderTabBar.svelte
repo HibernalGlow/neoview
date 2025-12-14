@@ -2,7 +2,7 @@
 	/**
 	 * FolderTabBar - 文件面板页签栏
 	 * 使用 shadcn Tabs 组件实现多页签管理
-	 * 点击图标触发下拉菜单：关闭、关闭其他、关闭左侧/右侧、固定、复制路径等
+	 * 点击图标触发下拉菜单，长按+按钮显示标签栏位置设置（圆形进度条）
 	 */
 	import {
 		X,
@@ -22,14 +22,29 @@
 		PanelBottom,
 		PanelLeft,
 		PanelRight,
-		Crosshair,
-		ChevronDown
+		Crosshair
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
+
+	// 长按相关状态
+	const LONG_PRESS_DURATION = 500; // 长按时间 500ms
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let longPressProgress = $state(0); // 0-100 进度
+	let longPressAnimationFrame: number | null = null;
+	let longPressStartTime = 0;
+	let showSettingsPopover = $state(false);
+	let longPressTriggered = false; // 标记是否触发了长按
+
+	// 组件销毁时清理定时器
+	onDestroy(() => {
+		handleLongPressEnd();
+	});
+
 	import {
 		allTabs,
 		activeTabId,
@@ -140,6 +155,58 @@
 
 	function handleSetTabBarLayout(layout: TabBarLayout) {
 		folderTabActions.setTabBarLayout(layout);
+		showSettingsPopover = false;
+	}
+
+	// 长按开始
+	function handleLongPressStart() {
+		longPressTriggered = false;
+		longPressStartTime = Date.now();
+		longPressProgress = 0;
+
+		// 动画更新进度
+		const updateProgress = () => {
+			const elapsed = Date.now() - longPressStartTime;
+			longPressProgress = Math.min((elapsed / LONG_PRESS_DURATION) * 100, 100);
+
+			if (longPressProgress < 100) {
+				longPressAnimationFrame = requestAnimationFrame(updateProgress);
+			}
+		};
+		longPressAnimationFrame = requestAnimationFrame(updateProgress);
+
+		// 长按完成后触发
+		longPressTimer = setTimeout(() => {
+			longPressTriggered = true;
+			showSettingsPopover = true;
+			clearProgress();
+		}, LONG_PRESS_DURATION);
+	}
+
+	// 清理进度动画
+	function clearProgress() {
+		if (longPressAnimationFrame) {
+			cancelAnimationFrame(longPressAnimationFrame);
+			longPressAnimationFrame = null;
+		}
+		longPressProgress = 0;
+	}
+
+	// 长按结束（取消）
+	function handleLongPressEnd() {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		clearProgress();
+	}
+
+	// 点击处理：只有非长按时才新建页签
+	function handlePlusClick() {
+		if (!longPressTriggered) {
+			handleCreateTab();
+		}
+		longPressTriggered = false;
 	}
 
 	// 中键点击关闭
@@ -195,7 +262,6 @@
 							{:else}
 								<Folder class="h-3.5 w-3.5" />
 							{/if}
-							<ChevronDown class="h-2.5 w-2.5 opacity-50" />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content class="w-56">
 							<!-- 复制操作 -->
@@ -230,46 +296,6 @@
 									定位当前文件
 								</DropdownMenu.Item>
 							{/if}
-
-							<DropdownMenu.Separator />
-
-							<!-- 标签栏位置子菜单 -->
-							<DropdownMenu.Sub>
-								<DropdownMenu.SubTrigger>
-									<PanelTop class="mr-2 h-4 w-4" />
-									标签栏位置
-								</DropdownMenu.SubTrigger>
-								<DropdownMenu.SubContent>
-									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('top')}>
-										<PanelTop class="mr-2 h-4 w-4" />
-										上
-										{#if $tabBarLayout === 'top'}
-											<Check class="ml-auto h-4 w-4" />
-										{/if}
-									</DropdownMenu.Item>
-									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('bottom')}>
-										<PanelBottom class="mr-2 h-4 w-4" />
-										下
-										{#if $tabBarLayout === 'bottom'}
-											<Check class="ml-auto h-4 w-4" />
-										{/if}
-									</DropdownMenu.Item>
-									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('left')}>
-										<PanelLeft class="mr-2 h-4 w-4" />
-										左
-										{#if $tabBarLayout === 'left'}
-											<Check class="ml-auto h-4 w-4" />
-										{/if}
-									</DropdownMenu.Item>
-									<DropdownMenu.Item onclick={() => handleSetTabBarLayout('right')}>
-										<PanelRight class="mr-2 h-4 w-4" />
-										右
-										{#if $tabBarLayout === 'right'}
-											<Check class="ml-auto h-4 w-4" />
-										{/if}
-									</DropdownMenu.Item>
-								</DropdownMenu.SubContent>
-							</DropdownMenu.Sub>
 
 							<DropdownMenu.Separator />
 
@@ -327,16 +353,91 @@
 			{/each}
 		</Tabs.List>
 
-		<!-- 新建页签按钮 -->
-		<Tooltip.Root>
-			<Tooltip.Trigger>
-				<Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" onclick={handleCreateTab}>
-					<Plus class="h-4 w-4" />
-				</Button>
-			</Tooltip.Trigger>
-			<Tooltip.Content>
-				<p>新建页签</p>
-			</Tooltip.Content>
-		</Tooltip.Root>
+		<!-- 新建页签按钮（长按显示标签栏位置菜单，圆形进度条） -->
+		<DropdownMenu.Root bind:open={showSettingsPopover}>
+			<DropdownMenu.Trigger>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-7 w-7 shrink-0 relative"
+							onclick={handlePlusClick}
+							onmousedown={handleLongPressStart}
+							onmouseup={handleLongPressEnd}
+							onmouseleave={handleLongPressEnd}
+							ontouchstart={handleLongPressStart}
+							ontouchend={handleLongPressEnd}
+							ontouchcancel={handleLongPressEnd}
+						>
+							<!-- 圆形进度条 SVG -->
+							{#if longPressProgress > 0}
+								<svg
+									class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
+									viewBox="0 0 28 28"
+								>
+									<circle
+										cx="14"
+										cy="14"
+										r="12"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-dasharray={2 * Math.PI * 12}
+										stroke-dashoffset={2 * Math.PI * 12 * (1 - longPressProgress / 100)}
+										class="text-primary opacity-60"
+									/>
+								</svg>
+							{/if}
+							<Plus class="h-4 w-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>新建页签（长按设置位置）</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content class="w-48">
+				<!-- 标签栏位置选项 -->
+				<DropdownMenu.Label>标签栏位置</DropdownMenu.Label>
+				<DropdownMenu.Separator />
+				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('top')}>
+					<PanelTop class="mr-2 h-4 w-4" />
+					上
+					{#if $tabBarLayout === 'top'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('bottom')}>
+					<PanelBottom class="mr-2 h-4 w-4" />
+					下
+					{#if $tabBarLayout === 'bottom'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('left')}>
+					<PanelLeft class="mr-2 h-4 w-4" />
+					左
+					{#if $tabBarLayout === 'left'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('right')}>
+					<PanelRight class="mr-2 h-4 w-4" />
+					右
+					{#if $tabBarLayout === 'right'}
+						<Check class="ml-auto h-4 w-4" />
+					{/if}
+				</DropdownMenu.Item>
+				<!-- 重新打开关闭的页签 -->
+				{#if $recentlyClosedTabs.length > 0}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item onclick={handleReopenClosed}>
+						<RotateCcw class="mr-2 h-4 w-4" />
+						重新打开关闭的页签
+					</DropdownMenu.Item>
+				{/if}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 	</div>
 </Tabs.Root>

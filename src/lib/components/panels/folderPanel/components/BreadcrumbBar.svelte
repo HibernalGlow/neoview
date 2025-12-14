@@ -18,9 +18,11 @@ interface Props {
 	homePath?: string;
 	/** 外部传入的路径（用于虚拟实例独立显示） */
 	externalPath?: string;
+	/** 是否垂直布局（左右位置时使用） */
+	vertical?: boolean;
 }
 
-let { onNavigate, onCreateTab, homePath = '', externalPath }: Props = $props();
+let { onNavigate, onCreateTab, homePath = '', externalPath, vertical = false }: Props = $props();
 
 // 使用外部路径或全局 store 的 currentPath
 import { get } from 'svelte/store';
@@ -214,111 +216,226 @@ function handleNavigate(path: string) {
 }
 </script>
 
-<div
-	bind:this={containerRef}
-	class="flex min-h-[28px] items-center gap-0.5 overflow-hidden px-2 py-1"
->
-	{#if isEditing}
-		<!-- 编辑模式 -->
-		<div class="flex flex-1 items-center gap-1">
-			<input
-				bind:this={inputRef}
-				type="text"
-				bind:value={editValue}
-				onkeydown={handleInputKeyDown}
-				onblur={handleInputBlur}
-				class="bg-background border-input h-6 flex-1 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-				placeholder="输入路径..."
-			/>
-		</div>
-	{:else}
-		<!-- 面包屑模式 -->
-		<!-- 根图标 -->
-		{#if breadcrumbItems.length > 0}
-			{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-6 gap-1 px-1.5"
-				onclick={() => handleNavigate(breadcrumbItems[0].path)}
-			>
-				{#if virtualType === 'bookmark'}
-					<Bookmark class="h-3.5 w-3.5 text-amber-500" />
-				{:else if virtualType === 'history'}
-					<Clock class="h-3.5 w-3.5 text-blue-500" />
-				{:else if breadcrumbItems[0].isRoot}
-					<HardDrive class="h-3.5 w-3.5" />
-				{:else}
-					<Folder class="h-3.5 w-3.5" />
-				{/if}
-				<span class="max-w-[80px] truncate text-xs">{breadcrumbItems[0].name}</span>
-			</Button>
-		{/if}
-
-		<!-- 折叠的项 -->
-		{#if visibleItems().collapsed.length > 0}
-			<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					<Button variant="ghost" size="sm" class="h-6 w-6 p-0">
-						<MoreHorizontal class="h-3.5 w-3.5" />
+{#if vertical}
+	<!-- 垂直布局（左右位置时）- 整个面包屑旋转90度 -->
+	<div
+		bind:this={containerRef}
+		class="flex h-full w-full overflow-x-hidden overflow-y-auto"
+		style="writing-mode: vertical-rl; text-orientation: mixed;"
+	>
+		<div class="flex min-w-[28px] items-center gap-0.5 px-1 py-2">
+			{#if isEditing}
+				<!-- 编辑模式 -->
+				<input
+					bind:this={inputRef}
+					type="text"
+					bind:value={editValue}
+					onkeydown={handleInputKeyDown}
+					onblur={handleInputBlur}
+					class="bg-background border-input h-full w-6 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+					style="writing-mode: horizontal-tb;"
+					placeholder="输入路径..."
+				/>
+			{:else}
+				<!-- 面包屑模式 -->
+				<!-- 根图标 -->
+				{#if breadcrumbItems.length > 0}
+					{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-auto w-6 gap-1 px-1.5 py-1"
+						onclick={() => handleNavigate(breadcrumbItems[0].path)}
+					>
+						{#if virtualType === 'bookmark'}
+							<Bookmark class="h-3.5 w-3.5 text-amber-500 rotate-90" />
+						{:else if virtualType === 'history'}
+							<Clock class="h-3.5 w-3.5 text-blue-500 rotate-90" />
+						{:else if breadcrumbItems[0].isRoot}
+							<HardDrive class="h-3.5 w-3.5 rotate-90" />
+						{:else}
+							<Folder class="h-3.5 w-3.5 rotate-90" />
+						{/if}
+						<span class="max-h-[80px] truncate text-xs">{breadcrumbItems[0].name}</span>
 					</Button>
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="start">
-					{#each visibleItems().collapsed as item}
-						<DropdownMenu.Item onclick={() => handleNavigate(item.path)}>
-							<Folder class="mr-2 h-4 w-4" />
-							{item.name}
-						</DropdownMenu.Item>
-					{/each}
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-		{/if}
+				{/if}
 
-		<!-- 可见的项（跳过第一个，因为已经显示了） -->
-		{#each visibleItems().visible.slice(1) as item}
-			<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+				<!-- 折叠的项 -->
+				{#if visibleItems().collapsed.length > 0}
+					<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0 rotate-90" />
 
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-6 min-w-0 max-w-[120px] px-1.5"
-				onclick={() => handleNavigate(item.path)}
-			>
-				<span class="truncate text-xs">{item.name}</span>
-			</Button>
-		{/each}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							<Button variant="ghost" size="sm" class="h-6 w-6 p-0">
+								<MoreHorizontal class="h-3.5 w-3.5 rotate-90" />
+							</Button>
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start">
+							{#each visibleItems().collapsed as item}
+								<DropdownMenu.Item onclick={() => handleNavigate(item.path)}>
+									<Folder class="mr-2 h-4 w-4" />
+									{item.name}
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/if}
 
-		<!-- 右侧按钮组 -->
-		<div class="flex-1"></div>
-		<div class="flex items-center gap-0.5">
-			<!-- 编辑按钮 -->
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-6 w-6 shrink-0"
-				onclick={startEditing}
-				title="编辑路径"
-			>
-				<Edit2 class="h-3 w-3" />
-			</Button>
-			<!-- 新建页签按钮 -->
-			<Tooltip.Root>
-				<Tooltip.Trigger>
+				<!-- 可见的项（跳过第一个，因为已经显示了） -->
+				{#each visibleItems().visible.slice(1) as item}
+					<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0 rotate-90" />
+
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-auto w-6 min-h-0 max-h-[120px] px-1.5 py-1"
+						onclick={() => handleNavigate(item.path)}
+					>
+						<span class="truncate text-xs">{item.name}</span>
+					</Button>
+				{/each}
+
+				<!-- 底部按钮组 -->
+				<div class="flex-1"></div>
+				<div class="flex items-center gap-0.5">
+					<!-- 编辑按钮 -->
 					<Button
 						variant="ghost"
 						size="icon"
 						class="h-6 w-6 shrink-0"
-						onclick={handleCreateTab}
+						onclick={startEditing}
+						title="编辑路径"
 					>
-						<Plus class="h-3 w-3" />
+						<Edit2 class="h-3 w-3 rotate-90" />
 					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					<p>新建页签</p>
-				</Tooltip.Content>
-			</Tooltip.Root>
+					<!-- 新建页签按钮 -->
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-6 w-6 shrink-0"
+								onclick={handleCreateTab}
+							>
+								<Plus class="h-3 w-3 rotate-90" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							<p>新建页签</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
+				</div>
+			{/if}
 		</div>
-	{/if}
-</div>
+	</div>
+{:else}
+	<!-- 水平布局（上下位置时） -->
+	<div
+		bind:this={containerRef}
+		class="flex min-h-[28px] items-center gap-0.5 overflow-hidden px-2 py-1"
+	>
+		{#if isEditing}
+			<!-- 编辑模式 -->
+			<div class="flex flex-1 items-center gap-1">
+				<input
+					bind:this={inputRef}
+					type="text"
+					bind:value={editValue}
+					onkeydown={handleInputKeyDown}
+					onblur={handleInputBlur}
+					class="bg-background border-input h-6 flex-1 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+					placeholder="输入路径..."
+				/>
+			</div>
+		{:else}
+			<!-- 面包屑模式 -->
+			<!-- 根图标 -->
+			{#if breadcrumbItems.length > 0}
+				{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6 gap-1 px-1.5"
+					onclick={() => handleNavigate(breadcrumbItems[0].path)}
+				>
+					{#if virtualType === 'bookmark'}
+						<Bookmark class="h-3.5 w-3.5 text-amber-500" />
+					{:else if virtualType === 'history'}
+						<Clock class="h-3.5 w-3.5 text-blue-500" />
+					{:else if breadcrumbItems[0].isRoot}
+						<HardDrive class="h-3.5 w-3.5" />
+					{:else}
+						<Folder class="h-3.5 w-3.5" />
+					{/if}
+					<span class="max-w-[80px] truncate text-xs">{breadcrumbItems[0].name}</span>
+				</Button>
+			{/if}
+
+			<!-- 折叠的项 -->
+			{#if visibleItems().collapsed.length > 0}
+				<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						<Button variant="ghost" size="sm" class="h-6 w-6 p-0">
+							<MoreHorizontal class="h-3.5 w-3.5" />
+						</Button>
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="start">
+						{#each visibleItems().collapsed as item}
+							<DropdownMenu.Item onclick={() => handleNavigate(item.path)}>
+								<Folder class="mr-2 h-4 w-4" />
+								{item.name}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			{/if}
+
+			<!-- 可见的项（跳过第一个，因为已经显示了） -->
+			{#each visibleItems().visible.slice(1) as item}
+				<ChevronRight class="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6 min-w-0 max-w-[120px] px-1.5"
+					onclick={() => handleNavigate(item.path)}
+				>
+					<span class="truncate text-xs">{item.name}</span>
+				</Button>
+			{/each}
+
+			<!-- 右侧按钮组 -->
+			<div class="flex-1"></div>
+			<div class="flex items-center gap-0.5">
+				<!-- 编辑按钮 -->
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6 shrink-0"
+					onclick={startEditing}
+					title="编辑路径"
+				>
+					<Edit2 class="h-3 w-3" />
+				</Button>
+				<!-- 新建页签按钮 -->
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-6 w-6 shrink-0"
+							onclick={handleCreateTab}
+						>
+							<Plus class="h-3 w-3" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>新建页签</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+			</div>
+		{/if}
+	</div>
+{/if}

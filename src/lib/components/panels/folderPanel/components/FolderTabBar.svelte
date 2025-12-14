@@ -352,22 +352,44 @@
 					{/if}
 				</DropdownMenu.Item>
 
-				<!-- 面包屑位置选项 -->
+				<!-- 面包屑位置选项（用图标显示4个方向） -->
 				<DropdownMenu.Separator />
 				<DropdownMenu.Label>面包屑位置</DropdownMenu.Label>
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={() => handleSetBreadcrumbPosition('follow')}>
-					跟随标签栏
-					{#if $breadcrumbPosition === 'follow'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => handleSetBreadcrumbPosition('toolbar')}>
-					工具栏上方
-					{#if $breadcrumbPosition === 'toolbar'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
+				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$breadcrumbPosition === 'top' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetBreadcrumbPosition('top')}
+					>
+						<PanelTop class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$breadcrumbPosition === 'bottom' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetBreadcrumbPosition('bottom')}
+					>
+						<PanelBottom class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$breadcrumbPosition === 'left' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetBreadcrumbPosition('left')}
+					>
+						<PanelLeft class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$breadcrumbPosition === 'right' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetBreadcrumbPosition('right')}
+					>
+						<PanelRight class="h-4 w-4" />
+					</Button>
+				</div>
 
 				<!-- 重新打开关闭的页签 -->
 				{#if $recentlyClosedTabs.length > 0}

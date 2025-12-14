@@ -154,183 +154,132 @@
 	});
 </script>
 
-{#if $tabBarLayout === 'left'}
-	<!-- 左侧标签栏布局 -->
-	<div class="bg-muted/10 flex h-full overflow-hidden">
-		<!-- 左侧标签栏（可调整宽度） -->
-		<div
-			class="flex flex-col border-r border-border/50 shrink-0 relative"
-			style="width: {$tabBarWidth}px"
-		>
-			<!-- 面包屑跟随标签栏时显示在这里 -->
-			{#if $breadcrumbPosition === 'follow'}
-				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-			{/if}
-			<FolderTabBar homePath={ctx.homePath} />
-			<!-- 拖拽调整宽度的手柄 -->
-			<div
-				class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-				role="separator"
-				tabindex="0"
-				onmousedown={(e) => {
-					e.preventDefault();
-					const startX = e.clientX;
-					const startWidth = $tabBarWidth;
-					const onMouseMove = (ev: MouseEvent) => {
-						const newWidth = Math.max(100, Math.min(400, startWidth + ev.clientX - startX));
-						folderTabActions.setTabBarWidth(newWidth);
-					};
-					const onMouseUp = () => {
-						document.removeEventListener('mousemove', onMouseMove);
-						document.removeEventListener('mouseup', onMouseUp);
-					};
-					document.addEventListener('mousemove', onMouseMove);
-					document.addEventListener('mouseup', onMouseUp);
-				}}
-			></div>
+<!-- 主布局容器 -->
+<div class="bg-muted/10 flex h-full overflow-hidden {$breadcrumbPosition === 'left' || $breadcrumbPosition === 'right' ? 'flex-row' : 'flex-col'}">
+	<!-- 面包屑在左侧（垂直布局） -->
+	{#if $breadcrumbPosition === 'left'}
+		<div class="border-r border-border/50 shrink-0">
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} />
 		</div>
-		<!-- 主内容区 -->
-		<div class="flex flex-1 flex-col min-w-0">
-			<!-- 面包屑独立显示在工具栏上方 -->
-			{#if $breadcrumbPosition === 'toolbar'}
-				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-			{/if}
-			<ToolbarCard
-				onRefresh={actions.handleRefresh}
-				onGoBack={actions.handleGoBack}
-				onGoForward={actions.handleGoForward}
-				onGoUp={actions.handleGoUp}
-				onGoHome={actions.handleGoHome}
-				onSetHome={actions.handleSetHome}
-				onBatchDelete={actions.handleBatchDelete}
-			/>
-			<FileListCard
-				onItemOpen={actions.handleItemOpen}
-				onItemDelete={actions.handleDelete}
-				onItemContextMenu={actions.handleContextMenu}
-				onOpenFolderAsBook={actions.handleOpenFolderAsBook}
-				onOpenInNewTab={actions.handleOpenInNewTab}
-				onNavigate={actions.handleNavigate}
-			/>
-		</div>
-	</div>
-{:else if $tabBarLayout === 'right'}
-	<!-- 右侧标签栏布局 -->
-	<div class="bg-muted/10 flex h-full overflow-hidden">
-		<!-- 主内容区 -->
-		<div class="flex flex-1 flex-col min-w-0">
-			<!-- 面包屑独立显示在工具栏上方 -->
-			{#if $breadcrumbPosition === 'toolbar'}
-				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-			{/if}
-			<ToolbarCard
-				onRefresh={actions.handleRefresh}
-				onGoBack={actions.handleGoBack}
-				onGoForward={actions.handleGoForward}
-				onGoUp={actions.handleGoUp}
-				onGoHome={actions.handleGoHome}
-				onSetHome={actions.handleSetHome}
-				onBatchDelete={actions.handleBatchDelete}
-			/>
-			<FileListCard
-				onItemOpen={actions.handleItemOpen}
-				onItemDelete={actions.handleDelete}
-				onItemContextMenu={actions.handleContextMenu}
-				onOpenFolderAsBook={actions.handleOpenFolderAsBook}
-				onOpenInNewTab={actions.handleOpenInNewTab}
-				onNavigate={actions.handleNavigate}
-			/>
-		</div>
-		<!-- 右侧标签栏（可调整宽度） -->
-		<div
-			class="flex flex-col border-l border-border/50 shrink-0 relative"
-			style="width: {$tabBarWidth}px"
-		>
-			<!-- 拖拽调整宽度的手柄 -->
-			<div
-				class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-				role="separator"
-				tabindex="0"
-				onmousedown={(e) => {
-					e.preventDefault();
-					const startX = e.clientX;
-					const startWidth = $tabBarWidth;
-					const onMouseMove = (ev: MouseEvent) => {
-						const newWidth = Math.max(100, Math.min(400, startWidth - (ev.clientX - startX)));
-						folderTabActions.setTabBarWidth(newWidth);
-					};
-					const onMouseUp = () => {
-						document.removeEventListener('mousemove', onMouseMove);
-						document.removeEventListener('mouseup', onMouseUp);
-					};
-					document.addEventListener('mousemove', onMouseMove);
-					document.addEventListener('mouseup', onMouseUp);
-				}}
-			></div>
-			<!-- 面包屑跟随标签栏时显示在这里 -->
-			{#if $breadcrumbPosition === 'follow'}
-				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-			{/if}
-			<FolderTabBar homePath={ctx.homePath} />
-		</div>
-	</div>
-{:else if $tabBarLayout === 'bottom'}
-	<!-- 底部标签栏布局 -->
-	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
-		<!-- 面包屑独立显示在工具栏上方 -->
-		{#if $breadcrumbPosition === 'toolbar'}
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-		{/if}
-		<ToolbarCard
-			onRefresh={actions.handleRefresh}
-			onGoBack={actions.handleGoBack}
-			onGoForward={actions.handleGoForward}
-			onGoUp={actions.handleGoUp}
-			onGoHome={actions.handleGoHome}
-			onSetHome={actions.handleSetHome}
-			onBatchDelete={actions.handleBatchDelete}
-		/>
-		<FileListCard
-			onItemOpen={actions.handleItemOpen}
-			onItemDelete={actions.handleDelete}
-			onItemContextMenu={actions.handleContextMenu}
-			onOpenFolderAsBook={actions.handleOpenFolderAsBook}
-			onOpenInNewTab={actions.handleOpenInNewTab}
-			onNavigate={actions.handleNavigate}
-		/>
-		<!-- 底部标签栏 -->
-		<div class="border-t border-border/50">
-			<!-- 面包屑跟随标签栏时显示在这里 -->
-			{#if $breadcrumbPosition === 'follow'}
-				<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-			{/if}
-			<FolderTabBar homePath={ctx.homePath} />
-		</div>
-	</div>
-{:else}
-	<!-- 默认顶部标签栏布局 -->
-	<div class="bg-muted/10 flex h-full flex-col overflow-hidden">
+	{/if}
+
+	<!-- 面包屑在顶部 -->
+	{#if $breadcrumbPosition === 'top'}
 		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
-		<FolderTabBar homePath={ctx.homePath} />
-		<ToolbarCard
-			onRefresh={actions.handleRefresh}
-			onGoBack={actions.handleGoBack}
-			onGoForward={actions.handleGoForward}
-			onGoUp={actions.handleGoUp}
-			onGoHome={actions.handleGoHome}
-			onSetHome={actions.handleSetHome}
-			onBatchDelete={actions.handleBatchDelete}
-		/>
-		<FileListCard
-			onItemOpen={actions.handleItemOpen}
-			onItemDelete={actions.handleDelete}
-			onItemContextMenu={actions.handleContextMenu}
-			onOpenFolderAsBook={actions.handleOpenFolderAsBook}
-			onOpenInNewTab={actions.handleOpenInNewTab}
-			onNavigate={actions.handleNavigate}
-		/>
+	{/if}
+
+	<!-- 中间主区域（标签栏+工具栏+文件列表） -->
+	<div class="flex flex-1 min-w-0 min-h-0 {$tabBarLayout === 'left' || $tabBarLayout === 'right' ? 'flex-row' : 'flex-col'}">
+		<!-- 标签栏在左侧 -->
+		{#if $tabBarLayout === 'left'}
+			<div
+				class="flex flex-col border-r border-border/50 shrink-0 relative"
+				style="width: {$tabBarWidth}px"
+			>
+				<FolderTabBar homePath={ctx.homePath} />
+				<!-- 拖拽调整宽度的手柄 -->
+				<div
+					class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+					role="separator"
+					tabindex="0"
+					onmousedown={(e) => {
+						e.preventDefault();
+						const startX = e.clientX;
+						const startWidth = $tabBarWidth;
+						const onMouseMove = (ev: MouseEvent) => {
+							const newWidth = Math.max(100, Math.min(400, startWidth + ev.clientX - startX));
+							folderTabActions.setTabBarWidth(newWidth);
+						};
+						const onMouseUp = () => {
+							document.removeEventListener('mousemove', onMouseMove);
+							document.removeEventListener('mouseup', onMouseUp);
+						};
+						document.addEventListener('mousemove', onMouseMove);
+						document.addEventListener('mouseup', onMouseUp);
+					}}
+				></div>
+			</div>
+		{/if}
+
+		<!-- 标签栏在顶部 -->
+		{#if $tabBarLayout === 'top'}
+			<FolderTabBar homePath={ctx.homePath} />
+		{/if}
+
+		<!-- 主内容区（工具栏+文件列表） -->
+		<div class="flex flex-1 flex-col min-w-0 min-h-0">
+			<ToolbarCard
+				onRefresh={actions.handleRefresh}
+				onGoBack={actions.handleGoBack}
+				onGoForward={actions.handleGoForward}
+				onGoUp={actions.handleGoUp}
+				onGoHome={actions.handleGoHome}
+				onSetHome={actions.handleSetHome}
+				onBatchDelete={actions.handleBatchDelete}
+			/>
+			<FileListCard
+				onItemOpen={actions.handleItemOpen}
+				onItemDelete={actions.handleDelete}
+				onItemContextMenu={actions.handleContextMenu}
+				onOpenFolderAsBook={actions.handleOpenFolderAsBook}
+				onOpenInNewTab={actions.handleOpenInNewTab}
+				onNavigate={actions.handleNavigate}
+			/>
+		</div>
+
+		<!-- 标签栏在底部 -->
+		{#if $tabBarLayout === 'bottom'}
+			<div class="border-t border-border/50">
+				<FolderTabBar homePath={ctx.homePath} />
+			</div>
+		{/if}
+
+		<!-- 标签栏在右侧 -->
+		{#if $tabBarLayout === 'right'}
+			<div
+				class="flex flex-col border-l border-border/50 shrink-0 relative"
+				style="width: {$tabBarWidth}px"
+			>
+				<!-- 拖拽调整宽度的手柄 -->
+				<div
+					class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+					role="separator"
+					tabindex="0"
+					onmousedown={(e) => {
+						e.preventDefault();
+						const startX = e.clientX;
+						const startWidth = $tabBarWidth;
+						const onMouseMove = (ev: MouseEvent) => {
+							const newWidth = Math.max(100, Math.min(400, startWidth - (ev.clientX - startX)));
+							folderTabActions.setTabBarWidth(newWidth);
+						};
+						const onMouseUp = () => {
+							document.removeEventListener('mousemove', onMouseMove);
+							document.removeEventListener('mouseup', onMouseUp);
+						};
+						document.addEventListener('mousemove', onMouseMove);
+						document.addEventListener('mouseup', onMouseUp);
+					}}
+				></div>
+				<FolderTabBar homePath={ctx.homePath} />
+			</div>
+		{/if}
 	</div>
-{/if}
+
+	<!-- 面包屑在底部 -->
+	{#if $breadcrumbPosition === 'bottom'}
+		<div class="border-t border-border/50">
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+		</div>
+	{/if}
+
+	<!-- 面包屑在右侧（垂直布局） -->
+	{#if $breadcrumbPosition === 'right'}
+		<div class="border-l border-border/50 shrink-0">
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} />
+		</div>
+	{/if}
+</div>
 
 <!-- 右键菜单 -->
 <FolderContextMenu

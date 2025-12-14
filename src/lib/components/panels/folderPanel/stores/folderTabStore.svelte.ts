@@ -155,8 +155,8 @@ const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
 // ============ Shared Tab Bar Settings ============
 // 标签栏位置和宽度设置
 export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
-// 面包屑位置：跟随标签栏 / 独立显示在工具栏上方
-export type BreadcrumbPosition = 'follow' | 'toolbar';
+// 面包屑位置：上下左右
+export type BreadcrumbPosition = 'top' | 'left' | 'right' | 'bottom';
 
 interface SharedTabBarSettings {
 	tabBarLayout: TabBarLayout;
@@ -172,7 +172,7 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 			return {
 				tabBarLayout: parsed.tabBarLayout ?? 'top',
 				tabBarWidth: parsed.tabBarWidth ?? 160,
-				breadcrumbPosition: parsed.breadcrumbPosition ?? 'follow'
+				breadcrumbPosition: parsed.breadcrumbPosition ?? 'top'
 			};
 		}
 	} catch (e) {
@@ -181,7 +181,7 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 	return {
 		tabBarLayout: 'top',
 		tabBarWidth: 160,
-		breadcrumbPosition: 'follow'
+		breadcrumbPosition: 'top'
 	};
 }
 

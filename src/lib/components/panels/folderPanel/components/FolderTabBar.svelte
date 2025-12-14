@@ -320,37 +320,43 @@
 				</Tooltip.Root>
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content class="w-48">
-				<!-- 标签栏位置选项 -->
+				<!-- 标签栏位置选项（用图标显示4个方向） -->
 				<DropdownMenu.Label>标签栏位置</DropdownMenu.Label>
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('top')}>
-					<PanelTop class="mr-2 h-4 w-4" />
-					上
-					{#if $tabBarLayout === 'top'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('bottom')}>
-					<PanelBottom class="mr-2 h-4 w-4" />
-					下
-					{#if $tabBarLayout === 'bottom'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('left')}>
-					<PanelLeft class="mr-2 h-4 w-4" />
-					左
-					{#if $tabBarLayout === 'left'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
-				<DropdownMenu.Item onclick={() => handleSetTabBarLayout('right')}>
-					<PanelRight class="mr-2 h-4 w-4" />
-					右
-					{#if $tabBarLayout === 'right'}
-						<Check class="ml-auto h-4 w-4" />
-					{/if}
-				</DropdownMenu.Item>
+				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$tabBarLayout === 'top' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetTabBarLayout('top')}
+					>
+						<PanelTop class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$tabBarLayout === 'bottom' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetTabBarLayout('bottom')}
+					>
+						<PanelBottom class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$tabBarLayout === 'left' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetTabBarLayout('left')}
+					>
+						<PanelLeft class="h-4 w-4" />
+					</Button>
+					<Button
+						variant={$tabBarLayout === 'right' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetTabBarLayout('right')}
+					>
+						<PanelRight class="h-4 w-4" />
+					</Button>
+				</div>
 
 				<!-- 面包屑位置选项（用图标显示4个方向） -->
 				<DropdownMenu.Separator />

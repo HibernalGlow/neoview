@@ -107,7 +107,7 @@ class CardWindowManagerImpl {
 				width: DEFAULT_WIDTH,
 				height: DEFAULT_HEIGHT,
 				center: true,
-				decorations: true, // 使用系统标题栏，确保窗口可关闭
+				decorations: false, // 无边框窗口，使用自定义标题栏
 				resizable: true,
 				minimizable: true,
 				maximizable: true,
@@ -158,7 +158,7 @@ class CardWindowManagerImpl {
 				x: config.position?.x,
 				y: config.position?.y,
 				center: !config.position,
-				decorations: true, // 使用系统标题栏
+				decorations: false, // 无边框窗口，使用自定义标题栏
 				resizable: true,
 				minimizable: true,
 				maximizable: true,

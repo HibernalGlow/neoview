@@ -177,22 +177,31 @@
 			await cardWindowManager.closeCardWindow(windowId);
 		}
 	}
+
+	// 标题栏拖动
+	async function handleTitleBarMouseDown(e: MouseEvent) {
+		// 只响应左键
+		if (e.button !== 0) return;
+		// 开始拖动窗口
+		await appWindow?.startDragging();
+	}
 </script>
 
 <svelte:head>
 	<title>{windowTitle} - NeoView</title>
 </svelte:head>
 
-<div class="h-screen w-screen flex flex-col bg-background select-none" data-tauri-drag-region>
+<div class="h-screen w-screen flex flex-col bg-background select-none">
 	<!-- 标题栏 -->
 	<div 
-		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 border-b"
-		data-tauri-drag-region
+		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 border-b cursor-default"
+		onmousedown={handleTitleBarMouseDown}
+		ondblclick={maximizeWindow}
 	>
-		<div class="flex items-center gap-2 flex-1 min-w-0" data-tauri-drag-region>
-			<span class="text-sm font-medium truncate" data-tauri-drag-region>{windowTitle}</span>
+		<div class="flex items-center gap-2 flex-1 min-w-0">
+			<span class="text-sm font-medium truncate">{windowTitle}</span>
 		</div>
-		<div class="flex items-center gap-0.5">
+		<div class="flex items-center gap-0.5" onmousedown={(e) => e.stopPropagation()}>
 			<Button 
 				variant="ghost" 
 				size="icon" 

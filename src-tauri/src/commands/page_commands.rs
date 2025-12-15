@@ -262,10 +262,12 @@ fn sort_by_distance_from_center(indices: &mut [usize], center: usize) {
 /// 接受需要生成的页面索引列表和当前页面索引
 /// 按照与当前页的距离排序后生成，距离近的优先
 /// 前端负责过滤已缓存的页面，避免重复生成
+/// 
+/// 优化：使用并行处理，同时生成多个缩略图
 #[tauri::command]
 pub async fn pm_preload_thumbnails(
     indices: Vec<usize>,
-    center_index: Option<usize>,  // 新增：当前页面索引，用于优先级排序
+    center_index: Option<usize>,  // 当前页面索引，用于优先级排序
     max_size: Option<u32>,
     app: AppHandle,
     state: State<'_, PageManagerState>,
@@ -296,45 +298,67 @@ pub async fn pm_preload_thumbnails(
     let result_indices = pages_to_load.clone();
     let manager_arc = Arc::clone(&state.manager);
     
-    // 在后台任务中生成缩略图并推送事件
+    // 并行度：同时处理的缩略图数量（根据 CPU 核心数动态调整）
+    let parallelism = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(8); // 最多 8 个并行任务
+    
+    // 在后台任务中并行生成缩略图
     tokio::spawn(async move {
-        log::info!("🖼️ [PageCommand] 开始生成 {} 个缩略图", pages_to_load.len());
+        use futures::stream::{self, StreamExt};
         
-        for index in pages_to_load {
-            log::debug!("🖼️ [PageCommand] 生成缩略图: page {}", index);
-            
-            let result = {
-                let manager = manager_arc.lock().await;
-                manager.generate_page_thumbnail(index, size).await
-            };
-
-            match result {
-                Ok(item) => {
-                    // Base64 编码缩略图数据
-                    use base64::{Engine as _, engine::general_purpose::STANDARD};
-                    let data_base64 = STANDARD.encode(&item.data);
-
-                    let event = ThumbnailReadyEvent {
-                        index,
-                        data: format!("data:image/webp;base64,{}", data_base64),
-                        width: item.width,
-                        height: item.height,
+        log::info!("🖼️ [PageCommand] 开始并行生成 {} 个缩略图 (并行度: {})", 
+            pages_to_load.len(), parallelism);
+        
+        // 使用 buffer_unordered 实现并行处理
+        let results: Vec<_> = stream::iter(pages_to_load)
+            .map(|index| {
+                let manager_arc = Arc::clone(&manager_arc);
+                let app = app.clone();
+                async move {
+                    log::debug!("🖼️ [PageCommand] 生成缩略图: page {}", index);
+                    
+                    let result = {
+                        let manager = manager_arc.lock().await;
+                        manager.generate_page_thumbnail(index, size).await
                     };
 
-                    log::info!("🖼️ 推送缩略图事件: page {}, {}x{}, data_len={}", 
-                        index, item.width, item.height, data_base64.len());
+                    match result {
+                        Ok(item) => {
+                            // Base64 编码缩略图数据
+                            use base64::{Engine as _, engine::general_purpose::STANDARD};
+                            let data_base64 = STANDARD.encode(&item.data);
 
-                    if let Err(e) = app.emit("thumbnail-ready", &event) {
-                        log::error!("🖼️ 推送缩略图事件失败: {}", e);
+                            let event = ThumbnailReadyEvent {
+                                index,
+                                data: format!("data:image/webp;base64,{}", data_base64),
+                                width: item.width,
+                                height: item.height,
+                            };
+
+                            log::debug!("🖼️ 推送缩略图事件: page {}, {}x{}", 
+                                index, item.width, item.height);
+
+                            if let Err(e) = app.emit("thumbnail-ready", &event) {
+                                log::error!("🖼️ 推送缩略图事件失败: {}", e);
+                            }
+                            Some(index)
+                        }
+                        Err(e) => {
+                            log::warn!("🖼️ 生成缩略图失败: page {}: {}", index, e);
+                            None
+                        }
                     }
                 }
-                Err(e) => {
-                    log::warn!("🖼️ 生成缩略图失败: page {}: {}", index, e);
-                }
-            }
-        }
+            })
+            .buffer_unordered(parallelism)
+            .collect()
+            .await;
         
-        log::info!("🖼️ [PageCommand] 缩略图生成任务完成");
+        let success_count = results.iter().filter(|r| r.is_some()).count();
+        log::info!("🖼️ [PageCommand] 缩略图生成完成: {}/{} 成功", 
+            success_count, results.len());
     });
     
     Ok(result_indices)

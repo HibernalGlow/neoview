@@ -644,16 +644,19 @@ pub async fn rename_path(
 }
 
 /// 移动到回收站
+/// 使用 spawn_blocking 在独立线程执行，避免 Windows COM 线程模型冲突
 #[tauri::command]
-pub async fn move_to_trash(path: String, state: State<'_, FsState>) -> Result<(), String> {
-    // 使用 unwrap_or_else 恢复被污染的锁
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+pub async fn move_to_trash(path: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(path);
 
-    let path = PathBuf::from(path);
-    fs_manager.move_to_trash(&path)
+    spawn_blocking(move || {
+        if !path_buf.exists() {
+            return Err(format!("文件不存在: {}", path_buf.display()));
+        }
+        trash::delete(&path_buf).map_err(|e| format!("移动到回收站失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking error: {}", e))?
 }
 
 /// 异步移动到回收站（绕开 IPC 协议问题）

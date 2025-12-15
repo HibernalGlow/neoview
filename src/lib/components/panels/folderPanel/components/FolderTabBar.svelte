@@ -22,7 +22,7 @@
 		PanelLeft,
 		PanelRight,
 		Crosshair,
-		Settings2
+		MoreVertical
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
@@ -316,7 +316,7 @@
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button variant="ghost" size="icon" class="h-7 w-7 shrink-0">
-							<Settings2 class="h-3.5 w-3.5" />
+							<MoreVertical class="h-3.5 w-3.5" />
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>

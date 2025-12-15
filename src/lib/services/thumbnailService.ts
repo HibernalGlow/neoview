@@ -22,11 +22,10 @@ import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 // 配置
 // ===========================================================================
 
-// 优化：增加预加载范围到 20 页
-const PRELOAD_RANGE = 20;
+// 预加载范围：前后各 5 页（保持原值，避免过度加载）
+const PRELOAD_RANGE = 5;
 const THUMBNAIL_MAX_SIZE = 256; // 缩略图最大尺寸
-// 优化：减少初始延迟到 100ms
-const INITIAL_DELAY_MS = 100;
+const INITIAL_DELAY_MS = 200; // 切书后的初始延迟
 
 // ===========================================================================
 // 状态
@@ -65,14 +64,9 @@ function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 // 核心加载逻辑
 // ===========================================================================
 
-// 防抖计时器（优化：减少防抖时间到 50ms）
+// 防抖计时器
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-const DEBOUNCE_MS = 50;
-
-// 批量请求队列
-let pendingBatchIndices: number[] = [];
-let batchTimer: ReturnType<typeof setTimeout> | null = null;
-const BATCH_DELAY_MS = 20; // 批量合并延迟
+const DEBOUNCE_MS = 100; // 100ms 防抖
 
 /**
  * 加载缩略图（中央优先策略）

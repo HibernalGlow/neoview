@@ -24,7 +24,6 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3 } from '@lucide/svelte';
 	import { thumbnailService } from '$lib/services/thumbnailService';
-	import { thumbnailLoadController, sortByCenterPriority } from '$lib/services/thumbnailLoadController';
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
@@ -336,45 +335,19 @@
 		return '';
 	}
 
-	// 优化：增加预加载范围到 20 页
+	// 预加载范围
 	const PRELOAD_RANGE = 20;
 
 	/**
-	 * 触发缩略图加载（使用 thumbnailService + 中央优先策略）
-	 * 优化：使用 sortByCenterPriority 确保中央优先加载
+	 * 触发缩略图加载（使用 thumbnailService）
+	 * 简化：直接调用 thumbnailService，让它处理中央优先策略
 	 */
 	function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
 		const centerIndex = bookStore.currentPageIndex;
-		const totalPages = currentBook.pages?.length || 0;
-		
-		// 计算预加载范围
-		const startIndex = Math.max(0, centerIndex - PRELOAD_RANGE);
-		const endIndex = Math.min(totalPages - 1, centerIndex + PRELOAD_RANGE);
-		
-		// 收集需要加载的索引（过滤已缓存的）
-		const needLoad: number[] = [];
-		for (let i = startIndex; i <= endIndex; i++) {
-			if (!thumbnailCacheStore.hasThumbnail(i) && 
-				!thumbnailCacheStore.isLoading(i) &&
-				!thumbnailCacheStore.hasFailed(i)) {
-				needLoad.push(i);
-			}
-		}
-		
-		if (needLoad.length === 0) return;
-		
-		// 中央优先排序
-		const sorted = sortByCenterPriority(needLoad, centerIndex);
-		
-		// 标记为加载中
-		for (const idx of sorted) {
-			thumbnailCacheStore.setLoading(idx);
-		}
-		
-		// 调用 thumbnailService 加载
+		// 直接调用 thumbnailService，它内部会处理中央优先和去重
 		thumbnailService.loadThumbnails(centerIndex);
 	}
 
@@ -618,16 +591,14 @@
 		}
 	}
 
-	// 滚动处理防抖（优化：使用更短的防抖时间）
+	// 滚动处理防抖
 	let scrollDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	let lastScrollTime = 0;
 
 	/**
-	 * 滚动事件处理（优化：快速响应 + 智能防抖）
+	 * 滚动事件处理
 	 */
 	function handleScroll(e: Event) {
 		const container = e.target as HTMLElement;
-		const now = Date.now();
 
 		// 更新滚动进度（用于 HorizontalListSlider）
 		const maxScroll = container.scrollWidth - container.clientWidth;
@@ -635,71 +606,38 @@
 		// 右开模式下反转进度（因为缩略图列表已经反转，滚动到最右边=第1页=进度0）
 		thumbnailScrollProgress = readingDirection === 'right-to-left' ? 1 - rawProgress : rawProgress;
 
-		// 通知控制器滚动事件
-		thumbnailLoadController.onScroll(container.scrollLeft, container.clientWidth);
-
-		// 防抖处理滚动加载（优化：50ms 防抖，更快响应）
+		// 防抖处理滚动加载
 		if (scrollDebounceTimer) {
 			clearTimeout(scrollDebounceTimer);
 		}
-		
-		// 如果距离上次滚动超过 200ms，立即加载（用户停止滚动）
-		const timeSinceLastScroll = now - lastScrollTime;
-		lastScrollTime = now;
-		
-		const debounceTime = timeSinceLastScroll > 200 ? 0 : 50;
 		scrollDebounceTimer = setTimeout(() => {
 			loadVisibleThumbnailsOnScroll(container);
-		}, debounceTime);
+		}, 100); // 100ms 防抖
 	}
 
 	/**
-	 * 滚动时高效加载可见缩略图（优化：中央优先 + 批量加载）
+	 * 滚动时加载可见缩略图
+	 * 简化：直接调用 thumbnailService
 	 */
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
 		const containerRect = container.getBoundingClientRect();
-		const buffer = 500; // 优化：增加缓冲区到 500px
+		const buffer = 300; // 缓冲区
 		const thumbnailWidth = 80; // 估算缩略图宽度
 
-		// 根据滚动位置计算可见范围（避免遍历所有 DOM）
+		// 根据滚动位置计算可见范围中心
 		const scrollLeft = container.scrollLeft;
-		const visibleWidth = containerRect.width + buffer * 2;
-		const startIdx = Math.max(0, Math.floor((scrollLeft - buffer) / thumbnailWidth));
-		const endIdx = Math.min(
-			currentBook.pages.length - 1,
-			Math.ceil((scrollLeft + visibleWidth) / thumbnailWidth)
-		);
-
-		// 收集需要加载的索引
-		const needLoad: number[] = [];
-		for (let i = startIdx; i <= endIdx; i++) {
-			if (!thumbnailCacheStore.hasThumbnail(i) && 
-				!thumbnailCacheStore.isLoading(i) &&
-				!loadingIndices.has(i)) {
-				needLoad.push(i);
-			}
-		}
+		const visibleWidth = containerRect.width;
+		const centerScrollPos = scrollLeft + visibleWidth / 2;
+		const centerIdx = Math.floor(centerScrollPos / thumbnailWidth);
 		
-		if (needLoad.length === 0) return;
+		// 限制在有效范围内
+		const safeCenter = Math.max(0, Math.min(currentBook.pages.length - 1, centerIdx));
 		
-		// 中央优先排序
-		const center = Math.floor((startIdx + endIdx) / 2);
-		const sorted = sortByCenterPriority(needLoad, center);
-		
-		// 优化：增加单次加载数量到 20
-		const maxLoad = 20;
-		const toLoad = sorted.slice(0, maxLoad);
-		
-		// 标记为加载中
-		for (const idx of toLoad) {
-			thumbnailCacheStore.setLoading(idx);
-		}
-		
-		// 使用 thumbnailLoadController 加载
-		thumbnailLoadController.loadVisibleThumbnails(startIdx, endIdx);
+		// 直接调用 thumbnailService 加载
+		thumbnailService.loadThumbnails(safeCenter);
 	}
 
 	function scrollCurrentThumbnailIntoCenter() {
@@ -733,9 +671,8 @@
 	}
 
 	onMount(async () => {
-		// 初始化缩略图服务和控制器
+		// 初始化缩略图服务
 		await thumbnailService.init();
-		await thumbnailLoadController.init();
 
 		// 订阅全局缩略图缓存
 		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
@@ -748,9 +685,8 @@
 	});
 
 	onDestroy(() => {
-		// 销毁缩略图服务和控制器
+		// 销毁缩略图服务
 		thumbnailService.destroy();
-		thumbnailLoadController.destroy();
 
 		if (unsubscribeThumbnailCache) {
 			unsubscribeThumbnailCache();

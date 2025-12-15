@@ -667,16 +667,26 @@ pub async fn move_to_trash_async(
     let path_clone = path.clone();
     let path_buf = PathBuf::from(path);
     
-    // 在后台线程执行删除操作（使用 trash crate 直接调用）
+    // 使用 spawn_blocking 在独立线程执行，避免 COM 线程模型冲突
     tokio::spawn(async move {
-        let result = trash::delete(&path_buf);
+        let delete_path = path_buf.clone();
+        let result = spawn_blocking(move || {
+            trash::delete(&delete_path)
+        }).await;
+        
+        // 处理结果
+        let (success, error) = match result {
+            Ok(Ok(())) => (true, None),
+            Ok(Err(e)) => (false, Some(e.to_string())),
+            Err(e) => (false, Some(format!("spawn_blocking error: {}", e))),
+        };
         
         // 通过事件通知前端
         let payload = serde_json::json!({
             "requestId": request_id,
             "path": path_clone,
-            "success": result.is_ok(),
-            "error": result.err().map(|e| e.to_string())
+            "success": success,
+            "error": error
         });
         
         let _ = app_handle.emit("trash-result", payload);

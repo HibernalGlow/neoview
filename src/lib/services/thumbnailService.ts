@@ -23,16 +23,18 @@ import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 // 配置
 // ===========================================================================
 
-// 初始预加载范围：前后各 5 页（快速响应）
-const INITIAL_PRELOAD_RANGE = 5;
-// 后台加载批次大小：每次加载 10 页
-const BACKGROUND_BATCH_SIZE = 10;
-// 后台加载间隔：500ms（避免阻塞主线程）
-const BACKGROUND_LOAD_INTERVAL_MS = 500;
+// 初始预加载范围：前后各 10 页（快速响应，覆盖可见区域）
+const INITIAL_PRELOAD_RANGE = 10;
+// 后台加载批次大小：每次加载 20 页
+const BACKGROUND_BATCH_SIZE = 20;
+// 后台加载间隔：200ms（更快的后台加载）
+const BACKGROUND_LOAD_INTERVAL_MS = 200;
 // 缩略图最大尺寸
 const THUMBNAIL_MAX_SIZE = 256;
-// 切书后的初始延迟
-const INITIAL_DELAY_MS = 200;
+// 切书后的初始延迟：100ms（更快响应）
+const INITIAL_DELAY_MS = 100;
+// 防抖时间：50ms（更快响应翻页）
+const DEBOUNCE_MS = 50;
 
 // ===========================================================================
 // 状态
@@ -78,7 +80,6 @@ function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 
 // 防抖计时器
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-const DEBOUNCE_MS = 100; // 100ms 防抖
 
 /**
  * 尝试从 FileBrowser 缓存复用缩略图
@@ -259,19 +260,20 @@ function startBackgroundLoad(): void {
 		// 扩大加载范围
 		backgroundLoadRadius += BACKGROUND_BATCH_SIZE;
 
-		// 检查是否已加载完所有页面
-		if (backgroundLoadRadius > totalPages) {
-			console.debug(`🖼️ ThumbnailService: Background load complete`);
-			backgroundLoadTimer = null;
-			return;
-		}
-
 		// 收集需要加载的索引
 		const needLoad = collectIndicesToLoad(backgroundLoadCenter, backgroundLoadRadius, BACKGROUND_BATCH_SIZE);
 
+		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖全部）
 		if (needLoad.length === 0) {
-			// 当前范围没有需要加载的，继续扩大范围
-			backgroundLoadTimer = setTimeout(loadNextBatch, 100);
+			// 检查是否真的全部加载完成（范围已覆盖所有页面）
+			const maxRadius = Math.max(backgroundLoadCenter, totalPages - 1 - backgroundLoadCenter);
+			if (backgroundLoadRadius >= maxRadius) {
+				console.debug(`🖼️ ThumbnailService: Background load complete (all ${totalPages} pages covered)`);
+				backgroundLoadTimer = null;
+				return;
+			}
+			// 当前范围没有需要加载的，立即扩大范围（不等待）
+			backgroundLoadTimer = setTimeout(loadNextBatch, 50);
 			return;
 		}
 
@@ -297,8 +299,8 @@ function startBackgroundLoad(): void {
 		}
 	};
 
-	// 延迟启动后台加载，让初始加载先完成
-	backgroundLoadTimer = setTimeout(loadNextBatch, BACKGROUND_LOAD_INTERVAL_MS);
+	// 延迟启动后台加载，让初始加载先完成（100ms 后开始）
+	backgroundLoadTimer = setTimeout(loadNextBatch, 100);
 }
 
 /**

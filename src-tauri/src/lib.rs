@@ -276,6 +276,9 @@ pub fn run() {
             commands::rename_path,
             commands::move_to_trash,
             commands::move_to_trash_async,
+            commands::fs_commands::get_last_deleted_item,
+            commands::fs_commands::undo_last_delete,
+            commands::fs_commands::restore_from_trash,
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,

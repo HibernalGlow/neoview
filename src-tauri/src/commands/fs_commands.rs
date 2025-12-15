@@ -2205,3 +2205,108 @@ pub async fn list_directory_files(path: String, pattern: Option<String>) -> Resu
     
     Ok(files)
 }
+
+// ===== 回收站撤回删除功能 =====
+
+/// 回收站项目信息
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashItem {
+    /// 原始文件名
+    pub name: String,
+    /// 原始路径
+    pub original_path: String,
+    /// 删除时间（Unix 时间戳，秒）
+    pub deleted_at: u64,
+    /// 是否为目录
+    pub is_dir: bool,
+}
+
+/// 获取最近删除的项目（用于撤回功能）
+/// 返回最近删除的一个项目，如果回收站为空则返回 None
+#[tauri::command]
+pub async fn get_last_deleted_item() -> Result<Option<TrashItem>, String> {
+    spawn_blocking(|| {
+        // 列出回收站中的所有项目
+        let items = trash::os_limited::list()
+            .map_err(|e| format!("获取回收站列表失败: {}", e))?;
+        
+        // 找到最近删除的项目（按删除时间排序）
+        let latest = items
+            .into_iter()
+            .max_by_key(|item| item.time_deleted);
+        
+        match latest {
+            Some(item) => {
+                let deleted_at = item.time_deleted as u64;
+                let is_dir = item.original_path().is_dir();
+                
+                Ok(Some(TrashItem {
+                    name: item.name.clone(),
+                    original_path: item.original_path().to_string_lossy().to_string(),
+                    deleted_at,
+                    is_dir,
+                }))
+            }
+            None => Ok(None),
+        }
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking error: {}", e))?
+}
+
+/// 撤回上一次删除（恢复最近删除的项目）
+#[tauri::command]
+pub async fn undo_last_delete() -> Result<Option<String>, String> {
+    spawn_blocking(|| {
+        // 列出回收站中的所有项目
+        let items = trash::os_limited::list()
+            .map_err(|e| format!("获取回收站列表失败: {}", e))?;
+        
+        // 找到最近删除的项目
+        let latest = items
+            .into_iter()
+            .max_by_key(|item| item.time_deleted);
+        
+        match latest {
+            Some(item) => {
+                let original_path = item.original_path().to_string_lossy().to_string();
+                
+                // 恢复该项目
+                trash::os_limited::restore_all([item])
+                    .map_err(|e| format!("恢复失败: {}", e))?;
+                
+                Ok(Some(original_path))
+            }
+            None => Ok(None),
+        }
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking error: {}", e))?
+}
+
+/// 恢复指定路径的已删除项目
+#[tauri::command]
+pub async fn restore_from_trash(original_path: String) -> Result<(), String> {
+    spawn_blocking(move || {
+        // 列出回收站中的所有项目
+        let items = trash::os_limited::list()
+            .map_err(|e| format!("获取回收站列表失败: {}", e))?;
+        
+        // 找到匹配原始路径的项目
+        let target: Vec<_> = items
+            .into_iter()
+            .filter(|item| item.original_path().to_string_lossy() == original_path)
+            .collect();
+        
+        if target.is_empty() {
+            return Err(format!("未在回收站中找到: {}", original_path));
+        }
+        
+        // 恢复该项目
+        trash::os_limited::restore_all(target)
+            .map_err(|e| format!("恢复失败: {}", e))
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking error: {}", e))?
+}

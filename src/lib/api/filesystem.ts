@@ -302,6 +302,45 @@ export async function moveToTrashAsync(path: string): Promise<void> {
   });
 }
 
+// ===== 回收站撤回删除 API =====
+
+/**
+ * 回收站项目信息
+ */
+export interface TrashItem {
+  /** 原始文件名 */
+  name: string;
+  /** 原始路径 */
+  originalPath: string;
+  /** 删除时间（Unix 时间戳，秒） */
+  deletedAt: number;
+  /** 是否为目录 */
+  isDir: boolean;
+}
+
+/**
+ * 获取最近删除的项目（用于撤回功能）
+ * 返回最近删除的一个项目，如果回收站为空则返回 null
+ */
+export async function getLastDeletedItem(): Promise<TrashItem | null> {
+  return await invoke<TrashItem | null>('get_last_deleted_item');
+}
+
+/**
+ * 撤回上一次删除（恢复最近删除的项目）
+ * 返回恢复的文件原始路径，如果回收站为空则返回 null
+ */
+export async function undoLastDelete(): Promise<string | null> {
+  return await invoke<string | null>('undo_last_delete');
+}
+
+/**
+ * 恢复指定路径的已删除项目
+ */
+export async function restoreFromTrash(originalPath: string): Promise<void> {
+  await invoke('restore_from_trash', { originalPath });
+}
+
 
 /**
  * 检查路径是否存在

@@ -356,6 +356,7 @@
 	onOpenWithSystem={actions.handleOpenWithSystem}
 	onReloadThumbnail={actions.handleReloadThumbnail}
 	onEditTags={handleEditTags}
+	onUndoDelete={actions.handleUndoDelete}
 />
 
 <!-- 确认对话框 -->

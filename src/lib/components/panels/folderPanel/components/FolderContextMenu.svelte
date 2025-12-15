@@ -20,7 +20,8 @@
 		FolderOpen,
 		PanelRight,
 		RefreshCw,
-		Tags
+		Tags,
+		Undo2
 	} from '@lucide/svelte';
 
 	interface Props {
@@ -44,6 +45,7 @@
 		onOpenWithSystem?: (item: FsItem) => void;
 		onReloadThumbnail?: (item: FsItem) => void;
 		onEditTags?: (item: FsItem) => void;
+		onUndoDelete?: () => void;
 	}
 
 	let {
@@ -66,7 +68,8 @@
 		onOpenInExplorer,
 		onOpenWithSystem,
 		onReloadThumbnail,
-		onEditTags
+		onEditTags,
+		onUndoDelete
 	}: Props = $props();
 
 	// 菜单位置状态（经过边界检查调整）
@@ -206,6 +209,11 @@
 		if (item) onEditTags?.(item);
 		onClose();
 	}
+
+	function handleUndoDelete() {
+		onUndoDelete?.();
+		onClose();
+	}
 </script>
 
 {#if visible && item}
@@ -339,6 +347,13 @@
 				>
 					<Trash2 class="h-4 w-4" />
 					<span>删除</span>
+				</button>
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleUndoDelete}
+				>
+					<Undo2 class="h-4 w-4" />
+					<span>撤回上一次删除</span>
 				</button>
 
 				<div class="bg-border my-1 h-px"></div>

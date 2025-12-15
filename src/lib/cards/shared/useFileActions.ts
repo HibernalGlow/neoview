@@ -251,6 +251,7 @@ export function createItemOpenActions(
 export interface DeleteActions {
 	handleDelete: (item: FsItem) => void;
 	handleBatchDelete: () => void;
+	handleUndoDelete: () => Promise<void>;
 }
 
 export function createDeleteActions(
@@ -377,9 +378,26 @@ export function createDeleteActions(
 		});
 	};
 
+	// 撤回上一次删除
+	const handleUndoDelete = async () => {
+		try {
+			const restoredPath = await FileSystemAPI.undoLastDelete();
+			if (restoredPath) {
+				// 刷新目录以显示恢复的文件
+				handleRefresh();
+				showSuccessToast('撤回成功', restoredPath.split(/[\\/]/).pop() || restoredPath);
+			} else {
+				showErrorToast('撤回失败', '回收站为空');
+			}
+		} catch (err) {
+			showErrorToast('撤回失败', err instanceof Error ? err.message : String(err));
+		}
+	};
+
 	return {
 		handleDelete,
-		handleBatchDelete
+		handleBatchDelete,
+		handleUndoDelete
 	};
 }
 

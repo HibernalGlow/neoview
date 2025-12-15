@@ -3,11 +3,12 @@
  *
  * 独立缩略图管理服务
  *
- * 策略：后端推送模式
+ * 策略：后端推送模式 + 后台持续加载
  * - 使用后端 API 生成缩略图
  * - 通过 Tauri 事件接收缩略图推送
  * - 支持中央优先加载策略
  * - 快速翻页取消机制
+ * - 停留时后台持续加载剩余缩略图
  */
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -22,10 +23,16 @@ import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 // 配置
 // ===========================================================================
 
-// 预加载范围：前后各 5 页（保持原值，避免过度加载）
-const PRELOAD_RANGE = 5;
-const THUMBNAIL_MAX_SIZE = 256; // 缩略图最大尺寸
-const INITIAL_DELAY_MS = 200; // 切书后的初始延迟
+// 初始预加载范围：前后各 5 页（快速响应）
+const INITIAL_PRELOAD_RANGE = 5;
+// 后台加载批次大小：每次加载 10 页
+const BACKGROUND_BATCH_SIZE = 10;
+// 后台加载间隔：500ms（避免阻塞主线程）
+const BACKGROUND_LOAD_INTERVAL_MS = 500;
+// 缩略图最大尺寸
+const THUMBNAIL_MAX_SIZE = 256;
+// 切书后的初始延迟
+const INITIAL_DELAY_MS = 200;
 
 // ===========================================================================
 // 状态
@@ -40,6 +47,11 @@ let eventUnlisten: UnlistenFn | null = null;
 
 // 当前预加载请求版本（用于取消旧请求）
 let preloadVersion = 0;
+
+// 后台加载状态
+let backgroundLoadTimer: ReturnType<typeof setTimeout> | null = null;
+let backgroundLoadCenter: number = 0;
+let backgroundLoadRadius: number = INITIAL_PRELOAD_RANGE;
 
 // ===========================================================================
 // 事件监听
@@ -69,6 +81,86 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const DEBOUNCE_MS = 100; // 100ms 防抖
 
 /**
+ * 尝试从 FileBrowser 缓存复用缩略图
+ */
+function tryReuseFromFileBrowser(index: number): boolean {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) return false;
+
+	const page = currentBook.pages?.[index];
+	if (!page) return false;
+
+	const existingThumb = getThumbnailUrl(page.path);
+	if (existingThumb) {
+		// 复用已有缩略图，不需要重新生成
+		thumbnailCacheStore.setThumbnail(index, existingThumb, 120, 120);
+		return true;
+	}
+	return false;
+}
+
+/**
+ * 检查页面是否需要加载
+ */
+function needsLoading(index: number): boolean {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) return false;
+
+	// 已缓存或正在加载
+	if (thumbnailCacheStore.hasThumbnail(index) || loadingIndices.has(index)) {
+		return false;
+	}
+
+	// 尝试复用 FileBrowser 缩略图
+	if (tryReuseFromFileBrowser(index)) {
+		return false;
+	}
+
+	// 视频文件跳过（后端不能直接生成视频缩略图）
+	const page = currentBook.pages?.[index];
+	const filename = page?.name || page?.path || '';
+	if (isVideoFile(filename)) {
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * 收集需要加载的索引（中央优先）
+ */
+function collectIndicesToLoad(centerIndex: number, radius: number, maxCount: number): number[] {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) return [];
+
+	const totalPages = currentBook.pages?.length || 0;
+	const needLoad: number[] = [];
+
+	for (let offset = 0; offset <= radius && needLoad.length < maxCount; offset++) {
+		if (offset === 0) {
+			if (needsLoading(centerIndex)) {
+				needLoad.push(centerIndex);
+			}
+		} else {
+			const before = centerIndex - offset;
+			const after = centerIndex + offset;
+
+			// 处理 before 页
+			if (before >= 0 && needLoad.length < maxCount && needsLoading(before)) {
+				needLoad.push(before);
+			}
+
+			// 处理 after 页
+			if (after < totalPages && needLoad.length < maxCount && needsLoading(after)) {
+				needLoad.push(after);
+			}
+		}
+	}
+
+	return needLoad;
+}
+
+/**
  * 加载缩略图（中央优先策略）
  *
  * 使用后端 API 生成缩略图，结果通过事件推送
@@ -83,8 +175,15 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 		clearTimeout(debounceTimer);
 	}
 
+	// 停止后台加载（翻页时重新开始）
+	stopBackgroundLoad();
+
 	// 增加版本号，取消之前的预加载
 	const currentVersion = ++preloadVersion;
+
+	// 更新后台加载中心
+	backgroundLoadCenter = centerIndex;
+	backgroundLoadRadius = INITIAL_PRELOAD_RANGE;
 
 	// 防抖
 	debounceTimer = setTimeout(async () => {
@@ -95,65 +194,12 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 			return;
 		}
 
-		// 计算需要加载的索引（过滤掉已缓存的）
-		const totalPages = currentBook.pages?.length || 0;
-		const needLoad: number[] = [];
+		// 收集初始需要加载的索引
+		const needLoad = collectIndicesToLoad(centerIndex, INITIAL_PRELOAD_RANGE, BACKGROUND_BATCH_SIZE);
 
-		// 【优化】尝试从 FileBrowser card 缓存复用缩略图（包括视频缩略图）
-		const tryReuseFromFileBrowser = (index: number): boolean => {
-			const page = currentBook.pages?.[index];
-			if (!page) return false;
-			const existingThumb = getThumbnailUrl(page.path);
-			if (existingThumb) {
-				// 复用已有缩略图，不需要重新生成
-				// 使用默认尺寸（后续显示时会自动获取）
-				thumbnailCacheStore.setThumbnail(index, existingThumb, 120, 120);
-				return true;
-			}
-			return false;
-		};
-
-		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
-			if (offset === 0) {
-				if (!thumbnailCacheStore.hasThumbnail(centerIndex) && !loadingIndices.has(centerIndex)) {
-					// 【关键】先尝试复用 FileBrowser 缩略图，失败再加入生成队列
-					if (!tryReuseFromFileBrowser(centerIndex)) {
-						// 视频文件且没有已有缩略图时跳过（后端不能直接生成视频缩略图）
-						const page = currentBook.pages?.[centerIndex];
-						const filename = page?.name || page?.path || '';
-						if (!isVideoFile(filename)) {
-							needLoad.push(centerIndex);
-						}
-					}
-				}
-			} else {
-				const before = centerIndex - offset;
-				const after = centerIndex + offset;
-				// 处理 before 页
-				if (before >= 0 && !thumbnailCacheStore.hasThumbnail(before) && !loadingIndices.has(before)) {
-					if (!tryReuseFromFileBrowser(before)) {
-						const page = currentBook.pages?.[before];
-						const filename = page?.name || page?.path || '';
-						if (!isVideoFile(filename)) {
-							needLoad.push(before);
-						}
-					}
-				}
-				// 处理 after 页
-				if (after < totalPages && !thumbnailCacheStore.hasThumbnail(after) && !loadingIndices.has(after)) {
-					if (!tryReuseFromFileBrowser(after)) {
-						const page = currentBook.pages?.[after];
-						const filename = page?.name || page?.path || '';
-						if (!isVideoFile(filename)) {
-							needLoad.push(after);
-						}
-					}
-				}
-			}
-		}
-
-		// 没有需要加载的，直接返回
+		// 没有需要加载的，启动后台加载
 		if (needLoad.length === 0) {
+			startBackgroundLoad();
 			return;
 		}
 
@@ -176,17 +222,99 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 					`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
 				);
 			}
+
+			// 初始加载完成后，启动后台持续加载
+			startBackgroundLoad();
 		} catch (error) {
 			console.error('Failed to preload thumbnails:', error);
+			// 即使失败也启动后台加载
+			startBackgroundLoad();
 		}
 	}, DEBOUNCE_MS);
+}
+
+/**
+ * 启动后台持续加载
+ * 每隔一段时间加载一批缩略图，直到全部加载完成
+ */
+function startBackgroundLoad(): void {
+	// 如果已经在运行，不重复启动
+	if (backgroundLoadTimer) return;
+
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) return;
+
+	const totalPages = currentBook.pages?.length || 0;
+	const currentVersion = preloadVersion;
+
+	console.debug(`🖼️ ThumbnailService: Starting background load from center ${backgroundLoadCenter}`);
+
+	const loadNextBatch = async () => {
+		// 版本检查（翻页时会取消）
+		if (currentVersion !== preloadVersion) {
+			backgroundLoadTimer = null;
+			return;
+		}
+
+		// 扩大加载范围
+		backgroundLoadRadius += BACKGROUND_BATCH_SIZE;
+
+		// 检查是否已加载完所有页面
+		if (backgroundLoadRadius > totalPages) {
+			console.debug(`🖼️ ThumbnailService: Background load complete`);
+			backgroundLoadTimer = null;
+			return;
+		}
+
+		// 收集需要加载的索引
+		const needLoad = collectIndicesToLoad(backgroundLoadCenter, backgroundLoadRadius, BACKGROUND_BATCH_SIZE);
+
+		if (needLoad.length === 0) {
+			// 当前范围没有需要加载的，继续扩大范围
+			backgroundLoadTimer = setTimeout(loadNextBatch, 100);
+			return;
+		}
+
+		try {
+			// 标记为加载中
+			for (const idx of needLoad) {
+				loadingIndices.add(idx);
+			}
+
+			// 调用后端加载
+			await preloadThumbnails(needLoad, backgroundLoadCenter, THUMBNAIL_MAX_SIZE);
+
+			console.debug(
+				`🖼️ ThumbnailService: Background loaded ${needLoad.length} thumbnails, radius=${backgroundLoadRadius}`
+			);
+		} catch (error) {
+			console.error('Background load failed:', error);
+		}
+
+		// 继续加载下一批
+		if (currentVersion === preloadVersion) {
+			backgroundLoadTimer = setTimeout(loadNextBatch, BACKGROUND_LOAD_INTERVAL_MS);
+		}
+	};
+
+	// 延迟启动后台加载，让初始加载先完成
+	backgroundLoadTimer = setTimeout(loadNextBatch, BACKGROUND_LOAD_INTERVAL_MS);
+}
+
+/**
+ * 停止后台加载
+ */
+function stopBackgroundLoad(): void {
+	if (backgroundLoadTimer) {
+		clearTimeout(backgroundLoadTimer);
+		backgroundLoadTimer = null;
+	}
 }
 
 /**
  * 加载单个页面的缩略图（兼容旧接口）
  */
 async function loadThumbnail(pageIndex: number): Promise<void> {
-	// 单个加载直接使用 loadThumbnails
 	await loadThumbnails(pageIndex);
 }
 
@@ -199,6 +327,7 @@ function cancelLoading(): void {
 		clearTimeout(debounceTimer);
 		debounceTimer = null;
 	}
+	stopBackgroundLoad();
 }
 
 // ===========================================================================
@@ -267,6 +396,7 @@ export function destroyThumbnailService(): void {
 		eventUnlisten();
 		eventUnlisten = null;
 	}
+	cancelLoading();
 	loadingIndices.clear();
 	currentBookPath = null;
 	isInitialized = false;
@@ -293,6 +423,7 @@ export const thumbnailService = {
 	/** 获取统计信息 */
 	getStats: () => ({
 		loadingCount: loadingIndices.size,
+		backgroundLoadRadius,
 		...thumbnailCacheStore.getStats()
 	})
 };

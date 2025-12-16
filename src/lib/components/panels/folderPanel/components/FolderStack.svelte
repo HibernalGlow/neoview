@@ -715,6 +715,8 @@
 
 			const prevLayer = layers[activeIndex];
 			if (prevLayer) {
+				// 更新最后导航路径，防止 $effect 重复处理
+				updateLastNavigatedPath(prevLayer.path);
 				globalStore.setPath(prevLayer.path);
 				// 同步 items 到 store（用于工具栏显示计数）
 				globalStore.setItems(prevLayer.items);
@@ -733,6 +735,9 @@
 			const parentPath = getParentPath(currentLayer.path);
 			if (parentPath) {
 				isAnimating = true;
+				
+				// 更新最后导航路径，防止 $effect 重复处理
+				updateLastNavigatedPath(parentPath);
 
 				// 创建父目录层并插入到栈的开头
 				const parentLayer = await createLayer(parentPath);

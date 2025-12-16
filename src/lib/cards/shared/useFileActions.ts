@@ -107,7 +107,9 @@ export function createNavigationActions(
 		parts.pop();
 		let parentPath = parts.join('\\');
 		if (/^[a-zA-Z]:$/.test(parentPath)) parentPath += '\\';
-		ctx.navigationCommand.set({ type: 'init', path: parentPath });
+		// 使用 'pop' 类型，让 FolderStack 智能处理向上导航
+		// 如果父目录在 layers 中，直接切换；否则在栈开头插入
+		ctx.navigationCommand.set({ type: 'pop' });
 	};
 
 	const handleGoHome = () => {

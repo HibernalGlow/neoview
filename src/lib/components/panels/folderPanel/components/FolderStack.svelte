@@ -318,8 +318,22 @@
 		return result;
 	}
 
+	// 最后导航的路径（用于防止 $effect 重复处理）
+	// 使用 $state 确保响应式更新
+	let lastNavigatedPath = $state('');
+	
+	// 是否正在处理导航命令（用于防止 $effect 和 navigationCommand 同时处理）
+	let isProcessingNavCommand = $state(false);
+	
+	// 更新最后导航的路径
+	function updateLastNavigatedPath(path: string) {
+		lastNavigatedPath = path;
+	}
+
 	// 初始化根层
 	async function initRoot(path: string) {
+		// 更新最后导航路径，防止 $effect 重复处理
+		updateLastNavigatedPath(path);
 		const layer = await createLayer(path);
 		layers = [layer];
 		activeIndex = 0;
@@ -330,6 +344,8 @@
 	// 初始化根层（不添加历史记录，用于历史导航）
 	async function initRootWithoutHistory(path: string) {
 		console.log('[FolderStack] initRootWithoutHistory 开始, path:', path);
+		// 更新最后导航路径，防止 $effect 重复处理
+		updateLastNavigatedPath(path);
 		const layer = await createLayer(path);
 		console.log('[FolderStack] createLayer 完成, layer.path:', layer.path, 'items.length:', layer.items.length);
 		layers = [layer];
@@ -555,6 +571,8 @@
 		isAnimating = true;
 		activeIndex = index;
 		const layer = layers[index];
+		// 更新最后导航路径，防止 $effect 重复处理
+		updateLastNavigatedPath(layer.path);
 		globalStore.setPath(layer.path, false);
 		globalStore.setItems(layer.items);
 		
@@ -570,6 +588,9 @@
 	 */
 	async function handleHistoryNavigation(targetPath: string): Promise<void> {
 		console.log('[FolderStack] handleHistoryNavigation 开始, targetPath:', targetPath, 'layers:', layers.map(l => l.path));
+		
+		// 更新最后导航路径，防止 $effect 重复处理
+		updateLastNavigatedPath(targetPath);
 		
 		// 1. 在现有 layers 中查找目标路径（精确匹配）
 		const targetIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
@@ -631,6 +652,9 @@
 		if (isAnimating) return;
 
 		isAnimating = true;
+		
+		// 更新最后导航路径，防止 $effect 重复处理
+		updateLastNavigatedPath(path);
 
 		// 获取当前层的路径
 		const currentLayer = layers[activeIndex];
@@ -791,26 +815,35 @@
 			if (tabId !== currentActiveTabId) return;
 		}
 
-		switch (cmd.type) {
-			case 'init':
-				if (cmd.path) initRoot(cmd.path);
-				break;
-			case 'push':
-				if (cmd.path) pushLayer(cmd.path);
-				break;
-			case 'pop':
-				popLayer();
-				break;
-			case 'goto':
-				if (cmd.index !== undefined) goToLayer(cmd.index);
-				break;
-			case 'history':
-				// 历史导航：使用智能导航函数，尽可能保留层叠栈
-				if (cmd.path) {
-					handleHistoryNavigation(cmd.path);
-				}
-				break;
-		}
+		// 设置标志，防止 initialPath 的 $effect 同时处理
+		isProcessingNavCommand = true;
+
+		// 异步处理导航命令
+		(async () => {
+			switch (cmd.type) {
+				case 'init':
+					if (cmd.path) await initRoot(cmd.path);
+					break;
+				case 'push':
+					if (cmd.path) await pushLayer(cmd.path);
+					break;
+				case 'pop':
+					await popLayer();
+					break;
+				case 'goto':
+					if (cmd.index !== undefined) goToLayer(cmd.index);
+					break;
+				case 'history':
+					// 历史导航：使用智能导航函数，尽可能保留层叠栈
+					if (cmd.path) {
+						await handleHistoryNavigation(cmd.path);
+					}
+					break;
+			}
+			
+			// 导航完成后重置标志
+			isProcessingNavCommand = false;
+		})();
 
 		// 清除命令
 		navigationCommand.set(null);
@@ -818,15 +851,12 @@
 
 	// 每个页签有独立的 FolderStack 实例
 	// 初始化时从 initialPath 加载
-	// 每个 FolderStack 实例对应一个标签页，tabId 在实例生命周期内不变
-	// initialPath 可能会变化（如后退操作更新 tab.currentPath）
-	// 注意：initialPath 的变化由 navigationCommand 处理，这里只处理首次加载
-	let lastProcessedPath = '';
+	// 注意：导航操作（pushLayer, handleHistoryNavigation 等）会更新 lastNavigatedPath
+	// $effect 只处理首次初始化和标签页切换，不处理同标签页内的历史导航
 	$effect(() => {
-		// 只依赖 initialPath，不依赖 layers（避免无限循环）
 		const targetPath = initialPath;
 		
-		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', targetPath, 'lastProcessedPath:', lastProcessedPath, 'layers.length:', layers.length);
+		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', targetPath, 'lastNavigatedPath:', lastNavigatedPath, 'layers.length:', layers.length, 'isProcessingNavCommand:', isProcessingNavCommand);
 		
 		// 如果 initialPath 为空，跳过
 		if (!targetPath) {
@@ -834,16 +864,22 @@
 			return;
 		}
 		
-		// 如果已经处理过这个路径，跳过（防止重复处理）
-		if (lastProcessedPath === targetPath) {
-			console.log('[FolderStack] 路径已处理过，跳过:', targetPath);
+		// 如果正在处理导航命令，跳过（让 navigationCommand 的 $effect 处理）
+		if (isProcessingNavCommand) {
+			console.log('[FolderStack] 正在处理导航命令，跳过 initialPath $effect');
+			return;
+		}
+		
+		// 如果路径已经被导航函数处理过，跳过
+		if (normalizePath(lastNavigatedPath) === normalizePath(targetPath)) {
+			console.log('[FolderStack] 路径已被导航函数处理，跳过:', targetPath);
 			return;
 		}
 		
 		// 情况1：首次初始化（layers 为空）
 		if (layers.length === 0) {
 			console.log('[FolderStack] 首次初始化:', targetPath);
-			lastProcessedPath = targetPath;
+			lastNavigatedPath = targetPath;
 			initRootWithoutHistory(targetPath);
 			return;
 		}
@@ -852,24 +888,42 @@
 		const currentActivePath = layers[activeIndex]?.path;
 		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(targetPath)) {
 			console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', targetPath);
-			lastProcessedPath = targetPath;
+			lastNavigatedPath = targetPath;
 			return;
 		}
 		
-		// 情况3：检查 layers 中是否包含目标路径
+		// 情况3：检查 layers 中是否包含目标路径（用于标签页切换时恢复状态）
 		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
 		if (targetLayerIndex !== -1) {
 			console.log('[FolderStack] 在 layers 中找到目标路径，切换到层:', targetLayerIndex);
-			lastProcessedPath = targetPath;
+			lastNavigatedPath = targetPath;
 			switchToLayer(targetLayerIndex);
 			return;
 		}
 		
 		// 情况4：initialPath 变化且不在 layers 中
-		// 使用智能历史导航来处理
-		console.log('[FolderStack] initialPath 变化，使用 handleHistoryNavigation:', targetPath);
-		lastProcessedPath = targetPath;
-		handleHistoryNavigation(targetPath);
+		// 这通常发生在标签页切换或外部导航请求时
+		// 同标签页内的历史导航应该通过 navigationCommand 处理，这里只做兜底
+		// 为了避免与 navigationCommand 冲突，延迟执行
+		console.log('[FolderStack] initialPath 变化但不在 layers 中，延迟检查是否需要处理');
+		const pathToHandle = targetPath;
+		setTimeout(() => {
+			// 再次检查是否已被处理
+			if (normalizePath(lastNavigatedPath) === normalizePath(pathToHandle)) {
+				console.log('[FolderStack] 路径已被其他函数处理，跳过:', pathToHandle);
+				return;
+			}
+			// 检查当前活动层是否已经是目标路径
+			const currentPath = layers[activeIndex]?.path;
+			if (currentPath && normalizePath(currentPath) === normalizePath(pathToHandle)) {
+				console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', pathToHandle);
+				lastNavigatedPath = pathToHandle;
+				return;
+			}
+			console.log('[FolderStack] 延迟后仍需处理，使用 handleHistoryNavigation:', pathToHandle);
+			lastNavigatedPath = pathToHandle;
+			handleHistoryNavigation(pathToHandle);
+		}, 50);
 	});
 
 	// 滚动到选中项的 token（用于触发 VirtualizedFileList 滚动）

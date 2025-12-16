@@ -87,13 +87,9 @@ export function createNavigationActions(
 			ctx.navigationCommand.set({ type: 'history', path: result.path });
 			return;
 		}
-		const prevTab = folderTabActions.goBackTab();
-		if (prevTab) {
-			const tab = folderTabActions.getActiveTab();
-			if (tab) {
-				ctx.navigationCommand.set({ type: 'init', path: tab.currentPath });
-			}
-		}
+		// 跨标签页后退：只切换标签页，不发送 navigationCommand
+		// 目标标签页的 FolderStack 会保持其原有的 layers 状态
+		folderTabActions.goBackTab();
 	};
 
 	const handleGoForward = () => {
@@ -103,11 +99,9 @@ export function createNavigationActions(
 			ctx.navigationCommand.set({ type: 'history', path: result.path });
 			return;
 		}
-		const nextTab = folderTabActions.goForwardTab();
-		if (nextTab) {
-			const tab = folderTabActions.getActiveTab();
-			if (tab) {
-				ctx.navigationCommand.set({ type: 'init', path: tab.currentPath });
+		// 跨标签页前进：只切换标签页，不发送 navigationCommand
+		// 目标标签页的 FolderStack 会保持其原有的 layers 状态
+		folderTabActions.goForwardTab();
 			}
 		}
 	};

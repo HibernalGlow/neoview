@@ -513,6 +513,119 @@
 		return normalizedChild.startsWith(normalizedParent + '/');
 	}
 
+	// ============ 历史导航辅助函数 ============
+
+	/**
+	 * 规范化路径（统一分隔符和大小写）
+	 * 用于路径比较
+	 */
+	function normalizePath(path: string): string {
+		return path.replace(/\\/g, '/').toLowerCase();
+	}
+
+	/**
+	 * 查找目标路径在 layers 中的父层索引
+	 * 如果目标路径是某个现有层的子目录，返回该层的索引
+	 * @param targetPath 目标路径
+	 * @returns 父层索引，如果没找到返回 -1
+	 */
+	function findParentLayerIndex(targetPath: string): number {
+		const normalizedTarget = normalizePath(targetPath);
+		
+		// 从后往前遍历，找到最近的父层
+		for (let i = layers.length - 1; i >= 0; i--) {
+			const layerPath = normalizePath(layers[i].path);
+			// 检查目标路径是否以该层路径开头（即该层是目标的父目录）
+			if (normalizedTarget.startsWith(layerPath + '/')) {
+				return i;
+			}
+		}
+		
+		return -1;
+	}
+
+	/**
+	 * 切换到指定层（不重新加载数据）
+	 * @param index 目标层索引
+	 */
+	function switchToLayer(index: number): void {
+		if (index < 0 || index >= layers.length) return;
+		if (index === activeIndex) return; // 已经在目标层
+		
+		isAnimating = true;
+		activeIndex = index;
+		const layer = layers[index];
+		globalStore.setPath(layer.path, false);
+		globalStore.setItems(layer.items);
+		
+		setTimeout(() => {
+			isAnimating = false;
+		}, 300);
+	}
+
+	/**
+	 * 处理历史导航命令
+	 * 智能地保留或重建层叠栈
+	 * @param targetPath 目标路径
+	 */
+	async function handleHistoryNavigation(targetPath: string): Promise<void> {
+		console.log('[FolderStack] handleHistoryNavigation 开始, targetPath:', targetPath, 'layers:', layers.map(l => l.path));
+		
+		// 1. 在现有 layers 中查找目标路径（精确匹配）
+		const targetIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
+		
+		if (targetIndex !== -1) {
+			// 找到了，直接切换到该层，保留整个 stack
+			console.log('[FolderStack] 在 layers 中找到目标路径, index:', targetIndex);
+			switchToLayer(targetIndex);
+			return;
+		}
+		
+		// 2. 检查目标路径是否是某个现有层的子目录
+		// 如果是，说明用户可能是从子目录后退到父目录，但父目录不在 layers 中
+		// 这种情况需要重建，但可以保留目标路径之上的层
+		const parentLayerIndex = findParentLayerIndex(targetPath);
+		if (parentLayerIndex !== -1) {
+			// 目标路径是某个层的子目录，截断到该层之后，然后加载目标路径
+			console.log('[FolderStack] 目标路径是 layers[', parentLayerIndex, '] 的子目录，截断并重建');
+			layers = layers.slice(0, parentLayerIndex + 1);
+			// 在父层之后推入目标路径
+			const newLayer = await createLayer(targetPath);
+			layers = [...layers, newLayer];
+			activeIndex = layers.length - 1;
+			globalStore.setPath(targetPath, false);
+			globalStore.setItems(newLayer.items);
+			return;
+		}
+		
+		// 3. 检查是否有层是目标路径的子目录
+		// 如果是，说明用户后退到了更上层的目录
+		const normalizedTarget = normalizePath(targetPath);
+		let childLayerIndex = -1;
+		for (let i = 0; i < layers.length; i++) {
+			const layerPath = normalizePath(layers[i].path);
+			if (layerPath.startsWith(normalizedTarget + '/')) {
+				childLayerIndex = i;
+				break; // 找到第一个子层
+			}
+		}
+		
+		if (childLayerIndex !== -1) {
+			// 目标路径是某个层的父目录，在该层之前插入目标路径
+			console.log('[FolderStack] 目标路径是 layers[', childLayerIndex, '] 的父目录，在前面插入');
+			const newLayer = await createLayer(targetPath);
+			layers = [newLayer, ...layers.slice(childLayerIndex)];
+			activeIndex = 0;
+			globalStore.setPath(targetPath, false);
+			globalStore.setItems(newLayer.items);
+			return;
+		}
+		
+		// 4. 目标路径与现有层完全无关，需要完全重建
+		console.log('[FolderStack] 目标路径与现有层无关，完全重建');
+		await initRootWithoutHistory(targetPath);
+	}
+
 	// 推入新层（进入子目录）或跳转到新路径
 	async function pushLayer(path: string) {
 		if (isAnimating) return;
@@ -692,25 +805,9 @@
 				if (cmd.index !== undefined) goToLayer(cmd.index);
 				break;
 			case 'history':
-				// 历史导航：优先在现有层中查找，找到则切换，否则重建
+				// 历史导航：使用智能导航函数，尽可能保留层叠栈
 				if (cmd.path) {
-					// 检查是否能在现有层中找到目标路径
-					const targetIndex = layers.findIndex((l) => l.path === cmd.path);
-					if (targetIndex !== -1 && targetIndex !== activeIndex) {
-						// 找到了，直接切换到该层
-						isAnimating = true;
-						activeIndex = targetIndex;
-						const layer = layers[targetIndex];
-						globalStore.setPath(layer.path, false);
-						globalStore.setItems(layer.items);
-						setTimeout(() => {
-							isAnimating = false;
-						}, 300);
-					} else if (targetIndex === -1) {
-						// 没找到，需要重建
-						initRootWithoutHistory(cmd.path);
-					}
-					// 如果 targetIndex === activeIndex，说明已经在目标层，不做任何操作
+					handleHistoryNavigation(cmd.path);
 				}
 				break;
 		}
@@ -722,10 +819,12 @@
 	// 每个页签有独立的 FolderStack 实例
 	// 初始化时从 initialPath 加载
 	// 使用 tabId 作为初始化标记的 key，确保每个标签页独立初始化
+	// 注意：initialPath 的变化（如后退操作）由 navigationCommand 的 'history' 类型处理
+	// 这里只处理首次加载和标签页切换
 	let initializedTabId = '';
-	let initializedPath = '';
+	let lastInitialPath = '';
 	$effect(() => {
-		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', initialPath, 'initializedTabId:', initializedTabId, 'initializedPath:', initializedPath, 'layers.length:', layers.length);
+		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', initialPath, 'initializedTabId:', initializedTabId, 'lastInitialPath:', lastInitialPath, 'layers.length:', layers.length);
 		
 		// 如果 initialPath 为空，跳过初始化
 		if (!initialPath) {
@@ -733,26 +832,51 @@
 			return;
 		}
 		
-		// 当 tabId 变化或 initialPath 变化时，重新加载
-		const needsInit = initializedTabId !== tabId || initializedPath !== initialPath || layers.length === 0;
-		if (!needsInit) {
-			console.log('[FolderStack] 无需初始化，tabId 和 initialPath 未变化');
-			return;
-		}
-		
-		// 检查当前层是否已经是目标路径（避免重复加载）
-		const currentLayerPath = layers[0]?.path;
-		if (currentLayerPath === initialPath) {
-			console.log('[FolderStack] 路径已匹配，跳过初始化:', initialPath);
+		// 情况1：tabId 变化（切换到不同的标签页）- 需要完全重新初始化
+		if (initializedTabId !== tabId) {
+			console.log('[FolderStack] tabId 变化，需要初始化');
 			initializedTabId = tabId;
-			initializedPath = initialPath;
+			lastInitialPath = initialPath;
+			initRootWithoutHistory(initialPath);
 			return;
 		}
 		
-		initializedTabId = tabId;
-		initializedPath = initialPath;
-		console.log('[FolderStack] 开始初始化, 调用 initRootWithoutHistory:', initialPath);
-		initRootWithoutHistory(initialPath);
+		// 情况2：layers 为空（首次加载）- 需要初始化
+		if (layers.length === 0) {
+			console.log('[FolderStack] layers 为空，需要初始化');
+			lastInitialPath = initialPath;
+			initRootWithoutHistory(initialPath);
+			return;
+		}
+		
+		// 情况3：initialPath 变化但 tabId 不变
+		// 这通常是由 navigationCommand 触发的导航（如后退/前进）
+		// 检查当前活动层是否已经是目标路径
+		const currentActivePath = layers[activeIndex]?.path;
+		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(initialPath)) {
+			console.log('[FolderStack] 当前活动层已是目标路径，跳过:', initialPath);
+			lastInitialPath = initialPath;
+			return;
+		}
+		
+		// 检查 layers 中是否包含目标路径（可能是之前浏览过的层）
+		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(initialPath));
+		if (targetLayerIndex !== -1) {
+			console.log('[FolderStack] 在 layers 中找到目标路径，切换到层:', targetLayerIndex);
+			lastInitialPath = initialPath;
+			switchToLayer(targetLayerIndex);
+			return;
+		}
+		
+		// 如果 initialPath 变化了，使用智能历史导航
+		if (lastInitialPath !== initialPath) {
+			console.log('[FolderStack] initialPath 变化，使用 handleHistoryNavigation:', initialPath);
+			lastInitialPath = initialPath;
+			handleHistoryNavigation(initialPath);
+			return;
+		}
+		
+		console.log('[FolderStack] 无需操作');
 	});
 
 	// 滚动到选中项的 token（用于触发 VirtualizedFileList 滚动）

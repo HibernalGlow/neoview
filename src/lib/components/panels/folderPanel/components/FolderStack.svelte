@@ -634,11 +634,22 @@
 		if (childLayerIndex !== -1) {
 			// 目标路径是某个层的父目录，在该层之前插入目标路径
 			console.log('[FolderStack] 目标路径是 layers[', childLayerIndex, '] 的父目录，在前面插入');
-			const newLayer = await createLayer(targetPath);
-			layers = [newLayer, ...layers.slice(childLayerIndex)];
-			activeIndex = 0;
+			
+			// 获取多层父目录路径（包括目标路径的父目录）
+			const parentPaths = getParentPaths(targetPath, PRELOAD_PARENT_COUNT - 1);
+			const allPaths = [targetPath, ...parentPaths];
+			
+			// 并行加载所有层
+			const newLayers = await Promise.all(
+				allPaths.map(p => createLayer(p))
+			);
+			
+			// 将所有层插入到栈的开头（从远到近的顺序）
+			layers = [...newLayers.reverse(), ...layers.slice(childLayerIndex)];
+			// 切换到目标路径层（即最后一个新加载的层）
+			activeIndex = newLayers.length - 1;
 			globalStore.setPath(targetPath, false);
-			globalStore.setItems(newLayer.items);
+			globalStore.setItems(newLayers[0].items);
 			return;
 		}
 		
@@ -704,6 +715,27 @@
 		return parentPath;
 	}
 
+	/**
+	 * 获取多层父目录路径
+	 * @param path 起始路径
+	 * @param count 要获取的层数
+	 * @returns 父目录路径数组（从近到远）
+	 */
+	function getParentPaths(path: string, count: number): string[] {
+		const parents: string[] = [];
+		let currentPath = path;
+		for (let i = 0; i < count; i++) {
+			const parent = getParentPath(currentPath);
+			if (!parent) break;
+			parents.push(parent);
+			currentPath = parent;
+		}
+		return parents;
+	}
+
+	// 预加载父目录层数
+	const PRELOAD_PARENT_COUNT = 3;
+
 	// 弹出当前层（返回上级）
 	async function popLayer(): Promise<boolean> {
 		if (isAnimating) return false;
@@ -726,6 +758,9 @@
 				isAnimating = false;
 			}, 300);
 
+			// 异步预加载更多父目录（不阻塞当前操作）
+			preloadParentLayers();
+
 			return true;
 		}
 
@@ -739,12 +774,18 @@
 				// 更新最后导航路径，防止 $effect 重复处理
 				updateLastNavigatedPath(parentPath);
 
-				// 创建父目录层并插入到栈的开头
-				const parentLayer = await createLayer(parentPath);
-				layers = [parentLayer, ...layers];
-				// activeIndex 保持不变，因为新层插入到了开头
-				// 但我们要切换到新插入的层
-				activeIndex = 0;
+				// 获取多层父目录路径（包括当前要导航的父目录）
+				const parentPaths = getParentPaths(currentLayer.path, PRELOAD_PARENT_COUNT);
+				
+				// 创建所有父目录层（并行加载）
+				const parentLayers = await Promise.all(
+					parentPaths.map(p => createLayer(p))
+				);
+				
+				// 将所有父目录层插入到栈的开头（从远到近的顺序）
+				layers = [...parentLayers.reverse(), ...layers];
+				// 切换到最近的父目录（即第一个加载的）
+				activeIndex = parentLayers.length - 1;
 
 				globalStore.setPath(parentPath);
 
@@ -757,6 +798,50 @@
 		}
 
 		return false;
+	}
+
+	/**
+	 * 异步预加载父目录层
+	 * 在向上导航后调用，确保后续向上操作不需要等待加载
+	 */
+	async function preloadParentLayers(): Promise<void> {
+		// 获取当前最顶层的路径
+		const topLayer = layers[0];
+		if (!topLayer) return;
+		
+		// 检查是否需要预加载
+		const parentPath = getParentPath(topLayer.path);
+		if (!parentPath) return; // 已经是根目录
+		
+		// 检查父目录是否已经在 layers 中
+		const normalizedParent = normalizePath(parentPath);
+		const alreadyLoaded = layers.some(l => normalizePath(l.path) === normalizedParent);
+		if (alreadyLoaded) return;
+		
+		// 异步加载父目录（不阻塞 UI）
+		try {
+			const parentPaths = getParentPaths(topLayer.path, PRELOAD_PARENT_COUNT);
+			// 过滤掉已经加载的路径
+			const pathsToLoad = parentPaths.filter(p => 
+				!layers.some(l => normalizePath(l.path) === normalizePath(p))
+			);
+			
+			if (pathsToLoad.length === 0) return;
+			
+			// 并行加载
+			const newLayers = await Promise.all(
+				pathsToLoad.map(p => createLayer(p))
+			);
+			
+			// 插入到栈的开头（从远到近的顺序）
+			layers = [...newLayers.reverse(), ...layers];
+			// 调整 activeIndex（因为在开头插入了新层）
+			activeIndex = activeIndex + newLayers.length;
+			
+			console.log('[FolderStack] 预加载父目录完成, 新增:', pathsToLoad.length, '层');
+		} catch (err) {
+			console.debug('[FolderStack] 预加载父目录失败:', err);
+		}
 	}
 
 	// 跳转到指定层

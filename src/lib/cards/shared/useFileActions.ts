@@ -82,27 +82,19 @@ export function createNavigationActions(
 
 	const handleGoBack = () => {
 		if (ctx.isVirtualInstance) return;
+		// 只在当前标签页内后退，不支持跨标签页
 		const result = folderTabActions.goBack();
 		if (result) {
 			ctx.navigationCommand.set({ type: 'history', path: result.path });
-			return;
 		}
-		// 跨标签页后退：只切换标签页，不发送 navigationCommand
-		// 目标标签页的 FolderStack 会保持其原有的 layers 状态
-		folderTabActions.goBackTab();
 	};
 
 	const handleGoForward = () => {
 		if (ctx.isVirtualInstance) return;
+		// 只在当前标签页内前进，不支持跨标签页
 		const result = folderTabActions.goForward();
 		if (result) {
 			ctx.navigationCommand.set({ type: 'history', path: result.path });
-			return;
-		}
-		// 跨标签页前进：只切换标签页，不发送 navigationCommand
-		// 目标标签页的 FolderStack 会保持其原有的 layers 状态
-		folderTabActions.goForwardTab();
-			}
 		}
 	};
 

@@ -820,51 +820,56 @@
 	// 初始化时从 initialPath 加载
 	// 每个 FolderStack 实例对应一个标签页，tabId 在实例生命周期内不变
 	// initialPath 可能会变化（如后退操作更新 tab.currentPath）
-	// 我们需要智能地处理这些变化，尽可能保留 layers 状态
-	let hasInitialized = false;
+	// 注意：initialPath 的变化由 navigationCommand 处理，这里只处理首次加载
+	let lastProcessedPath = '';
 	$effect(() => {
-		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', initialPath, 'hasInitialized:', hasInitialized, 'layers.length:', layers.length, 'activeIndex:', activeIndex);
+		// 只依赖 initialPath，不依赖 layers（避免无限循环）
+		const targetPath = initialPath;
+		
+		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', targetPath, 'lastProcessedPath:', lastProcessedPath, 'layers.length:', layers.length);
 		
 		// 如果 initialPath 为空，跳过
-		if (!initialPath) {
+		if (!targetPath) {
 			console.log('[FolderStack] initialPath 为空，跳过');
+			return;
+		}
+		
+		// 如果已经处理过这个路径，跳过（防止重复处理）
+		if (lastProcessedPath === targetPath) {
+			console.log('[FolderStack] 路径已处理过，跳过:', targetPath);
 			return;
 		}
 		
 		// 情况1：首次初始化（layers 为空）
 		if (layers.length === 0) {
-			console.log('[FolderStack] 首次初始化:', initialPath);
-			hasInitialized = true;
-			initRootWithoutHistory(initialPath);
+			console.log('[FolderStack] 首次初始化:', targetPath);
+			lastProcessedPath = targetPath;
+			initRootWithoutHistory(targetPath);
 			return;
 		}
 		
-		// 情况2：已经初始化过，检查当前活动层是否已经是目标路径
+		// 情况2：检查当前活动层是否已经是目标路径
 		const currentActivePath = layers[activeIndex]?.path;
-		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(initialPath)) {
-			console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', initialPath);
+		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(targetPath)) {
+			console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', targetPath);
+			lastProcessedPath = targetPath;
 			return;
 		}
 		
 		// 情况3：检查 layers 中是否包含目标路径
-		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(initialPath));
+		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
 		if (targetLayerIndex !== -1) {
 			console.log('[FolderStack] 在 layers 中找到目标路径，切换到层:', targetLayerIndex);
+			lastProcessedPath = targetPath;
 			switchToLayer(targetLayerIndex);
 			return;
 		}
 		
 		// 情况4：initialPath 变化且不在 layers 中
-		// 这可能是由 navigationCommand 触发的，或者是外部导航
 		// 使用智能历史导航来处理
-		if (hasInitialized) {
-			console.log('[FolderStack] initialPath 变化，使用 handleHistoryNavigation:', initialPath);
-			handleHistoryNavigation(initialPath);
-		} else {
-			console.log('[FolderStack] 初始化:', initialPath);
-			hasInitialized = true;
-			initRootWithoutHistory(initialPath);
-		}
+		console.log('[FolderStack] initialPath 变化，使用 handleHistoryNavigation:', targetPath);
+		lastProcessedPath = targetPath;
+		handleHistoryNavigation(targetPath);
 	});
 
 	// 滚动到选中项的 token（用于触发 VirtualizedFileList 滚动）

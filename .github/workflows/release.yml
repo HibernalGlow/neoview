@@ -12,6 +12,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  # 加速 Rust 编译
+  CARGO_NET_GIT_FETCH_WITH_CLI: true
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
 
 jobs:
   release:
@@ -26,13 +29,49 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 23
+          cache: 'yarn'
 
       - name: setup python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - uses: dtolnay/rust-toolchain@stable
+
+      # Rust 依赖缓存
+      - name: cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      # Rust 编译缓存 (sccache)
+      - name: setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: configure sccache
+        shell: powershell
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $env:GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $env:GITHUB_ENV
+
+      # Tauri 构建目标缓存
+      - name: cache rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target/
+            !src-tauri/target/release/bundle/
+          key: ${{ runner.os }}-rust-build-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('src-tauri/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-build-${{ hashFiles('**/Cargo.lock') }}-
+            ${{ runner.os }}-rust-build-
 
       - name: build windows bundles
         timeout-minutes: 60
@@ -42,6 +81,11 @@ jobs:
         run: |
           yarn install --frozen-lockfile
           yarn tauri build
+
+      # 显示 sccache 统计
+      - name: sccache stats
+        shell: powershell
+        run: sccache --show-stats
 
       - name: verify installer
         shell: powershell

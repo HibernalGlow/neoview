@@ -228,26 +228,70 @@
 	let isPresetsOpen = $state(false);
 	let isCustomThemesOpen = $state(false);
 
-	function duplicateTheme(theme: ThemeConfig, e: Event) {
+	// 导出单个主题为 JSON 并复制到剪贴板
+	function exportTheme(theme: ThemeConfig, e: MouseEvent) {
 		e.stopPropagation();
-		let newName = theme.name + ' (Copy)';
-		let counter = 1;
-		while (
-			customThemes.some((t) => t.name === newName) ||
-			presetThemes.some((t) => t.name === newName)
-		) {
-			newName = theme.name + ` (Copy ${counter})`;
-			counter++;
-		}
-		const newTheme: ThemeConfig = {
-			...theme,
-			name: newName,
-			description: `基于 ${theme.name} 的副本`
+		const exportData = {
+			name: theme.name,
+			description: theme.description,
+			cssVars: {
+				light: theme.colors.light,
+				dark: theme.colors.dark
+			}
 		};
-		addCustomTheme(newTheme);
+		const json = JSON.stringify(exportData, null, 2);
+		navigator.clipboard.writeText(json).then(() => {
+			// 可以添加一个 toast 提示
+			console.log('主题已复制到剪贴板');
+		});
 	}
 
-	function deleteCustomTheme(theme: ThemeConfig, e: Event) {
+	// 导出所有自定义主题为 JSON 并复制到剪贴板
+	function exportAllThemes() {
+		const exportData = customThemes.map((theme) => ({
+			name: theme.name,
+			description: theme.description,
+			cssVars: {
+				light: theme.colors.light,
+				dark: theme.colors.dark
+			}
+		}));
+		const json = JSON.stringify(exportData, null, 2);
+		navigator.clipboard.writeText(json).then(() => {
+			console.log('所有主题已复制到剪贴板');
+		});
+	}
+
+	// 从剪贴板导入所有主题
+	async function importAllThemes() {
+		try {
+			const text = await navigator.clipboard.readText();
+			const parsed = JSON.parse(text);
+			const themes = Array.isArray(parsed) ? parsed : [parsed];
+			let importedCount = 0;
+			for (const item of themes) {
+				if (item.cssVars && (item.cssVars.light || item.cssVars.dark)) {
+					const base = item.cssVars.theme ?? {};
+					const light = { ...base, ...(item.cssVars.light ?? {}) };
+					const dark = { ...base, ...(item.cssVars.dark ?? item.cssVars.light ?? {}) };
+					const importedTheme: ThemeConfig = {
+						name: item.name || `导入主题 ${importedCount + 1}`,
+						description: item.description || '导入的主题',
+						colors: { light, dark }
+					};
+					addCustomTheme(importedTheme);
+					importedCount++;
+				}
+			}
+			if (importedCount > 0) {
+				console.log(`成功导入 ${importedCount} 个主题`);
+			}
+		} catch (e) {
+			console.error('导入主题失败', e);
+		}
+	}
+
+	function deleteCustomTheme(theme: ThemeConfig, e: MouseEvent) {
 		e.stopPropagation();
 		if (selectedTheme.name === theme.name) {
 			selectPresetTheme(presetThemes[0]);
@@ -830,8 +874,8 @@
 								variant="ghost"
 								size="icon"
 								class="h-5 w-5"
-								onclick={(e) => duplicateTheme(theme, e)}
-								title="复制主题"
+								onclick={(e: MouseEvent) => exportTheme(theme, e)}
+								title="导出主题 JSON"
 							>
 								<Copy class="h-3 w-3" />
 							</Button>
@@ -875,20 +919,40 @@
 
 	{#if customThemes.length}
 		<div class="space-y-3">
-			<button
-				class="flex w-full items-center justify-between text-sm font-semibold"
-				onclick={() => (isCustomThemesOpen = !isCustomThemesOpen)}
-			>
-				<span class="flex items-center gap-2">
+			<div class="flex w-full items-center justify-between">
+				<button
+					class="flex items-center gap-2 text-sm font-semibold"
+					onclick={() => (isCustomThemesOpen = !isCustomThemesOpen)}
+				>
 					{#if isCustomThemesOpen}
 						<ChevronDown class="h-4 w-4" />
 					{:else}
 						<ChevronRight class="h-4 w-4" />
 					{/if}
 					自定义主题
-				</span>
-				<span class="text-muted-foreground text-xs">{customThemes.length} 个</span>
-			</button>
+					<span class="text-muted-foreground text-xs">({customThemes.length} 个)</span>
+				</button>
+				<div class="flex gap-1">
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-6 text-xs"
+						onclick={importAllThemes}
+						title="从剪贴板导入主题"
+					>
+						导入全部
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-6 text-xs"
+						onclick={exportAllThemes}
+						title="导出所有自定义主题"
+					>
+						导出全部
+					</Button>
+				</div>
+			</div>
 
 			{#if isCustomThemesOpen}
 				<div class="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4" transition:slide>
@@ -907,8 +971,8 @@
 									variant="ghost"
 									size="icon"
 									class="h-5 w-5"
-									onclick={(e) => duplicateTheme(theme, e)}
-									title="复制主题"
+									onclick={(e: MouseEvent) => exportTheme(theme, e)}
+									title="导出主题 JSON"
 								>
 									<Copy class="h-3 w-3" />
 								</Button>
@@ -916,7 +980,7 @@
 									variant="ghost"
 									size="icon"
 									class="text-destructive h-5 w-5 hover:text-red-600"
-									onclick={(e) => deleteCustomTheme(theme, e)}
+									onclick={(e: MouseEvent) => deleteCustomTheme(theme, e)}
 									title="删除主题"
 								>
 									<Trash2 class="h-3 w-3" />

@@ -99,3 +99,12 @@ jobs:
             ./src-tauri/target/release/bundle/**/*setup*.exe
             ./src-tauri/target/release/bundle/**/*.msi
             ./src-tauri/target/release/bundle/portable/neoview.exe
+
+      # 触发 Extras-Glow 仓库的 schedule workflow
+      - name: trigger extras-glow workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.EXTRAS_GLOW_PAT }}
+          repository: HibernalGlow/Extras-Glow
+          event-type: neoview-release
+          client-payload: '{"tag": "${{ github.ref_name }}"}'

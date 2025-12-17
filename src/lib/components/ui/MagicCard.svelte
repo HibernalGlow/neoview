@@ -46,7 +46,7 @@
   class={cn("group relative overflow-hidden", className)}
 >
   <!-- 内容区 -->
-  <div class="relative z-10 w-full">
+  <div class="relative z-10 w-full h-full flex flex-col">
     {#if children}
       {@render children()}
     {:else}

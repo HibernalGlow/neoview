@@ -12,7 +12,7 @@
 		Archive,
 		Eye,
 		BookOpen,
-		Layout,
+		LayoutDashboard,
 		PanelLeft,
 		Bell,
 		LayoutGrid,
@@ -43,7 +43,7 @@
 		{ value: 'view', label: '视图', icon: Eye },
 		{ value: 'notify', label: '通知', icon: Bell },
 		{ value: 'book', label: '书籍', icon: BookOpen },
-		{ value: 'theme', label: '外观', icon: Layout },
+		{ value: 'theme', label: '外观', icon: LayoutDashboard },
 		{ value: 'performance', label: '性能', icon: Zap },
 		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
 		{ value: 'cards', label: '卡片管理', icon: LayoutGrid },
@@ -58,7 +58,7 @@
 	let settings = $state(settingsManager.getSettings());
 	let settingsOpacity = $derived(settings.panels?.settingsOpacity ?? 85);
 	let settingsBlur = $derived(settings.panels?.settingsBlur ?? 12);
-	
+
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
 	});
@@ -66,20 +66,51 @@
 	function switchTab(tabValue: string) {
 		activeTab = tabValue;
 	}
+
+	// Dock 放大效果相关
+	let mouseY = $state<number | null>(null);
+	let tabRefs = $state<HTMLButtonElement[]>([]);
+
+	// 计算每个图标的缩放比例
+	function getIconScale(index: number): number {
+		if (mouseY === null || !tabRefs[index]) return 1;
+		const rect = tabRefs[index].getBoundingClientRect();
+		const itemCenterY = rect.top + rect.height / 2;
+		const distance = Math.abs(mouseY - itemCenterY);
+		const maxDistance = 80; // 影响范围
+		const maxScale = 1.4; // 最大放大倍数
+		if (distance > maxDistance) return 1;
+		// 使用余弦函数实现平滑过渡
+		const scale = 1 + (maxScale - 1) * Math.cos((distance / maxDistance) * (Math.PI / 2));
+		return scale;
+	}
+
+	function handleSidebarMouseMove(e: MouseEvent) {
+		mouseY = e.clientY;
+	}
+
+	function handleSidebarMouseLeave() {
+		mouseY = null;
+	}
 </script>
 
 <!-- 设置内容（无固定定位，填充父容器） -->
 <div class="flex h-full w-full flex-col text-foreground">
 	<!-- 主内容区 -->
 	<div class="flex flex-1 overflow-hidden">
-		<!-- 左侧标签栏 -->
-		<div 
+		<!-- 左侧标签栏 - 带 Dock 放大效果 -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
 			class="w-48 shrink-0 space-y-1 border-r p-2 overflow-auto"
 			style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
+			onmousemove={handleSidebarMouseMove}
+			onmouseleave={handleSidebarMouseLeave}
 		>
-			{#each tabs as tab}
+			{#each tabs as tab, index}
 				{@const IconComponent = tab.icon}
+				{@const scale = getIconScale(index)}
 				<button
+					bind:this={tabRefs[index]}
 					class="hover:bg-accent flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors {activeTab ===
 					tab.value
 						? 'bg-primary text-primary-foreground'
@@ -87,7 +118,12 @@
 					onclick={() => switchTab(tab.value)}
 					type="button"
 				>
-					<IconComponent class="h-5 w-5" />
+					<div
+						class="flex items-center justify-center transition-transform duration-150 ease-out"
+						style="transform: scale({scale}); transform-origin: left center;"
+					>
+						<IconComponent class="h-5 w-5" />
+					</div>
 					<span class="font-medium">{tab.label}</span>
 				</button>
 			{/each}

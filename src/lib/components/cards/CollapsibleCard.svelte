@@ -132,9 +132,8 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 
 <MagicCard 
 	class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}"
-	gradientSize={250}
-	gradientColor="rgba(120, 119, 198, 0.8)"
-	gradientOpacity={0.6}
+	gradientSize={120}
+	gradientOpacity={0.5}
 >
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}

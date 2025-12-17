@@ -3,6 +3,7 @@
  * CollapsibleCard - 通用可折叠卡片容器
  * 从 cardConfig 读取展开状态，支持拖拽手柄和移动按钮
  * 支持右键菜单在新窗口打开卡片
+ * 支持 MagicCard 鼠标跟随光效
  * Requirements: 1.1
  */
 import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
@@ -10,6 +11,7 @@ import { cardRegistry } from '$lib/cards/registry';
 import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw, EyeOff, ExternalLink } from '@lucide/svelte';
 import { slide } from 'svelte/transition';
 import { openCardInNewWindow } from '$lib/core/windows/cardWindowManager';
+import MagicCard from '$lib/components/ui/MagicCard.svelte';
 
 interface Props {
 	id: string;
@@ -128,7 +130,12 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 }
 </script>
 
-<div class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}">
+<MagicCard 
+	class="collapsible-card {hideHeader ? '' : 'rounded-lg border bg-muted/10 hover:border-primary/60'} transition-all {fullHeight ? 'flex flex-col flex-1 min-h-0' : ''} {orientation === 'horizontal' ? 'flex flex-row' : ''} {className}"
+	gradientSize={250}
+	gradientColor="rgba(120, 119, 198, 0.8)"
+	gradientOpacity={0.6}
+>
 	<!-- 标题栏（可隐藏） -->
 	{#if !hideHeader}
 		<div 
@@ -256,4 +263,4 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 		{/if}
 	{/if}
 
-</div>
+</MagicCard>

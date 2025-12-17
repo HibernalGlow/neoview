@@ -1,15 +1,15 @@
 <script lang="ts">
 	/**
 	 * BoxReveal - 盒子揭示动画组件
-	 * 纯 CSS 实现，兼容 Svelte 5 runes 模式
 	 * 参考 https://animation-svelte.vercel.app/magic/box-reveal
+	 * 使用 IntersectionObserver + CSS 动画实现
 	 */
 	import { cn } from '$lib/utils';
 
 	interface Props {
 		/** 容器宽度 */
 		width?: string;
-		/** 遮罩颜色 */
+		/** 遮罩颜色，默认使用主题色 */
 		boxColor?: string;
 		/** 动画持续时间（秒） */
 		duration?: number;
@@ -21,7 +21,7 @@
 
 	let {
 		width = 'fit-content',
-		boxColor = 'var(--color-primary)',
+		boxColor = 'hsl(var(--primary))',
 		duration = 0.5,
 		class: className = '',
 		children
@@ -37,14 +37,15 @@
 		const observer = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
-					isVisible = entry.isIntersecting;
+					if (entry.isIntersecting) {
+						isVisible = true;
+					}
 				});
 			},
 			{ threshold: 0.1 }
 		);
 
 		observer.observe(containerRef);
-
 		return () => observer.disconnect();
 	});
 </script>
@@ -54,9 +55,9 @@
 	class={cn('relative overflow-hidden', className)}
 	style="width: {width};"
 >
-	<!-- 内容区域 -->
+	<!-- 内容区域：从下方滑入并淡入 -->
 	<div
-		class="box-content"
+		class="content-wrapper"
 		class:visible={isVisible}
 		style="--duration: {duration}s;"
 	>
@@ -65,57 +66,58 @@
 		{/if}
 	</div>
 
-	<!-- 遮罩盒子 -->
+	<!-- 遮罩盒子：从左到右滑过 -->
 	<div
-		class="box-mask"
+		class="mask-box"
 		class:animate={isVisible}
-		style="--duration: {duration}s; --box-color: {boxColor};"
+		style="--duration: {duration}s; background-color: {boxColor};"
 	></div>
 </div>
 
 <style>
-	.box-content {
+	/* 内容初始状态：隐藏并向下偏移 */
+	.content-wrapper {
 		opacity: 0;
-		transform: translateY(20px);
-		transition:
-			opacity 0.01s,
-			transform calc(var(--duration) * 0.5);
-		transition-delay: calc(var(--duration) * 0.5);
+		transform: translateY(75px);
 	}
 
-	.box-content.visible {
-		opacity: 1;
-		transform: translateY(0);
+	/* 内容显示状态：延迟后淡入并上移 */
+	.content-wrapper.visible {
+		animation: content-reveal var(--duration) ease-out 0.25s forwards;
 	}
 
-	.box-mask {
+	@keyframes content-reveal {
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	/* 遮罩盒子 */
+	.mask-box {
 		position: absolute;
-		inset: 0;
-		background: var(--box-color);
-		transform: scaleX(0);
-		transform-origin: left;
-		z-index: 10;
+		top: 4px;
+		bottom: 4px;
+		left: 0;
+		right: 0;
+		z-index: 20;
+		transform: translateX(-100%);
 	}
 
-	.box-mask.animate {
-		animation: box-reveal calc(var(--duration) * 1) ease-in-out forwards;
+	/* 遮罩动画：从左滑入再从右滑出 */
+	.mask-box.animate {
+		animation: mask-slide var(--duration) ease-in forwards;
 	}
 
-	@keyframes box-reveal {
+	@keyframes mask-slide {
 		0% {
-			transform: scaleX(0);
-			transform-origin: left;
+			transform: translateX(-100%);
 		}
 		50% {
-			transform: scaleX(1);
-			transform-origin: left;
-		}
-		50.01% {
-			transform-origin: right;
+			transform: translateX(0%);
 		}
 		100% {
-			transform: scaleX(0);
-			transform-origin: right;
+			transform: translateX(100%);
 		}
 	}
 </style>

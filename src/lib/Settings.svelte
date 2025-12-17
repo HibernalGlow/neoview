@@ -20,7 +20,8 @@
 		Layout,
 		PanelLeft,
 		Bell,
-		LayoutGrid
+		LayoutGrid,
+		Info
 	} from '@lucide/svelte';
 
 	// 导入所有设置面板组件
@@ -36,6 +37,7 @@
 	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
 	import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
+	import AboutPanel from '$lib/components/panels/AboutPanel.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -52,7 +54,8 @@
 		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
 		{ value: 'cards', label: '卡片管理', icon: LayoutGrid },
 		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
-		{ value: 'data', label: '数据', icon: Monitor }
+		{ value: 'data', label: '数据', icon: Monitor },
+		{ value: 'about', label: '关于', icon: Info }
 	];
 
 	let activeTab = $state<string>('general');
@@ -150,6 +153,8 @@
 				<PerformanceSettingsPanel />
 			{:else if activeTab === 'data'}
 				<DataSettingsPanel />
+			{:else if activeTab === 'about'}
+				<AboutPanel />
 			{:else}
 				<!-- 其他标签暂未实现 -->
 				<div class="p-6">

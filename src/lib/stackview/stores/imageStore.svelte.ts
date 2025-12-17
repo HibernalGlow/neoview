@@ -5,9 +5,12 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from './imagePool.svelte';
+import { stackImageLoader } from '../utils/stackImageLoader';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { calculateTargetScale } from '../utils/imageTransitionManager';
+import type { ZoomMode } from '$lib/settings/settingsManager';
 
 /**
  * 检查是否应该加载第二张图片（双页模式）
@@ -279,11 +282,79 @@ export function createImageStore() {
     imagePool.clear();
   }
   
+  /**
+   * 【新增】获取指定页面的尺寸（按索引读取缓存）
+   * 优先级：stackImageLoader 缓存 > bookStore 元数据
+   */
+  function getDimensionsForPage(pageIndex: number): { width: number; height: number } | null {
+    // 1. 优先从 stackImageLoader 缓存读取
+    const cached = stackImageLoader.getCachedDimensions(pageIndex);
+    if (cached && cached.width > 0 && cached.height > 0) {
+      return cached;
+    }
+    
+    // 2. 降级：从 bookStore 元数据读取
+    const book = bookStore.currentBook;
+    if (book?.pages?.[pageIndex]) {
+      const page = book.pages[pageIndex];
+      if (page.width && page.height && page.width > 0 && page.height > 0) {
+        return { width: page.width, height: page.height };
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * 【新增】获取指定页面的预计算缩放值
+   * 优先级：预计算缓存 > 实时计算
+   */
+  function getScaleForPage(
+    pageIndex: number, 
+    zoomMode: ZoomMode, 
+    viewport: { width: number; height: number }
+  ): number {
+    if (!viewport.width || !viewport.height) {
+      return 1;
+    }
+    
+    // 1. 优先使用预计算的缩放值
+    const cachedScale = stackImageLoader.getCachedScale(pageIndex, zoomMode);
+    if (cachedScale !== null && cachedScale > 0) {
+      return cachedScale;
+    }
+    
+    // 2. 尝试预计算并缓存
+    const precomputed = stackImageLoader.precomputeScale(pageIndex, zoomMode);
+    if (precomputed !== null && precomputed > 0) {
+      return precomputed;
+    }
+    
+    // 3. 使用尺寸实时计算
+    const dims = getDimensionsForPage(pageIndex);
+    if (dims) {
+      return calculateTargetScale(dims, viewport, zoomMode);
+    }
+    
+    // 4. 最终降级
+    return 1;
+  }
+  
+  /**
+   * 【新增】设置视口尺寸（用于预计算缩放）
+   */
+  function setViewportSize(width: number, height: number): void {
+    stackImageLoader.setViewportSize(width, height);
+  }
+  
   return {
     get state() { return state; },
     loadCurrentPage,
     setUpscaledUrl,
     reset,
+    getDimensionsForPage,
+    getScaleForPage,
+    setViewportSize,
   };
 }
 

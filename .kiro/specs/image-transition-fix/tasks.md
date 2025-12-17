@@ -1,84 +1,85 @@
 # Implementation Plan
 
-- [x] 1. Create ImageTransitionManager utility module
+- [x] 1. 在 imageStore 中添加统一的尺寸和缩放获取接口
 
 
 
-  - [x] 1.1 Create imageTransitionManager.ts with core types and functions
 
-    - Define TransitionState interface
-    - Implement calculateTargetScale function for all zoom modes
-    - Implement prepareTransition function
-    - _Requirements: 1.1, 1.2, 3.2_
-  - [ ]* 1.2 Write property test for pre-cached dimensions usage
-    - **Property 1: Pre-cached Dimensions Usage**
-    - **Validates: Requirements 1.1, 1.2, 3.2**
-  - [ ]* 1.3 Write property test for aspect ratio change correctness
-    - **Property 3: Aspect Ratio Change Correctness**
-    - **Validates: Requirements 4.1, 4.2, 4.3**
+  - [x] 1.1 添加 `getDimensionsForPage(pageIndex)` 方法，从 stackImageLoader 读取缓存尺寸
 
-- [x] 2. Modify StackView.svelte to use transition manager
+    - 调用 `stackImageLoader.getCachedDimensions(pageIndex)`
 
+    - 如果缓存不存在，尝试从 `bookStore.currentBook.pages[pageIndex]` 获取
+    - _Requirements: 2.3, 3.1_
+  - [x] 1.2 添加 `getScaleForPage(pageIndex, zoomMode, viewport)` 方法
 
-  - [x] 2.1 Add transition state management
+    - 优先调用 `stackImageLoader.getCachedScale(pageIndex, zoomMode)`
+    - 如果缓存不存在，调用 `precomputeScale()` 计算并缓存
 
+    - _Requirements: 3.2, 4.1_
+  - [x] 1.3 添加 `setViewportSize(width, height)` 方法
 
-    - Import ImageTransitionManager
-    - Add transitionState reactive variable
-    - Modify modeScale calculation to use transition state when available
-    - _Requirements: 2.1, 2.2, 2.3_
-  - [x] 2.2 Update page change effect to prepare transitions
+    - 调用 `stackImageLoader.setViewportSize()`
+    - _Requirements: 4.3_
+  - [x] 1.4 写属性测试验证缩放计算正确性
 
-    - Call prepareTransition before page change
-    - Use pre-cached dimensions from bookStore.currentPage
-    - Clear transition state after image loads
-    - _Requirements: 1.1, 1.2_
-  - [x] 2.3 Remove immediate loadedImageSize clearing
-
-    - Modify $effect.pre to not clear loadedImageSize on page change
-    - Clear loadedImageSize only when new image starts loading
-    - _Requirements: 2.1, 2.3_
-  - [ ]* 2.4 Write property test for transition atomicity
-    - **Property 2: Transition Atomicity**
-    - **Validates: Requirements 2.1, 2.2, 2.3**
-
-- [x] 3. Checkpoint - Make sure all tests are passing
-
-  - Ensure all tests pass, ask the user if questions arise.
-
-- [x] 4. Add post-load scale verification
+    - **Property 1: Scale calculation correctness**
+    - **Validates: Requirements 1.2, 1.4**
 
 
-  - [x] 4.1 Implement dimension mismatch detection
+- [x] 2. 修改 StackView.svelte 使用新接口
+  - [x] 2.1 移除 `loadedImageSize` 单一变量及相关的 `$effect.pre`
+    - 删除 `let loadedImageSize = $state<...>(null)`
+    - 删除监听 `imageStore.state.currentUrl` 变化的 `$effect.pre`
+    - _Requirements: 1.1_
+  - [x] 2.2 移除 `transitionState` 及相关的过渡管理代码
+    - 删除 `let transitionState = $state<TransitionState | null>(null)`
+    - 删除 `prepareTransition`、`completeTransition` 相关调用
+    - 删除 `lastPageIndex` 追踪变量
+    - _Requirements: 3.2_
+  - [x] 2.3 重写 `modeScale` 计算逻辑
+    - 使用 `imageStore.getScaleForPage()` 获取预计算缩放
+    - 降级策略：缓存 → bookStore 元数据 → 默认值 1.0
+    - _Requirements: 1.2, 1.3, 2.2_
+  - [x] 2.4 更新 `hoverImageSize` 派生值
+    - 使用 `imageStore.getDimensionsForPage()` 替代 `loadedImageSize`
+    - _Requirements: 2.3_
+  - [x] 2.5 在视口尺寸变化时同步到 imageStore
+    - 在 `updateViewportSize()` 中调用 `imageStore.setViewportSize()`
+    - _Requirements: 4.3_
+  - [x] 2.6 写属性测试验证尺寸缓存一致性
+    - **Property 3: Dimension cache consistency**
+    - **Validates: Requirements 2.3, 3.1**
 
-
-    - Compare pre-cached dimensions with actual loaded dimensions
-    - Define threshold for significant mismatch (5%)
-    - _Requirements: 1.3_
-  - [x] 4.2 Add smooth scale adjustment on mismatch
-
-    - Implement smooth transition when dimensions differ significantly
-    - Ensure no jarring visual jumps
-    - _Requirements: 1.3, 2.3_
-  - [ ]* 4.3 Write property test for post-load verification
-    - **Property 4: Post-load Scale Verification**
-    - **Validates: Requirements 1.3**
-
-- [x] 5. Optimize preload utilization
-
-
-  - [x] 5.1 Ensure preloaded images are used immediately
-
-
-    - Check imagePool for preloaded data before loading
-    - Use preloaded dimensions for scale calculation
+- [x] 3. 更新 handleImageLoad 回调
+  - [x] 3.1 简化 `handleImageLoad` 函数
+    - 移除 `loadedImageSize` 更新逻辑
+    - 保留 `updateMetadataDimensions` 调用（更新 bookStore）
+    - _Requirements: 1.1_
+  - [x] 3.2 确保图片加载后尺寸写入缓存
+    - 在 `stackImageLoader.loadPage()` 中已有此逻辑，确认无需额外修改
     - _Requirements: 3.3_
-  - [ ]* 5.2 Write property test for preload utilization
-    - **Property 5: Preload Utilization**
-    - **Validates: Requirements 3.3**
 
-- [x] 6. Final Checkpoint - Make sure all tests are passing
+- [x] 4. Checkpoint - 确保所有测试通过
 
 
   - Ensure all tests pass, ask the user if questions arise.
 
+
+- [x] 5. 清理不再需要的代码
+  - [x] 5.1 删除 `imageTransitionManager.ts` 中不再使用的函数
+    - 保留 `calculateTargetScale`（仍在使用）
+    - 删除 `prepareTransition`、`completeTransition`、`checkDimensionsMatch`
+    - _Requirements: 3.2_
+  - [x] 5.2 清理 StackView.svelte 中的相关 import
+    - 移除 `prepareTransition`、`completeTransition`、`checkDimensionsMatch`、`TransitionState` 的导入
+    - _Requirements: 3.2_
+  - [x] 5.3 写属性测试验证页面索引隔离性
+    - **Property 5: Page index isolation**
+    - **Validates: Requirements 3.4, 1.1**
+
+- [x] 6. Final Checkpoint - 确保所有测试通过
+
+
+
+  - Ensure all tests pass, ask the user if questions arise.

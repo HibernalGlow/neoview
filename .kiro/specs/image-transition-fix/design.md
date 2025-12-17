@@ -2,379 +2,218 @@
 
 ## Overview
 
-本设计文档描述了修复 NeoView 图片查看器在横竖图片切换时视觉跳动问题的技术方案。
+本设计文档描述了修复图片查看器在切换图片时出现视觉跳动问题的技术方案。核心问题是当用户切换图片时，当前图片会先被缩小到错误的比例，然后新图片才以正确的缩放比例显示。
 
-### 问题分析
+### 问题根因分析
 
-当前实现中存在以下问题：
+1. **单一变量存储问题**：`loadedImageSize` 是单一变量，每次切换页面时被清空，导致"空档期"
+2. **尺寸清空时机问题**：新图片 URL 变化时立即清空尺寸，但新尺寸还没获取到
+3. **尺寸来源不一致**：`modeScale` 计算依赖多个尺寸来源，切换时这些值的更新时序不一致
 
-1. **尺寸信息时序问题**：在 `StackView.svelte` 中，`modeScale` 的计算依赖于多个尺寸来源：
-   - `loadedImageSize`：图片加载完成后通过 `onload` 事件获取
-   - `imageStore.state.dimensions`：从 imageStore 获取
-   - `bookStore.currentPage`：预缓存的页面元数据
+### 解决方案概述
 
-2. **状态清空导致跳动**：在 `$effect.pre` 中，当页面索引变化时会清空 `loadedImageSize`：
-   ```typescript
-   if (pageIndex !== lastPageIndex) {
-       loadedImageSize = null;  // 这里清空导致问题
-       lastPageIndex = pageIndex;
-   }
-   ```
+综合三种方案的优点，采用"索引化缓存 + 预计算缩放 + 统一 Store"策略：
 
-3. **缩放计算的级联效应**：当 `loadedImageSize` 被清空后，`modeScale` 会使用 fallback 尺寸，但这些尺寸可能与实际图片尺寸不同，导致缩放值跳动。
-
-### 解决方案
-
-采用"预计算 + 原子切换"策略：
-
-1. **预计算新图片的缩放**：在切换图片前，使用预缓存尺寸计算新图片的目标缩放值
-2. **原子切换**：同时更新图片源和缩放值，避免中间状态
-3. **延迟清空**：不在页面切换时立即清空 `loadedImageSize`，而是在新图片开始加载时才清空
+1. **利用现有尺寸缓存**（方案 A）：`stackImageLoader.dimensionsCache` 已按索引存储尺寸，直接复用
+2. **使用预计算缩放**（方案 B）：`stackImageLoader.precomputeScale()` 预计算并缓存缩放值，切换时直接读取
+3. **统一尺寸管理入口**（方案 C）：在 `imageStore` 中暴露统一的尺寸获取接口，解耦 StackView 与底层实现
+4. **移除 transitionState**：有了可靠的预计算缩放，不再需要复杂的过渡状态管理
+5. **移除 loadedImageSize 单一变量**：改用 `getDimensionsForPage(pageIndex)` 按索引读取
 
 ## Architecture
 
-```mermaid
-graph TB
-    subgraph "图片切换流程"
-        A[用户翻页] --> B{检查预缓存尺寸}
-        B -->|有| C[使用预缓存尺寸计算目标缩放]
-        B -->|无| D[使用默认缩放]
-        C --> E[准备新图片数据]
-        D --> E
-        E --> F[原子更新: 图片源 + 缩放值]
-        F --> G[图片加载完成]
-        G --> H{实际尺寸与预缓存一致?}
-        H -->|是| I[保持当前缩放]
-        H -->|否| J[微调缩放值]
-    end
 ```
+┌─────────────────────────────────────────────────────────────────┐
+│                        StackView.svelte                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐                     │
+│  │  Page Change    │───▶│ Get Cached      │                     │
+│  │  Detection      │    │ Scale           │                     │
+│  └─────────────────┘    └────────┬────────┘                     │
+│                                  │                               │
+│                                  ▼                               │
+│                         ┌─────────────────┐                     │
+│                         │ stackImageLoader│                     │
+│                         │ .getCachedScale │                     │
+│                         └────────┬────────┘                     │
+│                                  │ 有缓存？                      │
+│                    ┌─────────────┴─────────────┐                │
+│                    ▼                           ▼                │
+│           ┌─────────────────┐         ┌─────────────────┐       │
+│           │ 直接使用缓存值   │         │ 从 dimensions   │       │
+│           │ (无跳动)        │         │ 计算缩放        │       │
+│           └─────────────────┘         └─────────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
 
-### 状态管理流程
-
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant SV as StackView
-    participant BS as bookStore
-    participant IS as imageStore
-    participant Img as Image Element
-
-    User->>SV: 翻页操作
-    SV->>BS: 获取下一页预缓存尺寸
-    BS-->>SV: {width, height}
-    SV->>SV: 计算目标 modeScale
-    SV->>IS: 加载新图片
-    Note over SV: 保持旧图片显示
-    IS-->>SV: 新图片 URL 就绪
-    SV->>SV: 原子更新 (URL + scale)
-    SV->>Img: 设置新 src
-    Img-->>SV: onload 事件
-    SV->>SV: 验证/微调缩放
+┌─────────────────────────────────────────────────────────────────┐
+│                     stackImageLoader                             │
+├─────────────────────────────────────────────────────────────────┤
+│  dimensionsCache: Map<pageIndex, {width, height}>               │
+│  precomputedScaleCache: Map<cacheKey, scale>                    │
+│                                                                  │
+│  precomputeScale(pageIndex, zoomMode) → 计算并缓存              │
+│  getCachedScale(pageIndex, zoomMode) → 读取缓存                 │
+│  getCachedDimensions(pageIndex) → 读取尺寸                      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Components and Interfaces
 
-### 1. 新增：ImageTransitionManager
+### 1. imageStore 新增接口
+
+在 `imageStore` 中暴露统一的尺寸和缩放获取接口：
 
 ```typescript
-// src/lib/stackview/utils/imageTransitionManager.ts
-
-interface TransitionState {
-    // 目标页面索引
-    targetPageIndex: number;
-    // 预计算的目标缩放
-    targetScale: number;
-    // 预缓存的尺寸
-    preCachedDimensions: { width: number; height: number } | null;
-    // 是否正在过渡中
-    isTransitioning: boolean;
+// imageStore.svelte.ts 新增方法
+interface ImageStore {
+  // 现有方法...
+  
+  /** 【新增】获取指定页面的尺寸（按索引读取缓存） */
+  getDimensionsForPage(pageIndex: number): { width: number; height: number } | null;
+  
+  /** 【新增】获取指定页面的预计算缩放值 */
+  getScaleForPage(pageIndex: number, zoomMode: ZoomMode, viewport: ViewportSize): number;
+  
+  /** 【新增】设置视口尺寸（用于预计算） */
+  setViewportSize(width: number, height: number): void;
 }
-
-/**
- * 计算目标缩放值
- * @param dimensions 图片尺寸
- * @param viewport 视口尺寸
- * @param zoomMode 缩放模式
- */
-function calculateTargetScale(
-    dimensions: { width: number; height: number },
-    viewport: { width: number; height: number },
-    zoomMode: ZoomMode
-): number;
-
-/**
- * 准备图片过渡
- * 在实际切换前调用，预计算目标状态
- */
-function prepareTransition(
-    targetPageIndex: number,
-    preCachedDimensions: { width: number; height: number } | null,
-    viewport: { width: number; height: number },
-    zoomMode: ZoomMode
-): TransitionState;
 ```
 
-### 2. 修改：StackView.svelte
+### 2. stackImageLoader 现有接口（直接复用）
 
 ```typescript
-// 关键修改点
+// 已有的方法，无需修改
+class StackImageLoader {
+  // 尺寸缓存 - 按索引存储
+  private dimensionsCache = new Map<number, { width: number; height: number }>();
+  
+  // 预计算缩放缓存
+  private precomputedScaleCache = new Map<string, number>();
+  
+  // 获取缓存的尺寸
+  getCachedDimensions(pageIndex: number): { width: number; height: number } | undefined;
+  
+  // 预计算缩放
+  precomputeScale(pageIndex: number, zoomMode: string): number | null;
+  
+  // 获取缓存的缩放
+  getCachedScale(pageIndex: number, zoomMode: string): number | null;
+}
+```
 
-// 1. 移除 $effect.pre 中的 loadedImageSize 清空逻辑
-// 改为在新图片开始加载时才清空
+### 3. StackView.svelte 修改
 
-// 2. 新增过渡状态管理
-let transitionState = $state<TransitionState | null>(null);
+```typescript
+// 移除这些：
+// - loadedImageSize 单一变量
+// - transitionState 过渡状态
+// - 相关的 $effect.pre 监听
 
-// 3. 修改 modeScale 计算逻辑
+// 新增：
+// modeScale 计算改为直接读取缓存
 let modeScale = $derived.by(() => {
-    // 如果正在过渡中，使用预计算的目标缩放
-    if (transitionState?.isTransitioning) {
-        return transitionState.targetScale;
-    }
-    
-    // 正常计算逻辑...
+  const pageIndex = bookStore.currentPageIndex;
+  
+  // 1. 优先使用预计算的缩放值
+  const cachedScale = imageStore.getScaleForPage(pageIndex, currentZoomMode, viewportSize);
+  if (cachedScale > 0) {
+    return cachedScale;
+  }
+  
+  // 2. 使用缓存的尺寸计算
+  const dims = imageStore.getDimensionsForPage(pageIndex);
+  if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
+    return calculateTargetScale(dims, viewportSize, currentZoomMode);
+  }
+  
+  // 3. 降级：使用 bookStore 元数据
+  const page = bookStore.currentPage;
+  if (page?.width && page?.height) {
+    return calculateTargetScale({ width: page.width, height: page.height }, viewportSize, currentZoomMode);
+  }
+  
+  // 4. 最终降级
+  return 1;
 });
-
-// 4. 在页面切换时准备过渡
-$effect(() => {
-    const pageIndex = bookStore.currentPageIndex;
-    if (pageIndex !== lastPageIndex) {
-        // 获取预缓存尺寸
-        const page = bookStore.currentBook?.pages?.[pageIndex];
-        const preCached = page ? { width: page.width, height: page.height } : null;
-        
-        // 准备过渡
-        transitionState = prepareTransition(
-            pageIndex,
-            preCached,
-            viewportSize,
-            currentZoomMode
-        );
-        
-        lastPageIndex = pageIndex;
-    }
-});
-```
-
-### 3. 修改：StackViewer.svelte
-
-```typescript
-// 关键修改点
-
-// 1. 在 navigateToPage 中使用预计算缩放
-async function navigateToPage(pageIndex: number) {
-    // 获取预缓存尺寸
-    const page = bookStore.currentBook?.pages?.[pageIndex];
-    if (page?.width && page?.height) {
-        // 预计算缩放，避免跳动
-        const precomputedScale = computeScale(page.width, page.height);
-        // 应用预计算缩放...
-    }
-    
-    // 继续原有逻辑...
-}
 ```
 
 ## Data Models
 
-### TransitionState
+### 尺寸缓存数据流
 
-```typescript
-interface TransitionState {
-    targetPageIndex: number;
-    targetScale: number;
-    preCachedDimensions: { width: number; height: number } | null;
-    isTransitioning: boolean;
-    startTime: number;
-}
 ```
+预加载阶段：
+  loadPage(pageIndex) 
+    → 获取图片尺寸 
+    → dimensionsCache.set(pageIndex, dims)
+    → bookStore.updatePageDimensions(pageIndex, dims)
 
-### ImageDimensions
+切换页面时：
+  modeScale 计算
+    → imageStore.getScaleForPage(pageIndex)
+    → stackImageLoader.getCachedScale(pageIndex) 
+    → 有缓存？直接返回 : 计算并缓存
 
-```typescript
-interface ImageDimensions {
-    width: number;
-    height: number;
-    source: 'preCache' | 'loaded' | 'default';
-}
+图片加载完成后：
+  handleImageLoad()
+    → 更新 dimensionsCache（如果尺寸有变化）
+    → 触发 modeScale 重新计算（自动响应式）
 ```
 
 ## Correctness Properties
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system-essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-### Property 1: Pre-cached Dimensions Usage
-*For any* image transition where pre-cached dimensions are available, the initial scale calculation SHALL use those pre-cached dimensions without waiting for image load.
-**Validates: Requirements 1.1, 1.2, 3.2**
+### Property 1: Scale calculation correctness
+*For any* valid image dimensions and viewport size, the calculated scale using `calculateTargetScale` SHALL produce a value that ensures the image fits within the viewport according to the specified zoom mode.
+**Validates: Requirements 1.2, 1.4**
 
-### Property 2: Transition Atomicity
-*For any* image transition, the scale value and image source SHALL be updated atomically, with no intermediate scale values being rendered.
-**Validates: Requirements 2.1, 2.2, 2.3**
+### Property 2: Fallback scale safety
+*For any* scenario where image dimensions are unavailable (null or zero), the scale calculation SHALL return 1.0 as a safe default.
+**Validates: Requirements 1.3, 2.2**
 
-### Property 3: Aspect Ratio Change Correctness
-*For any* transition between images with different aspect ratios (horizontal to vertical or vice versa), the new image SHALL be displayed at its correct scale immediately upon transition.
-**Validates: Requirements 4.1, 4.2, 4.3**
+### Property 3: Dimension cache consistency
+*For any* page index, calling `getDimensionsForPage(pageIndex)` multiple times SHALL return the same dimensions (cache is stable).
+**Validates: Requirements 2.3, 3.1**
 
-### Property 4: Post-load Scale Verification
-*For any* image that finishes loading, if the actual dimensions differ from pre-cached dimensions, the scale SHALL be adjusted to match the actual dimensions.
-**Validates: Requirements 1.3**
+### Property 4: Scale cache hit rate
+*For any* preloaded page, calling `getScaleForPage(pageIndex)` SHALL return a cached value without recalculation.
+**Validates: Requirements 3.2, 4.1, 4.3**
 
-### Property 5: Preload Utilization
-*For any* image that has been preloaded by the image pool, the transition SHALL use the preloaded data immediately without additional loading delay.
-**Validates: Requirements 3.3**
+### Property 5: Page index isolation
+*For any* two different page indices, their cached dimensions and scales SHALL be independent (modifying one does not affect the other).
+**Validates: Requirements 3.4, 1.1**
 
 ## Error Handling
 
-### 错误场景
-
-1. **预缓存尺寸不可用**
-   - 使用默认缩放值 (1.0)
-   - 等待图片加载后更新缩放
-
-2. **预缓存尺寸与实际尺寸不匹配**
-   - 图片加载完成后检测差异
-   - 如果差异超过阈值（如 5%），平滑过渡到正确缩放
-
-3. **图片加载失败**
-   - 保持当前显示状态
-   - 显示错误提示
-
-### 错误处理代码示例
-
-```typescript
-function handleDimensionMismatch(
-    preCached: { width: number; height: number },
-    actual: { width: number; height: number }
-): void {
-    const widthDiff = Math.abs(preCached.width - actual.width) / actual.width;
-    const heightDiff = Math.abs(preCached.height - actual.height) / actual.height;
-    
-    // 如果差异超过 5%，需要调整
-    if (widthDiff > 0.05 || heightDiff > 0.05) {
-        console.warn('预缓存尺寸与实际尺寸不匹配，调整缩放');
-        // 平滑过渡到正确缩放
-        animateToCorrectScale(actual);
-    }
-}
-```
+1. **尺寸获取失败**：当所有尺寸来源都不可用时，使用默认缩放 1.0
+2. **过渡超时**：如果过渡状态持续超过 5 秒，强制清理并恢复正常计算
+3. **页面索引不匹配**：如果图片加载完成时页面索引已变化，忽略该加载结果
 
 ## Testing Strategy
 
-### 双重测试方法
+### 单元测试
 
-本功能采用单元测试和属性测试相结合的方式：
+1. `calculateTargetScale` 函数的各种缩放模式测试
+2. `getBestDimensions` 函数的优先级测试
+3. TransitionState 状态机的状态转换测试
 
-1. **单元测试**：验证具体的边界情况和错误处理
-2. **属性测试**：验证缩放计算和过渡的通用正确性
+### 属性测试
 
-### 属性测试框架
+使用 fast-check 库进行属性测试：
 
-使用 `fast-check` 作为 TypeScript/JavaScript 的属性测试库。
+1. **缩放计算正确性**：生成随机图片尺寸和视口尺寸，验证缩放结果符合预期
+2. **尺寸优先级**：生成随机的尺寸来源组合，验证选择正确的来源
+3. **过渡状态一致性**：生成随机的页面切换序列，验证状态机行为正确
 
-### 测试用例设计
+### 集成测试
 
-#### 单元测试
+1. 模拟快速翻页场景，验证无视觉跳动
+2. 模拟横竖图片切换，验证缩放平滑过渡
+3. 模拟缓存命中和未命中场景，验证行为一致
 
-1. **缩放计算测试**
-   - 测试各种 zoomMode 下的缩放计算
-   - 测试横向/竖向图片的缩放差异
+### 测试框架
 
-2. **过渡状态测试**
-   - 测试过渡状态的创建和清理
-   - 测试原子更新逻辑
-
-3. **错误处理测试**
-   - 测试预缓存尺寸不可用的情况
-   - 测试尺寸不匹配的处理
-
-#### 属性测试
-
-1. **Property 1: Pre-cached Dimensions Usage**
-   - 生成随机预缓存尺寸
-   - 验证缩放计算使用预缓存尺寸
-
-2. **Property 3: Aspect Ratio Change Correctness**
-   - 生成随机横向/竖向图片尺寸对
-   - 验证切换后缩放正确
-
-### 测试文件结构
-
-```
-src/lib/stackview/utils/
-├── imageTransitionManager.ts
-├── imageTransitionManager.test.ts      # 单元测试
-└── imageTransitionManager.property.test.ts  # 属性测试
-```
-
-### 属性测试示例
-
-```typescript
-import fc from 'fast-check';
-
-describe('Image Transition Properties', () => {
-    /**
-     * Feature: image-transition-fix, Property 1: Pre-cached Dimensions Usage
-     * Validates: Requirements 1.1, 1.2, 3.2
-     */
-    it('should use pre-cached dimensions for initial scale calculation', () => {
-        fc.assert(
-            fc.property(
-                fc.record({
-                    width: fc.integer({ min: 100, max: 4000 }),
-                    height: fc.integer({ min: 100, max: 4000 })
-                }),
-                fc.record({
-                    width: fc.integer({ min: 100, max: 2000 }),
-                    height: fc.integer({ min: 100, max: 2000 })
-                }),
-                (preCachedDims, viewport) => {
-                    const state = prepareTransition(0, preCachedDims, viewport, 'fit');
-                    
-                    // 验证使用了预缓存尺寸计算缩放
-                    const expectedScale = calculateTargetScale(preCachedDims, viewport, 'fit');
-                    expect(state.targetScale).toBe(expectedScale);
-                }
-            ),
-            { numRuns: 100 }
-        );
-    });
-
-    /**
-     * Feature: image-transition-fix, Property 3: Aspect Ratio Change Correctness
-     * Validates: Requirements 4.1, 4.2, 4.3
-     */
-    it('should calculate correct scale for aspect ratio changes', () => {
-        fc.assert(
-            fc.property(
-                // 横向图片
-                fc.record({
-                    width: fc.integer({ min: 1000, max: 4000 }),
-                    height: fc.integer({ min: 100, max: 999 })
-                }),
-                // 竖向图片
-                fc.record({
-                    width: fc.integer({ min: 100, max: 999 }),
-                    height: fc.integer({ min: 1000, max: 4000 })
-                }),
-                fc.record({
-                    width: fc.integer({ min: 800, max: 1920 }),
-                    height: fc.integer({ min: 600, max: 1080 })
-                }),
-                (horizontal, vertical, viewport) => {
-                    // 从横向切换到竖向
-                    const scaleForVertical = calculateTargetScale(vertical, viewport, 'fit');
-                    
-                    // 验证缩放值正确（适应视口）
-                    const expectedScale = Math.min(
-                        viewport.width / vertical.width,
-                        viewport.height / vertical.height
-                    );
-                    expect(Math.abs(scaleForVertical - expectedScale)).toBeLessThan(0.001);
-                }
-            ),
-            { numRuns: 100 }
-        );
-    });
-});
-```
-
+- 属性测试库：fast-check
+- 测试运行器：vitest
+- 测试文件位置：与源文件同目录，使用 `.test.ts` 后缀

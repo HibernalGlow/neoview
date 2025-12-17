@@ -26,14 +26,7 @@
 		type PageData
 	} from './utils/viewMode';
 	import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
-	import {
-		calculateTargetScale,
-		prepareTransition,
-		completeTransition,
-		checkDimensionsMatch,
-		getBestAvailableDimensions,
-		type TransitionState
-	} from './utils/imageTransitionManager';
+	import { calculateTargetScale } from './utils/imageTransitionManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
 	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 	import type { Frame, FrameLayout, FrameImage } from './types/frame';
@@ -96,131 +89,21 @@
 	// 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 DOM
 	// 不再使用 Svelte 响应式状态，避免高频更新触发重渲染
 
-	// 通过 onImageLoad 获取的图片尺寸（用于自动旋转等功能）
-	let loadedImageSize = $state<{ width: number; height: number } | null>(null);
-
-	// 图片尺寸：从多个来源获取，确保第一张图也有尺寸
+	// 【修复】图片尺寸：使用索引化缓存，避免切换时的空档期
+	// 通过 imageStore.getDimensionsForPage() 按索引读取，不再使用单一变量
 	let hoverImageSize = $derived.by(() => {
-		if (loadedImageSize?.width && loadedImageSize?.height) {
-			return { width: loadedImageSize.width, height: loadedImageSize.height };
-		}
-		const dims = imageStore.state.dimensions;
+		const pageIndex = bookStore.currentPageIndex;
+		// 优先从缓存读取当前页尺寸
+		const dims = imageStore.getDimensionsForPage(pageIndex);
 		if (dims?.width && dims?.height) {
 			return { width: dims.width, height: dims.height };
 		}
+		// 降级：从 bookStore 元数据读取
 		const page = bookStore.currentPage;
 		if (page?.width && page?.height) {
 			return { width: page.width, height: page.height };
 		}
 		return { width: 0, height: 0 };
-	});
-
-	// 追踪上一个页面索引，用于检测页面切换
-	let lastPageIndex = $state<number>(-1);
-
-	// 【修复】图片过渡状态管理 - 解决横竖图片切换时的视觉跳动
-	let transitionState = $state<TransitionState | null>(null);
-
-	// 【修复】页面切换时使用预缓存尺寸计算目标缩放，而不是立即清空 loadedImageSize
-	// 这样可以避免中间状态导致的视觉跳动
-	$effect.pre(() => {
-		const pageIndex = bookStore.currentPageIndex;
-		if (pageIndex !== lastPageIndex) {
-			// 【优化】优先从 imagePool 获取预加载的尺寸（更准确）
-			// 然后从 bookStore.currentPage 获取元数据尺寸（更快可用）
-			const newPage = bookStore.currentBook?.pages?.[pageIndex];
-			
-			// 尝试从 imageStore 获取已加载的尺寸
-			const storeDims = imageStore.state.dimensions;
-			const storePageIndex = bookStore.currentPageIndex;
-			
-			// 优先级：imageStore（如果是当前页）> bookStore.currentPage
-			let preCachedDims: { width: number; height: number } | null = null;
-			
-			if (storeDims?.width && storeDims?.height && storePageIndex === pageIndex) {
-				// imageStore 已有当前页的尺寸
-				preCachedDims = { width: storeDims.width, height: storeDims.height };
-			} else if (newPage?.width && newPage?.height) {
-				// 使用 bookStore 的元数据尺寸
-				preCachedDims = { width: newPage.width, height: newPage.height };
-			}
-			
-			// 准备过渡状态，使用预缓存尺寸计算目标缩放
-			if (preCachedDims && viewportSize.width > 0 && viewportSize.height > 0) {
-				transitionState = prepareTransition(
-					pageIndex,
-					preCachedDims,
-					viewportSize,
-					currentZoomMode
-				);
-			}
-			
-			// 延迟清空 loadedImageSize，等新图片开始加载时再清空
-			// 这样在过渡期间可以使用预计算的缩放值
-			lastPageIndex = pageIndex;
-		}
-	});
-
-	// 【修复】主动获取图片尺寸，使用 $effect.pre 确保在渲染前更新
-	$effect.pre(() => {
-		const url = imageStore.state.currentUrl;
-		const pageIndex = bookStore.currentPageIndex;
-		if (!url) {
-			loadedImageSize = null;
-			// 清空过渡状态
-			if (transitionState) {
-				transitionState = null;
-			}
-			return;
-		}
-
-		// 当 URL 变化时（新图片开始加载），清空旧的 loadedImageSize
-		// 但保留 transitionState 以使用预计算的缩放值
-		loadedImageSize = null;
-
-		// 创建临时 Image 对象获取精确尺寸
-		const img = new Image();
-		const capturedPageIndex = pageIndex;
-		img.onload = () => {
-			// 确保这是当前页面的图片（页面索引匹配）
-			if (capturedPageIndex === bookStore.currentPageIndex && img.naturalWidth && img.naturalHeight) {
-				const newWidth = img.naturalWidth;
-				const newHeight = img.naturalHeight;
-				const actualDims = { width: newWidth, height: newHeight };
-				
-				// 更新加载后的尺寸
-				if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
-					loadedImageSize = actualDims;
-				}
-				
-				// 图片加载完成，完成过渡
-				if (transitionState && transitionState.targetPageIndex === capturedPageIndex) {
-					// 【修复】检查预缓存尺寸与实际尺寸是否匹配
-					const dimensionsMatch = checkDimensionsMatch(
-						transitionState.preCachedDimensions,
-						actualDims,
-						0.05 // 5% 阈值
-					);
-					
-					if (!dimensionsMatch && transitionState.preCachedDimensions) {
-						// 尺寸不匹配，记录日志（实际缩放会自动通过 loadedImageSize 更新）
-						console.log('📐 图片尺寸不匹配，自动调整缩放:', {
-							preCached: transitionState.preCachedDimensions,
-							actual: actualDims
-						});
-					}
-					
-					transitionState = completeTransition(transitionState);
-					// 短暂延迟后清空过渡状态
-					setTimeout(() => {
-						if (transitionState && !transitionState.isTransitioning) {
-							transitionState = null;
-						}
-					}, 50);
-				}
-			}
-		};
-		img.src = url;
 	});
 
 	// ============================================================================
@@ -239,44 +122,47 @@
 	let rotation = $state(0);
 
 	// 根据 zoomMode 计算的基础缩放
-	// 【修复】在过渡期间使用预计算的缩放值，避免横竖图片切换时的视觉跳动
+	// 【修复】使用索引化缓存和预计算缩放，避免切换时的视觉跳动
 	let modeScale = $derived.by(() => {
-		// 【关键修复】如果正在过渡中且有预计算的缩放值，直接使用它
-		// 这样可以避免在图片加载完成前使用错误的尺寸计算缩放
-		if (transitionState?.isTransitioning && transitionState.targetScale > 0) {
-			return transitionState.targetScale;
+		const pageIndex = bookStore.currentPageIndex;
+		
+		// 1. 优先使用预计算的缩放值（从缓存读取）
+		if (viewportSize.width > 0 && viewportSize.height > 0) {
+			const cachedScale = imageStore.getScaleForPage(pageIndex, currentZoomMode, viewportSize);
+			if (cachedScale > 0) {
+				return cachedScale;
+			}
 		}
-
-		// 优先级：loadedImageSize > imageStore.dimensions > bookStore.currentPage
+		
+		// 2. 降级：使用尺寸实时计算
+		const dims = imageStore.getDimensionsForPage(pageIndex);
+		if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
+			return calculateTargetScale(dims, viewportSize, currentZoomMode);
+		}
+		
+		// 3. 最终降级：使用 bookStore 元数据
 		const page = bookStore.currentPage;
-		const storeDims = imageStore.state.dimensions;
-		
-		// 使用最准确的尺寸源（加载后的尺寸最准确，但页面元数据尺寸最快可用）
-		const iw = loadedImageSize?.width ?? storeDims?.width ?? page?.width ?? 0;
-		const ih = loadedImageSize?.height ?? storeDims?.height ?? page?.height ?? 0;
-		
-		if (!iw || !ih || !viewportSize.width || !viewportSize.height) {
-			return 1;
+		if (page?.width && page?.height && viewportSize.width > 0 && viewportSize.height > 0) {
+			return calculateTargetScale(
+				{ width: page.width, height: page.height },
+				viewportSize,
+				currentZoomMode
+			);
 		}
-
-		// 使用统一的缩放计算函数
-		return calculateTargetScale(
-			{ width: iw, height: ih },
-			viewportSize,
-			currentZoomMode
-		);
+		
+		return 1;
 	});
 
 	// 最终缩放 = modeScale * manualScale
 	let effectiveScale = $derived(modeScale * manualScale);
 
 	// 缩放后的实际显示尺寸
-	// 【性能优化】使用与 modeScale 相同的尺寸优先级
+	// 【性能优化】使用索引化缓存获取尺寸
 	let displaySize = $derived.by(() => {
-		const page = bookStore.currentPage;
-		const storeDims = imageStore.state.dimensions;
-		const w = loadedImageSize?.width ?? storeDims?.width ?? page?.width ?? 0;
-		const h = loadedImageSize?.height ?? storeDims?.height ?? page?.height ?? 0;
+		const pageIndex = bookStore.currentPageIndex;
+		const dims = imageStore.getDimensionsForPage(pageIndex);
+		const w = dims?.width ?? 0;
+		const h = dims?.height ?? 0;
 		
 		if (!w || !h) {
 			return { width: 0, height: 0 };
@@ -472,34 +358,17 @@
 	// ============================================================================
 
 	// 获取页面数据的辅助函数
-	// 对于当前页面，优先使用 loadedImageSize（图片加载后的实际尺寸）
+	// 【修复】使用索引化缓存获取尺寸
 	function getPageData(index: number): PageData | null {
 		const book = bookStore.currentBook;
 		if (!book || !book.pages || index < 0 || index >= book.pages.length) {
 			return null;
 		}
-		const page = book.pages[index];
 		
-		// 如果是当前页面，优先使用加载后的实际尺寸
-		let width = page?.width ?? 0;
-		let height = page?.height ?? 0;
-		
-		if (index === bookStore.currentPageIndex) {
-			// 优先使用 loadedImageSize
-			if (loadedImageSize?.width && loadedImageSize?.height) {
-				width = loadedImageSize.width;
-				height = loadedImageSize.height;
-			} else {
-				// 其次使用 imageStore 的尺寸
-				const dims = imageStore.state.dimensions;
-				if (dims?.width && dims?.height) {
-					width = dims.width;
-					height = dims.height;
-				}
-			}
-		}
-		
-		console.log(`📊 getPageData(${index}): width=${width}, height=${height}, isLandscape=${width > height}`);
+		// 使用索引化缓存获取尺寸
+		const dims = imageStore.getDimensionsForPage(index);
+		const width = dims?.width ?? book.pages[index]?.width ?? 0;
+		const height = dims?.height ?? book.pages[index]?.height ?? 0;
 		
 		return {
 			url: '',
@@ -510,23 +379,19 @@
 	}
 
 	// 判断当前页是否为分割页
-	// 优先使用 loadedImageSize（图片加载后的实际尺寸），其次使用页面元数据
+	// 【修复】使用索引化缓存获取尺寸
 	let isCurrentPageSplit = $derived.by(() => {
 		if (pageMode !== 'single' || !splitHorizontalPages) return false;
 		
-		// 优先使用加载后的实际尺寸
-		if (loadedImageSize?.width && loadedImageSize?.height) {
-			return loadedImageSize.width > loadedImageSize.height;
-		}
-		
-		// 其次使用 imageStore 的尺寸
-		const dims = imageStore.state.dimensions;
+		// 使用索引化缓存获取尺寸
+		const pageIndex = bookStore.currentPageIndex;
+		const dims = imageStore.getDimensionsForPage(pageIndex);
 		if (dims?.width && dims?.height) {
 			return dims.width > dims.height;
 		}
 		
-		// 最后使用页面元数据
-		const pageData = getPageData(bookStore.currentPageIndex);
+		// 降级：使用页面元数据
+		const pageData = getPageData(pageIndex);
 		return pageData ? shouldSplitPage(pageData, true) : false;
 	});
 
@@ -575,7 +440,7 @@
 	});
 
 	let currentFrameData = $derived.by((): Frame => {
-		const { currentUrl, secondUrl, dimensions } = imageStore.state;
+		const { currentUrl, secondUrl } = imageStore.state;
 
 		// 全景模式时不使用此组件，由 PanoramaFrameLayer 处理
 		if (isPanorama) {
@@ -584,10 +449,11 @@
 
 		if (!currentUrl) return emptyFrame;
 
-		// 获取尺寸：优先从 loadedImageSize（onload后获取），然后 imageStore，最后 bookStore.currentPage
-		const page = bookStore.currentPage;
-		const width = loadedImageSize?.width ?? dimensions?.width ?? page?.width ?? 0;
-		const height = loadedImageSize?.height ?? dimensions?.height ?? page?.height ?? 0;
+		// 【修复】使用索引化缓存获取尺寸
+		const pageIndex = bookStore.currentPageIndex;
+		const dims = imageStore.getDimensionsForPage(pageIndex);
+		const width = dims?.width ?? bookStore.currentPage?.width ?? 0;
+		const height = dims?.height ?? bookStore.currentPage?.height ?? 0;
 
 		// 构建当前页数据
 		const currentPage: PageData = {
@@ -666,17 +532,15 @@
 		resetScrollPosition();
 	}
 
-	// 图片加载完成回调 - 更新尺寸并触发自动旋转重计算
+	// 图片加载完成回调 - 更新尺寸到缓存和元数据
+	// 【修复】不再使用单一变量，尺寸由 stackImageLoader 缓存管理
 	function handleImageLoad(e: Event, _index: number) {
 		const img = e.target as HTMLImageElement;
 		if (img && img.naturalWidth && img.naturalHeight) {
 			const newWidth = img.naturalWidth;
 			const newHeight = img.naturalHeight;
-			if (loadedImageSize?.width !== newWidth || loadedImageSize?.height !== newHeight) {
-				loadedImageSize = { width: newWidth, height: newHeight };
-			}
 
-			// 更新 MetadataService 中的尺寸信息
+			// 更新 MetadataService 和 bookStore 中的尺寸信息
 			updateMetadataDimensions(newWidth, newHeight);
 		}
 	}
@@ -840,7 +704,6 @@
 				panoramaStore.reset();
 				zoomModeManager.reset();
 				resetScrollPosition();
-				loadedImageSize = null; // 重置尺寸，等待新书第一页加载
 
 				// 通知 upscaleStore 书籍切换
 				upscaleStore.setCurrentBook(currentPath);
@@ -904,6 +767,8 @@
 			const rect = containerRef.getBoundingClientRect();
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
+				// 【新增】同步视口尺寸到 imageStore，用于预计算缩放
+				imageStore.setViewportSize(rect.width, rect.height);
 			}
 		}
 	}

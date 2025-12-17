@@ -64,24 +64,6 @@
 			: `窗口中心 ${$viewerState.pageWindow.center + 1} · 前 ${$viewerState.pageWindow.forward.length} / 后 ${$viewerState.pageWindow.backward.length}`
 	);
 
-	// Dock 放大效果
-	let dockMouseY = $state<number | null>(null);
-	let dockItemRefs = $state<HTMLElement[]>([]);
-
-	function getDockIconScale(index: number): number {
-		// 鼠标不在区域内或元素未初始化时返回 1
-		if (dockMouseY === null) return 1;
-		const el = dockItemRefs[index];
-		if (!el) return 1;
-		const rect = el.getBoundingClientRect();
-		const itemCenterY = rect.top + rect.height / 2;
-		const distance = Math.abs(dockMouseY - itemCenterY);
-		const maxDistance = 60; // 影响范围
-		const maxScale = 1.25; // 最大放大倍数
-		if (distance > maxDistance) return 1;
-		return 1 + (maxScale - 1) * Math.cos((distance / maxDistance) * (Math.PI / 2));
-	}
-
 	// 拖拽调整大小
 	let isResizing = $state(false);
 	let startX = 0;
@@ -233,40 +215,28 @@
 						</div>
 					</Sidebar.Header>
 
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<Sidebar.Content
-						onmousemove={(e: MouseEvent) => (dockMouseY = e.clientY)}
-						onmouseleave={() => (dockMouseY = null)}
-					>
+					<Sidebar.Content>
 						<Sidebar.Group>
 							<Sidebar.GroupContent class="px-0">
 								<Sidebar.Menu>
-									{#each leftPanels as panel, index (panel.id)}
+									{#each leftPanels as panel (panel.id)}
 										{@const Icon = panel.icon}
-										{@const iconScale = getDockIconScale(index)}
-										<div bind:this={dockItemRefs[index]}>
-											<Sidebar.MenuItem>
-												<Sidebar.MenuButton
-													tooltipContentProps={{
-														hidden: false
-													}}
-													onclick={() => handleTabChange(panel.id)}
-													isActive={$activePanel === panel.id}
-													class="px-2"
-												>
-													{#snippet tooltipContent()}
-														{panel.title}
-													{/snippet}
-													<div
-														class="flex items-center justify-center transition-transform duration-150 ease-out"
-														style="transform: scale({iconScale}); transform-origin: center;"
-													>
-														<Icon />
-													</div>
-													<span>{panel.title}</span>
-												</Sidebar.MenuButton>
-											</Sidebar.MenuItem>
-										</div>
+										<Sidebar.MenuItem>
+											<Sidebar.MenuButton
+												tooltipContentProps={{
+													hidden: false
+												}}
+												onclick={() => handleTabChange(panel.id)}
+												isActive={$activePanel === panel.id}
+												class="px-2"
+											>
+												{#snippet tooltipContent()}
+													{panel.title}
+												{/snippet}
+												<Icon />
+												<span>{panel.title}</span>
+											</Sidebar.MenuButton>
+										</Sidebar.MenuItem>
 									{/each}
 								</Sidebar.Menu>
 							</Sidebar.GroupContent>

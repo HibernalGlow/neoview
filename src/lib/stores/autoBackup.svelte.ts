@@ -425,22 +425,24 @@ class AutoBackupStore {
         if (!this.settings.backupPath) return [];
 
         try {
-            const files = await invoke<Array<{
+            // 使用 HTTP API 列出目录文件
+            const response = await apiGet<Array<{
                 name: string;
                 path: string;
                 size: number;
                 modified: number;
-            }>>('list_directory_files', {
-                path: this.settings.backupPath,
-                pattern: 'neoview-backup-*.json'
-            });
+                isDir: boolean;
+            }>>('/directory/list', { path: this.settings.backupPath });
 
-            return files.map(f => ({
-                filename: f.name,
-                path: f.path,
-                size: f.size,
-                timestamp: f.modified
-            }));
+            // 过滤出备份文件
+            return response
+                .filter(f => !f.isDir && f.name.startsWith('neoview-backup-') && f.name.endsWith('.json'))
+                .map(f => ({
+                    filename: f.name,
+                    path: f.path,
+                    size: f.size,
+                    timestamp: f.modified
+                }));
         } catch (e) {
             console.error('[AutoBackup] 列出备份失败:', e);
             return [];
@@ -448,13 +450,126 @@ class AutoBackupStore {
     }
 
     /**
-     * 从备份恢复
+     * 从备份文件路径恢复
      */
     async restoreFromBackup(backupPath: string): Promise<boolean> {
         try {
-            const content = await invoke<string>('read_text_file', { path: backupPath });
+            // 使用 HTTP API 读取文件
+            const { PYTHON_API_BASE } = await import('$lib/api/config');
+            const response = await fetch(`${PYTHON_API_BASE}/file?path=${encodeURIComponent(backupPath)}`);
+            if (!response.ok) {
+                throw new Error(`读取文件失败: ${response.status}`);
+            }
+            const content = await response.text();
             const payload = JSON.parse(content) as FullBackupPayload;
 
+            return this.restoreFromPayload(payload);
+        } catch (e) {
+            console.error('[AutoBackup] 恢复失败:', e);
+            return false;
+        }
+    }
+
+    /**
+     * 选择备份目录（Web 模式下使用输入框）
+     */
+    async selectBackupPath(): Promise<string | null> {
+        // Web 模式：使用 prompt 让用户输入路径
+        const currentPath = this.settings.backupPath || '';
+        const newPath = prompt('请输入备份目录路径:', currentPath);
+        
+        if (newPath && newPath.trim()) {
+            const trimmedPath = newPath.trim();
+            // 尝试创建目录
+            try {
+                await createDirectory(trimmedPath);
+            } catch {
+                // 目录可能已存在，忽略错误
+            }
+            this.updateSettings({ backupPath: trimmedPath });
+            return trimmedPath;
+        }
+        return null;
+    }
+
+    /**
+     * 手动触发备份
+     */
+    async manualBackup(): Promise<boolean> {
+        return this.performBackup('manual');
+    }
+
+    /**
+     * 导出到文件（Web 模式：下载到浏览器）
+     */
+    async exportToFile(): Promise<boolean> {
+        try {
+            const payload = this.buildFullBackupPayload('manual');
+            const json = JSON.stringify(payload, null, 2);
+            
+            // Web 模式：使用浏览器下载
+            const date = new Date();
+            const dateStr = date.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const filename = `neoview-backup-manual-${dateStr}.json`;
+            
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            console.log(`[AutoBackup] 导出成功: ${filename}`);
+            return true;
+        } catch (e) {
+            console.error('[AutoBackup] 导出失败:', e);
+            return false;
+        }
+    }
+
+    /**
+     * 从文件导入（Web 模式：使用文件选择器）
+     */
+    async importFromFile(): Promise<boolean> {
+        return new Promise((resolve) => {
+            // Web 模式：使用 HTML5 文件选择器
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,application/json';
+            
+            input.onchange = async () => {
+                const file = input.files?.[0];
+                if (!file) {
+                    resolve(false);
+                    return;
+                }
+                
+                try {
+                    const content = await file.text();
+                    const payload = JSON.parse(content) as FullBackupPayload;
+                    
+                    // 恢复数据
+                    const success = await this.restoreFromPayload(payload);
+                    resolve(success);
+                } catch (e) {
+                    console.error('[AutoBackup] 导入失败:', e);
+                    resolve(false);
+                }
+            };
+            
+            input.oncancel = () => resolve(false);
+            input.click();
+        });
+    }
+
+    /**
+     * 从 payload 恢复数据（内部方法）
+     */
+    private async restoreFromPayload(payload: FullBackupPayload): Promise<boolean> {
+        try {
             // 恢复 localStorage 数据
             if (payload.rawLocalStorage && typeof window !== 'undefined') {
                 for (const [key, value] of Object.entries(payload.rawLocalStorage)) {
@@ -505,84 +620,6 @@ class AutoBackupStore {
             return true;
         } catch (e) {
             console.error('[AutoBackup] 恢复失败:', e);
-            return false;
-        }
-    }
-
-    /**
-     * 选择备份目录
-     */
-    async selectBackupPath(): Promise<string | null> {
-        try {
-            const { open } = await import('@tauri-apps/plugin-dialog');
-            const selected = await open({
-                directory: true,
-                multiple: false,
-                title: '选择备份目录'
-            });
-            if (selected && typeof selected === 'string') {
-                this.updateSettings({ backupPath: selected });
-                return selected;
-            }
-        } catch (e) {
-            console.error('[AutoBackup] 选择目录失败:', e);
-        }
-        return null;
-    }
-
-    /**
-     * 手动触发备份
-     */
-    async manualBackup(): Promise<boolean> {
-        return this.performBackup('manual');
-    }
-
-    /**
-     * 导出到文件（用户选择位置）
-     */
-    async exportToFile(): Promise<boolean> {
-        try {
-            const { save } = await import('@tauri-apps/plugin-dialog');
-            const date = new Date();
-            const dateStr = date.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            
-            const filepath = await save({
-                defaultPath: `neoview-backup-manual-${dateStr}.json`,
-                filters: [{ name: 'JSON', extensions: ['json'] }]
-            });
-
-            if (!filepath) return false;
-
-            const payload = this.buildFullBackupPayload('manual');
-            const json = JSON.stringify(payload, null, 2);
-            
-            await writeTextFile(filepath, json);
-
-            console.log(`[AutoBackup] 导出成功: ${filepath}`);
-            return true;
-        } catch (e) {
-            console.error('[AutoBackup] 导出失败:', e);
-            return false;
-        }
-    }
-
-    /**
-     * 从文件导入
-     */
-    async importFromFile(): Promise<boolean> {
-        try {
-            const { open } = await import('@tauri-apps/plugin-dialog');
-            const filepath = await open({
-                multiple: false,
-                filters: [{ name: 'JSON', extensions: ['json'] }],
-                title: '选择备份文件'
-            });
-
-            if (!filepath || typeof filepath !== 'string') return false;
-
-            return this.restoreFromBackup(filepath);
-        } catch (e) {
-            console.error('[AutoBackup] 导入失败:', e);
             return false;
         }
     }

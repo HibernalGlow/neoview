@@ -18,10 +18,33 @@
 		revokeSubtitleBlobUrl,
 		type SubtitleData
 	} from '$lib/utils/subtitleUtils';
-	import { apiPost, apiGet, getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
+	import { apiPost, apiGet, getFileUrl as convertFileSrc, getArchiveFileUrl } from '$lib/api/http-bridge';
 	import { dirname, join, basename } from '$lib/api/window';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import type { Page } from '$lib/types';
+
+	// ===== HTTP API 封装（替代 Tauri invoke）=====
+	
+	/** 从压缩包提取视频到临时文件 */
+	async function extractVideoToTemp(archivePath: string, innerPath: string): Promise<string> {
+		return await apiGet<string>('/video/extract-to-temp', {
+			archive_path: archivePath,
+			inner_path: innerPath
+		});
+	}
+	
+	/** 从压缩包读取文本文件 */
+	async function loadTextFromArchive(archivePath: string, innerPath: string): Promise<string> {
+		return await apiGet<string>('/archive/text', {
+			archive_path: archivePath,
+			inner_path: innerPath
+		});
+	}
+	
+	/** 读取本地文本文件 */
+	async function readTextFile(path: string): Promise<string> {
+		return await apiGet<string>('/file/text', { path });
+	}
 
 	// 视频操作事件监听器
 	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
@@ -98,22 +121,11 @@
 				videoStartTime = 0;
 			}
 
-			// 加载视频数据 - 统一使用 convertFileSrc 处理
-			if (videoPage.data) {
-				// 已有 base64 数据（仍使用 Blob URL）
-				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';
-				const blob = await fetch(`data:${mimeType};base64,${videoPage.data}`).then(r => r.blob());
-				if (requestId !== currentVideoRequestId) return;
-				const url = URL.createObjectURL(blob);
-				setVideoUrl(url, true);
-			} else if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
+			// 加载视频数据 - 统一使用 HTTP API 处理
+			if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
 				// 从压缩包加载 - 提取到临时文件后使用 convertFileSrc
 				const archivePath = bookStore.currentBook.path;
-				const tempPath: string = await invoke('extract_video_to_temp', {
-					archivePath,
-					filePath: videoPage.innerPath,
-					traceId: `video-${Date.now()}`
-				});
+				const tempPath = await extractVideoToTemp(archivePath, videoPage.innerPath);
 				if (requestId !== currentVideoRequestId) return;
 				const url = convertFileSrc(tempPath);
 				setVideoUrl(url, false); // 临时文件不需要 revoke
@@ -155,11 +167,7 @@
 
 					if (subPage?.innerPath) {
 						try {
-							const subData: number[] = await invoke('load_text_from_archive', {
-								archivePath,
-								filePath: subPage.innerPath
-							});
-							const content = new TextDecoder('utf-8').decode(new Uint8Array(subData));
+							const content = await loadTextFromArchive(archivePath, subPage.innerPath);
 							const type = getSubtitleType(subPage.innerPath);
 							if (type && content) {
 								subtitleData = parseSubtitleContent(content, type, subPage.innerPath);
@@ -178,7 +186,7 @@
 				for (const subName of possibleNames) {
 					try {
 						const subPath = await join(videoDir, subName);
-						const content: string = await invoke('read_text_file', { path: subPath });
+						const content = await readTextFile(subPath);
 						const type = getSubtitleType(subName);
 						if (type && content) {
 							subtitleData = parseSubtitleContent(content, type, subName);
@@ -359,7 +367,7 @@
 			});
 
 			if (selected && typeof selected === 'string') {
-				const content: string = await invoke('read_text_file', { path: selected });
+				const content = await readTextFile(selected);
 				const filename = await basename(selected);
 				const type = getSubtitleType(filename);
 

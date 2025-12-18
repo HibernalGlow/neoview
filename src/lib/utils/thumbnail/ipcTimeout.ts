@@ -1,9 +1,9 @@
 /**
  * IPC Timeout Utility
- * IPC 调用超时处理工具
+ * HTTP API 调用超时处理工具（已从 Tauri IPC 迁移到 HTTP API）
  */
 
-import { apiPost } from '$lib/api/http-bridge';
+import { apiGet } from '$lib/api/http-bridge';
 
 // 超时时间配置
 // 普通查询：5秒
@@ -13,13 +13,15 @@ export const FOLDER_SCAN_TIMEOUT = 10000; // 10秒文件夹扫描超时
 
 export class IpcTimeoutError extends Error {
 	constructor(command: string, timeout: number) {
-		super(`IPC command '${command}' timed out after ${timeout}ms`);
+		super(`API command '${command}' timed out after ${timeout}ms`);
 		this.name = 'IpcTimeoutError';
 	}
 }
 
 /**
- * 带超时的 IPC 调用
+ * 带超时的 API 调用
+ * 注意：此函数已弃用，请直接使用 apiGet/apiPost
+ * @deprecated 使用 apiGet 或 apiPost 替代
  */
 export async function invokeWithTimeout<T>(
 	command: string,
@@ -32,8 +34,11 @@ export async function invokeWithTimeout<T>(
 		}, timeout);
 	});
 
+	// 将命令转换为 API 端点（简单映射）
+	const endpoint = `/${command.replace(/_/g, '-')}`;
+	
 	return Promise.race([
-		invoke<T>(command, args),
+		apiGet<T>(endpoint, args as Record<string, string | number | boolean>),
 		timeoutPromise
 	]);
 }

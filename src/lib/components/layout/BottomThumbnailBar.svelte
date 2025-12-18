@@ -2,6 +2,9 @@
 	/**
 	 * Bottom Thumbnail Bar
 	 * 底部缩略图栏 - 自动隐藏，鼠标悬停显示
+	 * 
+	 * 【性能优化】使用 HTTP URL 直接加载缩略图，不阻塞主线程
+	 * 浏览器异步加载图片，手势响应不受影响
 	 */
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
@@ -27,6 +30,8 @@
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { getThumbnailUrl as getHttpThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
+	import { isRunningInTauri } from '$lib/api/window';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -77,6 +82,34 @@
 	// 从全局缓存获取缩略图
 	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
 		return thumbnailSnapshot.get(pageIndex) ?? null;
+	}
+
+	/**
+	 * 【性能优化】获取页面的 HTTP 缩略图 URL
+	 * Web 模式下直接返回 HTTP URL，让浏览器异步加载，不阻塞主线程
+	 * 这样打开压缩包时手势可以立即响应，不需要等待缩略图加载完成
+	 */
+	function getPageThumbnailUrl(pageIndex: number): string | null {
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) return null;
+		
+		const page = currentBook.pages?.[pageIndex];
+		if (!page) return null;
+		
+		// Web 模式：使用 HTTP URL，浏览器异步加载
+		if (!isRunningInTauri()) {
+			if (currentBook.type === 'archive') {
+				// 压缩包内文件：传递压缩包路径和内部路径
+				return getHttpThumbnailUrl(page.path, currentBook.path) ?? null;
+			} else {
+				// 普通文件：直接使用文件路径
+				return getHttpThumbnailUrl(page.path) ?? null;
+			}
+		}
+		
+		// Tauri 模式：从缓存获取（保持原有逻辑）
+		const cached = getThumbnailFromCache(pageIndex);
+		return cached?.url ?? null;
 	}
 
 	// 响应钉住状态、锁定状态和 open 状态
@@ -900,6 +933,7 @@
 					{#each getOrderedPages() as page, index (page.path)}
 						{@const originalIndex = page.originalIndex}
 						{@const status = bookStore.getPageUpscaleStatus(originalIndex)}
+						{@const thumbnailUrl = getPageThumbnailUrl(originalIndex)}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<button
@@ -913,7 +947,16 @@
 									onclick={() => jumpToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>
-									{#if getThumbnailFromCache(originalIndex)}
+									{#if thumbnailUrl}
+										<!-- 【性能优化】使用 HTTP URL，浏览器异步加载，不阻塞手势 -->
+										<img
+											src={thumbnailUrl}
+											alt="Page {originalIndex + 1}"
+											class="h-full w-full object-contain"
+											style="object-position: center;"
+											loading="lazy"
+										/>
+									{:else if getThumbnailFromCache(originalIndex)}
 										<img
 											src={getThumbnailFromCache(originalIndex)?.url}
 											alt="Page {originalIndex + 1}"

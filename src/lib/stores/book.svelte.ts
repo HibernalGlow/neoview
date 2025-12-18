@@ -393,37 +393,36 @@ class BookStore {
       return;
     }
 
-    try {
-      console.log(`📄 Navigating to page ${index + 1}/${this.state.currentBook.totalPages}`);
-      await bookApi.navigateToPage(index);
+    console.log(`📄 Navigating to page ${index + 1}/${this.state.currentBook.totalPages}`);
+    
+    // 【性能优化】立即更新本地状态，不等待后端响应
+    // 这样翻页操作可以立即响应，后端同步在后台进行
+    this.state.currentBook.currentPage = index;
+    this.syncAppStateBookSlice('user');
+    this.syncInfoPanelBookInfo();
+    this.showPageSwitchToastIfEnabled();
 
-      // 更新本地状态
-      this.state.currentBook.currentPage = index;
-      this.syncAppStateBookSlice('user');
-      this.syncInfoPanelBookInfo();
+    // 【性能优化】后端同步和历史记录更新在后台进行，不阻塞翻页
+    bookApi.navigateToPage(index).catch(err => {
+      console.error('❌ Error syncing page to backend:', err);
+    });
 
-      // 【单文件模式】更新当前文件路径并添加历史记录
-      if (this.state.singleFileMode) {
-        const currentPage = this.state.currentBook.pages?.[index];
-        if (currentPage) {
-          this.state.originalFilePath = currentPage.path;
-          // 单文件模式下，为每个文件添加/更新历史记录
-          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+    // 历史记录更新也不阻塞
+    if (this.state.singleFileMode) {
+      const currentPage = this.state.currentBook.pages?.[index];
+      if (currentPage) {
+        this.state.originalFilePath = currentPage.path;
+        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
           const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
           const pathStack = this.buildPathStack();
-          unifiedHistoryStore.add(pathStack, index, this.state.currentBook.totalPages, { displayName: name });
-        }
-      } else {
-        // 非单文件模式，更新 book 的历史记录
-        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-        const pathStack = this.buildPathStack();
-        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages);
+          unifiedHistoryStore.add(pathStack, index, this.state.currentBook!.totalPages, { displayName: name });
+        });
       }
-
-      this.showPageSwitchToastIfEnabled();
-    } catch (err) {
-      console.error('❌ Error navigating to page:', err);
-      this.state.error = String(err);
+    } else {
+      import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+        const pathStack = this.buildPathStack();
+        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook!.totalPages);
+      });
     }
   }
 

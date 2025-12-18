@@ -11,13 +11,14 @@ from pathlib import Path
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from models.schemas import ArchiveEntry
 from core.archive_manager import (
     list_archive_contents,
     extract_file,
+    extract_file_stream,
     extract_to_temp,
     delete_zip_entry,
     detect_archive_type,
@@ -57,35 +58,52 @@ async def api_list_archive(
 async def api_extract_file(
     archive_path: str = Query(..., description="压缩包路径"),
     inner_path: str = Query(..., description="压缩包内文件路径"),
+    stream: bool = Query(False, description="是否使用流式响应"),
 ):
     """
     从压缩包提取单个文件
-    【性能优化】使用线程池执行，不阻塞事件循环
+    【性能优化】
+    - 使用线程池执行，不阻塞事件循环
+    - 支持流式响应（stream=true），边解压边传输
     """
     if not Path(archive_path).exists():
         raise HTTPException(status_code=404, detail=f"压缩包不存在: {archive_path}")
     
-    # 标准化内部路径分隔符（ZIP 使用正斜杠）
     normalized_inner_path = inner_path.replace("\\", "/")
+    mime_type = get_mime_type(normalized_inner_path)
     
     try:
-        # 【性能优化】在线程池中执行同步的提取操作
-        loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(
-            _archive_executor,
-            extract_file,
-            archive_path,
-            normalized_inner_path
-        )
-        mime_type = get_mime_type(normalized_inner_path)
-        
-        return Response(
-            content=data,
-            media_type=mime_type,
-            headers={
-                "Content-Disposition": f'inline; filename="{Path(normalized_inner_path).name}"',
-            }
-        )
+        if stream and detect_archive_type(archive_path) == "zip":
+            # 【流式响应】边解压边传输，减少首字节延迟
+            def generate():
+                for chunk in extract_file_stream(archive_path, normalized_inner_path):
+                    yield chunk
+            
+            return StreamingResponse(
+                generate(),
+                media_type=mime_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{Path(normalized_inner_path).name}"',
+                }
+            )
+        else:
+            # 普通响应（使用线程池）
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                _archive_executor,
+                extract_file,
+                archive_path,
+                normalized_inner_path
+            )
+            
+            return Response(
+                content=data,
+                media_type=mime_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{Path(normalized_inner_path).name}"',
+                    "Content-Length": str(len(data)),
+                }
+            )
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"文件不存在: {inner_path}")
     except Exception as e:

@@ -152,7 +152,8 @@ def generate_file_thumbnail(
             category = "video"
         else:
             category = "file"
-        db.save_thumbnail(path_key, thumbnail, st.st_size, int(st.st_mtime), category)
+        # save_thumbnail(key, size, ghash, data, category)
+        db.save_thumbnail(path_key, st.st_size, int(st.st_mtime), thumbnail, category)
         
         return thumbnail
         

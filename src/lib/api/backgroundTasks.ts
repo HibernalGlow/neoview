@@ -1,4 +1,10 @@
-import { invoke } from '$lib/api/adapter';
+/**
+ * NeoView - Background Tasks API
+ * 后台任务相关的 API 接口
+ * 全面使用 Python HTTP API
+ */
+
+import { apiGet, apiPost } from './http-bridge';
 
 export interface FolderScanResult {
 	folder: string;
@@ -32,15 +38,15 @@ export interface CacheMaintenanceResult {
 
 export async function scanFolderThumbnails(folders: string[]): Promise<FolderScanResult[]> {
 	if (folders.length === 0) return [];
-	return invoke<FolderScanResult[]>('scan_folder_thumbnails', { folders });
+	return await apiPost<FolderScanResult[]>('/thumbnail/scan-folders', { folders });
 }
 
 export async function fetchBackgroundQueueMetrics(): Promise<BackgroundQueueMetrics> {
-	return invoke<BackgroundQueueMetrics>('get_background_queue_metrics');
+	return await apiGet<BackgroundQueueMetrics>('/system/background-queue-metrics');
 }
 
 export async function runCacheMaintenance(): Promise<CacheMaintenanceResult> {
-	return invoke<CacheMaintenanceResult>('enqueue_cache_maintenance');
+	return await apiPost<CacheMaintenanceResult>('/system/cache-maintenance');
 }
 
 // ===== Comparison Commands =====
@@ -58,7 +64,7 @@ export interface ComparisonPrepareResponse {
 export async function prepareComparisonPreview(
 	request: ComparisonPrepareRequest
 ): Promise<ComparisonPrepareResponse> {
-	return invoke<ComparisonPrepareResponse>('prepare_comparison_preview', { request });
+	return await apiPost<ComparisonPrepareResponse>('/comparison/prepare', request);
 }
 
 // ===== Archive Batch Scan Commands =====
@@ -77,7 +83,5 @@ export interface ArchiveScanResult {
 
 export async function batchScanArchives(archivePaths: string[]): Promise<ArchiveScanResult[]> {
 	if (archivePaths.length === 0) return [];
-	return invoke<ArchiveScanResult[]>('batch_scan_archives', { archivePaths });
+	return await apiPost<ArchiveScanResult[]>('/archive/batch-scan', { archive_paths: archivePaths });
 }
-
-

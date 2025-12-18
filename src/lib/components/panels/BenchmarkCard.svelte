@@ -3,7 +3,7 @@
 	 * 基准测试卡片
 	 * 用于测试不同图像解码方法的性能
 	 */
-	import { invoke } from '$lib/api/adapter';
+	import { apiPost, apiGet } from '$lib/api/http-bridge';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';

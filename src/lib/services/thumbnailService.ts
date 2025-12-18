@@ -11,8 +11,7 @@
  * - 停留时后台持续加载剩余缩略图
  */
 
-import { listen } from '$lib/api/adapter';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '$lib/api/window';
 import { preloadThumbnails, type ThumbnailReadyEvent } from '$lib/api/pageManager';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';

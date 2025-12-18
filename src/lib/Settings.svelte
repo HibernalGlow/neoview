@@ -3,7 +3,7 @@
 	 * NeoView - Settings Window
 	 * 设置窗口 - 独立窗口外壳，内容复用 SettingsContent
 	 */
-	import { getAppWindow } from '$lib/api/adapter';
+	import { getAppWindow } from '$lib/api/window';
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, X, Minimize } from '@lucide/svelte';
 	import SettingsContent from '$lib/components/SettingsContent.svelte';

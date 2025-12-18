@@ -1,9 +1,10 @@
 /**
  * NeoView - Content API
- * 统一内容管理 Tauri API 封装
+ * 统一内容管理 API 封装
+ * 全面使用 Python HTTP API
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet, apiPost, openBook } from './http-bridge';
 import type { ContentItem, SortMode } from '$lib/types/content';
 import { generateContentId, extractName, inferContentType } from '$lib/types/content';
 
@@ -20,8 +21,8 @@ export async function loadContentItem(path: string, innerPath?: string): Promise
   let finalType = type;
   if (type === 'unknown') {
     try {
-      const isDir = await invoke<boolean>('is_directory', { path });
-      if (isDir) {
+      const info = await apiGet<{ is_dir: boolean }>('/file/info', { path });
+      if (info.is_dir) {
         finalType = 'folder';
       }
     } catch {
@@ -60,35 +61,22 @@ export async function expandContainer(
 ): Promise<ContentItem[]> {
   // 调用后端获取内容列表
   try {
-    const bookInfo = await invoke<{
-      pages: Array<{
-        index: number;
-        path: string;
-        innerPath?: string;
-        name: string;
-        size?: number;
-        width?: number;
-        height?: number;
-        stableHash?: string;
-      }>;
-    }>('open_book', { path });
+    const bookInfo = await openBook(path);
 
     // 转换为 ContentItem[]
     const items = bookInfo.pages.map((page): ContentItem => {
       const type = inferContentType(page.name);
       return {
-        id: generateContentId(page.path, page.innerPath),
+        id: generateContentId(page.path, page.path),
         type,
         path: page.path,
-        innerPath: page.innerPath,
+        innerPath: page.path,
         name: page.name,
         parentRef: innerPath ? { path, innerPath } : { path },
         metadata: {
-          size: page.size,
           width: page.width,
           height: page.height,
         },
-        stableHash: page.stableHash,
       };
     });
 
@@ -113,15 +101,15 @@ export async function expandContainer(
 }
 
 /**
- * 加载页面数据（复用现有 API）
+ * 加载页面数据
  */
 export async function loadPageData(path: string, innerPath?: string): Promise<{
   data: Uint8Array;
   mimeType: string;
 }> {
-  const result = await invoke<{ data: number[]; mime_type: string }>('load_page_data', {
+  const result = await apiPost<{ data: number[]; mime_type: string }>('/page/data', {
     path,
-    innerPath
+    inner_path: innerPath
   });
   return {
     data: new Uint8Array(result.data),

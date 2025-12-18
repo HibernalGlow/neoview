@@ -1,4 +1,4 @@
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 export const preventDefault = <T extends Event>(fn: (e: T) => void): ((e: T) => void) => {
     return (e: T) => {

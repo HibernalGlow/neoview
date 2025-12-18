@@ -10,7 +10,7 @@ import { cacheStats, formatFileSize } from '$lib/stores/upscale/upscalePanelStor
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 let isRefreshing = $state(false);
 let isClearing = $state(false);

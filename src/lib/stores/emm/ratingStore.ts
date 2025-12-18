@@ -6,7 +6,7 @@
  */
 
 import { writable, get } from 'svelte/store';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import type { RatingData } from './types';
 
 // 内存缓存

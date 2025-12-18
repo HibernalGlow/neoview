@@ -1,9 +1,11 @@
 /**
- * NeoView - Image API
+ * NeoView - FS API (原 Image API)
  * 图像加载相关的前端 API 封装
+ * 全面使用 Python HTTP API
  */
 
-import { invoke } from '$lib/api/adapter';
+import { PYTHON_API_BASE } from './config';
+import { apiGet } from './http-bridge';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 
@@ -14,7 +16,7 @@ export interface LoadImageOptions {
 }
 
 /**
- * 加载图片为 Object URL（旧接口，兼容用）
+ * 加载图片为 Object URL
  */
 export async function loadImage(path: string, options: LoadImageOptions = {}): Promise<string> {
 	const { blob } = await loadImageAsBlob(path, options);
@@ -22,30 +24,28 @@ export async function loadImage(path: string, options: LoadImageOptions = {}): P
 }
 
 /**
- * 加载图片为 Blob（推荐，避免重复转换）
+ * 加载图片为 Blob
  */
 export async function loadImageAsBlob(path: string, options: LoadImageOptions = {}): Promise<{ blob: Blob; traceId: string }> {
 	const traceId = options.traceId ?? createImageTraceId('fs', options.pageIndex);
-	logImageTrace(traceId, 'invoke load_image', { path, pageIndex: options.pageIndex, bookPath: options.bookPath });
+	logImageTrace(traceId, 'loading image via HTTP API', { path, pageIndex: options.pageIndex, bookPath: options.bookPath });
 
-	const binaryData = await invoke<number[]>('load_image', {
-		path,
-		traceId,
-		pageIndex: options.pageIndex,
-		bookPath: options.bookPath
-	});
-
-	logImageTrace(traceId, 'load_image resolved', { bytes: binaryData.length });
-
-	// 直接创建 Blob，不创建 URL
-	const blob = new Blob([new Uint8Array(binaryData)]);
-	logImageTrace(traceId, 'blob created', { size: blob.size });
+	const url = `${PYTHON_API_BASE}/file?path=${encodeURIComponent(path)}`;
+	const response = await fetch(url);
+	
+	if (!response.ok) {
+		throw new Error(`Image loading failed: ${response.status}`);
+	}
+	
+	const blob = await response.blob();
+	logImageTrace(traceId, 'blob fetched', { size: blob.size });
 
 	return { blob, traceId };
 }
 
 export async function getImageDimensions(path: string): Promise<[number, number]> {
-	return await invoke<[number, number]>('get_image_dimensions', { path });
+	const result = await apiGet<{ width: number; height: number }>('/dimensions', { path });
+	return [result.width, result.height];
 }
 
 export async function generateThumbnail(
@@ -53,9 +53,10 @@ export async function generateThumbnail(
 	maxWidth: number,
 	maxHeight: number
 ): Promise<string> {
-	return await invoke<string>('generate_thumbnail', { path, maxWidth, maxHeight });
+	// 返回缩略图 URL
+	return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}&max_size=${Math.max(maxWidth, maxHeight)}`;
 }
 
 export async function getFileMetadata(path: string): Promise<FsItem> {
-	return await invoke<FsItem>('get_file_metadata', { path });
+	return await apiGet<FsItem>('/file/info', { path });
 }

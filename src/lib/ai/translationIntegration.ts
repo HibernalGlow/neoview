@@ -6,7 +6,7 @@ import { aiTranslationStore, type TranslationServiceType } from '$lib/stores/ai/
 import { aiApiConfigStore } from '$lib/stores/aiApiConfig.svelte';
 import { createTanStackProvider } from './tanstackAdapter';
 import { translateWithStreaming, translateWithoutStreaming, type StreamingTranslationResult } from './streamingTranslation';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 /**
  * AI 翻译数据库缓存接口

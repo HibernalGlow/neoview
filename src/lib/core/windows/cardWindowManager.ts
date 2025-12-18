@@ -4,8 +4,7 @@
  * Requirements: 1.2, 1.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4
  */
 
-import { emit, listen, isRunningInTauri } from '$lib/api/adapter';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { emit, listen, isRunningInTauri, type UnlistenFn } from '$lib/api/window';
 import { cardRegistry } from '$lib/cards/registry';
 import { 
 	CardWindowTabStore, 

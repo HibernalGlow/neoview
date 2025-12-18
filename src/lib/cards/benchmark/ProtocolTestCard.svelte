@@ -3,7 +3,7 @@
  * 协议测试卡片
  * 测试 file:// 和 convertFileSrc (asset://) 协议的兼容性和速度
  */
-import { convertFileSrc } from '$lib/api/adapter';
+import { getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FileImage, Play, FolderOpen, CheckCircle, XCircle, Clock } from '@lucide/svelte';

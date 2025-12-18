@@ -1,39 +1,40 @@
 /**
  * NeoView - Book API
  * 书籍管理相关的前端 API 封装
+ * 全面使用 Python HTTP API
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet, apiPost, openBook as httpOpenBook, closeBook as httpCloseBook, getCurrentBook as httpGetCurrentBook, navigateToPage as httpNavigateToPage } from './http-bridge';
 import type { BookInfo, PageSortMode } from '../types';
 
 export async function openBook(path: string): Promise<BookInfo> {
-	return await invoke<BookInfo>('open_book', { path });
+	return await httpOpenBook(path);
 }
 
 export async function closeBook(): Promise<void> {
-	return await invoke('close_book');
+	return await httpCloseBook();
 }
 
 export async function getCurrentBook(): Promise<BookInfo | null> {
-	return await invoke<BookInfo | null>('get_current_book');
+	return await httpGetCurrentBook();
 }
 
 export async function navigateToPage(pageIndex: number): Promise<void> {
-	return await invoke('navigate_to_page', { pageIndex });
+	await httpNavigateToPage(pageIndex);
 }
 
 export async function nextPage(): Promise<number> {
-	return await invoke<number>('next_page');
+	return await apiPost<number>('/book/next');
 }
 
 export async function previousPage(): Promise<number> {
-	return await invoke<number>('previous_page');
+	return await apiPost<number>('/book/previous');
 }
 
 export async function navigateToImage(imagePath: string): Promise<number> {
-	return await invoke<number>('navigate_to_image', { imagePath });
+	return await apiPost<number>('/book/navigate-to-image', { image_path: imagePath });
 }
 
 export async function setBookSortMode(sortMode: PageSortMode): Promise<BookInfo> {
-	return await invoke<BookInfo>('set_book_sort_mode', { sortMode });
+	return await apiPost<BookInfo>('/book/sort', { sort_mode: sortMode });
 }

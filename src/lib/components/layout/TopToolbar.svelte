@@ -3,7 +3,7 @@
 	 * Top Toolbar Component
 	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
 	 */
-	import { getAppWindow, isRunningInTauri } from '$lib/api/adapter';
+	import { getAppWindow, isRunningInTauri } from '$lib/api/window';
 	import { Button } from '$lib/components/ui/button';
 	import TitleBarSection from './TitleBarSection.svelte';
 	import * as Separator from '$lib/components/ui/separator';

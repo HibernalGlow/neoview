@@ -3,7 +3,7 @@
  * 加载模式测试卡片
  * 从 BenchmarkPanel 提取
  */
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FolderOpen, Play, Trash2 } from '@lucide/svelte';

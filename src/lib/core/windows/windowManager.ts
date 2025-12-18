@@ -3,8 +3,7 @@
  * 窗口管理器 - 支持应用多开和多窗口管理
  */
 
-import { listen, isRunningInTauri } from '$lib/api/adapter';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { listen, isRunningInTauri, type UnlistenFn } from '$lib/api/window';
 
 export interface WindowInfo {
 	id: string;

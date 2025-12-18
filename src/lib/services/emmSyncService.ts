@@ -4,7 +4,7 @@
  * 实现"一次读取，全部获取"的优化目标
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { writable, get } from 'svelte/store';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';

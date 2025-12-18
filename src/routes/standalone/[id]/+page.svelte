@@ -5,7 +5,7 @@
 	 */
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { getAppWindow } from '$lib/api/adapter';
+	import { getAppWindow } from '$lib/api/window';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Minimize, Maximize } from '@lucide/svelte';
 

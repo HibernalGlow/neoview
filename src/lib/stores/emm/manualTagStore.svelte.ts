@@ -5,7 +5,7 @@
  */
 
 import { writable, get } from 'svelte/store';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { SvelteMap } from 'svelte/reactivity';
 
 const STORAGE_KEY = 'neoview-manual-tags';

@@ -5,7 +5,7 @@
 	 * Requirements: 1.3, 2.2, 6.1, 6.2, 6.3, 6.4
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { getAppWindow } from '$lib/api/adapter';
+	import { getAppWindow } from '$lib/api/window';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Maximize, Minus } from '@lucide/svelte';
 	import { getOrCreateTabStore, type CardWindowTabStore } from '$lib/stores/cardWindowTabStore.svelte';

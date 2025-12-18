@@ -2,7 +2,7 @@
  * Rating 缓存管理器 - 使用 rating_data JSON 字段
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 export interface RatingData {
 	value: number;

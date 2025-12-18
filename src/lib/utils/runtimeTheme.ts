@@ -2,8 +2,7 @@
 // 运行时主题工具：从 localStorage 读取主题并应用到当前 WebView
 // 支持 Tauri 事件广播实现跨窗口同步
 
-import { listen } from '$lib/api/adapter';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '$lib/api/window';
 
 export type RuntimeThemeMode = 'light' | 'dark' | 'system';
 

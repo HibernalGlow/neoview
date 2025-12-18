@@ -3,7 +3,7 @@
 	 * NeoView - Title Bar Component
 	 * 标题栏组件
 	 */
-	import { getAppWindow } from '$lib/api/adapter';
+	import { getAppWindow } from '$lib/api/window';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';

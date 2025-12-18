@@ -3,7 +3,7 @@
 	 * 延迟分析卡片
 	 * 分析图片加载全流程延迟，对比 IPC 和 TempFile 两种方式
 	 */
-	import { invoke, convertFileSrc } from '$lib/api/adapter';
+	import { apiPost, apiGet, getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { FolderOpen, Play, Timer } from '@lucide/svelte';

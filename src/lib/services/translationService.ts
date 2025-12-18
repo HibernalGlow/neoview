@@ -4,7 +4,7 @@
  */
 
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { toast } from 'svelte-sonner';
 import { Command } from '@tauri-apps/plugin-shell';
 import { translateWithTanStack, isTanStackAvailable } from '$lib/ai/translationIntegration';

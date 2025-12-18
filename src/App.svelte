@@ -14,7 +14,7 @@
 	} from '$lib/components/ui/empty';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { open } from '@tauri-apps/plugin-dialog';
-	import { convertFileSrc } from '$lib/api/adapter';
+	import { getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
 	import {
 		bookStore,
 		zoomIn,

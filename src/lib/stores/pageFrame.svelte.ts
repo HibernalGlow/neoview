@@ -5,7 +5,7 @@
  * 支持单页/双页模式、横向页面分割、RTL 阅读方向
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 // ===== 类型定义 =====
 

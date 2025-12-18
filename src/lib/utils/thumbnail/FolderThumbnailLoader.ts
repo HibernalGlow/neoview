@@ -5,7 +5,7 @@
  * - 目录切换时取消旧任务
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import * as FileSystemAPI from '$lib/api/filesystem';
 import type { FsItem } from '$lib/types';
 

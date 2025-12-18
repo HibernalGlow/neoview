@@ -4,7 +4,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet } from '$lib/api/http-bridge';
 import { FileSystemAPI } from '$lib/api';
 
 /**

@@ -3,7 +3,7 @@
  * 自动备份管理系统
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { getStartupConfig } from '$lib/config/startupConfig';
 import { settingsManager } from './settingsManager.svelte';
 import { settingsManager as coreSettingsManager } from '$lib/settings/settingsManager';

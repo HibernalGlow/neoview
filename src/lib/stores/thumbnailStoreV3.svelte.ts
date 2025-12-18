@@ -7,8 +7,8 @@
  * 2. 接收 blob 并显示
  */
 
-import { invoke, listen, isRunningInTauri } from '$lib/api/adapter';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { apiPost, apiGet, getThumbnailUrl as httpGetThumbnailUrl } from '$lib/api/http-bridge';
+import { listen, isRunningInTauri, type UnlistenFn } from '$lib/api/window';
 import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
 

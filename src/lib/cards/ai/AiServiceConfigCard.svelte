@@ -9,7 +9,7 @@ import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type 
 import { testConnection, clearOllamaStatusCache } from '$lib/services/translationService';
 import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen, Play, Power } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { toast } from 'svelte-sonner';
 
 let config = $state(aiTranslationStore.getConfig());

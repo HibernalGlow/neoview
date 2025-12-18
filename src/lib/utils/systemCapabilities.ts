@@ -6,7 +6,7 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet } from '$lib/api/http-bridge';
 
 export interface SystemCapabilities {
   totalMemoryMB: number;

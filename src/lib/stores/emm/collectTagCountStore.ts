@@ -6,7 +6,7 @@
  */
 
 import { writable, get } from 'svelte/store';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { favoriteTagStore, mixedGenderStore } from './favoriteTagStore.svelte';
 
 // 缓存结构

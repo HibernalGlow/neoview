@@ -7,7 +7,7 @@
  * 不再依赖 Tauri IPC
  */
 
-import { convertFileSrc, convertArchiveFileSrc } from '$lib/api/adapter';
+import { getFileUrl as convertFileSrc, getArchiveFileUrl as convertArchiveFileSrc } from '$lib/api/http-bridge';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';

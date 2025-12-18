@@ -5,7 +5,7 @@
  */
 
 import { get } from 'svelte/store';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import type { FsItem } from '$lib/types';
 import {
 	folderTabActions,

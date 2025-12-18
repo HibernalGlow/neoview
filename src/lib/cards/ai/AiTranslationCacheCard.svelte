@@ -5,7 +5,7 @@
 import { Button } from '$lib/components/ui/button';
 import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
 import { Database, Trash2, Download, Upload, RefreshCcw, HardDrive } from '@lucide/svelte';
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { onMount } from 'svelte';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';

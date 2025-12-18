@@ -9,6 +9,9 @@
 
 import { PYTHON_API_BASE, getWsBaseUrl } from './config';
 
+// 重新导出 PYTHON_API_BASE 供其他模块使用
+export { PYTHON_API_BASE };
+
 /**
  * 获取 API 基础 URL
  */

@@ -5,7 +5,7 @@
  * 用于 BookManager 的 setLoadFunctions
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import type { VirtualPage } from './types';
 
 // ============================================================================

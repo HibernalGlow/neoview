@@ -1,9 +1,10 @@
 /**
  * NeoView - Performance API
  * 性能设置相关的 API 接口
+ * 全面使用 Python HTTP API
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet, apiPost } from './http-bridge';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 export interface PerformanceSettings {
@@ -24,7 +25,7 @@ export interface PerformanceSettings {
  * 获取性能设置
  */
 export async function getPerformanceSettings(): Promise<PerformanceSettings> {
-  return await invoke('get_performance_settings');
+  return await apiGet<PerformanceSettings>('/system/performance-settings');
 }
 
 /**
@@ -32,7 +33,7 @@ export async function getPerformanceSettings(): Promise<PerformanceSettings> {
  * 注意：这需要重启应用才能生效
  */
 export async function savePerformanceSettings(settings: PerformanceSettings): Promise<void> {
-  await invoke('save_performance_settings', { settings });
+  await apiPost('/system/performance-settings', settings);
   
   // 提示用户重启应用
   const confirmed = await confirm({
@@ -43,6 +44,7 @@ export async function savePerformanceSettings(settings: PerformanceSettings): Pr
     variant: 'warning'
   });
   if (confirmed) {
-    await invoke('tauri', { __tauriModule: 'Process', message: { cmd: 'restart' } });
+    // Web 模式下刷新页面
+    window.location.reload();
   }
 }

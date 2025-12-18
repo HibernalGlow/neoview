@@ -6,7 +6,7 @@
  * Requirements: 4.2, 4.4
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { perfMonitor } from '$lib/utils/perfMonitor';
 
 export interface BatchRequest {

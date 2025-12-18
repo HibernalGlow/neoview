@@ -2,7 +2,7 @@
  * useTagActions - 标签相关操作
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import {
 	favoriteTagStore,
 	createTagValue,

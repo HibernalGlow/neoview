@@ -18,7 +18,8 @@
 		revokeSubtitleBlobUrl,
 		type SubtitleData
 	} from '$lib/utils/subtitleUtils';
-	import { invoke, convertFileSrc, dirname, join, basename } from '$lib/api/adapter';
+	import { apiPost, apiGet, getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
+	import { dirname, join, basename } from '$lib/api/window';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import type { Page } from '$lib/types';
 

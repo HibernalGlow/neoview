@@ -3,7 +3,7 @@
 	 * 标题栏区域组件
 	 * 包含窗口控制、主题切换、钉住按钮等
 	 */
-	import { getAppWindow } from '$lib/api/adapter';
+	import { getAppWindow } from '$lib/api/window';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';

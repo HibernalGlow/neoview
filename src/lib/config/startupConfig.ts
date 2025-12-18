@@ -2,7 +2,7 @@
  * 启动配置管理
  * 用于前后端共享的配置文件
  */
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 /** 超分条件配置（与后端对应） */
 export interface UpscaleConditionConfig {

@@ -3,7 +3,7 @@
  * 缩略图加载延迟测试卡片
  * 测试文件夹缩略图和图片缩略图的生成延迟
  */
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { Activity, Play, RefreshCw, Folder, Image } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 

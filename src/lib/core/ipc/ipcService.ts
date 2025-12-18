@@ -1,5 +1,5 @@
-import { invoke as tauriInvoke } from '$lib/api/adapter';
-import { listen } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
+import { listen } from '$lib/api/window';
 
 type CommandMap = Record<string, (...args: any[]) => Promise<unknown>>;
 

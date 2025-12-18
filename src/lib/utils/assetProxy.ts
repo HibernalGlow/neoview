@@ -1,4 +1,4 @@
-import { convertFileSrc } from '$lib/api/adapter';
+import { getFileUrl as convertFileSrc } from '$lib/api/http-bridge';
 
 /**
  * 将可能的本地路径/文件URL规范化为可以在前端直接使用的 asset URL。

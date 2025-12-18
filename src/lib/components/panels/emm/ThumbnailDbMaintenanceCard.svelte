@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invoke } from '$lib/api/adapter';
+	import { apiPost, apiGet, apiDelete } from '$lib/api/http-bridge';
 	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, Loader2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';

@@ -1,9 +1,11 @@
 /**
  * NeoView - File Index API
  * 文件索引相关的 API 接口
+ * 全面使用 Python HTTP API
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiGet, apiPost, apiDelete } from './http-bridge';
+import type { FsItem } from '$lib/types';
 
 export interface IndexStats {
   totalFiles: number;
@@ -17,7 +19,7 @@ export interface IndexStats {
  * 初始化文件索引
  */
 export async function initializeFileIndex(): Promise<void> {
-  return invoke('initialize_file_index');
+  await apiPost('/index/initialize');
 }
 
 /**
@@ -26,35 +28,21 @@ export async function initializeFileIndex(): Promise<void> {
  * @param recursive 是否递归索引子目录
  */
 export async function buildFileIndex(path: string, recursive: boolean = true): Promise<void> {
-  return invoke('build_file_index', { path, recursive });
+  await apiPost('/index/build', { path, recursive });
 }
 
 /**
  * 获取索引统计信息
  */
 export async function getIndexStats(): Promise<IndexStats> {
-  return invoke('get_index_stats');
+  return await apiGet<IndexStats>('/index/stats');
 }
 
 /**
  * 清除文件索引
  */
 export async function clearFileIndex(): Promise<void> {
-  return invoke('clear_file_index');
-}
-
-/**
- * 搜索索引中的文件和文件夹
- * @param query 搜索查询字符串
- * @param maxResults 最大结果数量
- * @param options 搜索选项
- */
-export async function searchInIndex(
-  query: string,
-  maxResults: number = 100,
-  options?: SearchInIndexOptions
-): Promise<FsItem[]> {
-  return invoke('search_in_index', { query, maxResults, options });
+  await apiDelete('/index/clear');
 }
 
 /**
@@ -78,6 +66,20 @@ export interface SearchInIndexOptions {
 }
 
 /**
+ * 搜索索引中的文件和文件夹
+ * @param query 搜索查询字符串
+ * @param maxResults 最大结果数量
+ * @param options 搜索选项
+ */
+export async function searchInIndex(
+  query: string,
+  maxResults: number = 100,
+  options?: SearchInIndexOptions
+): Promise<FsItem[]> {
+  return await apiPost<FsItem[]>('/index/search', { query, max_results: maxResults, options });
+}
+
+/**
  * 获取索引中的文件路径列表
  * @param path 父路径（可选）
  * @param recursive 是否递归获取子目录
@@ -86,7 +88,7 @@ export async function getIndexedPaths(
   path?: string,
   recursive: boolean = false
 ): Promise<string[]> {
-  return invoke('get_indexed_paths', { path, recursive });
+  return await apiGet<string[]>('/index/paths', { path, recursive });
 }
 
 /**
@@ -94,14 +96,7 @@ export async function getIndexedPaths(
  * @param path 要检查的路径
  */
 export async function isPathIndexed(path: string): Promise<boolean> {
-  return invoke('is_path_indexed', { path });
-}
-
-/**
- * 获取索引进度
- */
-export async function getIndexProgress(): Promise<IndexProgress> {
-  return invoke('get_index_progress');
+  return await apiGet<boolean>('/index/is-indexed', { path });
 }
 
 /**
@@ -112,4 +107,11 @@ export interface IndexProgress {
   processedFiles: number;
   totalFiles: number;
   isRunning: boolean;
+}
+
+/**
+ * 获取索引进度
+ */
+export async function getIndexProgress(): Promise<IndexProgress> {
+  return await apiGet<IndexProgress>('/index/progress');
 }

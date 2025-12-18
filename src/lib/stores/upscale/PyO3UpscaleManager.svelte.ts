@@ -3,7 +3,7 @@
  * 使用 PyO3 调用 Python sr_vulkan 进行超分的管理器
  */
 
-import { invoke } from '$lib/api/adapter';
+import { apiPost, apiGet } from '$lib/api/http-bridge';
 
 export interface PyO3UpscaleModel {
 	modelId: number;

@@ -1,7 +1,13 @@
 """
 缩略图 API
 提供缩略图生成、缓存管理等功能
+
+【性能优化】
+- 使用线程池执行 CPU 密集型操作，不阻塞事件循环
+- 缩略图生成在后台线程执行，不影响其他请求
 """
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
@@ -19,6 +25,9 @@ from db.thumbnail_db import get_thumbnail_db
 
 router = APIRouter()
 
+# 【性能优化】缩略图生成线程池（不阻塞主事件循环）
+_thumbnail_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="thumbnail_")
+
 
 class BatchThumbnailRequest(BaseModel):
     """批量缩略图请求"""
@@ -33,6 +42,18 @@ class VisibleThumbnailsRequest(BaseModel):
     center_index: int
 
 
+def _generate_thumbnail_sync(path: str, inner_path: Optional[str], max_size: int) -> Optional[bytes]:
+    """
+    同步生成缩略图（在线程池中执行）
+    """
+    if inner_path:
+        from core.thumbnail_generator import generate_image_thumbnail
+        image_data = extract_file(path, inner_path)
+        return generate_image_thumbnail(image_data, max_size)
+    else:
+        return generate_file_thumbnail(path, max_size)
+
+
 @router.get("/thumbnail")
 async def get_thumbnail(
     path: str = Query(..., description="文件路径"),
@@ -44,20 +65,24 @@ async def get_thumbnail(
     - 检查 SQLite 缓存
     - 生成 WebP 格式缩略图
     - 支持文件/压缩包/视频
+    
+    【性能优化】在线程池中执行，不阻塞事件循环
     """
     if not Path(path).exists():
         raise HTTPException(status_code=404, detail=f"文件不存在: {path}")
     
-    # 如果指定了 inner_path，从压缩包提取
-    if inner_path:
-        try:
-            from core.thumbnail_generator import generate_image_thumbnail
-            image_data = extract_file(path, inner_path)
-            thumbnail = generate_image_thumbnail(image_data, max_size)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"生成缩略图失败: {e}")
-    else:
-        thumbnail = generate_file_thumbnail(path, max_size)
+    try:
+        # 【性能优化】在线程池中执行缩略图生成，不阻塞其他请求
+        loop = asyncio.get_event_loop()
+        thumbnail = await loop.run_in_executor(
+            _thumbnail_executor,
+            _generate_thumbnail_sync,
+            path,
+            inner_path,
+            max_size
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成缩略图失败: {e}")
     
     if not thumbnail:
         raise HTTPException(status_code=404, detail="无法生成缩略图")

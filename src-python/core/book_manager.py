@@ -131,7 +131,7 @@ class BookManager:
         pages = []
         
         for entry in entries:
-            if entry.is_image:
+            if entry.isImage:
                 pages.append(PageInfo(
                     path=entry.path,
                     name=entry.name,

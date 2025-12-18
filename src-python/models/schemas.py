@@ -18,6 +18,11 @@ class FileEntry(BaseModel):
     isArchive: bool
     isVideo: bool
     isEpub: bool = False
+    # 文件夹统计（仅对文件夹有效）
+    folderCount: Optional[int] = None
+    imageCount: Optional[int] = None
+    archiveCount: Optional[int] = None
+    videoCount: Optional[int] = None
 
 
 class FileInfo(BaseModel):

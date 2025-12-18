@@ -111,7 +111,7 @@ def generate_archive_thumbnail(
     
     # 找到第一张图片
     for entry in entries:
-        if entry.is_image:
+        if entry.isImage:
             try:
                 image_data = extract_file(archive_path, entry.path)
                 return generate_image_thumbnail(image_data, max_size)

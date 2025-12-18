@@ -138,6 +138,32 @@ def list_directory(
                 if filter_supported and not is_dir and not is_supported_file(str(item)):
                     continue
                 
+                # 计算文件夹统计
+                folder_count = None
+                image_count = None
+                archive_count = None
+                video_count = None
+                
+                if is_dir:
+                    try:
+                        folder_count = 0
+                        image_count = 0
+                        archive_count = 0
+                        video_count = 0
+                        for sub in item.iterdir():
+                            if sub.name.startswith('.'):
+                                continue
+                            if sub.is_dir():
+                                folder_count += 1
+                            elif is_image_file(str(sub)):
+                                image_count += 1
+                            elif is_archive_file(str(sub)):
+                                archive_count += 1
+                            elif is_video_file(str(sub)):
+                                video_count += 1
+                    except (OSError, PermissionError):
+                        pass
+                
                 entry = FileEntry(
                     name=item.name,
                     path=str(item.absolute()),
@@ -149,6 +175,10 @@ def list_directory(
                     isArchive=is_archive_file(str(item)) if not is_dir else False,
                     isVideo=is_video_file(str(item)) if not is_dir else False,
                     isEpub=is_epub_file(str(item)) if not is_dir else False,
+                    folderCount=folder_count,
+                    imageCount=image_count,
+                    archiveCount=archive_count,
+                    videoCount=video_count,
                 )
                 entries.append(entry)
             except (OSError, PermissionError):

@@ -9,7 +9,7 @@
  * 4. 关闭超分时清除所有超分图，回退到原图
  */
 
-import { apiPost, apiGet, getFileUrl } from '$lib/api/http-bridge';
+import { apiPost, getFileUrl } from '$lib/api/http-bridge';
 import { listen, type UnlistenFn } from '$lib/api/window';
 const convertFileSrc = getFileUrl;
 import { SvelteMap } from 'svelte/reactivity';
@@ -175,7 +175,7 @@ class UpscaleStore {
 
     // 初始化后端服务（后端从 config.json 读取缓存目录）
     try {
-      await invoke('upscale_service_init');
+      await apiPost('/upscale/init');
       console.log('✅ 后端 UpscaleService 初始化完成');
     } catch (err) {
       console.error('❌ 后端 UpscaleService 初始化失败:', err);
@@ -207,7 +207,7 @@ class UpscaleStore {
       // 1. 同步超分开关
       if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
         this.state.enabled = panelSettings.autoUpscaleEnabled;
-        await invoke('upscale_service_set_enabled', { enabled: panelSettings.autoUpscaleEnabled });
+        await apiPost('/upscale/enabled', { enabled: panelSettings.autoUpscaleEnabled });
         console.log('✅ 同步超分开关:', panelSettings.autoUpscaleEnabled);
       }
       
@@ -257,7 +257,7 @@ class UpscaleStore {
       }
       
       // 传递给后端
-      await invoke('upscale_service_sync_conditions', {
+      await apiPost('/upscale/conditions', {
         enabled: panelSettings.conditionalUpscaleEnabled ?? false, // 默认禁用条件超分，让全局开关生效
         conditions: (panelSettings.conditionsList ?? []).map(c => ({
           id: c.id,
@@ -306,7 +306,7 @@ class UpscaleStore {
     this.state.enabled = enabled;
 
     try {
-      await invoke('upscale_service_set_enabled', { enabled });
+      await apiPost('/upscale/enabled', { enabled });
 
       if (!enabled) {
         // 禁用时清除所有超分图，回退到原图
@@ -488,7 +488,7 @@ class UpscaleStore {
     this.state.currentBookPath = bookPath;
 
     try {
-      await invoke('upscale_service_set_current_book', { bookPath });
+      await apiPost('/upscale/current-book', { book_path: bookPath });
     } catch (err) {
       console.error('设置当前书籍失败:', err);
     }
@@ -501,7 +501,7 @@ class UpscaleStore {
     this.state.currentPageIndex = pageIndex;
 
     try {
-      await invoke('upscale_service_set_current_page', { pageIndex });
+      await apiPost('/upscale/current-page', { page_index: pageIndex });
 
       // 检查是否已有超分结果
       const status = this.state.pageStatus.get(pageIndex);
@@ -512,30 +512,32 @@ class UpscaleStore {
     }
   }
 
-  /** 请求超分（手动触发） */
+  /** 请求超分（手动触发）
+   * @param _imageHash 图片哈希（保留参数，用于缓存键）
+   * @param _priority 优先级（保留参数，用于队列排序）
+   */
   async requestUpscale(
     bookPath: string,
     pageIndex: number,
     imagePath: string,
-    imageHash: string,
-    priority: 'current' | 'preload' = 'current',
+    // 保留参数用于 API 兼容性
+    _imageHash?: string,
+    _priority?: 'current' | 'preload',
   ) {
+    void _imageHash;
+    void _priority;
     if (!this.state.enabled) return;
 
     // 从 upscalePanelStore 获取当前模型设置
-    const { selectedModel, scale, tileSize, noiseLevel } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
+    const { selectedModel, scale } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
 
     try {
-      await invoke('upscale_service_request', {
-        bookPath,
-        pageIndex,
-        imagePath,
-        imageHash,
-        priority,
-        modelName: selectedModel.value,
+      await apiPost('/upscale/request', {
+        image_path: imagePath,
+        book_path: bookPath,
+        page_index: pageIndex,
+        model: selectedModel.value,
         scale: scale.value,
-        tileSize: tileSize.value,
-        noiseLevel: noiseLevel.value,
       });
 
       // 更新状态
@@ -555,24 +557,11 @@ class UpscaleStore {
     if (!this.state.enabled) return;
 
     try {
-      // 后端期望 request 对象，字段使用 camelCase
-      // 不传递模型配置，由后端根据条件匹配决定
-      await invoke('upscale_service_request_preload_range', {
-        request: {
-          bookPath,
-          centerIndex,
-          totalPages,
-          imageInfos: imageInfos.map(info => ({
-            pageIndex: info.pageIndex,
-            imagePath: info.imagePath,
-            hash: info.hash,
-          })),
-          // 模型配置由后端条件匹配决定，不传默认值
-          modelName: null,
-          scale: null,
-          tileSize: null,
-          noiseLevel: null,
-        },
+      // 使用 HTTP API 请求预加载范围
+      await apiPost('/upscale/preload-range', {
+        book_path: bookPath,
+        start_index: Math.min(...imageInfos.map(i => i.pageIndex)),
+        end_index: Math.max(...imageInfos.map(i => i.pageIndex)),
       });
     } catch (err) {
       console.error('请求预加载范围失败:', err);
@@ -582,7 +571,7 @@ class UpscaleStore {
   /** 取消指定页面的超分 */
   async cancelPage(bookPath: string, pageIndex: number) {
     try {
-      await invoke('upscale_service_cancel_page', { bookPath, pageIndex });
+      await apiPost('/upscale/cancel-job', { job_key: `${bookPath}_${pageIndex}` });
     } catch (err) {
       console.error('取消页面超分失败:', err);
     }
@@ -591,7 +580,7 @@ class UpscaleStore {
   /** 取消当前书籍的所有超分 */
   async cancelBook(bookPath: string) {
     try {
-      await invoke('upscale_service_cancel_book', { bookPath });
+      await apiPost('/upscale/cancel-book', { book_path: bookPath });
       this.clearAll();
     } catch (err) {
       console.error('取消书籍超分失败:', err);
@@ -601,7 +590,7 @@ class UpscaleStore {
   /** 清除缓存 */
   async clearCache(bookPath?: string) {
     try {
-      await invoke('upscale_service_clear_cache', { bookPath: bookPath ?? null });
+      await apiPost('/upscale/clear-cache', { book_path: bookPath ?? null });
 
       if (!bookPath || bookPath === this.state.currentBookPath) {
         this.clearAll();
@@ -614,25 +603,20 @@ class UpscaleStore {
   /** 刷新统计信息 */
   async refreshStats() {
     try {
-      const stats = await invoke<{
-        memoryCacheCount: number;
-        memoryCacheBytes: number;
-        pendingTasks: number;
-        processingTasks: number;
-        completedCount: number;
-        skippedCount: number;
-        failedCount: number;
-        isEnabled: boolean;
-      }>('upscale_service_get_stats');
+      const stats = await apiPost<{
+        total_items?: number;
+        total_size?: number;
+        hit_rate?: number;
+      }>('/upscale/cache-stats');
 
+      // Web 模式下统计信息有限
       this.state.stats = {
-        pendingTasks: stats.pendingTasks,
-        processingTasks: stats.processingTasks,
-        completedCount: stats.completedCount,
-        skippedCount: stats.skippedCount,
-        failedCount: stats.failedCount,
+        pendingTasks: 0,
+        processingTasks: 0,
+        completedCount: stats?.total_items ?? 0,
+        skippedCount: 0,
+        failedCount: 0,
       };
-      this.state.enabled = stats.isEnabled;
     } catch (err) {
       console.error('刷新统计失败:', err);
     }

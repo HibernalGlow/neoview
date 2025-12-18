@@ -14,6 +14,7 @@ from send2trash import send2trash
 from PIL import Image
 import io
 
+from pydantic import BaseModel
 from models.schemas import FileInfo
 
 router = APIRouter()
@@ -172,11 +173,16 @@ async def read_text_file(
         raise HTTPException(status_code=500, detail=f"读取失败: {e}")
 
 
+class PathRequest(BaseModel):
+    """路径请求"""
+    path: str
+
+
 @router.post("/file/mkdir")
-async def create_directory(path: str = Query(..., description="目录路径")):
+async def create_directory(request: PathRequest):
     """创建目录"""
     try:
-        Path(path).mkdir(parents=True, exist_ok=True)
+        Path(request.path).mkdir(parents=True, exist_ok=True)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建目录失败: {e}")
@@ -201,93 +207,99 @@ async def delete_path(path: str = Query(..., description="路径")):
         raise HTTPException(status_code=500, detail=f"删除失败: {e}")
 
 
+class RenameRequest(BaseModel):
+    """重命名请求"""
+    from_path: str
+    to_path: str
+
+
 @router.post("/file/rename")
-async def rename_path(
-    from_path: str = Query(..., description="原路径"),
-    to_path: str = Query(..., description="新路径")
-):
+async def rename_path(request: RenameRequest):
     """重命名文件或目录"""
-    p = Path(from_path)
+    p = Path(request.from_path)
     
     if not p.exists():
-        raise HTTPException(status_code=404, detail=f"路径不存在: {from_path}")
+        raise HTTPException(status_code=404, detail=f"路径不存在: {request.from_path}")
     
     try:
-        p.rename(to_path)
+        p.rename(request.to_path)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重命名失败: {e}")
 
 
 @router.post("/file/trash")
-async def move_to_trash(path: str = Query(..., description="路径")):
+async def move_to_trash(request: PathRequest):
     """移动到回收站"""
-    p = Path(path)
+    p = Path(request.path)
     
     if not p.exists():
-        raise HTTPException(status_code=404, detail=f"路径不存在: {path}")
+        raise HTTPException(status_code=404, detail=f"路径不存在: {request.path}")
     
     try:
-        send2trash(path)
+        send2trash(request.path)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"移动到回收站失败: {e}")
 
 
 
+class WriteFileRequest(BaseModel):
+    """写入文件请求"""
+    path: str
+    content: str
+    encoding: str = "utf-8"
+
+
 @router.post("/file/write")
-async def write_text_file(
-    path: str = Query(..., description="文件路径"),
-    content: str = Query(..., description="文件内容"),
-    encoding: str = Query("utf-8", description="编码")
-):
+async def write_text_file(request: WriteFileRequest):
     """写入文本文件"""
     try:
-        p = Path(path)
+        p = Path(request.path)
         # 确保父目录存在
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding=encoding)
+        p.write_text(request.content, encoding=request.encoding)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"写入失败: {e}")
 
 
+class CopyMoveRequest(BaseModel):
+    """复制/移动请求"""
+    from_path: str
+    to_path: str
+
+
 @router.post("/file/copy")
-async def copy_path(
-    from_path: str = Query(..., description="源路径"),
-    to_path: str = Query(..., description="目标路径")
-):
+async def copy_path(request: CopyMoveRequest):
     """复制文件或目录"""
     import shutil
     
-    p = Path(from_path)
+    p = Path(request.from_path)
     if not p.exists():
-        raise HTTPException(status_code=404, detail=f"路径不存在: {from_path}")
+        raise HTTPException(status_code=404, detail=f"路径不存在: {request.from_path}")
     
     try:
         if p.is_dir():
-            shutil.copytree(from_path, to_path)
+            shutil.copytree(request.from_path, request.to_path)
         else:
-            shutil.copy2(from_path, to_path)
+            shutil.copy2(request.from_path, request.to_path)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复制失败: {e}")
 
 
 @router.post("/file/move")
-async def move_path(
-    from_path: str = Query(..., description="源路径"),
-    to_path: str = Query(..., description="目标路径")
-):
+async def move_path(request: CopyMoveRequest):
     """移动文件或目录"""
     import shutil
     
-    p = Path(from_path)
+    p = Path(request.from_path)
     if not p.exists():
-        raise HTTPException(status_code=404, detail=f"路径不存在: {from_path}")
+        raise HTTPException(status_code=404, detail=f"路径不存在: {request.from_path}")
     
     try:
-        shutil.move(from_path, to_path)
+        shutil.move(request.from_path, request.to_path)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"移动失败: {e}")

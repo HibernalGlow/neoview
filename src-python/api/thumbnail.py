@@ -123,7 +123,7 @@ async def get_thumbnail_stats() -> dict:
 
 class PreloadPagesRequest(BaseModel):
     """预加载页面缩略图请求"""
-    indices: list[int] = []
+    indices: Optional[list[Optional[int]]] = []
     centerIndex: Optional[int] = None
     maxSize: int = DEFAULT_MAX_SIZE
 
@@ -131,9 +131,10 @@ class PreloadPagesRequest(BaseModel):
 @router.post("/thumbnail/preload-pages")
 async def preload_page_thumbnails(request: PreloadPagesRequest) -> dict:
     """预加载页面缩略图（用于阅读器底部缩略图栏）"""
-    # 这里只是占位实现，实际需要根据当前打开的书籍获取页面路径
+    # 过滤掉 None 值
+    valid_indices = [i for i in (request.indices or []) if i is not None]
     return {
         "success": True,
-        "requested": len(request.indices),
+        "requested": len(valid_indices),
         "centerIndex": request.centerIndex,
     }

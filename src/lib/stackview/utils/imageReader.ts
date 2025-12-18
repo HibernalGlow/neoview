@@ -2,16 +2,15 @@
  * StackView 图片读取模块
  * 负责从文件系统或压缩包读取图片数据
  * 
- * 【纯内存方案】
- * 1. 文件系统图片：使用 asset:// 协议
- * 2. 压缩包图片：使用二进制 IPC
+ * 【HTTP 方案】
+ * 1. 文件系统图片：通过 Python HTTP API 获取
+ * 2. 压缩包图片：通过 Python HTTP API 提取
  * 
  * 【延迟追踪】记录加载耗时到 infoPanelStore
  */
 
-import { convertFileSrc, isRunningInTauri, convertArchiveFileSrc } from '$lib/api/adapter';
+import { convertFileSrc, convertArchiveFileSrc } from '$lib/api/adapter';
 import { bookStore } from '$lib/stores/book.svelte';
-import { loadImageFromArchiveAsBlob } from '$lib/api/filesystem';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 
@@ -27,6 +26,7 @@ export interface ReadPageOptions {
 
 /**
  * 读取页面图片为 Blob
+ * 直接通过 HTTP API 获取，绕过 Tauri IPC
  */
 export async function readPageBlob(pageIndex: number, options: ReadPageOptions = {}): Promise<ReadResult> {
   const { updateLatencyTrace = true } = options;
@@ -44,46 +44,31 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
     throw new Error(`页面 ${pageIndex} 不存在: 页面信息为空`);
   }
 
+  const loadStart = performance.now();
   let blob: Blob;
-  let loadMs = 0;
+  let url: string;
 
   if (currentBook.type === 'archive') {
-    const loadStart = performance.now();
-    
-    // Web 模式：直接使用 HTTP API
-    if (!isRunningInTauri()) {
-      const url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Archive fetch failed: ${response.status}`);
-      }
-      blob = await response.blob();
-    } else {
-      // Tauri 模式：使用二进制 IPC
-      const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-        pageIndex
-      });
-      blob = result.blob;
-    }
-    loadMs = performance.now() - loadStart;
+    // 压缩包：通过 HTTP API 提取
+    url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
   } else {
-    // 文件系统：使用 asset:// 协议或 HTTP API
-    const loadStart = performance.now();
-    const assetUrl = convertFileSrc(pageInfo.path);
-    const response = await fetch(assetUrl);
-    if (!response.ok) {
-      throw new Error(`Asset fetch failed: ${response.status}`);
-    }
-    blob = await response.blob();
-    loadMs = performance.now() - loadStart;
+    // 文件系统：通过 HTTP API 获取
+    url = convertFileSrc(pageInfo.path);
   }
 
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`图片加载失败: ${response.status} - ${url}`);
+  }
+  blob = await response.blob();
+  
+  const loadMs = performance.now() - loadStart;
   const totalMs = performance.now() - startTime;
 
   // 更新延迟追踪
   if (updateLatencyTrace) {
     const latencyTrace: LatencyTrace = {
-      dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+      dataSource: 'http',
       renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
       loadMs,
       totalMs,

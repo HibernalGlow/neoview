@@ -2,26 +2,18 @@
  * 图片读取模块
  * 负责从文件系统或压缩包读取图片数据
  * 
- * 【双模式支持】
- * 1. IPC 模式：二进制 IPC + Blob（内存缓存）
- * 2. Tempfile 模式：解压到临时文件 + asset:// 协议
- * 
- * 【优化】
- * - 并行预加载 ±5 页到后端缓存
- * - Web Worker 解码避免阻塞主线程
+ * 【HTTP 方案】
+ * 统一通过 Python HTTP API 获取图片 blob
+ * 不再依赖 Tauri IPC
  */
 
-import { convertFileSrc, invoke, isRunningInTauri } from '$lib/api/adapter';
+import { convertFileSrc, convertArchiveFileSrc } from '$lib/api/adapter';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
-import * as pm from '$lib/api/pageManager';
-
-// Tempfile 模式缓存（URL -> blob）
-const tempfileCache = new Map<string, { url: string; blob: Blob }>();
-const TEMPFILE_CACHE_LIMIT = 100;
+import { PYTHON_API_BASE } from '$lib/api/config';
 
 export interface ReadResult {
 	blob: Blob;
@@ -30,38 +22,27 @@ export interface ReadResult {
 
 // 预加载状态跟踪
 let lastPreloadedPage = -1;
-const PRELOAD_RANGE = 5; // ±5 页
+const PRELOAD_RANGE = 5;
 
-// PageManager 书籍同步状态（避免重复检查）
-let lastSyncedBookPath: string | null = null;
-
-// 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function preExtractArchive(_archivePath: string): Promise<string | null> {
-	// 简化：不再预解压到文件，直接使用内存方案
 	return null;
 }
 
 export function clearExtractCache(): void {
-	// 重置预加载状态
 	lastPreloadedPage = -1;
-	// 重置 PageManager 同步状态
-	lastSyncedBookPath = null;
 }
 
 /**
- * 【优化】触发并行预加载邻近页面
- * 异步执行，不阻塞当前加载
+ * 触发并行预加载邻近页面
  */
 async function triggerParallelPreload(currentPage: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook || currentBook.type !== 'archive') return;
 	
-	// 避免频繁触发
 	if (Math.abs(currentPage - lastPreloadedPage) < 3) return;
 	lastPreloadedPage = currentPage;
 	
-	// 计算需要预加载的页面范围
 	const totalPages = currentBook.pages.length;
 	const startPage = Math.max(0, currentPage - PRELOAD_RANGE);
 	const endPage = Math.min(totalPages - 1, currentPage + PRELOAD_RANGE);
@@ -75,7 +56,6 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	
 	if (pagePaths.length === 0) return;
 	
-	// 异步预加载，不等待结果
 	try {
 		const { preloadArchivePages } = await import('$lib/api/filesystem');
 		preloadArchivePages(currentBook.path, pagePaths).catch(err => {
@@ -87,21 +67,18 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 }
 
 export interface ReadPageOptions {
-	/** 是否更新延迟追踪显示（仅当前页需要） */
 	updateLatencyTrace?: boolean;
 }
 
 /**
  * 读取页面图片为 Blob
- * 【纯内存方案】优先使用最快的方式获取数据到内存
- * 【追踪】记录链路延迟到 infoPanelStore（仅当前页）
+ * 统一通过 HTTP API 获取
  */
 export async function readPageBlob(pageIndex: number, options: ReadPageOptions = {}): Promise<ReadResult> {
 	const { updateLatencyTrace = true } = options;
 	const startTime = performance.now();
 	const currentBook = bookStore.currentBook;
 	
-	// 【关键】详细验证，防止切书后加载不存在的页面
 	if (!currentBook) {
 		throw new Error(`页面 ${pageIndex} 不存在: 没有打开的书籍`);
 	}
@@ -120,100 +97,47 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 		bookType: currentBook.type
 	});
 
-	let blob: Blob;
-	let cacheHit = false;
-	let loadMs = 0;
+	const loadStart = performance.now();
+	let url: string;
 
 	if (currentBook.type === 'archive') {
-		const cacheKey = `${currentBook.path}::${pageInfo.path}`;
-		
-		// 检查 Tempfile 缓存
-		const cached = tempfileCache.get(cacheKey);
-		if (cached) {
-			logImageTrace(traceId, 'tempfile cache hit', { cacheKey });
-			blob = cached.blob;
-			cacheHit = true;
-		} else if (loadModeStore.isTempfileMode) {
-			// Tempfile 模式：解压到临时文件 + asset:// 协议
-			logImageTrace(traceId, 'using tempfile mode');
-			const loadStart = performance.now();
-			
-			const tempPath = await invoke<string>('extract_image_to_temp', {
-				archivePath: currentBook.path,
-				filePath: pageInfo.path,
-				traceId,
-				pageIndex
-			});
-			
-			const assetUrl = convertFileSrc(tempPath);
-			logImageTrace(traceId, 'tempfile asset url', { assetUrl });
-			
-			const response = await fetch(assetUrl);
-			if (!response.ok) {
-				throw new Error(`Tempfile fetch failed: ${response.status}`);
-			}
-			blob = await response.blob();
-			loadMs = performance.now() - loadStart;
-			
-			// 存入缓存
-			if (tempfileCache.size >= TEMPFILE_CACHE_LIMIT) {
-				// 简单 LRU：删除最早的
-				const firstKey = tempfileCache.keys().next().value;
-				if (firstKey) tempfileCache.delete(firstKey);
-			}
-			tempfileCache.set(cacheKey, { url: assetUrl, blob });
-		} else {
-			// IPC 模式：使用二进制 IPC（最快的首次加载）
-			logImageTrace(traceId, 'using ipc mode');
-			const loadStart = performance.now();
-			const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
-			const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-				traceId,
-				pageIndex
-			});
-			blob = result.blob;
-			loadMs = performance.now() - loadStart;
-		}
+		// 压缩包：通过 HTTP API 提取
+		url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
 	} else if (currentBook.type === 'epub') {
-		// EPUB：使用 IPC 加载（内部图片不能直接用 asset://）
-		logImageTrace(traceId, 'using ipc mode for epub');
-		const loadStart = performance.now();
-		const { loadImage } = await import('$lib/api/filesystem');
-		const data = await loadImage(pageInfo.path, { traceId, pageIndex });
-		blob = new Blob([data]);
-		loadMs = performance.now() - loadStart;
+		// EPUB：通过专门的 EPUB API
+		url = `${PYTHON_API_BASE}/epub/page?path=${encodeURIComponent(currentBook.path)}&page=${encodeURIComponent(pageInfo.path)}`;
 	} else {
-		// 文件系统：使用 asset:// 协议
-		const assetUrl = convertFileSrc(pageInfo.path);
-		logImageTrace(traceId, 'using asset protocol', { assetUrl });
-		const loadStart = performance.now();
-		
-		const response = await fetch(assetUrl);
-		if (!response.ok) {
-			throw new Error(`Asset fetch failed: ${response.status}`);
-		}
-		blob = await response.blob();
-		loadMs = performance.now() - loadStart;
+		// 文件系统：通过 HTTP API 获取
+		url = convertFileSrc(pageInfo.path);
 	}
 
+	logImageTrace(traceId, 'fetching from HTTP API', { url });
+	
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`图片加载失败: ${response.status}`);
+	}
+	const blob = await response.blob();
+	
+	const loadMs = performance.now() - loadStart;
 	const totalMs = performance.now() - startTime;
-	logImageTrace(traceId, 'readPageBlob blob ready', { size: blob.size, loadMs, totalMs });
+	
+	logImageTrace(traceId, 'readPageBlob complete', { size: blob.size, loadMs, totalMs });
 
-	// 更新链路延迟追踪（仅当前页，避免预加载干扰显示）
 	if (updateLatencyTrace) {
 		const latencyTrace: LatencyTrace = {
-			dataSource: loadModeStore.isTempfileMode ? 'tempfile' : 'blob',
+			dataSource: 'http',
 			renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
 			loadMs,
 			totalMs,
-			cacheHit,
+			cacheHit: false,
 			dataSize: blob.size,
 			traceId
 		};
 		infoPanelStore.setLatencyTrace(latencyTrace);
 	}
 
-	// 【优化】触发并行预加载（异步，不阻塞当前加载）
+	// 触发并行预加载
 	triggerParallelPreload(pageIndex);
 
 	return { blob, traceId };
@@ -221,20 +145,17 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 
 /**
  * 获取图片尺寸
- * 【优化】优先使用 Web Worker 解码，避免阻塞主线程
  */
 export async function getImageDimensions(blob: Blob): Promise<{ width: number; height: number } | null> {
-	// 优先尝试 Worker 解码
 	try {
 		const { decodeImageInWorker } = await import('$lib/workers/imageDecoderManager');
 		const result = await decodeImageInWorker(blob);
-		result.bitmap.close(); // 释放 ImageBitmap
+		result.bitmap.close();
 		return { width: result.width, height: result.height };
 	} catch {
 		// Worker 失败，回退到主线程
 	}
 
-	// 回退：使用 Image 元素
 	return new Promise((resolve) => {
 		const url = URL.createObjectURL(blob);
 		const img = new Image();
@@ -252,8 +173,7 @@ export async function getImageDimensions(blob: Blob): Promise<{ width: number; h
 }
 
 /**
- * 【优化】预解码图片到 ImageBitmap
- * 在 Worker 中解码，返回 ImageBitmap 可直接用于 Canvas
+ * 预解码图片到 ImageBitmap
  */
 export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 	try {
@@ -261,7 +181,6 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 		const result = await decodeImageInWorker(blob);
 		return result.bitmap;
 	} catch {
-		// Worker 失败，尝试主线程
 		try {
 			return await createImageBitmap(blob);
 		} catch {
@@ -271,10 +190,7 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 }
 
 /**
- * 【新系统】使用 PageManager 读取页面
- * 后端自动处理缓存和预加载，减少 IPC 调用
- * 
- * @param isCurrentPage 是否是当前页（true=gotoPage触发预加载，false=getPage不触发）
+ * V2 版本 - 使用 PageManager（兼容接口）
  */
 export async function readPageBlobV2(
 	pageIndex: number, 
@@ -286,97 +202,72 @@ export async function readPageBlobV2(
 	
 	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex, isCurrentPage });
 	
-	try {
-		// 检查 PageManager 是否已打开书籍（使用缓存避免重复 IPC）
-		const currentBook = bookStore.currentBook;
-		if (!currentBook) {
-			throw new Error('没有打开的书籍');
-		}
-		
-		// 书籍同步计时
-		let bookSyncMs = 0;
-		if (lastSyncedBookPath !== currentBook.path) {
-			const syncStart = performance.now();
-			logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
-			await pm.openBook(currentBook.path);
-			lastSyncedBookPath = currentBook.path;
-			bookSyncMs = performance.now() - syncStart;
-		}
-		
-		// IPC 调用计时（后端处理 + 网络传输）
-		const ipcStart = performance.now();
-		
-		// 使用 Raw 版本获取 ArrayBuffer，分离 Blob 创建时间
-		const buffer = isCurrentPage 
-			? await pm.gotoPageRaw(pageIndex)
-			: await pm.getPageRaw(pageIndex);
-		
-		const ipcMs = performance.now() - ipcStart;
-		
-		// Blob 创建计时
-		const blobStart = performance.now();
-		const blob = new Blob([buffer]);
-		const blobCreateMs = performance.now() - blobStart;
-		
-		const totalMs = performance.now() - startTime;
-		
-		logImageTrace(traceId, 'readPageBlobV2 complete', { 
-			size: blob.size, 
-			bookSyncMs,
-			ipcMs,
-			blobCreateMs,
-			totalMs 
-		});
-		
-		// 记录到 pipelineLatencyStore
-		pipelineLatencyStore.record({
-			timestamp: Date.now(),
-			pageIndex,
-			traceId,
-			bookSyncMs,
-			backendLoadMs: ipcMs,
-			ipcTransferMs: ipcMs,
-			blobCreateMs,
-			totalMs,
-			dataSize: blob.size,
-			cacheHit: false,
-			isCurrentPage,
-			source: isCurrentPage ? 'current' : 'preload'
-		});
-		
-		// 异步触发后端预加载（不阻塞当前请求）
-		if (isCurrentPage) {
-			invoke('pm_trigger_preload').catch(() => {});
-		}
-		
-		// 更新延迟追踪（兼容旧系统）
-		if (updateLatencyTrace) {
-			const latencyTrace: LatencyTrace = {
-				dataSource: 'blob',
-				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs: ipcMs,
-				totalMs,
-				cacheHit: false,
-				dataSize: blob.size,
-				traceId
-			};
-			infoPanelStore.setLatencyTrace(latencyTrace);
-		}
-		
-		return { blob, traceId };
-	} catch (error) {
-		logImageTrace(traceId, 'readPageBlobV2 error', { error: String(error) });
-		throw error;
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) {
+		throw new Error('没有打开的书籍');
 	}
+	
+	const pageInfo = currentBook.pages[pageIndex];
+	if (!pageInfo) {
+		throw new Error(`页面 ${pageIndex} 不存在`);
+	}
+
+	const loadStart = performance.now();
+	let url: string;
+
+	if (currentBook.type === 'archive') {
+		url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
+	} else {
+		url = convertFileSrc(pageInfo.path);
+	}
+
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`图片加载失败: ${response.status}`);
+	}
+	const blob = await response.blob();
+	
+	const loadMs = performance.now() - loadStart;
+	const totalMs = performance.now() - startTime;
+	
+	logImageTrace(traceId, 'readPageBlobV2 complete', { size: blob.size, loadMs, totalMs });
+	
+	// 记录到 pipelineLatencyStore
+	pipelineLatencyStore.record({
+		timestamp: Date.now(),
+		pageIndex,
+		traceId,
+		bookSyncMs: 0,
+		backendLoadMs: loadMs,
+		ipcTransferMs: loadMs,
+		blobCreateMs: 0,
+		totalMs,
+		dataSize: blob.size,
+		cacheHit: false,
+		isCurrentPage,
+		source: isCurrentPage ? 'current' : 'preload'
+	});
+	
+	if (updateLatencyTrace) {
+		const latencyTrace: LatencyTrace = {
+			dataSource: 'http',
+			renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+			loadMs,
+			totalMs,
+			cacheHit: false,
+			dataSize: blob.size,
+			traceId
+		};
+		infoPanelStore.setLatencyTrace(latencyTrace);
+	}
+	
+	return { blob, traceId };
 }
 
 /**
  * 创建缩略图 DataURL
- * 如果 blob 已经是小图片（< 100KB），直接转换为 data URL，无需 canvas 重绘
- * 后端已返回正确尺寸的 webp 缩略图
  */
 export async function createThumbnailDataURL(blob: Blob, height: number = 120): Promise<string> {
-	// 小于 100KB 的图片直接转换为 data URL（后端返回的 webp 缩略图通常很小）
 	if (blob.size < 100 * 1024) {
 		return new Promise<string>((resolve, reject) => {
 			const reader = new FileReader();
@@ -386,7 +277,6 @@ export async function createThumbnailDataURL(blob: Blob, height: number = 120): 
 		});
 	}
 
-	// 大图片才需要 canvas 缩放
 	const imageUrl = URL.createObjectURL(blob);
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d')!;

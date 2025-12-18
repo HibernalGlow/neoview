@@ -21,14 +21,16 @@ from core.fs_manager import is_image_file, is_video_file
 # 压缩包索引缓存 (最多 100 个，TTL 1 小时)
 _archive_cache: TTLCache = TTLCache(maxsize=100, ttl=3600)
 
-# 【性能优化】压缩包句柄缓存 (最多 5 个，避免重复打开大文件)
-_archive_handle_cache: LRUCache = LRUCache(maxsize=5)
+# 【性能优化】压缩包句柄缓存 (最多 10 个，避免重复打开大文件)
+# 增加到 10 个以支持更多并发访问
+_archive_handle_cache: LRUCache = LRUCache(maxsize=10)
 _handle_lock = threading.Lock()
 
-# 【性能优化】提取数据缓存 (最多 50MB，缓存最近提取的文件)
-_extract_cache: LRUCache = LRUCache(maxsize=100)
+# 【性能优化】提取数据缓存 (最多 200MB，缓存最近提取的文件)
+# 增加缓存大小以支持更多预加载
+_extract_cache: LRUCache = LRUCache(maxsize=200)
 _extract_cache_size = 0
-_MAX_EXTRACT_CACHE_SIZE = 50 * 1024 * 1024  # 50MB
+_MAX_EXTRACT_CACHE_SIZE = 200 * 1024 * 1024  # 200MB
 
 
 def _get_cached_zip_handle(path: str) -> zipfile.ZipFile:

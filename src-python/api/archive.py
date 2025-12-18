@@ -27,8 +27,8 @@ from api.files import get_mime_type
 router = APIRouter()
 
 # 【性能优化】线程池用于执行同步的压缩包操作
-# 使用 4 个线程，允许并行提取多个文件
-_archive_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="archive_")
+# 使用 8 个线程，允许更多并行提取（压缩包 I/O 密集型）
+_archive_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="archive_")
 
 
 @router.get("/archive/list")

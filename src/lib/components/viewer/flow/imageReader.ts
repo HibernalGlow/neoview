@@ -191,6 +191,7 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 
 /**
  * V2 版本 - 使用 PageManager（兼容接口）
+ * 【性能优化】当前页加载时立即触发后台预加载
  */
 export async function readPageBlobV2(
 	pageIndex: number, 
@@ -217,6 +218,11 @@ export async function readPageBlobV2(
 
 	if (currentBook.type === 'archive') {
 		url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
+		
+		// 【性能优化】当前页加载时立即触发后台预加载（不等待）
+		if (isCurrentPage) {
+			triggerParallelPreload(pageIndex);
+		}
 	} else {
 		url = convertFileSrc(pageInfo.path);
 	}

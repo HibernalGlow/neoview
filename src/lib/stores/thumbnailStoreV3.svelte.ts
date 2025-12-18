@@ -5,9 +5,12 @@
  * 前端极简设计：
  * 1. 通知后端可见区域
  * 2. 接收 blob 并显示
+ * 
+ * 【性能优化】
+ * - 支持请求取消：切书时取消所有进行中的缩略图请求
+ * - 使用 fetch + AbortController 替代 <img src>
  */
 
-import { apiPost, apiGet, getThumbnailUrl as httpGetThumbnailUrl } from '$lib/api/http-bridge';
 import { listen, isRunningInTauri, type UnlistenFn } from '$lib/api/window';
 import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
@@ -16,6 +19,20 @@ import { PYTHON_API_BASE } from '$lib/api/config';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();
+
+// 【性能优化】Web 模式缩略图缓存 (cacheKey -> blob URL)
+const webThumbnailCache = new SvelteMap<string, string>();
+
+// 【性能优化】当前书本路径（用于取消旧请求）
+let currentBookPath: string | null = null;
+
+// 【性能优化】进行中的请求 AbortController
+let currentAbortController: AbortController | null = null;
+
+// 【性能优化】请求队列和并发控制
+const pendingRequests = new Map<string, Promise<string | null>>();
+const MAX_CONCURRENT_REQUESTS = 4;
+let activeRequestCount = 0;
 
 // 路径转换：统一使用正斜杠作为 key
 function toRelativeKey(path: string): string {
@@ -224,26 +241,156 @@ export async function cancelThumbnailRequests(dir: string): Promise<void> {
 }
 
 /**
+ * 生成缩略图缓存 key
+ */
+function makeCacheKey(path: string, archivePath?: string): string {
+  if (archivePath) {
+    return `${archivePath}::${path}`;
+  }
+  return path;
+}
+
+/**
+ * 生成缩略图 HTTP URL
+ */
+function makeHttpUrl(path: string, archivePath?: string): string {
+  if (archivePath) {
+    return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(archivePath)}&inner_path=${encodeURIComponent(path)}`;
+  }
+  return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
+}
+
+/**
+ * 【性能优化】切换书本时调用，取消所有进行中的缩略图请求
+ */
+export function setCurrentBook(bookPath: string | null): void {
+  if (currentBookPath === bookPath) return;
+  
+  console.log(`🖼️ ThumbnailStoreV3: 切换书本 ${currentBookPath} -> ${bookPath}`);
+  currentBookPath = bookPath;
+  
+  // 取消所有进行中的请求
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+  
+  // 清空请求队列
+  pendingRequests.clear();
+  activeRequestCount = 0;
+  
+  // 创建新的 AbortController
+  currentAbortController = new AbortController();
+  
+  // 清空旧书的缩略图缓存（释放内存）
+  for (const url of webThumbnailCache.values()) {
+    URL.revokeObjectURL(url);
+  }
+  webThumbnailCache.clear();
+}
+
+/**
+ * 【性能优化】使用 fetch 加载缩略图（可取消）
+ * 返回 blob URL，失败返回 null
+ */
+async function fetchThumbnail(
+  path: string, 
+  archivePath?: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const cacheKey = makeCacheKey(path, archivePath);
+  
+  // 检查缓存
+  const cached = webThumbnailCache.get(cacheKey);
+  if (cached) return cached;
+  
+  // 检查是否已有进行中的请求
+  const pending = pendingRequests.get(cacheKey);
+  if (pending) return pending;
+  
+  // 并发控制
+  while (activeRequestCount >= MAX_CONCURRENT_REQUESTS) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+    // 检查是否被取消
+    if (signal?.aborted) return null;
+  }
+  
+  activeRequestCount++;
+  
+  const url = makeHttpUrl(path, archivePath);
+  
+  const requestPromise = (async (): Promise<string | null> => {
+    try {
+      const response = await fetch(url, { signal });
+      if (!response.ok) {
+        console.warn(`缩略图加载失败: ${response.status} ${url}`);
+        return null;
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // 存入缓存
+      webThumbnailCache.set(cacheKey, blobUrl);
+      
+      return blobUrl;
+    } catch (err) {
+      // 忽略取消错误
+      if (err instanceof Error && err.name === 'AbortError') {
+        return null;
+      }
+      console.warn(`缩略图加载错误: ${err}`);
+      return null;
+    } finally {
+      activeRequestCount--;
+      pendingRequests.delete(cacheKey);
+    }
+  })();
+  
+  pendingRequests.set(cacheKey, requestPromise);
+  return requestPromise;
+}
+
+/**
  * 获取缩略图 URL（同步）
  * - Tauri 模式：从本地缓存获取
- * - Web 模式：直接返回 HTTP URL
+ * - Web 模式：从缓存获取，如果没有则返回 undefined（需要异步加载）
  * 
  * @param path 文件路径（对于普通文件是完整路径，对于压缩包内文件是内部路径）
  * @param archivePath 压缩包路径（可选，如果提供则表示是压缩包内的文件）
  */
 export function getThumbnailUrl(path: string, archivePath?: string): string | undefined {
-  // Web 模式：直接返回 HTTP URL
+  // Web 模式：从缓存获取
   if (!isRunningInTauri()) {
-    if (archivePath) {
-      // 压缩包内文件：使用 archive_path 和 inner_path 参数
-      return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(archivePath)}&inner_path=${encodeURIComponent(path)}`;
+    const cacheKey = makeCacheKey(path, archivePath);
+    const cached = webThumbnailCache.get(cacheKey);
+    if (cached) return cached;
+    
+    // 触发异步加载（不阻塞）
+    if (currentAbortController) {
+      fetchThumbnail(path, archivePath, currentAbortController.signal).catch(() => {});
     }
-    // 普通文件：直接使用 path
-    return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
+    
+    // 返回 HTTP URL 作为 fallback（让浏览器加载）
+    return makeHttpUrl(path, archivePath);
   }
   
   // Tauri 模式：从本地缓存获取
   return thumbnails.get(path);
+}
+
+/**
+ * 【性能优化】异步获取缩略图（可取消）
+ * 用于需要等待加载完成的场景
+ */
+export async function getThumbnailUrlAsync(
+  path: string, 
+  archivePath?: string
+): Promise<string | null> {
+  if (!isRunningInTauri()) {
+    return fetchThumbnail(path, archivePath, currentAbortController?.signal);
+  }
+  return thumbnails.get(path) ?? null;
 }
 
 /**

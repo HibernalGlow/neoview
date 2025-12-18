@@ -13,6 +13,8 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+// 【性能优化】导入缩略图 store，用于切书时取消请求
+import { setCurrentBook as setThumbnailCurrentBook } from './thumbnailStoreV3.svelte';
 
 // 从子模块导入
 import {
@@ -237,6 +239,9 @@ class BookStore {
       // 初始化路径栈
       this.state.pathStack = [{ path }];
       infoPanelStore.resetAll();
+      
+      // 【性能优化】切书时取消所有进行中的缩略图请求
+      setThumbnailCurrentBook(path);
 
       // 使用通用的 openBook API (它会自动检测类型)
       const book = await bookApi.openBook(path);
@@ -308,6 +313,9 @@ class BookStore {
     this.lastEmmMetadataForCurrentBook = null;
     this.state.upscaledImageData = null;
     infoPanelStore.resetAll();
+
+    // 【性能优化】取消所有进行中的缩略图请求
+    setThumbnailCurrentBook(null);
 
     // 重置页面超分状态
     this.resetAllPageUpscaleStatus();

@@ -201,3 +201,8 @@
 - [x] 修复 `browse_directory_internal` 等函数移除不必要的 async
 - [x] 合并重复的 match arms（消除 clippy 警告）
 - [x] 内联 format 字符串（消除 clippy 警告）
+- [x] 修复 axum 路由语法：`{command}` 改为 `:command`
+- [x] 添加 `get_file_metadata` 命令（复用 `get_file_info_internal`）
+- [x] 添加 `list_subfolders` 命令和 `list_subfolders_internal` 函数
+- [x] 修复 `listSubfolders` 前端 null 检查
+- [x] 添加 `get_home_dir` 命令，修复 Web 模式下 homeDir 返回值

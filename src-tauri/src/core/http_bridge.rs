@@ -274,6 +274,26 @@ async fn execute_command(
             Ok(serde_json::to_value(info).unwrap_or_default())
         }
         
+        // get_file_metadata - 与 get_file_info 相同，返回 FsItem 格式
+        "get_file_metadata" => {
+            let path = args.get("path")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing path parameter")?;
+            
+            let info = get_file_info_internal(path)?;
+            Ok(info)
+        }
+        
+        // list_subfolders - 列出子文件夹
+        "list_subfolders" => {
+            let path = args.get("path")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing path parameter")?;
+            
+            let subfolders = list_subfolders_internal(path)?;
+            Ok(serde_json::to_value(subfolders).unwrap_or_default())
+        }
+        
         // ===== Book 命令 =====
         "get_current_book" => {
             let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
@@ -415,6 +435,15 @@ async fn execute_command(
             }))
         }
         
+        // 获取用户主目录
+        "get_home_dir" => {
+            // Windows: USERPROFILE, Unix: HOME
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_else(|_| "C:\\".to_string());
+            Ok(serde_json::Value::String(home))
+        }
+        
         // 默认：命令未实现，返回 null 而不是错误
         _ => {
             log::warn!("HTTP Bridge: 未实现的命令 '{command}', 返回 null");
@@ -498,6 +527,35 @@ fn get_file_info_internal(path: &str) -> Result<serde_json::Value, String> {
         "size": metadata.len(),
         "readonly": metadata.permissions().readonly(),
     }))
+}
+
+/// 列出子文件夹（用于 FolderTree）
+fn list_subfolders_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
+    let path = std::path::Path::new(path);
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+    
+    let mut subfolders = Vec::new();
+    let read_dir = std::fs::read_dir(path).map_err(|e| e.to_string())?;
+    
+    for entry in read_dir.flatten() {
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            // 检查是否有子目录
+            let has_children = std::fs::read_dir(&entry_path)
+                .map(|rd| rd.filter_map(Result::ok).any(|e| e.path().is_dir()))
+                .unwrap_or(false);
+            
+            subfolders.push(serde_json::json!({
+                "path": entry_path.to_string_lossy(),
+                "name": entry.file_name().to_string_lossy(),
+                "hasChildren": has_children
+            }));
+        }
+    }
+    
+    Ok(subfolders)
 }
 
 /// 加载图片为 base64

@@ -99,6 +99,13 @@ export interface SubfolderItem {
  */
 export async function listSubfolders(path: string): Promise<SubfolderItem[]> {
   const items = await invoke<SubfolderItem[]>('list_subfolders', { path });
+  
+  // 处理 null 或无效响应（Web 模式下可能发生）
+  if (!items || !Array.isArray(items)) {
+    console.warn('[listSubfolders] 收到无效响应，返回空数组:', items);
+    return [];
+  }
+  
   // 过滤排除路径
   return items.filter(item => !isPathExcluded(item.path));
 }

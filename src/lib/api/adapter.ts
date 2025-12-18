@@ -267,9 +267,16 @@ export async function homeDir(): Promise<string> {
         return tauriHomeDir();
     }
     
-    // Web 模式：返回根目录或通过 API 获取
-    // 浏览器无法直接获取用户主目录，返回一个默认值
-    return '/';
+    // Web 模式：尝试通过 API 获取，或返回 Windows 默认路径
+    try {
+        const result = await invoke<string>('get_home_dir');
+        if (result) return result;
+    } catch {
+        // 忽略错误
+    }
+    
+    // 返回 Windows 常见的默认路径
+    return 'C:\\';
 }
 
 /**

@@ -16,8 +16,6 @@
 	let explorerContextMenuEnabled = $state(false);
 	let explorerContextMenuLoading = $state(true);
 	let explorerContextMenuError: string | null = $state(null);
-	let explorerContextMenuInitialized = $state(false);
-	let explorerContextMenuSyncing = $state(false);
 	let currentSettings = $state(settingsManager.getSettings());
 
 	onMount(async () => {
@@ -36,30 +34,25 @@
 		currentSettings = s;
 	});
 
-	$effect(() => {
-		if (explorerContextMenuLoading || explorerContextMenuSyncing) return;
-		if (!explorerContextMenuInitialized) {
-			explorerContextMenuInitialized = true;
-			return;
-		}
-		// 用户切换开关时，同步到后端
-		void toggleExplorerContextMenu(explorerContextMenuEnabled);
-	});
-
-	async function toggleExplorerContextMenu(value: boolean) {
+	// 用户手动切换开关时调用（不使用 $effect 避免无限循环）
+	async function handleExplorerContextMenuToggle(value: boolean) {
+		// Web 模式下此功能不可用，直接返回
+		if (explorerContextMenuLoading) return;
+		
 		const previous = explorerContextMenuEnabled;
 		explorerContextMenuEnabled = value;
 		explorerContextMenuError = null;
-		explorerContextMenuSyncing = true;
+		
 		try {
 			const result = await FileSystemAPI.setExplorerContextMenuEnabled(value);
-			explorerContextMenuEnabled = result;
+			// 只有当结果与当前值不同时才更新，避免不必要的状态变化
+			if (result !== explorerContextMenuEnabled) {
+				explorerContextMenuEnabled = result;
+			}
 		} catch (err) {
 			console.error('更新资源管理器上下文菜单失败:', err);
 			explorerContextMenuEnabled = previous;
 			explorerContextMenuError = '更新失败，请检查权限';
-		} finally {
-			explorerContextMenuSyncing = false;
 		}
 	}
 
@@ -215,7 +208,8 @@
 				<label class="flex items-center justify-between gap-2">
 					<span class="text-sm">在资源管理器右键菜单中添加“在 NeoView 中打开”</span>
 					<Switch
-						bind:checked={explorerContextMenuEnabled}
+						checked={explorerContextMenuEnabled}
+						onCheckedChange={handleExplorerContextMenuToggle}
 						disabled={explorerContextMenuLoading}
 					/>
 				</label>

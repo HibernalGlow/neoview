@@ -188,5 +188,16 @@
 
 - [ ] 14. Final Checkpoint - 端到端测试
   - Ensure all tests pass, ask the user if questions arise.
-  - 测试: 启动应用后，用浏览器访问 http://localhost:3456
+  - 测试: 启动应用后，用浏览器访问 http://localhost:3457
   - 验证: 文件浏览、图片查看、缩略图加载都正常工作
+
+## Bug 修复记录
+
+- [x] 修复 `load_directory_snapshot` 返回数据格式问题
+  - 字段名 `isDirectory` 改为 `isDir`（与前端 FsItem 类型匹配）
+  - 添加 `isImage` 字段
+- [x] 修复 `filesystem.ts` 中 null 检查
+  - `loadDirectorySnapshot` 添加 null/undefined 防护
+- [x] 修复 `browse_directory_internal` 等函数移除不必要的 async
+- [x] 合并重复的 match arms（消除 clippy 警告）
+- [x] 内联 format 字符串（消除 clippy 警告）

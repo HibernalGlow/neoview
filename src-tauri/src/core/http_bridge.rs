@@ -127,8 +127,9 @@ pub async fn start_api_server(
     log::info!("📁 前端目录: {}", dist_dir.display());
     
     // 构建路由
+    // 注意：axum 0.7 使用 :param 语法，而不是 {param}
     let mut app = Router::new()
-        .route("/api/invoke/{command}", post(handle_invoke))
+        .route("/api/invoke/:command", post(handle_invoke))
         .route("/api/asset", get(handle_asset))
         .route("/api/events", get(handle_events))
         .route("/api/health", get(handle_health));
@@ -137,7 +138,8 @@ pub async fn start_api_server(
     if config.serve_frontend && dist_dir.exists() {
         log::info!("📦 启用前端静态文件服务: {}", dist_dir.display());
         
-        // 使用 tower-http 的 ServeDir
+        // 使用 tower-http 的 ServeDir，配置 fallback 到 index.html 用于 SPA 路由
+        // 注意：API 路由已经在上面定义，会优先匹配
         let serve_dir = tower_http::services::ServeDir::new(&dist_dir)
             .append_index_html_on_directories(true)
             .fallback(tower_http::services::ServeFile::new(dist_dir.join("index.html")));
@@ -150,7 +152,7 @@ pub async fn start_api_server(
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     
-    log::info!("🌐 API Server 启动: http://{}", addr);
+    log::info!("🌐 API Server 启动: http://{addr}");
     
     axum::serve(listener, app).await?;
     
@@ -171,6 +173,8 @@ async fn handle_invoke(
     Path(command): Path<String>,
     body: String,
 ) -> impl IntoResponse {
+    log::info!("📥 HTTP invoke: {command}");
+    
     // 解析请求体为 JSON
     let args: serde_json::Value = if body.is_empty() {
         serde_json::Value::Object(serde_json::Map::new())
@@ -235,8 +239,21 @@ async fn execute_command(
                 .ok_or("Missing path parameter")?;
             
             // 直接使用文件系统操作
-            let entries = browse_directory_internal(path).await?;
+            let entries = browse_directory_internal(path)?;
             Ok(serde_json::to_value(entries).unwrap_or_default())
+        }
+        
+        "load_directory_snapshot" => {
+            let path = args.get("path")
+                .and_then(|v| v.as_str())
+                .ok_or("Missing path parameter")?;
+            
+            // 返回目录快照格式
+            let items = browse_directory_internal(path)?;
+            Ok(serde_json::json!({
+                "items": items,
+                "cached": false
+            }))
         }
         
         "read_directory" => {
@@ -244,7 +261,7 @@ async fn execute_command(
                 .and_then(|v| v.as_str())
                 .ok_or("Missing path parameter")?;
             
-            let entries = read_directory_internal(path).await?;
+            let entries = read_directory_internal(path)?;
             Ok(serde_json::to_value(entries).unwrap_or_default())
         }
         
@@ -253,7 +270,7 @@ async fn execute_command(
                 .and_then(|v| v.as_str())
                 .ok_or("Missing path parameter")?;
             
-            let info = get_file_info_internal(path).await?;
+            let info = get_file_info_internal(path)?;
             Ok(serde_json::to_value(info).unwrap_or_default())
         }
         
@@ -361,15 +378,11 @@ async fn execute_command(
             Ok(serde_json::json!([]))
         }
         
-        "find_emm_translation_database" => {
-            Ok(serde_json::Value::Null)
-        }
-        
-        "find_emm_setting_file" => {
-            Ok(serde_json::Value::Null)
-        }
-        
-        "load_emm_metadata" | "load_emm_metadata_by_path" => {
+        // EMM 相关命令 - 返回 null（Web 模式不支持）
+        "find_emm_translation_database" 
+        | "find_emm_setting_file" 
+        | "load_emm_metadata" 
+        | "load_emm_metadata_by_path" => {
             Ok(serde_json::Value::Null)
         }
         
@@ -389,7 +402,8 @@ async fn execute_command(
             }))
         }
         
-        "get_global_upscale_enabled" => {
+        // 返回 false 的命令
+        "get_global_upscale_enabled" | "check_ffmpeg_available" => {
             Ok(serde_json::Value::Bool(false))
         }
         
@@ -401,13 +415,9 @@ async fn execute_command(
             }))
         }
         
-        "check_ffmpeg_available" => {
-            Ok(serde_json::Value::Bool(false))
-        }
-        
         // 默认：命令未实现，返回 null 而不是错误
         _ => {
-            log::warn!("HTTP Bridge: 未实现的命令 '{}', 返回 null", command);
+            log::warn!("HTTP Bridge: 未实现的命令 '{command}', 返回 null");
             // 返回 null 而不是错误，让前端能继续运行
             Ok(serde_json::Value::Null)
         }
@@ -417,7 +427,8 @@ async fn execute_command(
 // ===== 内部辅助函数 =====
 
 /// 浏览目录 - 返回文件和文件夹列表
-async fn browse_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
+/// 返回格式与前端 FsItem 类型匹配
+fn browse_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
     let path = std::path::Path::new(path);
     if !path.exists() {
         return Err(format!("Path does not exist: {}", path.display()));
@@ -426,38 +437,64 @@ async fn browse_directory_internal(path: &str) -> Result<Vec<serde_json::Value>,
     let mut entries = Vec::new();
     let read_dir = std::fs::read_dir(path).map_err(|e| e.to_string())?;
     
+    // 图片扩展名列表
+    let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "ico", "tiff", "tif", "svg", "jxl"];
+    
     for entry in read_dir.flatten() {
         let entry_path = entry.path();
         let metadata = entry.metadata().ok();
-        let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+        let is_dir = metadata.as_ref().is_some_and(std::fs::Metadata::is_dir);
+        let size = metadata.as_ref().map_or(0, std::fs::Metadata::len);
+        
+        // 检查是否为图片
+        let is_image = if is_dir {
+            false
+        } else {
+            entry_path.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| image_exts.contains(&e.to_lowercase().as_str()))
+                .unwrap_or(false)
+        };
         
         entries.push(serde_json::json!({
             "name": entry.file_name().to_string_lossy(),
             "path": entry_path.to_string_lossy(),
-            "isDirectory": is_dir,
+            "isDir": is_dir,  // 与前端 FsItem 类型匹配
             "size": size,
+            "isImage": is_image
         }));
     }
     
     Ok(entries)
 }
 
-/// 读取目录 - 与 browse_directory 类似
-async fn read_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
-    browse_directory_internal(path).await
+/// 读取目录 - 与 `browse_directory` 类似
+fn read_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
+    browse_directory_internal(path)
 }
 
 /// 获取文件信息
-async fn get_file_info_internal(path: &str) -> Result<serde_json::Value, String> {
-    let path = std::path::Path::new(path);
-    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+fn get_file_info_internal(path: &str) -> Result<serde_json::Value, String> {
+    let path_obj = std::path::Path::new(path);
+    let metadata = std::fs::metadata(path_obj).map_err(|e| e.to_string())?;
+    let is_dir = metadata.is_dir();
+    
+    // 图片扩展名列表
+    let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "ico", "tiff", "tif", "svg", "jxl"];
+    let is_image = if is_dir {
+        false
+    } else {
+        path_obj.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| image_exts.contains(&e.to_lowercase().as_str()))
+            .unwrap_or(false)
+    };
     
     Ok(serde_json::json!({
-        "path": path.to_string_lossy(),
-        "name": path.file_name().map(|n| n.to_string_lossy().to_string()),
-        "isDirectory": metadata.is_dir(),
-        "isFile": metadata.is_file(),
+        "path": path_obj.to_string_lossy(),
+        "name": path_obj.file_name().map(|n| n.to_string_lossy().to_string()),
+        "isDir": is_dir,  // 与前端 FsItem 类型匹配
+        "isImage": is_image,
         "size": metadata.len(),
         "readonly": metadata.permissions().readonly(),
     }))
@@ -471,7 +508,7 @@ async fn load_image_base64_internal(path: &str) -> Result<String, String> {
     // 检测 MIME 类型
     let mime = mime_guess::from_path(path).first_or_octet_stream().to_string();
     
-    Ok(format!("data:{};base64,{}", mime, base64_data))
+    Ok(format!("data:{mime};base64,{base64_data}"))
 }
 
 /// 获取图片尺寸
@@ -500,7 +537,7 @@ async fn handle_asset(
     
     // 如果有 entry 参数，从压缩包提取
     if let Some(entry) = &query.entry {
-        return serve_archive_entry(&state.app_handle, path, entry).await;
+        return serve_archive_entry(&state.app_handle, path, entry);
     }
     
     // 普通文件服务
@@ -536,7 +573,7 @@ async fn serve_file(path: &str) -> Response<Body> {
 }
 
 /// 从压缩包提取并服务文件
-async fn serve_archive_entry(
+fn serve_archive_entry(
     app_handle: &tauri::AppHandle,
     archive_path: &str,
     entry_path: &str,
@@ -555,7 +592,7 @@ async fn serve_archive_entry(
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(serde_json::json!({
                         "success": false,
-                        "error": format!("Lock error: {}", e)
+                        "error": format!("Lock error: {e}")
                     }).to_string()))
                     .unwrap();
             }
@@ -583,7 +620,7 @@ async fn serve_archive_entry(
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(serde_json::json!({
                     "success": false,
-                    "error": format!("Failed to extract: {}", e)
+                    "error": format!("Failed to extract: {e}")
                 }).to_string()))
                 .unwrap()
         }

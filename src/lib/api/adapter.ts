@@ -252,3 +252,37 @@ export async function getAppWindow() {
     }
     return mockWindow;
 }
+
+
+// ===== Path API 适配器 =====
+
+/**
+ * homeDir 适配器 - 获取用户主目录
+ * 
+ * 与 @tauri-apps/api/path 的 homeDir 签名相同
+ */
+export async function homeDir(): Promise<string> {
+    if (isRunningInTauri()) {
+        const { homeDir: tauriHomeDir } = await import('@tauri-apps/api/path');
+        return tauriHomeDir();
+    }
+    
+    // Web 模式：返回根目录或通过 API 获取
+    // 浏览器无法直接获取用户主目录，返回一个默认值
+    return '/';
+}
+
+/**
+ * appDataDir 适配器 - 获取应用数据目录
+ * 
+ * 与 @tauri-apps/api/path 的 appDataDir 签名相同
+ */
+export async function appDataDir(): Promise<string> {
+    if (isRunningInTauri()) {
+        const { appDataDir: tauriAppDataDir } = await import('@tauri-apps/api/path');
+        return tauriAppDataDir();
+    }
+    
+    // Web 模式：返回空字符串
+    return '';
+}

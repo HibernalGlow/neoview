@@ -6,7 +6,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { homeDir } from '@tauri-apps/api/path';
+	import { homeDir } from '$lib/api/adapter';
 
 	// 卡片组件
 	import ToolbarCard from '../folder/cards/ToolbarCard.svelte';

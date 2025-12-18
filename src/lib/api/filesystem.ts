@@ -37,6 +37,13 @@ export async function browseDirectory(path: string): Promise<FsItem[]> {
 
 export async function loadDirectorySnapshot(path: string): Promise<DirectorySnapshot> {
   const snapshot = await invoke<DirectorySnapshot>('load_directory_snapshot', { path });
+  
+  // 处理 null 或无效响应（Web 模式下可能发生）
+  if (!snapshot || !snapshot.items) {
+    console.warn('[loadDirectorySnapshot] 收到无效响应，返回空快照:', snapshot);
+    return { items: [], cached: false };
+  }
+  
   // 过滤排除路径
   snapshot.items = snapshot.items.filter(item => !isPathExcluded(item.path));
   return snapshot;

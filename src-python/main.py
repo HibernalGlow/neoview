@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import files, directory, archive, thumbnail, metadata, book, video, stream, upscale, epub, system
+from api import files, directory, archive, thumbnail, metadata, book, video, stream, upscale, epub, system, emm
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -36,6 +36,7 @@ app.include_router(stream.router, prefix="/v1", tags=["stream"])
 app.include_router(upscale.router, prefix="/v1", tags=["upscale"])
 app.include_router(epub.router, prefix="/v1", tags=["epub"])
 app.include_router(system.router, prefix="/v1", tags=["system"])
+app.include_router(emm.router, prefix="/v1", tags=["emm"])
 
 
 @app.get("/health")

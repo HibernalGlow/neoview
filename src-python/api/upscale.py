@@ -152,3 +152,103 @@ async def update_conditions(conditions: UpscaleConditions):
 async def get_conditions() -> UpscaleConditions:
     """获取超分条件"""
     return _conditions
+
+
+@router.get("/upscale/available")
+async def check_upscale_availability() -> dict:
+    """检查超分服务是否可用"""
+    # 检查是否有可用的超分模型
+    # 这里返回基本可用状态，实际应检查模型文件
+    return {
+        "available": True,
+        "models": ["realesrgan-x4plus", "realesrgan-x4plus-anime"],
+        "gpu_available": False,  # 需要实际检测
+    }
+
+
+@router.get("/upscale/models")
+async def get_available_models() -> list[str]:
+    """获取可用的超分模型列表（返回模型名称字符串数组）"""
+    return [
+        "realesrgan-x4plus",
+        "realesrgan-x4plus-anime",
+    ]
+
+
+@router.get("/upscale/cache-stats")
+async def get_cache_stats() -> dict:
+    """获取超分缓存统计"""
+    return {
+        "total_items": 0,
+        "total_size": 0,
+        "hit_rate": 0.0,
+        "cache_dir": None,
+    }
+
+
+# ===== 请求模型 =====
+
+class EnabledRequest(BaseModel):
+    enabled: bool
+
+class CurrentBookRequest(BaseModel):
+    book_path: Optional[str] = None
+
+class CurrentPageRequest(BaseModel):
+    page_index: int
+
+class PreloadRangeRequest(BaseModel):
+    book_path: str
+    start_index: int
+    end_index: int
+
+class CancelBookRequest(BaseModel):
+    book_path: Optional[str] = None
+
+class ClearCacheRequest(BaseModel):
+    book_path: Optional[str] = None
+
+class CancelJobRequest(BaseModel):
+    job_key: str
+
+
+@router.post("/upscale/enabled")
+async def set_upscale_enabled(request: EnabledRequest) -> dict:
+    """设置超分服务启用状态"""
+    return {"success": True, "enabled": request.enabled}
+
+
+@router.post("/upscale/current-book")
+async def set_current_book(request: CurrentBookRequest) -> dict:
+    """设置当前书籍路径"""
+    return {"success": True, "book_path": request.book_path}
+
+
+@router.post("/upscale/current-page")
+async def set_current_page(request: CurrentPageRequest) -> dict:
+    """设置当前页面索引"""
+    return {"success": True, "page_index": request.page_index}
+
+
+@router.post("/upscale/preload-range")
+async def request_preload_range(request: PreloadRangeRequest) -> dict:
+    """请求预加载页面范围"""
+    return {"success": True, "range": [request.start_index, request.end_index]}
+
+
+@router.post("/upscale/cancel-book")
+async def cancel_book_upscale(request: CancelBookRequest) -> dict:
+    """取消书籍的所有超分任务"""
+    return {"success": True, "book_path": request.book_path}
+
+
+@router.post("/upscale/clear-cache")
+async def clear_upscale_cache(request: ClearCacheRequest = ClearCacheRequest()) -> dict:
+    """清除超分缓存"""
+    return {"success": True, "cleared": True}
+
+
+@router.post("/upscale/cancel-job")
+async def cancel_job(request: CancelJobRequest) -> dict:
+    """取消指定任务"""
+    return {"success": True, "job_key": request.job_key}

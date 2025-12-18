@@ -12,8 +12,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
 
-// Python 后端 API 地址
-const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
+import { PYTHON_API_BASE } from '$lib/api/config';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();

@@ -7,8 +7,7 @@
  * 注意：不使用浏览器路由，保持内部状态管理
  */
 
-// Python 后端 API 基础 URL
-const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
+import { PYTHON_API_BASE, getWsBaseUrl } from './config';
 
 /**
  * 获取 API 基础 URL
@@ -408,7 +407,7 @@ export function createDirectoryStream(
     onError?: (error: Event) => void,
     onClose?: () => void
 ): WebSocket {
-    const wsBase = PYTHON_API_BASE.replace('http://', 'ws://').replace('https://', 'wss://');
+    const wsBase = getWsBaseUrl();
     const url = `${wsBase}/stream/directory?path=${encodeURIComponent(path)}&batch_size=${batchSize}`;
     
     const ws = new WebSocket(url);
@@ -444,7 +443,7 @@ export function createSearchStream(
     onError?: (error: Event) => void,
     onClose?: () => void
 ): WebSocket {
-    const wsBase = PYTHON_API_BASE.replace('http://', 'ws://').replace('https://', 'wss://');
+    const wsBase = getWsBaseUrl();
     const url = `${wsBase}/stream/search?path=${encodeURIComponent(path)}&query=${encodeURIComponent(query)}&batch_size=${batchSize}`;
     
     const ws = new WebSocket(url);

@@ -7,8 +7,7 @@ import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
 
-// Python 后端 API 地址
-const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
+import { PYTHON_API_BASE, getWsBaseUrl } from './config';
 
 export interface DirectorySnapshot {
   items: FsItem[];
@@ -166,7 +165,7 @@ export async function batchLoadDirectorySnapshots(
       }
     }
     return results;
-  } catch (error) {
+  } catch {
     // 回退到串行加载
     const results: BatchDirectorySnapshotResult[] = [];
     for (const path of paths) {
@@ -616,7 +615,7 @@ export async function streamDirectory(
   callbacks: StreamCallbacks,
   options?: StreamOptions
 ): Promise<StreamHandle> {
-  const wsBase = PYTHON_API_BASE.replace('http://', 'ws://').replace('https://', 'wss://');
+  const wsBase = getWsBaseUrl();
   const batchSize = options?.batchSize ?? 15;
   const url = `${wsBase}/stream/directory?path=${encodeURIComponent(path)}&batch_size=${batchSize}`;
   
@@ -702,7 +701,7 @@ export async function streamSearch(
   callbacks: StreamCallbacks,
   options?: StreamOptions
 ): Promise<StreamHandle> {
-  const wsBase = PYTHON_API_BASE.replace('http://', 'ws://').replace('https://', 'wss://');
+  const wsBase = getWsBaseUrl();
   const batchSize = options?.batchSize ?? 15;
   const url = `${wsBase}/stream/search?path=${encodeURIComponent(path)}&query=${encodeURIComponent(query)}&batch_size=${batchSize}`;
   

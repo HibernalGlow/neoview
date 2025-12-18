@@ -13,8 +13,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "uvi": "concurrently \"cd src-python && uvicorn main:app --host 127.0.0.1 --port 9008 --reload\" \"vite dev --port 9601\"",
     "dev:web": "vite dev --port 9601",
-    "py": "uvicorn main:app --host 127.0.0.1 --port 8000 --reload --app-dir src-python",
+    "py": "uvicorn main:app --host 127.0.0.1 --port 9008 --reload --app-dir src-python",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",

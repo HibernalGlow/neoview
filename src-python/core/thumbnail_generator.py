@@ -47,6 +47,53 @@ def generate_image_thumbnail(
     return buffer.getvalue()
 
 
+def generate_folder_thumbnail(
+    path: str,
+    max_size: int = DEFAULT_MAX_SIZE
+) -> Optional[bytes]:
+    """生成文件夹缩略图（使用第一张图片或压缩包首图）"""
+    from natsort import natsorted, ns
+    
+    p = Path(path)
+    if not p.is_dir():
+        return None
+    
+    try:
+        # 收集所有文件并自然排序
+        items = []
+        for item in p.iterdir():
+            if item.name.startswith('.'):
+                continue
+            items.append(item)
+        
+        items = natsorted(items, key=lambda x: x.name.lower(), alg=ns.IGNORECASE)
+        
+        # 优先找图片
+        for item in items:
+            if item.is_file() and is_image_file(str(item)):
+                with open(item, 'rb') as f:
+                    image_data = f.read()
+                return generate_image_thumbnail(image_data, max_size)
+        
+        # 其次找压缩包
+        for item in items:
+            if item.is_file() and is_archive_file(str(item)):
+                thumb = generate_archive_thumbnail(str(item), max_size)
+                if thumb:
+                    return thumb
+        
+        # 最后找视频
+        for item in items:
+            if item.is_file() and is_video_file(str(item)):
+                thumb = generate_video_thumbnail_sync(str(item), max_size)
+                if thumb:
+                    return thumb
+    except (OSError, PermissionError):
+        pass
+    
+    return None
+
+
 def generate_file_thumbnail(
     path: str,
     max_size: int = DEFAULT_MAX_SIZE
@@ -71,7 +118,12 @@ def generate_file_thumbnail(
         return None
     
     try:
-        if is_image_file(path):
+        if p.is_dir():
+            # 文件夹 - 使用第一张图片
+            thumbnail = generate_folder_thumbnail(path, max_size)
+            if not thumbnail:
+                return None
+        elif is_image_file(path):
             # 图片文件
             with open(path, 'rb') as f:
                 image_data = f.read()
@@ -92,7 +144,14 @@ def generate_file_thumbnail(
             return None
         
         # 保存到缓存
-        category = "archive" if is_archive_file(path) else "video" if is_video_file(path) else "file"
+        if p.is_dir():
+            category = "folder"
+        elif is_archive_file(path):
+            category = "archive"
+        elif is_video_file(path):
+            category = "video"
+        else:
+            category = "file"
         db.save_thumbnail(path_key, thumbnail, st.st_size, int(st.st_mtime), category)
         
         return thumbnail

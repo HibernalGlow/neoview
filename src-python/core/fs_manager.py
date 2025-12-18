@@ -63,8 +63,8 @@ def natural_sort_entries(entries: list[FileEntry]) -> list[FileEntry]:
     自然排序文件条目
     目录优先，然后按名称自然排序
     """
-    dirs = [e for e in entries if e.is_dir]
-    files = [e for e in entries if not e.is_dir]
+    dirs = [e for e in entries if e.isDir]
+    files = [e for e in entries if not e.isDir]
     
     sorted_dirs = natsorted(dirs, key=lambda x: x.name.lower(), alg=ns.IGNORECASE)
     sorted_files = natsorted(files, key=lambda x: x.name.lower(), alg=ns.IGNORECASE)
@@ -93,11 +93,11 @@ def get_file_entry(path: str) -> Optional[FileEntry]:
             size=st.st_size if not is_dir else 0,
             modified=int(st.st_mtime),
             created=int(st.st_ctime) if hasattr(st, 'st_ctime') else None,
-            is_dir=is_dir,
-            is_image=is_image_file(path) if not is_dir else False,
-            is_archive=is_archive_file(path) if not is_dir else False,
-            is_video=is_video_file(path) if not is_dir else False,
-            is_epub=is_epub_file(path) if not is_dir else False,
+            isDir=is_dir,
+            isImage=is_image_file(path) if not is_dir else False,
+            isArchive=is_archive_file(path) if not is_dir else False,
+            isVideo=is_video_file(path) if not is_dir else False,
+            isEpub=is_epub_file(path) if not is_dir else False,
         )
     except (OSError, PermissionError):
         return None
@@ -144,11 +144,11 @@ def list_directory(
                     size=st.st_size if not is_dir else 0,
                     modified=int(st.st_mtime),
                     created=int(st.st_ctime) if hasattr(st, 'st_ctime') else None,
-                    is_dir=is_dir,
-                    is_image=is_image_file(str(item)) if not is_dir else False,
-                    is_archive=is_archive_file(str(item)) if not is_dir else False,
-                    is_video=is_video_file(str(item)) if not is_dir else False,
-                    is_epub=is_epub_file(str(item)) if not is_dir else False,
+                    isDir=is_dir,
+                    isImage=is_image_file(str(item)) if not is_dir else False,
+                    isArchive=is_archive_file(str(item)) if not is_dir else False,
+                    isVideo=is_video_file(str(item)) if not is_dir else False,
+                    isEpub=is_epub_file(str(item)) if not is_dir else False,
                 )
                 entries.append(entry)
             except (OSError, PermissionError):

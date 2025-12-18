@@ -182,8 +182,14 @@ class PathRequest(BaseModel):
 async def create_directory(request: PathRequest):
     """创建目录"""
     try:
-        Path(request.path).mkdir(parents=True, exist_ok=True)
+        p = Path(request.path)
+        # 检查目标路径是否是已存在的文件，防止覆盖文件
+        if p.exists() and p.is_file():
+            raise HTTPException(status_code=400, detail=f"目标路径是一个文件，无法创建目录: {request.path}")
+        p.mkdir(parents=True, exist_ok=True)
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建目录失败: {e}")
 
@@ -256,10 +262,15 @@ async def write_text_file(request: WriteFileRequest):
     """写入文本文件"""
     try:
         p = Path(request.path)
+        # 检查目标路径是否是已存在的目录，防止覆盖目录
+        if p.exists() and p.is_dir():
+            raise HTTPException(status_code=400, detail=f"目标路径是一个目录，无法写入: {request.path}")
         # 确保父目录存在
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(request.content, encoding=request.encoding)
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"写入失败: {e}")
 

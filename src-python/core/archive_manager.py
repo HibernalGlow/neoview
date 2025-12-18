@@ -47,9 +47,9 @@ def list_zip_contents(path: str) -> list[ArchiveEntry]:
                     name=file_name,
                     path=name,
                     size=info.file_size,
-                    is_dir=info.is_dir(),
-                    is_image=is_image_file(name),
-                    entry_index=idx,
+                    isDir=info.is_dir(),
+                    isImage=is_image_file(name),
+                    entryIndex=idx,
                     modified=int(info.date_time[0] * 10000000 + info.date_time[1] * 100000 + 
                                info.date_time[2] * 1000 + info.date_time[3] * 100 + 
                                info.date_time[4] * 10 + info.date_time[5]) if info.date_time else None,
@@ -76,9 +76,9 @@ def list_rar_contents(path: str) -> list[ArchiveEntry]:
                     name=file_name,
                     path=name,
                     size=info.file_size,
-                    is_dir=info.is_dir(),
-                    is_image=is_image_file(name),
-                    entry_index=idx,
+                    isDir=info.is_dir(),
+                    isImage=is_image_file(name),
+                    entryIndex=idx,
                     modified=int(info.mtime.timestamp()) if info.mtime else None,
                 ))
     except Exception:
@@ -102,9 +102,9 @@ def list_7z_contents(path: str) -> list[ArchiveEntry]:
                     name=file_name,
                     path=name,
                     size=info.get('uncompressed', 0),
-                    is_dir=False,
-                    is_image=is_image_file(name),
-                    entry_index=idx,
+                    isDir=False,
+                    isImage=is_image_file(name),
+                    entryIndex=idx,
                     modified=None,
                 ))
     except Exception:
@@ -118,9 +118,9 @@ def list_7z_contents(path: str) -> list[ArchiveEntry]:
                         name=file_name,
                         path=name,
                         size=0,
-                        is_dir=False,
-                        is_image=is_image_file(name),
-                        entry_index=idx,
+                        isDir=False,
+                        isImage=is_image_file(name),
+                        entryIndex=idx,
                         modified=None,
                     ))
         except Exception:
@@ -155,7 +155,7 @@ def list_archive_contents(path: str, use_cache: bool = True) -> list[ArchiveEntr
     
     # 更新索引
     for idx, entry in enumerate(entries):
-        entry.entry_index = idx
+        entry.entryIndex = idx
     
     # 缓存
     if use_cache:

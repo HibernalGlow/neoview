@@ -13,11 +13,11 @@ class FileEntry(BaseModel):
     size: int
     modified: int  # Unix 时间戳
     created: Optional[int] = None
-    is_dir: bool
-    is_image: bool
-    is_archive: bool
-    is_video: bool
-    is_epub: bool = False
+    isDir: bool  # camelCase 匹配前端 FsItem
+    isImage: bool
+    isArchive: bool
+    isVideo: bool
+    isEpub: bool = False
 
 
 class FileInfo(BaseModel):
@@ -55,9 +55,9 @@ class ArchiveEntry(BaseModel):
     name: str  # 文件名
     path: str  # 完整路径（压缩包内）
     size: int  # 解压后大小
-    is_dir: bool  # 是否目录
-    is_image: bool  # 是否图片
-    entry_index: int  # 条目索引
+    isDir: bool  # 是否目录 (camelCase 匹配前端)
+    isImage: bool  # 是否图片
+    entryIndex: int  # 条目索引
     modified: Optional[int] = None  # 修改时间戳
 
 

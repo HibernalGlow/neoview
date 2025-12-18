@@ -11,8 +11,8 @@ import { apiGet, apiPost, apiDelete, getArchiveFileUrl } from './http-bridge';
  */
 export async function getArchiveFirstImageBlob(archivePath: string): Promise<string> {
   // 获取压缩包内容列表
-  const entries = await apiGet<Array<{ path: string; is_image: boolean }>>('/archive/list', { path: archivePath });
-  const firstImage = entries.find(e => e.is_image);
+  const entries = await apiGet<Array<{ path: string; isImage: boolean }>>('/archive/list', { path: archivePath });
+  const firstImage = entries.find(e => e.isImage);
   if (!firstImage) {
     throw new Error('No image found in archive');
   }

@@ -61,8 +61,9 @@ export const thumbnailManager = {
   },
 
   // V3: 获取缩略图 URL
+  // 注意：此方法用于文件浏览器，path 应该是完整的文件系统路径
   async getThumbnail(path: string, currentPath?: string): Promise<string | null> {
-    // 直接从 V3 缓存获取
+    // 直接从 V3 缓存获取（文件浏览器使用完整路径，不需要 archivePath）
     const url = getThumbnailUrl(path);
     if (url) return url;
 

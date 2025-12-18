@@ -227,10 +227,18 @@ export async function cancelThumbnailRequests(dir: string): Promise<void> {
  * 获取缩略图 URL（同步）
  * - Tauri 模式：从本地缓存获取
  * - Web 模式：直接返回 HTTP URL
+ * 
+ * @param path 文件路径（对于普通文件是完整路径，对于压缩包内文件是内部路径）
+ * @param archivePath 压缩包路径（可选，如果提供则表示是压缩包内的文件）
  */
-export function getThumbnailUrl(path: string): string | undefined {
+export function getThumbnailUrl(path: string, archivePath?: string): string | undefined {
   // Web 模式：直接返回 HTTP URL
   if (!isRunningInTauri()) {
+    if (archivePath) {
+      // 压缩包内文件：使用 archive_path 和 inner_path 参数
+      return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(archivePath)}&inner_path=${encodeURIComponent(path)}`;
+    }
+    // 普通文件：直接使用 path
     return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
   }
   

@@ -92,7 +92,9 @@ function tryReuseFromFileBrowser(index: number): boolean {
 	const page = currentBook.pages?.[index];
 	if (!page) return false;
 
-	const existingThumb = getThumbnailUrl(page.path);
+	// 对于压缩包内的文件，需要传递压缩包路径
+	const archivePath = currentBook.type === 'archive' ? currentBook.path : undefined;
+	const existingThumb = getThumbnailUrl(page.path, archivePath);
 	if (existingThumb) {
 		// 复用已有缩略图，不需要重新生成
 		thumbnailCacheStore.setThumbnail(index, existingThumb, 120, 120);

@@ -166,10 +166,12 @@ function collectIndicesToLoad(centerIndex: number, radius: number, maxCount: num
 /**
  * 加载缩略图（中央优先策略）
  *
- * 使用后端 API 生成缩略图，结果通过事件推送
- * 内置防抖和去重逻辑
+ * 【性能优化】完全非阻塞实现：
+ * - 使用后端 API 生成缩略图，结果通过事件推送
+ * - 内置防抖和去重逻辑
+ * - 所有 HTTP 请求在后台执行，不阻塞主线程
  */
-async function loadThumbnails(centerIndex: number): Promise<void> {
+function loadThumbnails(centerIndex: number): void {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook) return;
 
@@ -189,7 +191,7 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 	backgroundLoadRadius = INITIAL_PRELOAD_RANGE;
 
 	// 防抖
-	debounceTimer = setTimeout(async () => {
+	debounceTimer = setTimeout(() => {
 		debounceTimer = null;
 
 		// 版本检查
@@ -206,33 +208,33 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 			return;
 		}
 
-		try {
-			// 标记为加载中
-			for (const idx of needLoad) {
-				loadingIndices.add(idx);
-			}
-
-			// 传递 centerIndex 给后端，让后端按距离排序（中央优先策略）
-			const indices = await preloadThumbnails(needLoad, centerIndex, THUMBNAIL_MAX_SIZE);
-
-			// 检查版本，如果已被取消则忽略
-			if (currentVersion !== preloadVersion) {
-				return;
-			}
-
-			if (indices.length > 0) {
-				console.debug(
-					`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
-				);
-			}
-
-			// 初始加载完成后，启动后台持续加载
-			startBackgroundLoad();
-		} catch (error) {
-			console.error('Failed to preload thumbnails:', error);
-			// 即使失败也启动后台加载
-			startBackgroundLoad();
+		// 标记为加载中
+		for (const idx of needLoad) {
+			loadingIndices.add(idx);
 		}
+
+		// 【性能优化】后台执行预加载，不阻塞主线程
+		preloadThumbnails(needLoad, centerIndex, THUMBNAIL_MAX_SIZE)
+			.then((indices) => {
+				// 检查版本，如果已被取消则忽略
+				if (currentVersion !== preloadVersion) {
+					return;
+				}
+
+				if (indices.length > 0) {
+					console.debug(
+						`🖼️ ThumbnailService: Preloading ${indices.length} thumbnails from center ${centerIndex}`
+					);
+				}
+
+				// 初始加载完成后，启动后台持续加载
+				startBackgroundLoad();
+			})
+			.catch((error) => {
+				console.error('Failed to preload thumbnails:', error);
+				// 即使失败也启动后台加载
+				startBackgroundLoad();
+			});
 	}, DEBOUNCE_MS);
 }
 
@@ -317,9 +319,10 @@ function stopBackgroundLoad(): void {
 
 /**
  * 加载单个页面的缩略图（兼容旧接口）
+ * 【性能优化】非阻塞，不返回 Promise
  */
-async function loadThumbnail(pageIndex: number): Promise<void> {
-	await loadThumbnails(pageIndex);
+function loadThumbnail(pageIndex: number): void {
+	loadThumbnails(pageIndex);
 }
 
 /**

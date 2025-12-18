@@ -89,8 +89,12 @@ class BookStore {
       latest.currentPage = nextPage;
       this.state.currentBook = latest;
       this.syncAppStateBookSlice();
-      await bookApi.navigateToPage(nextPage);
-      await this.syncInfoPanelBookInfo();
+      this.syncInfoPanelBookInfo();
+      
+      // 【性能优化】后端同步在后台进行
+      bookApi.navigateToPage(nextPage).catch(err => {
+        console.error('❌ Error syncing page after reload:', err);
+      });
     } catch (err) {
       console.error('❌ Error reloading current book:', err);
       this.state.error = String(err);
@@ -430,18 +434,41 @@ class BookStore {
     if (!this.state.currentBook) return;
 
     try {
+      // 【优化】先尝试本地查找索引
+      const localIndex = this.state.currentBook.pages?.findIndex(p => p.path === imagePath);
+      if (localIndex !== undefined && localIndex >= 0) {
+        // 本地找到，立即更新
+        this.state.currentBook.currentPage = localIndex;
+        this.syncAppStateBookSlice('user');
+        this.syncInfoPanelBookInfo();
+        
+        // 后端同步在后台
+        bookApi.navigateToImage(imagePath).catch(err => {
+          console.error('❌ Error syncing navigateToImage to backend:', err);
+        });
+        
+        if (!options.skipHistoryUpdate) {
+          import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+            const pathStack = this.buildPathStack();
+            unifiedHistoryStore.updateIndex(pathStack, localIndex, this.state.currentBook!.totalPages);
+          });
+        }
+        return;
+      }
+
+      // 本地找不到，需要后端查找
       const index = await bookApi.navigateToImage(imagePath);
       if (!this.state.currentBook) return;
 
       this.state.currentBook.currentPage = index;
       this.syncAppStateBookSlice('user');
-      await this.syncInfoPanelBookInfo();
+      this.syncInfoPanelBookInfo();
 
-      // 【优化】允许调用方跳过历史更新（用于视频/图片单独记录场景）
       if (!options.skipHistoryUpdate) {
-        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-        const pathStack = this.buildPathStack();
-        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages);
+        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+          const pathStack = this.buildPathStack();
+          unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook!.totalPages);
+        });
       }
     } catch (err) {
       console.error('❌ Error navigating to image:', err);
@@ -458,37 +485,43 @@ class BookStore {
       return;
     }
 
-    try {
-      const newIndex = await bookApi.nextPage();
-      if (this.state.currentBook) {
-        this.state.currentBook.currentPage = newIndex;
-        await this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice('user');
+    if (!this.state.currentBook) return;
 
-        // 【单文件模式】更新当前文件路径并添加历史记录
-        if (this.state.singleFileMode) {
-          const currentPage = this.state.currentBook.pages?.[newIndex];
-          if (currentPage) {
-            this.state.originalFilePath = currentPage.path;
-            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-            const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-            const pathStack = this.buildPathStack();
-            unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook.totalPages, { displayName: name });
-          }
-        } else {
-          // 非单文件模式，更新 book 的历史记录
-          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+    // 【性能优化】立即计算并更新本地状态，不等待后端
+    const newIndex = Math.min(
+      this.state.currentBook.currentPage + 1,
+      this.state.currentBook.totalPages - 1
+    );
+    
+    this.state.currentBook.currentPage = newIndex;
+    this.syncAppStateBookSlice('user');
+    this.syncInfoPanelBookInfo();
+    this.showPageSwitchToastIfEnabled();
+
+    // 后端同步在后台进行
+    bookApi.nextPage().catch(err => {
+      console.error('❌ Error syncing next page to backend:', err);
+    });
+
+    // 历史记录更新不阻塞
+    if (this.state.singleFileMode) {
+      const currentPage = this.state.currentBook.pages?.[newIndex];
+      if (currentPage) {
+        this.state.originalFilePath = currentPage.path;
+        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+          const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
           const pathStack = this.buildPathStack();
-          unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook.totalPages);
-        }
+          unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook!.totalPages, { displayName: name });
+        });
       }
-
-      this.showPageSwitchToastIfEnabled();
-      return newIndex;
-    } catch (err) {
-      console.error('❌ Error going to next page:', err);
-      this.state.error = String(err);
+    } else {
+      import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+        const pathStack = this.buildPathStack();
+        unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook!.totalPages);
+      });
     }
+
+    return newIndex;
   }
 
   /**
@@ -500,58 +533,72 @@ class BookStore {
       return;
     }
 
-    try {
-      const newIndex = await bookApi.previousPage();
-      if (this.state.currentBook) {
-        this.state.currentBook.currentPage = newIndex;
-        await this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice('user');
+    if (!this.state.currentBook) return;
 
-        // 【单文件模式】更新当前文件路径并添加历史记录
-        if (this.state.singleFileMode) {
-          const currentPage = this.state.currentBook.pages?.[newIndex];
-          if (currentPage) {
-            this.state.originalFilePath = currentPage.path;
-            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-            const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-            const pathStack = this.buildPathStack();
-            unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook.totalPages, { displayName: name });
-          }
-        } else {
-          // 非单文件模式，更新 book 的历史记录
-          const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+    // 【性能优化】立即计算并更新本地状态，不等待后端
+    const newIndex = Math.max(this.state.currentBook.currentPage - 1, 0);
+    
+    this.state.currentBook.currentPage = newIndex;
+    this.syncAppStateBookSlice('user');
+    this.syncInfoPanelBookInfo();
+
+    // 后端同步在后台进行
+    bookApi.previousPage().catch(err => {
+      console.error('❌ Error syncing previous page to backend:', err);
+    });
+
+    // 历史记录更新不阻塞
+    if (this.state.singleFileMode) {
+      const currentPage = this.state.currentBook.pages?.[newIndex];
+      if (currentPage) {
+        this.state.originalFilePath = currentPage.path;
+        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+          const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
           const pathStack = this.buildPathStack();
-          unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook.totalPages);
-        }
+          unifiedHistoryStore.add(pathStack, newIndex, this.state.currentBook!.totalPages, { displayName: name });
+        });
       }
-      return newIndex;
-    } catch (err) {
-      console.error('❌ Error going to previous page:', err);
-      this.state.error = String(err);
+    } else {
+      import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+        const pathStack = this.buildPathStack();
+        unifiedHistoryStore.updateIndex(pathStack, newIndex, this.state.currentBook!.totalPages);
+      });
     }
+
+    return newIndex;
   }
 
   /**
    * 打开当前排序列表的下一/上一部书
    * 优先使用 FolderPanel 的排序（异步加载），回退到 FileBrowser
+   * 
+   * 【性能优化】非阻塞实现：
+   * 1. 先尝试同步查找（FileBrowser 缓存）
+   * 2. 如果同步找不到，异步查找但不阻塞
    */
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
     
-    // 使用 FolderPanel 的异步版本，会自动从文件系统加载
-    const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore.svelte');
-    let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction);
+    // 【优化】先尝试同步查找（FileBrowser 缓存，不阻塞）
+    let targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
     
-    // 如果 FolderPanel 没有数据，回退到 FileBrowser
+    // 如果同步找不到，再尝试异步查找
     if (!targetPath) {
-      targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
+      // 使用 FolderPanel 的异步版本，会自动从文件系统加载
+      const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore.svelte');
+      targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction);
     }
     
     if (!targetPath) {
       console.warn(`⚠️ No ${direction} book found from`, currentPath);
       return;
     }
-    await this.openBook(targetPath);
+    
+    // 【性能优化】打开书本，不等待完成
+    // openBook 内部已经优化为非阻塞，但这里也不需要等待
+    this.openBook(targetPath).catch(err => {
+      console.error(`❌ Error opening ${direction} book:`, err);
+    });
   }
 
   private syncFileBrowserSelection(path: string) {

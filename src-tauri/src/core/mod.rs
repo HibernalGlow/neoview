@@ -47,6 +47,7 @@ pub mod dimension_scanner;
 // 新增模块
 pub mod lru_image_cache;
 pub mod app_context;
+pub mod http_bridge;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

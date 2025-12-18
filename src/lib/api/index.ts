@@ -15,3 +15,6 @@ export * as PageManagerAPI from './pageManager';
 
 // 剪贴板 API - 使用 tauri-plugin-clipboard-x
 export { ClipboardAPI } from './clipboard';
+
+// Web 浏览模式适配器 - 自动检测环境选择 Tauri IPC 或 HTTP
+export * from './adapter';

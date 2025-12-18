@@ -3,9 +3,11 @@
 	 * CardWindowContent - 卡片窗口内容渲染器
 	 * 直接渲染卡片组件，不使用 CollapsibleCard 包装
 	 * 用于独立卡片窗口中的标签页内容
+	 * 支持 MagicCard 鼠标跟随光效
 	 */
 	import { setContext } from 'svelte';
 	import { cardRegistry } from '$lib/cards/registry';
+	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 
 	// 懒加载组件映射
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,7 +127,7 @@
 	});
 </script>
 
-<div class="h-full w-full">
+<MagicCard class="h-full w-full rounded-lg border bg-muted/10 hover:border-primary/60 transition-all" gradientOpacity={0.4}>
 	{#if isLoading}
 		<div class="text-muted-foreground flex items-center justify-center py-8 text-sm">
 			加载中...
@@ -141,4 +143,4 @@
 			{/if}
 		</div>
 	{/if}
-</div>
+</MagicCard>

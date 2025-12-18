@@ -82,7 +82,20 @@ pub fn run() {
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_x::init())
+        .plugin(tauri_plugin_localhost::Builder::new(3456).build())  // Web 浏览模式 - serve 前端
         .setup(|app| {
+            // 🌐 启动 HTTP API 服务器 (Web 浏览模式)
+            let app_handle_for_api = app.handle().clone();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+                rt.block_on(async {
+                    let config = core::http_bridge::HttpBridgeConfig::default();
+                    if let Err(e) = core::http_bridge::start_api_server(app_handle_for_api, config).await {
+                        log::error!("❌ API Server 启动失败: {}", e);
+                    }
+                });
+            });
+
             // 🚀 启动初始化：确保所有必需目录存在
             let startup_diagnostics = match core::startup_init::ensure_app_directories(app.handle()) {
                 Ok(diag) => {

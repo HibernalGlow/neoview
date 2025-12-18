@@ -3,7 +3,8 @@
  * 监听后端的尺寸扫描进度和完成事件，更新 bookStore
  */
 
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { bookStore } from './book.svelte';
 
 /** 尺寸更新条目 */

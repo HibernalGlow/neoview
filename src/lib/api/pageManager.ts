@@ -436,7 +436,8 @@ export async function framePositionForIndex(pageIndex: number): Promise<[number,
 
 // ===== 事件监听 =====
 
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 /** 页面加载事件数据 */
 export interface PageLoadedEvent {

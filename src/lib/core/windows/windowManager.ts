@@ -5,7 +5,8 @@
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 export interface WindowInfo {
 	id: string;

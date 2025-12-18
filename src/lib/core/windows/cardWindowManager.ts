@@ -5,7 +5,8 @@
  */
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { emit, listen } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { cardRegistry } from '$lib/cards/registry';
 import { 
 	CardWindowTabStore, 

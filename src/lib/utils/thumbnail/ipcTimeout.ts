@@ -3,7 +3,7 @@
  * IPC 调用超时处理工具
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 // 超时时间配置
 // 普通查询：5秒

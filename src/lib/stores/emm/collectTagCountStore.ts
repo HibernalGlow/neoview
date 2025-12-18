@@ -6,7 +6,7 @@
  */
 
 import { writable, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { favoriteTagStore, mixedGenderStore } from './favoriteTagStore.svelte';
 
 // 缓存结构

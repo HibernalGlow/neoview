@@ -3,7 +3,7 @@
  * 文件索引相关的 API 接口
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface IndexStats {
   totalFiles: number;

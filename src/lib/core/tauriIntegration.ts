@@ -5,7 +5,7 @@
  * 用于 BookManager 的 setLoadFunctions
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { VirtualPage } from './types';
 
 // ============================================================================

@@ -3,7 +3,7 @@
  * 性能设置相关的 API 接口
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 export interface PerformanceSettings {

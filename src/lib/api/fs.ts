@@ -3,7 +3,7 @@
  * 图像加载相关的前端 API 封装
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 

@@ -2,7 +2,7 @@
  * Rating 缓存管理器 - 使用 rating_data JSON 字段
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface RatingData {
 	value: number;

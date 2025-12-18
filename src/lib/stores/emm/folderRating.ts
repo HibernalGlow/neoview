@@ -8,7 +8,7 @@
 
 import { writable, get, derived } from 'svelte/store';
 import type { FolderRatingCache, FolderRatingEntry } from './types';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { ratingStore } from './ratingStore';
 
 const STORAGE_KEY = 'neoview-emm-folder-ratings';

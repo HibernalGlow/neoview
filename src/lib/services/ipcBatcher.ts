@@ -6,7 +6,7 @@
  * Requirements: 4.2, 4.4
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { perfMonitor } from '$lib/utils/perfMonitor';
 
 export interface BatchRequest {

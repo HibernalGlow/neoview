@@ -3,7 +3,7 @@
  * 文件系统操作相关的前端 API 封装
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface FileInfo {
 	name: string;

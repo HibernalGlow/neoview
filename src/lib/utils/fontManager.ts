@@ -4,7 +4,8 @@
  * 使用 Tauri 事件实现跨窗口同步
  */
 
-import { listen, emit, type UnlistenFn } from '@tauri-apps/api/event';
+import { listen, emit } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { settingsManager } from '$lib/settings/settingsManager';
 
 export interface FontSettings {

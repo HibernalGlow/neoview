@@ -3,7 +3,7 @@
  * 提供文件浏览、操作等功能
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';

@@ -5,7 +5,7 @@
  * - 目录切换时取消旧任务
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import * as FileSystemAPI from '$lib/api/filesystem';
 import type { FsItem } from '$lib/types';
 

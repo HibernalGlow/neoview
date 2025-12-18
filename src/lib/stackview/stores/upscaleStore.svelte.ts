@@ -9,9 +9,8 @@
  * 4. 关闭超分时清除所有超分图，回退到原图
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc, listen } from '$lib/api/adapter';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { SvelteMap } from 'svelte/reactivity';
 import { imagePool } from './imagePool.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';

@@ -3,7 +3,7 @@
  * 书籍管理相关的前端 API 封装
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { BookInfo, PageSortMode } from '../types';
 
 export async function openBook(path: string): Promise<BookInfo> {

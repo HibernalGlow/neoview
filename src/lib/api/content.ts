@@ -3,7 +3,7 @@
  * 统一内容管理 Tauri API 封装
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { ContentItem, SortMode } from '$lib/types/content';
 import { generateContentId, extractName, inferContentType } from '$lib/types/content';
 

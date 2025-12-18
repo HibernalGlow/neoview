@@ -4,7 +4,7 @@
  */
 
 import { writable, derived } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import * as EMMAPI from '$lib/api/emm';
 import type { EMMMetadata, EMMCollectTag } from '$lib/api/emm';
 import type { EMMCacheEntry } from '$lib/services/emmSyncService';

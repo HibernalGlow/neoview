@@ -4,7 +4,7 @@
  * 支持 LRU 缓存、前后端元数据复用、自动同步到 infoPanelStore
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { LRUCache } from '$lib/utils/lruCache';
 import {
   type ImageMetadata,

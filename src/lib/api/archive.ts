@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export async function getArchiveFirstImageBlob(path: string): Promise<string> {
   return await invoke<string>('get_archive_first_image_blob', { archivePath: path });

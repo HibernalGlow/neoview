@@ -3,7 +3,7 @@
  * 读取 exhentai-manga-manager 的元数据
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface EMMMetadata {
 	hash: string;

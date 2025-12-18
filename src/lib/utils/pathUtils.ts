@@ -4,7 +4,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { FileSystemAPI } from '$lib/api';
 
 /**

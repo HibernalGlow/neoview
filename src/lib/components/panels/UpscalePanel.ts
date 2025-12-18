@@ -1,6 +1,6 @@
 import { setUpscaleSettings, DEFAULT_UPSCALE_SETTINGS } from '$lib/utils/upscale/settings';
 import { settingsManager } from '$lib/settings/settingsManager';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { UpscaleSettings } from '$lib/utils/upscale/settings';
 import { getDefaultConditionPresets, normalizeCondition } from '$lib/utils/upscale/conditions';
 

@@ -10,7 +10,7 @@
  * - 前端无需管理加载状态
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 // ===== 类型定义 =====
 

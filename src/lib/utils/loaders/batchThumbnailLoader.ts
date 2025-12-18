@@ -3,7 +3,7 @@
  * 支持批量加载、增量加载、优先级队列
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface BatchLoadOptions {
   batchSize?: number;           // 批次大小

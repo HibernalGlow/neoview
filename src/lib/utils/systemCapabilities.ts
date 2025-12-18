@@ -6,7 +6,7 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 export interface SystemCapabilities {
   totalMemoryMB: number;

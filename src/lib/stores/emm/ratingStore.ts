@@ -6,7 +6,7 @@
  */
 
 import { writable, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import type { RatingData } from './types';
 
 // 内存缓存

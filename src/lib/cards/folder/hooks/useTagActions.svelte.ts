@@ -2,7 +2,7 @@
  * useTagActions - 标签相关操作
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import {
 	favoriteTagStore,
 	createTagValue,

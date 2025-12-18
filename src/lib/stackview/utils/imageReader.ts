@@ -9,7 +9,7 @@
  * 【延迟追踪】记录加载耗时到 infoPanelStore
  */
 
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc } from '$lib/api/adapter';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadImageFromArchiveAsBlob } from '$lib/api/filesystem';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';

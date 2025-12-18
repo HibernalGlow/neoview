@@ -3,7 +3,7 @@
  * 超分预处理转码基准测试卡片
  * 对比 WIC vs 原有方法（jxl-oxide/image crate）的转码性能
  */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FolderOpen, Play, Trash2, Gauge, Clock, FileImage, ArrowRight } from '@lucide/svelte';

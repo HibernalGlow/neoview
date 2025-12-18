@@ -17,20 +17,20 @@ export interface FsItem {
   // EMM 元数据（可选）
   emmMetadata?: {
     translatedTitle?: string;
-    tags?: Record\u003cstring, string[]\u003e;
+    tags?: Record<string, string[]>;
   };
-// 评分数据（可选，用于排序）
-rating ?: number;
-// 收藏标签匹配数（可选，用于排序）
-collectTagCount ?: number;
-// 历史记录元数据（可选，仅用于历史记录列表）
-historyMetadata ?: {
-  currentPage?: number;
-  totalPages?: number;
-  videoPosition?: number;
-  videoDuration?: number;
-  videoCompleted?: boolean;
-};
+  // 评分数据（可选，用于排序）
+  rating?: number;
+  // 收藏标签匹配数（可选，用于排序）
+  collectTagCount?: number;
+  // 历史记录元数据（可选，仅用于历史记录列表）
+  historyMetadata?: {
+    currentPage?: number;
+    totalPages?: number;
+    videoPosition?: number;
+    videoDuration?: number;
+    videoCompleted?: boolean;
+  };
 }
 
 /**

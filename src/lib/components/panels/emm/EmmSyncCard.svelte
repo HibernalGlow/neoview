@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invoke } from '@tauri-apps/api/core';
+	import { invoke } from '$lib/api/adapter';
 	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync, Wrench, Plus } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';

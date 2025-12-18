@@ -4,8 +4,7 @@
  * 从 BenchmarkPanel 提取
  * 新增: WIC + LZ4 压缩传输测试
  */
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FolderOpen, Play, Trash2, Zap } from '@lucide/svelte';

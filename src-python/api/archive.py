@@ -103,3 +103,24 @@ async def api_delete_archive_entry(
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除失败: {e}")
+
+
+@router.get("/archive/text")
+async def api_read_text_from_archive(
+    archive_path: str = Query(..., description="压缩包路径"),
+    inner_path: str = Query(..., description="压缩包内文件路径"),
+    encoding: str = Query("utf-8", description="文本编码"),
+) -> str:
+    """从压缩包读取文本文件"""
+    if not Path(archive_path).exists():
+        raise HTTPException(status_code=404, detail=f"压缩包不存在: {archive_path}")
+    
+    try:
+        data = extract_file(archive_path, inner_path)
+        return data.decode(encoding)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"文件不存在: {inner_path}")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail=f"无法使用 {encoding} 解码文件")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取失败: {e}")

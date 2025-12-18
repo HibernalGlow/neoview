@@ -4,7 +4,7 @@
 	 * 实时监控 CPU、内存、GPU、IO 等系统资源使用情况
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { invoke } from '@tauri-apps/api/core';
+	import { invoke } from '$lib/api/adapter';
 	import CpuMonitor from './components/CpuMonitor.svelte';
 	import MemoryMonitor from './components/MemoryMonitor.svelte';
 	import IoMonitor from './components/IoMonitor.svelte';

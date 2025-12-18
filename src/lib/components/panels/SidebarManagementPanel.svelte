@@ -14,7 +14,7 @@
 	} from '$lib/stores/sidebarConfig.svelte';
 	import { onMount } from 'svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
-	import { emit } from '@tauri-apps/api/event';
+	import { emit } from '$lib/api/adapter';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import { LayoutGrid, Settings2 } from '@lucide/svelte';
 	import * as Tabs from '$lib/components/ui/tabs';

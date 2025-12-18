@@ -8,7 +8,7 @@ import { Database, Download, Upload, RefreshCcw, ChevronDown } from '@lucide/sve
 import { Button } from '$lib/components/ui/button';
 import { Label } from '$lib/components/ui/label';
 import { getStartupConfig, saveStartupConfig, type StartupConfig } from '$lib/config/startupConfig';
-import { appDataDir } from '@tauri-apps/api/path';
+import { appDataDir } from '$lib/api/adapter';
 import { settingsManager } from '$lib/settings/settingsManager';
 
 let configPath = $state('');

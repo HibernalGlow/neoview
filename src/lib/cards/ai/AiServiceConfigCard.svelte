@@ -9,8 +9,7 @@ import { aiTranslationStore, type TranslationServiceType, BUILTIN_PRESETS, type 
 import { testConnection, clearOllamaStatusCache } from '$lib/services/translationService';
 import { Settings, Server, Bot, CheckCircle, XCircle, Loader2, Copy, Check, Terminal, Ban, ExternalLink, Circle, Sparkles, BookOpen, Play, Power } from '@lucide/svelte';
 import * as Select from '$lib/components/ui/select';
-import { invoke } from '@tauri-apps/api/core';
-import { Command, type Child } from '@tauri-apps/plugin-shell';
+import { invoke } from '$lib/api/adapter';
 import { toast } from 'svelte-sonner';
 
 let config = $state(aiTranslationStore.getConfig());
@@ -101,14 +100,8 @@ async function checkOllamaStatus() {
 async function startOllama() {
 	startingOllama = true;
 	try {
-		// 使用 Tauri shell 命令启动 ollama serve
-		const command = Command.create('ollama', ['serve']);
-		command.on('error', (error) => {
-			console.error('Ollama 启动错误:', error);
-			toast.error('Ollama 启动失败: ' + error);
-		});
-		command.spawn();
-		toast.success('正在启动 Ollama 服务...');
+		// Web 模式下无法直接启动进程，提示用户手动启动
+		toast.info('请在终端中运行: ollama serve');
 		
 		// 清除翻译服务中的状态缓存
 		clearOllamaStatusCache();

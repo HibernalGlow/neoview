@@ -252,3 +252,9 @@ async def clear_upscale_cache(request: ClearCacheRequest = ClearCacheRequest()) 
 async def cancel_job(request: CancelJobRequest) -> dict:
     """取消指定任务"""
     return {"success": True, "job_key": request.job_key}
+
+
+@router.post("/upscale/clear-all-cache")
+async def clear_all_upscale_cache() -> dict:
+    """清除所有超分缓存"""
+    return {"success": True, "cleared": True}

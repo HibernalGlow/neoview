@@ -3,7 +3,7 @@
  * 详细对比测试卡片
  * 从 BenchmarkPanel 提取
  */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FolderOpen, Play, Trash2 } from '@lucide/svelte';

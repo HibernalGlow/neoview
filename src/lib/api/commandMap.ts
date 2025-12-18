@@ -106,6 +106,22 @@ const commands: Record<string, CommandMapper> = {
 
     // 页面管理相关
     pm_preload_thumbnails: (a) => ({ path: '/thumbnail/preload-pages', method: 'POST', body: () => a }),
+
+    // 视频相关
+    extract_video_to_temp: (a) => ({ path: `/video/extract-to-temp?archive_path=${enc(a?.archivePath)}&inner_path=${enc(a?.filePath)}`, method: 'GET' }),
+    load_text_from_archive: (a) => ({ path: `/archive/text?archive_path=${enc(a?.archivePath)}&inner_path=${enc(a?.filePath)}`, method: 'GET' }),
+
+    // 缩略图数据库维护
+    get_thumbnail_db_stats_v3: () => ({ path: '/thumbnail/db-stats', method: 'GET' }),
+    migrate_thumbnail_db: () => ({ path: '/thumbnail/migrate', method: 'POST' }),
+    clear_expired_thumbnails_v3: (a) => ({ path: '/thumbnail/clear-expired', method: 'POST', body: () => a }),
+    clear_thumbnails_by_path_v3: (a) => ({ path: '/thumbnail/clear-by-path', method: 'POST', body: () => a }),
+
+    // 超分缓存
+    clear_all_pyo3_cache: () => ({ path: '/upscale/clear-all-cache', method: 'POST' }),
+
+    // AI 翻译
+    get_ai_translation_count: () => ({ path: '/ai/translation-count', method: 'GET' }),
 };
 
 /**

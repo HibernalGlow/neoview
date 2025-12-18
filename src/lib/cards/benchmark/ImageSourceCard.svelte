@@ -4,8 +4,7 @@
  * 对比 Blob 模式和 ConvertFileSrc 模式的加载性能
  * 支持压缩包和普通文件，模拟真实场景，包含缓存测试
  */
-import { invoke } from '@tauri-apps/api/core';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Button } from '$lib/components/ui/button';
 import { FolderOpen, Play, Trash2, Copy, Check, RotateCcw, Archive } from '@lucide/svelte';

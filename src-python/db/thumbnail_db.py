@@ -178,13 +178,21 @@ class ThumbnailDB:
             stats = {}
             total_count = 0
             total_size = 0
+            folder_count = 0
             for row in cursor:
                 category, count, size = row
                 stats[category] = {"count": count, "size": size or 0}
                 total_count += count
                 total_size += size or 0
+                if category == "folder":
+                    folder_count = count
             
-            stats["total"] = {"count": total_count, "size": total_size}
+            # 获取数据库文件大小
+            db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
+            
+            stats["total"] = total_count
+            stats["folders"] = folder_count
+            stats["size_bytes"] = db_size
             return stats
     
     def cleanup_old(self, max_age_days: int = 30, max_count: int = 10000):
@@ -208,6 +216,36 @@ class ThumbnailDB:
                     )""",
                     (count - max_count,)
                 )
+    
+    def vacuum(self):
+        """压缩数据库"""
+        with self._get_conn() as conn:
+            conn.execute("VACUUM")
+    
+    def clear_expired(self, expire_days: int = 30, exclude_folders: bool = True) -> int:
+        """清除过期缩略图"""
+        cutoff = int(time.time()) - expire_days * 86400
+        with self._get_conn() as conn:
+            if exclude_folders:
+                cursor = conn.execute(
+                    "DELETE FROM thumbnails WHERE accessed_at < ? AND category != 'folder'",
+                    (cutoff,)
+                )
+            else:
+                cursor = conn.execute(
+                    "DELETE FROM thumbnails WHERE accessed_at < ?",
+                    (cutoff,)
+                )
+            return cursor.rowcount
+    
+    def clear_by_prefix(self, path_prefix: str) -> int:
+        """按路径前缀清除缩略图"""
+        with self._get_conn() as conn:
+            cursor = conn.execute(
+                "DELETE FROM thumbnails WHERE path_key LIKE ?",
+                (f"{path_prefix}%",)
+            )
+            return cursor.rowcount
 
 
 # 全局实例

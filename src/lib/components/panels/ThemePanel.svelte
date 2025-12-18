@@ -19,7 +19,7 @@
 	import { slide } from 'svelte/transition';
 	import { fetchThemeFromURL } from '$lib/utils/themeManager';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { emit } from '@tauri-apps/api/event';
+	import { emit } from '$lib/api/adapter';
 
 	type ThemeMode = 'light' | 'dark' | 'system';
 

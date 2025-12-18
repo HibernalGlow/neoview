@@ -3,7 +3,7 @@
  * PageContextMenu - 页面列表右键菜单
  * 支持复制、删除、在资源管理器中显示等操作
  */
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 import {
 	Copy,
 	Trash2,

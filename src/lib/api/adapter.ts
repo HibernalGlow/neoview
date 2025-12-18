@@ -174,6 +174,33 @@ export async function appDataDir(): Promise<string> {
     return '';
 }
 
+/**
+ * 获取路径的目录部分
+ */
+export async function dirname(path: string): Promise<string> {
+    const sep = path.includes('/') ? '/' : '\\';
+    const parts = path.split(sep);
+    parts.pop();
+    return parts.join(sep) || sep;
+}
+
+/**
+ * 连接路径
+ */
+export async function join(...paths: string[]): Promise<string> {
+    const sep = paths[0]?.includes('/') ? '/' : '\\';
+    return paths.join(sep).replace(/[/\\]+/g, sep);
+}
+
+/**
+ * 获取路径的文件名部分
+ */
+export async function basename(path: string): Promise<string> {
+    const sep = path.includes('/') ? '/' : '\\';
+    const parts = path.split(sep);
+    return parts[parts.length - 1] || '';
+}
+
 // ===== 类型导出 =====
 
 export type UnlistenFn = () => void;

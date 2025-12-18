@@ -59,7 +59,6 @@
 	import { directoryTreeCache } from '../utils/directoryTreeCache';
 	import { folderRatingStore } from '$lib/stores/emm/folderRating';
 	import { getDefaultRating } from '$lib/stores/emm/storage';
-	import { invoke } from '@tauri-apps/api/core';
 	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 

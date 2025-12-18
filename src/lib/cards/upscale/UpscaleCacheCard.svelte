@@ -10,7 +10,7 @@ import { cacheStats, formatFileSize } from '$lib/stores/upscale/upscalePanelStor
 import { pyo3UpscaleManager } from '$lib/stores/upscale/PyO3UpscaleManager.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { confirm } from '$lib/stores/confirmDialog.svelte';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '$lib/api/adapter';
 
 let isRefreshing = $state(false);
 let isClearing = $state(false);

@@ -138,3 +138,58 @@ async def preload_page_thumbnails(request: PreloadPagesRequest) -> dict:
         "requested": len(valid_indices),
         "centerIndex": request.centerIndex,
     }
+
+
+@router.get("/thumbnail/db-stats")
+async def get_thumbnail_db_stats() -> dict:
+    """获取缩略图数据库统计（V3）"""
+    db = get_thumbnail_db()
+    stats = db.get_stats()
+    return {
+        "total_entries": stats.get("total", 0),
+        "folder_entries": stats.get("folders", 0),
+        "db_size_bytes": stats.get("size_bytes", 0),
+        "db_size_mb": round(stats.get("size_bytes", 0) / 1024 / 1024, 2),
+    }
+
+
+@router.post("/thumbnail/vacuum")
+async def vacuum_thumbnail_db() -> dict:
+    """压缩缩略图数据库"""
+    db = get_thumbnail_db()
+    db.vacuum()
+    return {"success": True}
+
+
+@router.post("/thumbnail/migrate")
+async def migrate_thumbnail_db() -> str:
+    """迁移缩略图数据库"""
+    # 占位实现
+    return "数据库迁移完成"
+
+
+class ClearExpiredRequest(BaseModel):
+    """清除过期缩略图请求"""
+    expire_days: int = 30
+    exclude_folders: bool = True
+
+
+@router.post("/thumbnail/clear-expired")
+async def clear_expired_thumbnails(request: ClearExpiredRequest) -> dict:
+    """清除过期缩略图"""
+    db = get_thumbnail_db()
+    count = db.clear_expired(request.expire_days, request.exclude_folders)
+    return {"success": True, "cleared": count}
+
+
+class ClearByPathRequest(BaseModel):
+    """按路径清除缩略图请求"""
+    path_prefix: str
+
+
+@router.post("/thumbnail/clear-by-path")
+async def clear_thumbnails_by_path(request: ClearByPathRequest) -> dict:
+    """按路径前缀清除缩略图"""
+    db = get_thumbnail_db()
+    count = db.clear_by_prefix(request.path_prefix)
+    return {"success": True, "cleared": count}

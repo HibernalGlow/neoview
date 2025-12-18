@@ -46,7 +46,20 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         body: args ? JSON.stringify(args) : '{}',
     });
     
-    const result = await response.json();
+    // 检查 HTTP 状态
+    if (!response.ok) {
+        const text = await response.text();
+        console.warn(`[Adapter] HTTP ${response.status} for ${cmd}:`, text);
+        throw new Error(`HTTP ${response.status}: ${text || 'Request failed'}`);
+    }
+    
+    const text = await response.text();
+    if (!text) {
+        // 空响应，返回 null
+        return null as T;
+    }
+    
+    const result = JSON.parse(text);
     
     if (!result.success) {
         throw new Error(result.error || 'Unknown error');
@@ -60,7 +73,8 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
  * 
  * 与 @tauri-apps/api/core 的 convertFileSrc 签名相同
  */
-export function convertFileSrc(path: string, protocol?: string): string {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function convertFileSrc(path: string, _protocol?: string): string {
     if (isRunningInTauri()) {
         // Tauri 模式：使用原生转换
         // 动态导入会有问题，这里直接构造 asset URL
@@ -197,3 +211,44 @@ export function getRunMode(): 'tauri' | 'web' {
 
 // 导出类型
 export type { UnlistenFn } from '@tauri-apps/api/event';
+
+
+// ===== 窗口 API 适配器 =====
+
+/**
+ * 安全获取当前窗口
+ * 在浏览器中返回 null
+ */
+export async function getCurrentWindow(): Promise<unknown | null> {
+    if (!isRunningInTauri()) {
+        return null;
+    }
+    const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+    return getCurrentWebviewWindow();
+}
+
+/**
+ * 窗口操作的空实现（用于浏览器模式）
+ */
+export const mockWindow = {
+    async minimize() { console.log('[Adapter] minimize not available in browser'); },
+    async maximize() { console.log('[Adapter] maximize not available in browser'); },
+    async close() { window.close(); },
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async setFullscreen(_fullscreen: boolean) { console.log('[Adapter] setFullscreen not available in browser'); },
+    async isFullscreen() { return false; },
+    async startDragging() { console.log('[Adapter] startDragging not available in browser'); },
+    async setTitle(title: string) { document.title = title; },
+    async toggleMaximize() { console.log('[Adapter] toggleMaximize not available in browser'); },
+};
+
+/**
+ * 获取窗口对象（Tauri 或 mock）
+ */
+export async function getAppWindow() {
+    if (isRunningInTauri()) {
+        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+        return getCurrentWebviewWindow();
+    }
+    return mockWindow;
+}

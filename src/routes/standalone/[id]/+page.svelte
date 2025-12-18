@@ -5,8 +5,7 @@
 	 */
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
-	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getAppWindow } from '$lib/api/adapter';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Minimize, Maximize } from '@lucide/svelte';
 
@@ -14,9 +13,13 @@
 	let windowTitle = $state('');
 	let panelContent = $state('');
 
-	const appWindow = getCurrentWebviewWindow();
+	// 窗口对象（异步获取，浏览器模式下为 mock）
+	let appWindow: Awaited<ReturnType<typeof getAppWindow>> | null = null;
 
-	onMount(() => {
+	onMount(async () => {
+		// 获取窗口对象
+		appWindow = await getAppWindow();
+		
 		// 从URL参数获取窗口ID
 		const pathSegments = $page.url.split('/');
 		windowId = pathSegments[pathSegments.length - 1];
@@ -73,19 +76,19 @@
 		}
 
 		// 设置窗口标题
-		appWindow.setTitle(windowTitle);
+		appWindow?.setTitle(windowTitle);
 	});
 
 	async function minimizeWindow() {
-		await appWindow.minimize();
+		await appWindow?.minimize();
 	}
 
 	async function maximizeWindow() {
-		await appWindow.toggleMaximize();
+		await appWindow?.toggleMaximize();
 	}
 
 	async function closeWindow() {
-		await appWindow.close();
+		await appWindow?.close();
 	}
 
 	// 动态导入组件

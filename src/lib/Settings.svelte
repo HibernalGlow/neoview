@@ -3,19 +3,25 @@
 	 * NeoView - Settings Window
 	 * 设置窗口 - 独立窗口外壳，内容复用 SettingsContent
 	 */
-	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getAppWindow } from '$lib/api/adapter';
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, X, Minimize } from '@lucide/svelte';
 	import SettingsContent from '$lib/components/SettingsContent.svelte';
 
-	const appWindow = getCurrentWebviewWindow();
+	// 窗口对象（异步获取，浏览器模式下为 mock）
+	let appWindow: Awaited<ReturnType<typeof getAppWindow>> | null = null;
+	
+	// 初始化窗口对象
+	if (typeof window !== 'undefined') {
+		getAppWindow().then(w => { appWindow = w; });
+	}
 
 	async function minimizeWindow() {
-		await appWindow.minimize();
+		await appWindow?.minimize();
 	}
 
 	async function closeWindow() {
-		await appWindow.close();
+		await appWindow?.close();
 	}
 </script>
 

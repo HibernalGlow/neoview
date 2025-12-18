@@ -80,9 +80,8 @@ smallvec = "1.13"  # 小型集合优化，避免堆分配
 ahash = "0.8"  # 更快的哈希算法，比 std::hash 快 2-3x
 reqwest = { version = "0.12", features = ["json"] }  # HTTP 客户端（Ollama 代理）
 tauri-plugin-clipboard-x = "2"  # 系统剪贴板操作（文件复制/粘贴）
-tauri-plugin-localhost = "2"  # Web 浏览模式 - serve 前端静态文件
 
-# Web API Server (axum)
+# Web API Server (axum) - 统一 serve 前端和 API
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "fs"] }

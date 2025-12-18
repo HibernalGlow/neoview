@@ -5,7 +5,7 @@
 	 * Requirements: 1.3, 2.2, 6.1, 6.2, 6.3, 6.4
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getAppWindow } from '$lib/api/adapter';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Maximize, Minus } from '@lucide/svelte';
 	import { getOrCreateTabStore, type CardWindowTabStore } from '$lib/stores/cardWindowTabStore.svelte';
@@ -20,7 +20,7 @@
 	let activeCardId = $state<string>('');
 	let windowTitle = $state('卡片窗口');
 	let windowId = $state<string>('');
-	let appWindow: ReturnType<typeof getCurrentWebviewWindow> | null = null;
+	let appWindow: Awaited<ReturnType<typeof getAppWindow>> | null = null;
 
 	/**
 	 * 从 URL 查询参数解析窗口 ID
@@ -50,8 +50,8 @@
 		
 		console.log('[CardWindow] 初始化窗口:', windowId, '初始卡片:', initialCardId);
 		
-		// 获取当前窗口
-		appWindow = getCurrentWebviewWindow();
+		// 获取当前窗口（异步，浏览器模式下为 mock）
+		appWindow = await getAppWindow();
 		
 		// 初始化标签页 store
 		tabStore = getOrCreateTabStore(windowId, initialCardId || undefined);

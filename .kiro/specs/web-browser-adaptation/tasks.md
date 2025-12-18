@@ -160,11 +160,21 @@
 
 
 
-- [ ] 12. 更新前端 import 路径
-  - [ ] 12.1 创建 import 替换脚本或手动更新
+- [x] 12. 更新前端 import 路径
+  - [x] 12.1 创建 import 替换脚本或手动更新
     - 将 `import { invoke } from '@tauri-apps/api/core'` 
     - 改为 `import { invoke } from '$lib/api/adapter'`
     - 同样处理 convertFileSrc, listen, emit
+    - _Requirements: 2.1_
+  - [x] 12.2 修复 getCurrentWebviewWindow 直接调用
+    - TopToolbar.svelte, TitleBarSection.svelte, TitleBar.svelte
+    - Settings.svelte, CardWindow.svelte, standalone/[id]/+page.svelte
+    - 改用 adapter 的 getAppWindow() 异步获取窗口对象
+    - _Requirements: 2.1_
+  - [x] 12.3 修复窗口管理器的浏览器兼容性
+    - windowManager.ts: 使用 window.open 替代 WebviewWindow
+    - cardWindowManager.ts: 添加浏览器模式支持
+    - 全屏功能使用 Fullscreen API
     - _Requirements: 2.1_
 
 - [ ] 13. 实现 `--server` 命令行模式 (可选)

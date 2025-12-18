@@ -82,7 +82,7 @@ pub fn run() {
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_x::init())
-        .plugin(tauri_plugin_localhost::Builder::new(3456).build())  // Web 浏览模式 - serve 前端
+        // tauri-plugin-localhost 已移除，改用 axum 统一 serve 前端和 API
         .setup(|app| {
             // 🌐 启动 HTTP API 服务器 (Web 浏览模式)
             let app_handle_for_api = app.handle().clone();

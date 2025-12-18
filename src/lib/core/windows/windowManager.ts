@@ -3,9 +3,7 @@
  * 窗口管理器 - 支持应用多开和多窗口管理
  */
 
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { listen } from '$lib/api/adapter';
+import { listen, isRunningInTauri } from '$lib/api/adapter';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 
 export interface WindowInfo {
@@ -17,12 +15,13 @@ export interface WindowInfo {
 }
 
 class WindowManager {
-	private windows = new Map<string, WebviewWindow>();
+	private windows = new Map<string, unknown>();
 	private windowCounter = 0;
 	private fullscreenUnlisten: UnlistenFn | null = null;
 
 	/**
 	 * 创建新窗口
+	 * 浏览器模式下使用 window.open
 	 */
 	async createWindow(
 		label: string,
@@ -33,10 +32,25 @@ class WindowManager {
 			height?: number;
 			center?: boolean;
 		}
-	): Promise<WebviewWindow | null> {
+	): Promise<unknown | null> {
+		const windowId = `window-${++this.windowCounter}-${Date.now()}`;
+		
+		// 浏览器模式：使用 window.open
+		if (!isRunningInTauri()) {
+			const width = options?.width || 1200;
+			const height = options?.height || 800;
+			const newWindow = window.open(url, windowId, `width=${width},height=${height}`);
+			if (newWindow) {
+				this.windows.set(windowId, newWindow);
+				newWindow.document.title = options?.title || label;
+			}
+			return newWindow;
+		}
+		
+		// Tauri 模式：使用 WebviewWindow
 		try {
-			const windowId = `window-${++this.windowCounter}-${Date.now()}`;
-			const window = new WebviewWindow(windowId, {
+			const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+			const tauriWindow = new WebviewWindow(windowId, {
 				url,
 				title: options?.title || label,
 				width: options?.width || 1200,
@@ -49,14 +63,14 @@ class WindowManager {
 				closable: true
 			});
 
-			this.windows.set(windowId, window);
+			this.windows.set(windowId, tauriWindow);
 
 			// 监听窗口关闭事件
-			window.once('tauri://close-requested', () => {
+			tauriWindow.once('tauri://close-requested', () => {
 				this.windows.delete(windowId);
 			});
 
-			return window;
+			return tauriWindow;
 		} catch (error) {
 			console.error('创建新窗口失败:', error);
 			return null;
@@ -94,7 +108,7 @@ class WindowManager {
 	/**
 	 * 获取所有窗口
 	 */
-	getAllWindows(): WebviewWindow[] {
+	getAllWindows(): unknown[] {
 		return Array.from(this.windows.values());
 	}
 
@@ -109,13 +123,20 @@ class WindowManager {
 	 * 关闭指定窗口
 	 */
 	async closeWindow(windowId: string): Promise<boolean> {
-		const window = this.windows.get(windowId);
-		if (!window) {
+		const win = this.windows.get(windowId);
+		if (!win) {
 			return false;
 		}
 
 		try {
-			await window.close();
+			// 浏览器模式
+			if (!isRunningInTauri() && win instanceof Window) {
+				win.close();
+				this.windows.delete(windowId);
+				return true;
+			}
+			// Tauri 模式
+			await (win as { close: () => Promise<void> }).close();
 			this.windows.delete(windowId);
 			return true;
 		} catch (error) {
@@ -129,9 +150,15 @@ class WindowManager {
 	 */
 	async closeAllWindows(): Promise<void> {
 		const windowsToClose = Array.from(this.windows.entries());
-		for (const [windowId, window] of windowsToClose) {
+		for (const [windowId, win] of windowsToClose) {
 			try {
-				await window.close();
+				// 浏览器模式
+				if (!isRunningInTauri() && win instanceof Window) {
+					win.close();
+				} else {
+					// Tauri 模式
+					await (win as { close: () => Promise<void> }).close();
+				}
 				this.windows.delete(windowId);
 			} catch (error) {
 				console.error(`关闭窗口 ${windowId} 失败:`, error);
@@ -143,7 +170,13 @@ class WindowManager {
 	 * 获取当前窗口是否为全屏
 	 */
 	async isFullscreen(): Promise<boolean> {
+		// 浏览器模式：使用 Fullscreen API
+		if (!isRunningInTauri()) {
+			return !!document.fullscreenElement;
+		}
+		
 		try {
+			const { getCurrentWindow } = await import('@tauri-apps/api/window');
 			const win = getCurrentWindow();
 			return await win.isFullscreen();
 		} catch (error) {
@@ -156,7 +189,22 @@ class WindowManager {
 	 * 设置当前窗口全屏状态
 	 */
 	async setFullscreen(fullscreen: boolean): Promise<void> {
+		// 浏览器模式：使用 Fullscreen API
+		if (!isRunningInTauri()) {
+			try {
+				if (fullscreen) {
+					await document.documentElement.requestFullscreen();
+				} else if (document.fullscreenElement) {
+					await document.exitFullscreen();
+				}
+			} catch (error) {
+				console.error('设置全屏状态失败:', error);
+			}
+			return;
+		}
+		
 		try {
+			const { getCurrentWindow } = await import('@tauri-apps/api/window');
 			const win = getCurrentWindow();
 			await win.setFullscreen(fullscreen);
 		} catch (error) {
@@ -186,7 +234,18 @@ class WindowManager {
 			this.fullscreenUnlisten = null;
 		}
 
+		// 浏览器模式：监听 fullscreenchange 事件
+		if (!isRunningInTauri()) {
+			const handler = () => {
+				onStateChange(!!document.fullscreenElement);
+			};
+			document.addEventListener('fullscreenchange', handler);
+			this.fullscreenUnlisten = () => document.removeEventListener('fullscreenchange', handler);
+			return;
+		}
+
 		try {
+			const { getCurrentWindow } = await import('@tauri-apps/api/window');
 			const win = getCurrentWindow();
 			
 			// 监听窗口进入全屏事件

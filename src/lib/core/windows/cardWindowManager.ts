@@ -4,8 +4,7 @@
  * Requirements: 1.2, 1.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4
  */
 
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { emit, listen } from '$lib/api/adapter';
+import { emit, listen, isRunningInTauri } from '$lib/api/adapter';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { cardRegistry } from '$lib/cards/registry';
 import { 
@@ -51,7 +50,7 @@ const DEFAULT_HEIGHT = 600;
 // ============ CardWindowManager Class ============
 
 class CardWindowManagerImpl {
-	private windows = new Map<string, WebviewWindow>();
+	private windows = new Map<string, unknown>();
 	private windowCounter = 0;
 	private unlistenFns: UnlistenFn[] = [];
 	private initialized = false;
@@ -96,14 +95,28 @@ class CardWindowManagerImpl {
 			return null;
 		}
 
+		const windowId = `card-window-${++this.windowCounter}-${Date.now()}`;
+		const cardDef = cardRegistry[cardId];
+		const url = `/cardwindow.html?windowId=${encodeURIComponent(windowId)}&cardId=${encodeURIComponent(cardId)}`;
+
+		// 浏览器模式：使用 window.open
+		if (!isRunningInTauri()) {
+			const newWindow = window.open(url, windowId, `width=${DEFAULT_WIDTH},height=${DEFAULT_HEIGHT}`);
+			if (newWindow) {
+				this.windows.set(windowId, newWindow);
+				newWindow.document.title = cardDef.title;
+				// 创建标签页 store
+				getOrCreateTabStore(windowId, cardId);
+				this.saveConfigs();
+			}
+			return newWindow ? windowId : null;
+		}
+
+		// Tauri 模式
 		try {
-			const windowId = `card-window-${++this.windowCounter}-${Date.now()}`;
-			const cardDef = cardRegistry[cardId];
-			
-			// 创建 Tauri 窗口
-			// 使用独立的 cardwindow.html 入口点，通过查询参数传递窗口 ID 和卡片 ID
-			const window = new WebviewWindow(windowId, {
-				url: `/cardwindow.html?windowId=${encodeURIComponent(windowId)}&cardId=${encodeURIComponent(cardId)}`,
+			const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+			const tauriWindow = new WebviewWindow(windowId, {
+				url,
 				title: cardDef.title,
 				width: DEFAULT_WIDTH,
 				height: DEFAULT_HEIGHT,
@@ -115,13 +128,13 @@ class CardWindowManagerImpl {
 				closable: true
 			});
 
-			this.windows.set(windowId, window);
+			this.windows.set(windowId, tauriWindow);
 
 			// 创建标签页 store
-			const tabStore = getOrCreateTabStore(windowId, cardId);
+			getOrCreateTabStore(windowId, cardId);
 			
 			// 监听窗口关闭事件
-			window.once('tauri://close-requested', async () => {
+			tauriWindow.once('tauri://close-requested', async () => {
 				await this.closeCardWindow(windowId);
 			});
 
@@ -139,23 +152,44 @@ class CardWindowManagerImpl {
 	 * 从配置创建窗口（用于恢复）
 	 */
 	async createWindowFromConfig(config: CardWindowConfig): Promise<string | null> {
-		try {
-			const windowId = config.windowId;
-			const firstTab = config.tabs[0];
-			
-			if (!firstTab || !cardRegistry[firstTab.cardId]) {
-				console.warn(`[CardWindowManager] Invalid config for window ${windowId}`);
-				return null;
-			}
+		const windowId = config.windowId;
+		const firstTab = config.tabs[0];
+		
+		if (!firstTab || !cardRegistry[firstTab.cardId]) {
+			console.warn(`[CardWindowManager] Invalid config for window ${windowId}`);
+			return null;
+		}
 
-			const cardDef = cardRegistry[firstTab.cardId];
-			
-			// 使用独立的 cardwindow.html 入口点
-			const window = new WebviewWindow(windowId, {
-				url: `/cardwindow.html?windowId=${encodeURIComponent(windowId)}`,
+		const cardDef = cardRegistry[firstTab.cardId];
+		const url = `/cardwindow.html?windowId=${encodeURIComponent(windowId)}`;
+		const width = config.size?.width || DEFAULT_WIDTH;
+		const height = config.size?.height || DEFAULT_HEIGHT;
+
+		// 浏览器模式：使用 window.open
+		if (!isRunningInTauri()) {
+			const newWindow = window.open(url, windowId, `width=${width},height=${height}`);
+			if (newWindow) {
+				this.windows.set(windowId, newWindow);
+				newWindow.document.title = cardDef.title;
+				
+				// 从配置创建标签页 store
+				const tabStore = CardWindowTabStore.fromConfig(windowId, config.tabs);
+				if (config.activeTabId && tabStore.tabs.find(t => t.id === config.activeTabId)) {
+					tabStore.setActiveTab(config.activeTabId);
+				}
+				registerTabStore(windowId, tabStore);
+			}
+			return newWindow ? windowId : null;
+		}
+
+		// Tauri 模式
+		try {
+			const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+			const tauriWindow = new WebviewWindow(windowId, {
+				url,
 				title: cardDef.title,
-				width: config.size?.width || DEFAULT_WIDTH,
-				height: config.size?.height || DEFAULT_HEIGHT,
+				width,
+				height,
 				x: config.position?.x,
 				y: config.position?.y,
 				center: !config.position,
@@ -166,7 +200,7 @@ class CardWindowManagerImpl {
 				closable: true
 			});
 
-			this.windows.set(windowId, window);
+			this.windows.set(windowId, tauriWindow);
 
 			// 从配置创建标签页 store
 			const tabStore = CardWindowTabStore.fromConfig(windowId, config.tabs);
@@ -176,7 +210,7 @@ class CardWindowManagerImpl {
 			registerTabStore(windowId, tabStore);
 
 			// 监听窗口关闭事件
-			window.once('tauri://close-requested', async () => {
+			tauriWindow.once('tauri://close-requested', async () => {
 				await this.closeCardWindow(windowId);
 			});
 
@@ -209,16 +243,22 @@ class CardWindowManagerImpl {
 	 * Requirements: 5.3
 	 */
 	async closeCardWindow(windowId: string): Promise<void> {
-		const window = this.windows.get(windowId);
+		const win = this.windows.get(windowId);
 		
 		// 移除标签页 store
 		removeTabStore(windowId);
 		
 		// 关闭窗口
-		if (window) {
+		if (win) {
 			try {
-				await window.close();
-			} catch (error) {
+				// 浏览器模式
+				if (!isRunningInTauri() && win instanceof Window) {
+					win.close();
+				} else {
+					// Tauri 模式
+					await (win as { close: () => Promise<void> }).close();
+				}
+			} catch {
 				// 窗口可能已经关闭
 			}
 			this.windows.delete(windowId);
@@ -434,7 +474,7 @@ class CardWindowManagerImpl {
 	/**
 	 * 获取窗口实例
 	 */
-	getWindow(windowId: string): WebviewWindow | undefined {
+	getWindow(windowId: string): unknown | undefined {
 		return this.windows.get(windowId);
 	}
 
@@ -442,10 +482,17 @@ class CardWindowManagerImpl {
 	 * 聚焦窗口
 	 */
 	async focusWindow(windowId: string): Promise<void> {
-		const window = this.windows.get(windowId);
-		if (window) {
-			await window.setFocus();
+		const win = this.windows.get(windowId);
+		if (!win) return;
+		
+		// 浏览器模式
+		if (!isRunningInTauri() && win instanceof Window) {
+			win.focus();
+			return;
 		}
+		
+		// Tauri 模式
+		await (win as { setFocus: () => Promise<void> }).setFocus();
 	}
 }
 

@@ -25,6 +25,8 @@ use base64::Engine as _;
 pub struct HttpBridgeConfig {
     pub port: u16,
     pub host: String,
+    pub serve_frontend: bool,  // 是否同时 serve 前端
+    pub frontend_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for HttpBridgeConfig {
@@ -32,6 +34,8 @@ impl Default for HttpBridgeConfig {
         Self {
             port: 3457,
             host: "127.0.0.1".to_string(),
+            serve_frontend: true,
+            frontend_dir: None,
         }
     }
 }
@@ -95,13 +99,53 @@ pub async fn start_api_server(
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
+    // 获取前端 dist 目录路径
+    let dist_dir = config.frontend_dir.clone().unwrap_or_else(|| {
+        // 尝试多个可能的路径
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+        
+        // 生产模式：exe 同级的 dist 目录
+        if let Some(ref dir) = exe_dir {
+            let prod_dist = dir.join("dist");
+            if prod_dist.exists() {
+                return prod_dist;
+            }
+        }
+        
+        // 开发模式：项目根目录的 dist
+        let dev_dist = std::path::PathBuf::from("../dist");
+        if dev_dist.exists() {
+            return dev_dist;
+        }
+        
+        // 默认
+        std::path::PathBuf::from("dist")
+    });
+    
+    log::info!("📁 前端目录: {}", dist_dir.display());
+    
+    // 构建路由
+    let mut app = Router::new()
         .route("/api/invoke/{command}", post(handle_invoke))
         .route("/api/asset", get(handle_asset))
         .route("/api/events", get(handle_events))
-        .route("/api/health", get(handle_health))
-        .layer(cors)
-        .with_state(state);
+        .route("/api/health", get(handle_health));
+    
+    // 如果启用前端服务，添加静态文件服务
+    if config.serve_frontend && dist_dir.exists() {
+        log::info!("📦 启用前端静态文件服务: {}", dist_dir.display());
+        
+        // 使用 tower-http 的 ServeDir
+        let serve_dir = tower_http::services::ServeDir::new(&dist_dir)
+            .append_index_html_on_directories(true)
+            .fallback(tower_http::services::ServeFile::new(dist_dir.join("index.html")));
+        
+        app = app.fallback_service(serve_dir);
+    }
+    
+    let app = app.layer(cors).with_state(state);
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -301,10 +345,71 @@ async fn execute_command(
             }
         }
         
-        // 默认：命令未实现
+        // ===== 启动配置命令 =====
+        "get_startup_config" => {
+            // 返回默认配置
+            Ok(serde_json::json!({
+                "cacheDir": null,
+                "upscaleEnabled": false,
+                "preloadPages": 3
+            }))
+        }
+        
+        // ===== EMM 命令 =====
+        "find_emm_databases" => {
+            // 返回空数组
+            Ok(serde_json::json!([]))
+        }
+        
+        "find_emm_translation_database" => {
+            Ok(serde_json::Value::Null)
+        }
+        
+        "find_emm_setting_file" => {
+            Ok(serde_json::Value::Null)
+        }
+        
+        "load_emm_metadata" | "load_emm_metadata_by_path" => {
+            Ok(serde_json::Value::Null)
+        }
+        
+        // ===== 性能设置命令 =====
+        "get_performance_settings" => {
+            Ok(serde_json::json!({
+                "preloadCount": 3,
+                "cacheSize": 100
+            }))
+        }
+        
+        // ===== 超分设置命令 =====
+        "get_upscale_settings" => {
+            Ok(serde_json::json!({
+                "enabled": false,
+                "model": "default"
+            }))
+        }
+        
+        "get_global_upscale_enabled" => {
+            Ok(serde_json::Value::Bool(false))
+        }
+        
+        // ===== 系统命令 =====
+        "get_system_stats" => {
+            Ok(serde_json::json!({
+                "cpuUsage": 0.0,
+                "memoryUsage": 0.0
+            }))
+        }
+        
+        "check_ffmpeg_available" => {
+            Ok(serde_json::Value::Bool(false))
+        }
+        
+        // 默认：命令未实现，返回 null 而不是错误
         _ => {
-            log::warn!("HTTP Bridge: 未实现的命令 '{}'", command);
-            Err(format!("Command '{}' not implemented in HTTP bridge. Available: path_exists, browse_directory, read_directory, get_file_info, get_current_book, load_image_base64, get_image_dimensions, list_archive_contents, load_image_from_archive_base64, has_thumbnail, load_thumbnail_from_db", command))
+            log::warn!("HTTP Bridge: 未实现的命令 '{}', 返回 null", command);
+            // 返回 null 而不是错误，让前端能继续运行
+            Ok(serde_json::Value::Null)
         }
     }
 }

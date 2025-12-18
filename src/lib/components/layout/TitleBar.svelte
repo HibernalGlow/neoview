@@ -3,29 +3,35 @@
 	 * NeoView - Title Bar Component
 	 * 标题栏组件
 	 */
-	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { getAppWindow } from '$lib/api/adapter';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
 	import { toggleLeftSidebar, toggleRightSidebar } from '$lib/stores';
 
-	const appWindow = getCurrentWebviewWindow();
+	// 窗口对象（异步获取，浏览器模式下为 mock）
+	let appWindow: Awaited<ReturnType<typeof getAppWindow>> | null = null;
+	
+	// 初始化窗口对象
+	if (typeof window !== 'undefined') {
+		getAppWindow().then(w => { appWindow = w; });
+	}
 
 	function openSettings() {
 		openSettingsOverlay();
 	}
 
 	async function minimizeWindow() {
-		await appWindow.minimize();
+		await appWindow?.minimize();
 	}
 
 	async function maximizeWindow() {
-		await appWindow.toggleMaximize();
+		await appWindow?.toggleMaximize();
 	}
 
 	async function closeWindow() {
-		await appWindow.close();
+		await appWindow?.close();
 	}
 </script>
 

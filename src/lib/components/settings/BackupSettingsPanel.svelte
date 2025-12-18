@@ -125,8 +125,8 @@
 			return;
 		}
 		try {
-			const { invoke } = await import('@tauri-apps/api/core');
-			await invoke('delete_file', { path: backup.path });
+			const { apiDelete } = await import('$lib/api/http-bridge');
+			await apiDelete('/file', { path: backup.path });
 			showSuccessToast('备份已删除');
 			loadBackups();
 		} catch (e) {

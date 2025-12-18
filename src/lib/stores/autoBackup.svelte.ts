@@ -1,12 +1,38 @@
 /**
  * NeoView - Auto Backup Store
  * 自动备份管理系统
+ * 使用 Python HTTP API 进行文件操作
  */
 
 import { apiPost, apiGet } from '$lib/api/http-bridge';
 import { getStartupConfig } from '$lib/config/startupConfig';
 import { settingsManager } from './settingsManager.svelte';
 import { settingsManager as coreSettingsManager } from '$lib/settings/settingsManager';
+
+// ==================== 文件操作辅助函数 ====================
+
+/**
+ * 创建目录（通过 HTTP API）
+ */
+async function createDirectory(path: string): Promise<void> {
+    await apiPost('/file/mkdir', { path });
+}
+
+/**
+ * 写入文本文件（通过 HTTP API）
+ */
+async function writeTextFile(path: string, content: string): Promise<void> {
+    await apiPost('/file/write', { path, content });
+}
+
+/**
+ * 删除文件（通过 HTTP API）
+ */
+async function deleteFile(path: string): Promise<void> {
+    // 使用 DELETE 方法，路径作为查询参数
+    const { apiDelete } = await import('$lib/api/http-bridge');
+    await apiDelete('/file', { path });
+}
 
 // ==================== 类型定义 ====================
 
@@ -107,7 +133,7 @@ class AutoBackupStore {
                 
                 // 尝试创建目录
                 try {
-                    await invoke('create_directory', { path: defaultPath });
+                    await createDirectory(defaultPath);
                 } catch {
                     // 目录可能已存在，忽略错误
                 }
@@ -344,10 +370,7 @@ class AutoBackupStore {
             const filepath = `${this.settings.backupPath}/${filename}`;
 
             // 写入文件
-            await invoke('write_text_file', {
-                path: filepath,
-                content: json
-            });
+            await writeTextFile(filepath, json);
 
             // 更新最后备份时间
             this.settings.lastBackupTime = Date.now();
@@ -383,7 +406,7 @@ class AutoBackupStore {
 
                 for (const backup of toDelete) {
                     try {
-                        await invoke('delete_file', { path: backup.path });
+                        await deleteFile(backup.path);
                         console.log(`[AutoBackup] 已删除旧备份: ${backup.filename}`);
                     } catch (e) {
                         console.error(`[AutoBackup] 删除旧备份失败: ${backup.filename}`, e);
@@ -533,10 +556,7 @@ class AutoBackupStore {
             const payload = this.buildFullBackupPayload('manual');
             const json = JSON.stringify(payload, null, 2);
             
-            await invoke('write_text_file', {
-                path: filepath,
-                content: json
-            });
+            await writeTextFile(filepath, json);
 
             console.log(`[AutoBackup] 导出成功: ${filepath}`);
             return true;

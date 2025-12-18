@@ -1,6 +1,7 @@
 /**
  * 启动配置管理
  * 用于前后端共享的配置文件
+ * 使用 Python HTTP API 进行通信
  */
 import { apiPost, apiGet } from '$lib/api/http-bridge';
 
@@ -39,7 +40,7 @@ export interface StartupConfig {
  */
 export async function getStartupConfig(): Promise<StartupConfig> {
   try {
-    return await invoke<StartupConfig>('get_startup_config');
+    return await apiGet<StartupConfig>('/system/startup-config');
   } catch (err) {
     console.error('获取启动配置失败:', err);
     return {};
@@ -51,7 +52,7 @@ export async function getStartupConfig(): Promise<StartupConfig> {
  */
 export async function saveStartupConfig(config: StartupConfig): Promise<void> {
   try {
-    await invoke('save_startup_config', { config });
+    await apiPost('/system/startup-config', config);
     console.log('✅ 启动配置已保存');
   } catch (err) {
     console.error('❌ 保存启动配置失败:', err);
@@ -67,7 +68,7 @@ export async function updateStartupConfigField(
   value: string | null
 ): Promise<void> {
   try {
-    await invoke('update_startup_config_field', { field, value });
+    await apiPost('/system/startup-config/field', { field, value });
     console.log(`✅ 启动配置字段 ${field} 已更新`);
   } catch (err) {
     console.error(`❌ 更新启动配置字段 ${field} 失败:`, err);

@@ -1,50 +1,12 @@
-//! NeoView - Commands Module
-//! 导出所有 Tauri 命令
+//! ``NeoView`` - Commands Module
+//! 精简后的 Tauri 命令模块
+//! 大部分功能已迁移到 Python FastAPI 后端
 
-pub mod book_commands;
-pub mod comparison_commands;
 pub mod default;
-pub mod emm_metadata_commands;
-pub mod explorer_context_menu_commands;
-pub mod fs_commands;
-pub mod generic_upscale_commands;
-pub mod image_commands;
-pub mod image_data_commands;
-pub mod pyo3_upscale_commands;
-pub mod startup_config_commands;
-pub mod task_queue_commands;
-pub mod thumbnail_commands;
-pub mod thumbnail_v3_commands;
-pub mod upscale_commands;
-pub mod upscale_scheduler_commands;
-pub mod upscale_service_commands;
-pub mod upscale_settings_commands;
-pub mod video_commands;
-pub mod benchmark_commands;
-pub mod page_commands;
-pub mod system_monitor_commands;
-pub mod ollama_commands;
-pub mod stream_commands;
-pub mod metadata_commands;
+pub mod errors;
 
-pub use book_commands::*;
-pub use comparison_commands::*;
+// 保留必要的模块用于 Tauri 桌面功能
+pub mod explorer_context_menu_commands;
+
 pub use default::*;
 pub use explorer_context_menu_commands::*;
-pub use fs_commands::*;
-pub use generic_upscale_commands::*;
-pub use image_commands::*;
-pub use image_data_commands::*;
-pub use pyo3_upscale_commands::*;
-pub use task_queue_commands::*;
-pub use thumbnail_commands::*;
-pub use thumbnail_v3_commands::*;
-pub use upscale_commands::*;
-pub use upscale_scheduler_commands::*;
-pub use upscale_settings_commands::*;
-pub use video_commands::*;
-pub use page_commands::*;
-pub use system_monitor_commands::*;
-pub use ollama_commands::*;
-pub use stream_commands::*;
-pub use metadata_commands::*;

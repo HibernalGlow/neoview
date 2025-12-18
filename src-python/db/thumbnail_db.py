@@ -1,6 +1,7 @@
 """
 缩略图数据库
 使用 SQLite 存储缩略图缓存
+兼容 Rust/Tauri 版本的数据库结构
 """
 import sqlite3
 import time
@@ -9,11 +10,28 @@ from typing import Optional
 from contextlib import contextmanager
 
 # 默认数据库路径
-DEFAULT_DB_PATH = Path.home() / ".neoview" / "thumbnails.db"
+# 优先使用环境变量，否则使用 D:\temp\neoview（与 Tauri 模式兼容）
+def _get_default_db_path() -> Path:
+    import os
+    env_path = os.environ.get("NEOVIEW_THUMBNAIL_DB")
+    if env_path:
+        return Path(env_path)
+    # Windows 默认路径（与 Tauri 模式兼容）
+    if os.name == 'nt':
+        return Path("D:/temp/neoview/thumbnails.db")
+    # 其他系统使用 home 目录
+    return Path.home() / ".neoview" / "thumbnails.db"
+
+DEFAULT_DB_PATH = _get_default_db_path()
 
 
 class ThumbnailDB:
-    """缩略图数据库管理器"""
+    """
+    缩略图数据库管理器
+    兼容 Rust/Tauri 版本的表结构：
+    - thumbs 表: key, size, date, ghash, value, category, ...
+    - failed_thumbnails 表: path_key, error, failed_at
+    """
     
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
@@ -21,41 +39,36 @@ class ThumbnailDB:
         self._init_db()
     
     def _init_db(self):
-        """初始化数据库表"""
+        """初始化数据库表（兼容 Rust 版本）"""
         with self._get_conn() as conn:
-            conn.executescript("""
-                -- 启用 WAL 模式提高并发性能
-                PRAGMA journal_mode=WAL;
-                PRAGMA synchronous=NORMAL;
-                
-                -- 缩略图缓存表
-                CREATE TABLE IF NOT EXISTS thumbnails (
-                    path_key TEXT PRIMARY KEY,
-                    file_size INTEGER,
-                    file_mtime INTEGER,
-                    data BLOB,
-                    created_at INTEGER,
-                    accessed_at INTEGER,
-                    category TEXT
-                );
-                CREATE INDEX IF NOT EXISTS idx_accessed_at ON thumbnails(accessed_at);
-                CREATE INDEX IF NOT EXISTS idx_category ON thumbnails(category);
-                
-                -- 目录快照缓存表
-                CREATE TABLE IF NOT EXISTS directory_snapshots (
-                    path TEXT PRIMARY KEY,
-                    mtime INTEGER,
-                    items_json TEXT,
-                    created_at INTEGER
-                );
-                
-                -- 失败记录表（避免重复尝试）
-                CREATE TABLE IF NOT EXISTS failed_thumbnails (
-                    path_key TEXT PRIMARY KEY,
-                    error TEXT,
-                    failed_at INTEGER
-                );
-            """)
+            # 检查 thumbs 表是否存在（Rust 版本创建的）
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='thumbs'"
+            )
+            if not cursor.fetchone():
+                # 如果不存在，创建兼容的表结构
+                conn.executescript("""
+                    PRAGMA journal_mode=WAL;
+                    PRAGMA synchronous=NORMAL;
+                    
+                    CREATE TABLE IF NOT EXISTS thumbs (
+                        key TEXT NOT NULL PRIMARY KEY,
+                        size INTEGER,
+                        date INTEGER,
+                        ghash INTEGER,
+                        value BLOB,
+                        category TEXT DEFAULT 'file'
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_thumbs_key ON thumbs(key);
+                    CREATE INDEX IF NOT EXISTS idx_thumbs_category ON thumbs(category);
+                    CREATE INDEX IF NOT EXISTS idx_thumbs_date ON thumbs(date);
+                    
+                    CREATE TABLE IF NOT EXISTS failed_thumbnails (
+                        path_key TEXT PRIMARY KEY,
+                        error TEXT,
+                        failed_at INTEGER
+                    );
+                """)
     
     @contextmanager
     def _get_conn(self):
@@ -68,17 +81,18 @@ class ThumbnailDB:
             conn.close()
     
     def get_thumbnail(self, path_key: str) -> Optional[bytes]:
-        """获取缓存的缩略图"""
+        """获取缓存的缩略图（兼容 Rust 表结构）"""
         with self._get_conn() as conn:
+            # Rust 表结构: thumbs(key, size, date, ghash, value, category)
             cursor = conn.execute(
-                "SELECT data FROM thumbnails WHERE path_key = ?",
+                "SELECT value FROM thumbs WHERE key = ?",
                 (path_key,)
             )
             row = cursor.fetchone()
             if row:
                 # 更新访问时间
                 conn.execute(
-                    "UPDATE thumbnails SET accessed_at = ? WHERE path_key = ?",
+                    "UPDATE thumbs SET date = ? WHERE key = ?",
                     (int(time.time()), path_key)
                 )
                 return row[0]
@@ -92,21 +106,19 @@ class ThumbnailDB:
     ) -> Optional[bytes]:
         """获取缓存的缩略图（如果文件未修改）"""
         with self._get_conn() as conn:
+            # Rust 表结构: size 是文件大小，date 是修改时间
             cursor = conn.execute(
-                """SELECT data, file_size, file_mtime FROM thumbnails 
-                   WHERE path_key = ?""",
+                "SELECT value, size, date FROM thumbs WHERE key = ?",
                 (path_key,)
             )
             row = cursor.fetchone()
             if row:
-                cached_data, cached_size, cached_mtime = row
-                # 检查文件是否修改
-                if cached_size == file_size and cached_mtime == file_mtime:
-                    # 更新访问时间
-                    conn.execute(
-                        "UPDATE thumbnails SET accessed_at = ? WHERE path_key = ?",
-                        (int(time.time()), path_key)
-                    )
+                cached_data, cached_size, cached_date = row
+                # 检查文件是否修改（size 和 mtime 匹配）
+                if cached_size == file_size and cached_date == file_mtime:
+                    return cached_data
+                # 如果只有 date 匹配也返回（兼容旧数据）
+                if cached_date == file_mtime:
                     return cached_data
         return None
     
@@ -118,14 +130,14 @@ class ThumbnailDB:
         file_mtime: int,
         category: str = "file"
     ):
-        """保存缩略图到缓存"""
-        now = int(time.time())
+        """保存缩略图到缓存（兼容 Rust 表结构）"""
         with self._get_conn() as conn:
+            # Rust 表结构: thumbs(key, size, date, ghash, value, category)
             conn.execute(
-                """INSERT OR REPLACE INTO thumbnails 
-                   (path_key, file_size, file_mtime, data, created_at, accessed_at, category)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (path_key, file_size, file_mtime, data, now, now, category)
+                """INSERT OR REPLACE INTO thumbs 
+                   (key, size, date, ghash, value, category)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (path_key, file_size, file_mtime, 0, data, category)
             )
     
     def is_failed(self, path_key: str, max_age: int = 3600) -> bool:
@@ -157,23 +169,23 @@ class ThumbnailDB:
             )
     
     def clear_cache(self, category: Optional[str] = None):
-        """清除缓存"""
+        """清除缓存（兼容 Rust 表结构）"""
         with self._get_conn() as conn:
             if category:
                 conn.execute(
-                    "DELETE FROM thumbnails WHERE category = ?",
+                    "DELETE FROM thumbs WHERE category = ?",
                     (category,)
                 )
             else:
-                conn.execute("DELETE FROM thumbnails")
+                conn.execute("DELETE FROM thumbs")
                 conn.execute("DELETE FROM failed_thumbnails")
     
     def get_stats(self) -> dict:
-        """获取缓存统计"""
+        """获取缓存统计（兼容 Rust 表结构）"""
         with self._get_conn() as conn:
             cursor = conn.execute(
-                """SELECT category, COUNT(*), SUM(LENGTH(data)) 
-                   FROM thumbnails GROUP BY category"""
+                """SELECT category, COUNT(*), SUM(LENGTH(value)) 
+                   FROM thumbs GROUP BY category"""
             )
             stats = {}
             total_count = 0
@@ -196,23 +208,23 @@ class ThumbnailDB:
             return stats
     
     def cleanup_old(self, max_age_days: int = 30, max_count: int = 10000):
-        """清理旧缓存"""
+        """清理旧缓存（兼容 Rust 表结构）"""
         cutoff = int(time.time()) - max_age_days * 86400
         with self._get_conn() as conn:
             # 删除过期的
             conn.execute(
-                "DELETE FROM thumbnails WHERE accessed_at < ?",
+                "DELETE FROM thumbs WHERE date < ?",
                 (cutoff,)
             )
             
             # 如果还是太多，删除最旧的
-            cursor = conn.execute("SELECT COUNT(*) FROM thumbnails")
+            cursor = conn.execute("SELECT COUNT(*) FROM thumbs")
             count = cursor.fetchone()[0]
             if count > max_count:
                 conn.execute(
-                    """DELETE FROM thumbnails WHERE path_key IN (
-                        SELECT path_key FROM thumbnails 
-                        ORDER BY accessed_at ASC LIMIT ?
+                    """DELETE FROM thumbs WHERE key IN (
+                        SELECT key FROM thumbs 
+                        ORDER BY date ASC LIMIT ?
                     )""",
                     (count - max_count,)
                 )
@@ -223,26 +235,26 @@ class ThumbnailDB:
             conn.execute("VACUUM")
     
     def clear_expired(self, expire_days: int = 30, exclude_folders: bool = True) -> int:
-        """清除过期缩略图"""
+        """清除过期缩略图（兼容 Rust 表结构）"""
         cutoff = int(time.time()) - expire_days * 86400
         with self._get_conn() as conn:
             if exclude_folders:
                 cursor = conn.execute(
-                    "DELETE FROM thumbnails WHERE accessed_at < ? AND category != 'folder'",
+                    "DELETE FROM thumbs WHERE date < ? AND category != 'folder'",
                     (cutoff,)
                 )
             else:
                 cursor = conn.execute(
-                    "DELETE FROM thumbnails WHERE accessed_at < ?",
+                    "DELETE FROM thumbs WHERE date < ?",
                     (cutoff,)
                 )
             return cursor.rowcount
     
     def clear_by_prefix(self, path_prefix: str) -> int:
-        """按路径前缀清除缩略图"""
+        """按路径前缀清除缩略图（兼容 Rust 表结构）"""
         with self._get_conn() as conn:
             cursor = conn.execute(
-                "DELETE FROM thumbnails WHERE path_key LIKE ?",
+                "DELETE FROM thumbs WHERE key LIKE ?",
                 (f"{path_prefix}%",)
             )
             return cursor.rowcount

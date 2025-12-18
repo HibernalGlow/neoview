@@ -48,8 +48,10 @@ pub mod dimension_scanner;
 pub mod lru_image_cache;
 pub mod app_context;
 pub mod http_bridge;
+pub mod python_backend;
 
 pub use book_manager::BookManager;
+pub use python_backend::{PythonBackendManager, PythonBackendConfig, init_python_backend, get_python_backend};
 pub use dimension_cache::DimensionCache;
 pub use dimension_scanner::{DimensionScanner, DimensionScannerState, ScanResult};
 pub use image_loader::ImageLoader;

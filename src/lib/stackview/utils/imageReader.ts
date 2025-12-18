@@ -9,7 +9,7 @@
  * 【延迟追踪】记录加载耗时到 infoPanelStore
  */
 
-import { convertFileSrc } from '$lib/api/adapter';
+import { convertFileSrc, isRunningInTauri, convertArchiveFileSrc } from '$lib/api/adapter';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadImageFromArchiveAsBlob } from '$lib/api/filesystem';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
@@ -48,15 +48,26 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
   let loadMs = 0;
 
   if (currentBook.type === 'archive') {
-    // 压缩包：使用二进制 IPC
     const loadStart = performance.now();
-    const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
-      pageIndex
-    });
-    blob = result.blob;
+    
+    // Web 模式：直接使用 HTTP API
+    if (!isRunningInTauri()) {
+      const url = convertArchiveFileSrc(currentBook.path, pageInfo.path);
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Archive fetch failed: ${response.status}`);
+      }
+      blob = await response.blob();
+    } else {
+      // Tauri 模式：使用二进制 IPC
+      const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
+        pageIndex
+      });
+      blob = result.blob;
+    }
     loadMs = performance.now() - loadStart;
   } else {
-    // 文件系统：使用 asset:// 协议
+    // 文件系统：使用 asset:// 协议或 HTTP API
     const loadStart = performance.now();
     const assetUrl = convertFileSrc(pageInfo.path);
     const response = await fetch(assetUrl);

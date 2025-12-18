@@ -3,11 +3,14 @@
  * 提供文件浏览、操作等功能
  */
 
-import { invoke } from '$lib/api/adapter';
+import { invoke, isRunningInTauri, convertArchiveFileSrc } from '$lib/api/adapter';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
+
+// Python 后端 API 地址
+const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
 
 export interface DirectorySnapshot {
   items: FsItem[];
@@ -397,6 +400,25 @@ export async function loadImage(
   options: LoadImageFromArchiveOptions = {}
 ): Promise<ArrayBuffer> {
   const traceId = options.traceId ?? createImageTraceId('ipc', options.pageIndex);
+  
+  // Web 模式：直接使用 HTTP API
+  if (!isRunningInTauri()) {
+    logImageTrace(traceId, 'using HTTP API for image loading', { path, pageIndex: options.pageIndex });
+    
+    const url = `${PYTHON_API_BASE}/file?path=${encodeURIComponent(path)}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Image loading failed: ${response.status}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    logImageTrace(traceId, 'image fetched from HTTP API', { bytes: arrayBuffer.byteLength });
+    
+    return arrayBuffer;
+  }
+  
+  // Tauri 模式：使用 IPC
   logImageTrace(traceId, 'invoke load_image_base64', { path, pageIndex: options.pageIndex });
 
   // 使用 Base64 传输，避免 IPC 协议问题
@@ -465,6 +487,29 @@ export async function loadImageFromArchiveAsBlob(
   options: LoadImageFromArchiveOptions = {}
 ): Promise<{ blob: Blob; traceId: string }> {
   const traceId = options.traceId ?? createImageTraceId('archive', options.pageIndex);
+  
+  // Web 模式：直接使用 HTTP API
+  if (!isRunningInTauri()) {
+    logImageTrace(traceId, 'using HTTP API for archive extraction', {
+      archivePath,
+      innerPath: filePath,
+      pageIndex: options.pageIndex
+    });
+    
+    const url = convertArchiveFileSrc(archivePath, filePath);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Archive extraction failed: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    logImageTrace(traceId, 'blob fetched from HTTP API', { size: blob.size });
+    
+    return { blob, traceId };
+  }
+  
+  // Tauri 模式：使用 IPC
   logImageTrace(traceId, 'invoke load_image_from_archive_base64', {
     archivePath,
     innerPath: filePath,

@@ -7,10 +7,13 @@
  * 2. 接收 blob 并显示
  */
 
-import { invoke, listen } from '$lib/api/adapter';
+import { invoke, listen, isRunningInTauri } from '$lib/api/adapter';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
+
+// Python 后端 API 地址
+const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();
@@ -71,8 +74,15 @@ export async function initThumbnailServiceV3(
 ): Promise<void> {
   if (initialized) return;
 
+  // Web 模式：不需要初始化后端服务，直接使用 HTTP URL
+  if (!isRunningInTauri()) {
+    initialized = true;
+    console.log('✅ ThumbnailStoreV3 initialized (Web mode - HTTP API)');
+    return;
+  }
+
   try {
-    // 初始化后端服务
+    // Tauri 模式：初始化后端服务
     await invoke('init_thumbnail_service_v3', {
       thumbnailPath,
       size,
@@ -132,6 +142,11 @@ export async function requestVisibleThumbnails(
 ): Promise<void> {
   if (!initialized) {
     console.warn('⚠️ ThumbnailStoreV3 not initialized');
+    return;
+  }
+
+  // Web 模式：不需要请求，HTTP URL 按需加载
+  if (!isRunningInTauri()) {
     return;
   }
 
@@ -210,9 +225,17 @@ export async function cancelThumbnailRequests(dir: string): Promise<void> {
 }
 
 /**
- * 获取缩略图 URL（同步，从本地缓存）
+ * 获取缩略图 URL（同步）
+ * - Tauri 模式：从本地缓存获取
+ * - Web 模式：直接返回 HTTP URL
  */
 export function getThumbnailUrl(path: string): string | undefined {
+  // Web 模式：直接返回 HTTP URL
+  if (!isRunningInTauri()) {
+    return `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
+  }
+  
+  // Tauri 模式：从本地缓存获取
   return thumbnails.get(path);
 }
 
@@ -256,8 +279,13 @@ export async function reloadThumbnail(
 
 /**
  * 检查是否有缓存
+ * - Web 模式：总是返回 true（HTTP URL 总是可用）
  */
 export function hasThumbnail(path: string): boolean {
+  // Web 模式：HTTP URL 总是可用
+  if (!isRunningInTauri()) {
+    return true;
+  }
   return thumbnails.has(path);
 }
 
@@ -540,6 +568,9 @@ export function useThumbnails() {
     },
     get initialized() {
       return initialized;
+    },
+    get isWebMode() {
+      return !isRunningInTauri();
     },
     getThumbnailUrl,
     hasThumbnail,

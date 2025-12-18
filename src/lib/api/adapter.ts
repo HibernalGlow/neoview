@@ -3,11 +3,16 @@
  * 
  * 统一的 API 适配层，根据运行环境自动选择：
  * - Tauri 桌面模式：使用原生 IPC
- * - Web 浏览器模式：使用 HTTP API
+ * - Web 浏览器模式：使用 Python HTTP API
+ * 
+ * 注意：不使用浏览器路由，保持内部状态管理
  */
 
 // API 服务器地址
-const API_BASE_URL = 'http://localhost:3457';
+const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:3457';
+
+// Python 后端 API 地址
+const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
 
 // 缓存环境检测结果
 let _isTauri: boolean | null = null;
@@ -81,8 +86,8 @@ export function convertFileSrc(path: string, _protocol?: string): string {
         return `asset://localhost/${encodeURIComponent(path)}`;
     }
     
-    // Web 模式：使用 HTTP API
-    return `${API_BASE_URL}/api/asset?path=${encodeURIComponent(path)}`;
+    // Web 模式：使用 Python 后端 HTTP API
+    return `${PYTHON_API_BASE}/file?path=${encodeURIComponent(path)}`;
 }
 
 /**
@@ -94,8 +99,29 @@ export function convertArchiveFileSrc(archivePath: string, entryPath: string): s
         return `asset://localhost/${encodeURIComponent(archivePath)}?entry=${encodeURIComponent(entryPath)}`;
     }
     
-    // Web 模式：使用 HTTP API
-    return `${API_BASE_URL}/api/asset?path=${encodeURIComponent(archivePath)}&entry=${encodeURIComponent(entryPath)}`;
+    // Web 模式：使用 Python 后端 HTTP API
+    return `${PYTHON_API_BASE}/archive/extract?archive_path=${encodeURIComponent(archivePath)}&inner_path=${encodeURIComponent(entryPath)}`;
+}
+
+/**
+ * 转换缩略图路径为可访问的 URL
+ */
+export function convertThumbnailSrc(path: string, innerPath?: string, maxSize?: number): string {
+    if (isRunningInTauri()) {
+        // Tauri 模式：使用原生缩略图 API
+        // 这里返回一个占位符，实际由组件处理
+        return `thumbnail://${encodeURIComponent(path)}`;
+    }
+    
+    // Web 模式：使用 Python 后端 HTTP API
+    let url = `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
+    if (innerPath) {
+        url += `&inner_path=${encodeURIComponent(innerPath)}`;
+    }
+    if (maxSize) {
+        url += `&max_size=${maxSize}`;
+    }
+    return url;
 }
 
 // SSE 连接管理

@@ -50,15 +50,18 @@ async def api_extract_file(
     if not Path(archive_path).exists():
         raise HTTPException(status_code=404, detail=f"压缩包不存在: {archive_path}")
     
+    # 标准化内部路径分隔符（ZIP 使用正斜杠）
+    normalized_inner_path = inner_path.replace("\\", "/")
+    
     try:
-        data = extract_file(archive_path, inner_path)
-        mime_type = get_mime_type(inner_path)
+        data = extract_file(archive_path, normalized_inner_path)
+        mime_type = get_mime_type(normalized_inner_path)
         
         return Response(
             content=data,
             media_type=mime_type,
             headers={
-                "Content-Disposition": f'inline; filename="{Path(inner_path).name}"',
+                "Content-Disposition": f'inline; filename="{Path(normalized_inner_path).name}"',
             }
         )
     except FileNotFoundError:

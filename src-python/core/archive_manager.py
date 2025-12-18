@@ -191,12 +191,15 @@ def extract_file(archive_path: str, inner_path: str) -> bytes:
     """从压缩包提取文件"""
     archive_type = detect_archive_type(archive_path)
     
+    # 标准化路径分隔符（ZIP 使用正斜杠）
+    normalized_path = inner_path.replace("\\", "/")
+    
     if archive_type == "zip":
-        return extract_from_zip(archive_path, inner_path)
+        return extract_from_zip(archive_path, normalized_path)
     elif archive_type == "rar":
-        return extract_from_rar(archive_path, inner_path)
+        return extract_from_rar(archive_path, normalized_path)
     elif archive_type == "7z":
-        return extract_from_7z(archive_path, inner_path)
+        return extract_from_7z(archive_path, normalized_path)
     else:
         raise ValueError(f"不支持的压缩包格式: {archive_path}")
 

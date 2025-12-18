@@ -246,16 +246,19 @@ export async function getThumbnailStats(): Promise<Record<string, { count: numbe
 
 // ===== 书籍 API =====
 
-export interface BookInfo {
+import type { BookInfo, Page, BookType } from '../types';
+
+// Python 后端返回的原始格式（snake_case）
+interface RawBookInfo {
     path: string;
     name: string;
     book_type: string;
-    pages: PageInfo[];
+    pages: RawPageInfo[];
     current_page: number;
     total_pages: number;
 }
 
-export interface PageInfo {
+interface RawPageInfo {
     path: string;
     name: string;
     index: number;
@@ -264,10 +267,50 @@ export interface PageInfo {
 }
 
 /**
+ * 生成页面的稳定哈希值
+ * 用于缓存键等场景
+ */
+function generateStableHash(bookPath: string, pagePath: string, index: number): string {
+    // 简单的哈希：使用路径和索引组合
+    return `${bookPath}:${pagePath}:${index}`;
+}
+
+/**
+ * 转换 Python 后端的 BookInfo 到前端格式
+ * 将 snake_case 转换为 camelCase，并填充前端需要的默认值
+ */
+function transformBookInfo(raw: RawBookInfo): BookInfo {
+    const pages: Page[] = raw.pages.map((p, idx) => ({
+        index: p.index,
+        entryIndex: idx,  // 使用数组索引作为 entry 顺序
+        path: p.path,
+        name: p.name,
+        size: 0,  // Python 后端暂未返回
+        width: p.width,
+        height: p.height,
+        loaded: false,
+        stableHash: generateStableHash(raw.path, p.path, p.index),
+    }));
+
+    return {
+        path: raw.path,
+        name: raw.name,
+        type: raw.book_type as BookType,
+        totalPages: raw.total_pages,
+        currentPage: raw.current_page,
+        pages,
+        sortMode: 'fileName',  // 默认排序模式
+        readOrder: 'leftToRight',  // 默认阅读顺序
+        pageMode: 'singlePage',  // 默认页面模式
+    };
+}
+
+/**
  * 打开书籍
  */
 export async function openBook(path: string): Promise<BookInfo> {
-    return apiPost<BookInfo>(`/book/open?path=${encodeURIComponent(path)}`);
+    const raw = await apiPost<RawBookInfo>(`/book/open?path=${encodeURIComponent(path)}`);
+    return transformBookInfo(raw);
 }
 
 /**
@@ -281,7 +324,8 @@ export async function closeBook(): Promise<void> {
  * 获取当前书籍
  */
 export async function getCurrentBook(): Promise<BookInfo | null> {
-    return apiGet<BookInfo | null>('/book/current');
+    const raw = await apiGet<RawBookInfo | null>('/book/current');
+    return raw ? transformBookInfo(raw) : null;
 }
 
 /**

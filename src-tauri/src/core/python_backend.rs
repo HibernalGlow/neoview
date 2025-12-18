@@ -1,6 +1,6 @@
 //! Python Backend Manager
 //! 
-//! 管理 Python FastAPI 后端进程的生命周期：
+//! 管理 Python `FastAPI` 后端进程的生命周期：
 //! - 启动 Python 进程
 //! - 健康检查等待
 //! - 进程生命周期管理
@@ -121,9 +121,8 @@ impl PythonBackendManager {
 
     /// 检查 Python 后端是否正在运行
     pub fn is_running(&self) -> bool {
-        let process_guard = match self.process.lock() {
-            Ok(g) => g,
-            Err(_) => return false,
+        let Ok(process_guard) = self.process.lock() else {
+            return false;
         };
         
         if let Some(ref child) = *process_guard {

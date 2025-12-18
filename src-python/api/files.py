@@ -232,3 +232,62 @@ async def move_to_trash(path: str = Query(..., description="路径")):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"移动到回收站失败: {e}")
+
+
+
+@router.post("/file/write")
+async def write_text_file(
+    path: str = Query(..., description="文件路径"),
+    content: str = Query(..., description="文件内容"),
+    encoding: str = Query("utf-8", description="编码")
+):
+    """写入文本文件"""
+    try:
+        p = Path(path)
+        # 确保父目录存在
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding=encoding)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"写入失败: {e}")
+
+
+@router.post("/file/copy")
+async def copy_path(
+    from_path: str = Query(..., description="源路径"),
+    to_path: str = Query(..., description="目标路径")
+):
+    """复制文件或目录"""
+    import shutil
+    
+    p = Path(from_path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"路径不存在: {from_path}")
+    
+    try:
+        if p.is_dir():
+            shutil.copytree(from_path, to_path)
+        else:
+            shutil.copy2(from_path, to_path)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"复制失败: {e}")
+
+
+@router.post("/file/move")
+async def move_path(
+    from_path: str = Query(..., description="源路径"),
+    to_path: str = Query(..., description="目标路径")
+):
+    """移动文件或目录"""
+    import shutil
+    
+    p = Path(from_path)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail=f"路径不存在: {from_path}")
+    
+    try:
+        shutil.move(from_path, to_path)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"移动失败: {e}")

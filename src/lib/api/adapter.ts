@@ -1,15 +1,11 @@
 /**
  * NeoView - API Adapter
  * 
- * 统一的 API 适配层，根据运行环境自动选择：
- * - Tauri 桌面模式：使用原生 IPC
- * - Web 浏览器模式：使用 Python HTTP API
+ * 统一的 API 适配层，全面使用 Python HTTP API
+ * 不再依赖 Tauri IPC
  * 
  * 注意：不使用浏览器路由，保持内部状态管理
  */
-
-// API 服务器地址
-const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:3457';
 
 // Python 后端 API 地址
 const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_BASE || 'http://localhost:8000/v1';
@@ -19,11 +15,11 @@ let _isTauri: boolean | null = null;
 
 /**
  * 检测是否运行在 Tauri 环境中
+ * 注意：即使在 Tauri 中，我们也使用 Python HTTP API
  */
 export function isRunningInTauri(): boolean {
     if (_isTauri !== null) return _isTauri;
     
-    // 检测 window.__TAURI__ 或 window.__TAURI_INTERNALS__
     _isTauri = typeof window !== 'undefined' && 
         (('__TAURI__' in window) || ('__TAURI_INTERNALS__' in window));
     
@@ -31,62 +27,269 @@ export function isRunningInTauri(): boolean {
 }
 
 /**
- * invoke 适配器 - 调用后端命令
+ * invoke 适配器 - 调用 Python HTTP API
  * 
- * 与 @tauri-apps/api/core 的 invoke 签名相同
+ * 保留此函数以兼容旧代码，但实际调用 Python HTTP API
+ * @deprecated 请直接使用 http-bridge.ts 中的函数
  */
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用原生 IPC
-        const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
-        return tauriInvoke<T>(cmd, args);
+    // 将 Tauri 命令映射到 Python API
+    const endpoint = mapCommandToEndpoint(cmd, args);
+    
+    if (!endpoint) {
+        console.warn(`[Adapter] 未映射的命令: ${cmd}`, args);
+        throw new Error(`Command not mapped: ${cmd}`);
     }
     
-    // Web 模式：使用 HTTP API
-    const response = await fetch(`${API_BASE_URL}/api/invoke/${cmd}`, {
-        method: 'POST',
+    const response = await fetch(`${PYTHON_API_BASE}${endpoint.path}`, {
+        method: endpoint.method,
         headers: {
             'Content-Type': 'application/json',
         },
-        body: args ? JSON.stringify(args) : '{}',
+        body: endpoint.body ? JSON.stringify(endpoint.body) : undefined,
     });
     
-    // 检查 HTTP 状态
     if (!response.ok) {
         const text = await response.text();
         console.warn(`[Adapter] HTTP ${response.status} for ${cmd}:`, text);
         throw new Error(`HTTP ${response.status}: ${text || 'Request failed'}`);
     }
     
+    const contentType = response.headers.get('content-type');
+    if (contentType?.includes('application/json')) {
+        return response.json();
+    }
+    
     const text = await response.text();
     if (!text) {
-        // 空响应，返回 null
         return null as T;
     }
     
-    const result = JSON.parse(text);
-    
-    if (!result.success) {
-        throw new Error(result.error || 'Unknown error');
+    // 尝试解析为 JSON
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text as T;
+    }
+}
+
+/**
+ * 命令到端点的映射
+ */
+interface EndpointMapping {
+    path: string;
+    method: 'GET' | 'POST' | 'DELETE';
+    body?: unknown;
+}
+
+function mapCommandToEndpoint(cmd: string, args?: Record<string, unknown>): EndpointMapping | null {
+    // 目录相关
+    if (cmd === 'load_directory_snapshot') {
+        return { path: `/directory/snapshot?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'list_subfolders') {
+        return { path: `/directory/subfolders?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'get_images_in_directory') {
+        return { path: `/directory/images?path=${encodeURIComponent(args?.path as string)}&recursive=${args?.recursive ?? false}`, method: 'GET' };
+    }
+    if (cmd === 'read_directory') {
+        return { path: `/directory/list?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
     }
     
-    return result.data as T;
+    // 文件相关
+    if (cmd === 'path_exists') {
+        return { path: `/file/exists?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'get_file_info' || cmd === 'get_file_metadata') {
+        return { path: `/file/info?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'create_directory') {
+        return { path: '/file/mkdir', method: 'POST', body: { path: args?.path } };
+    }
+    if (cmd === 'delete_path' || cmd === 'delete_file') {
+        return { path: `/file?path=${encodeURIComponent(args?.path as string)}`, method: 'DELETE' };
+    }
+    if (cmd === 'rename_path') {
+        return { path: '/file/rename', method: 'POST', body: { from_path: args?.from, to_path: args?.to } };
+    }
+    if (cmd === 'move_to_trash' || cmd === 'move_to_trash_async') {
+        return { path: '/file/trash', method: 'POST', body: { path: args?.path } };
+    }
+    if (cmd === 'read_text_file') {
+        return { path: `/file/text?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'write_text_file') {
+        return { path: '/file/write', method: 'POST', body: { path: args?.path, content: args?.content } };
+    }
+    
+    // 压缩包相关
+    if (cmd === 'list_archive_contents') {
+        return { path: `/archive/list?path=${encodeURIComponent(args?.archivePath as string)}`, method: 'GET' };
+    }
+    
+    // 缩略图相关
+    if (cmd === 'init_thumbnail_service_v3') {
+        return { path: '/thumbnail/init', method: 'POST', body: args };
+    }
+    if (cmd === 'request_visible_thumbnails_v3') {
+        return { path: '/thumbnail/visible', method: 'POST', body: args };
+    }
+    if (cmd === 'cancel_thumbnail_requests_v3') {
+        return { path: '/thumbnail/cancel', method: 'POST', body: { dir: args?.dir } };
+    }
+    if (cmd === 'reload_thumbnail_v3') {
+        return { path: '/thumbnail/reload', method: 'POST', body: args };
+    }
+    if (cmd === 'clear_thumbnail_cache_v3') {
+        return { path: '/thumbnail/cache', method: 'DELETE' };
+    }
+    if (cmd === 'vacuum_thumbnail_db_v3') {
+        return { path: '/thumbnail/vacuum', method: 'POST' };
+    }
+    if (cmd === 'preload_directory_thumbnails_v3') {
+        return { path: '/thumbnail/preload', method: 'POST', body: args };
+    }
+    
+    // 书籍相关
+    if (cmd === 'open_book') {
+        return { path: `/book/open?path=${encodeURIComponent(args?.path as string)}`, method: 'POST' };
+    }
+    if (cmd === 'close_book') {
+        return { path: '/book/close', method: 'POST' };
+    }
+    if (cmd === 'get_current_book') {
+        return { path: '/book/current', method: 'GET' };
+    }
+    if (cmd === 'navigate_to_page') {
+        return { path: '/book/navigate', method: 'POST', body: { page_index: args?.pageIndex } };
+    }
+    if (cmd === 'next_page') {
+        return { path: '/book/next', method: 'POST' };
+    }
+    if (cmd === 'previous_page') {
+        return { path: '/book/previous', method: 'POST' };
+    }
+    if (cmd === 'set_book_sort_mode') {
+        return { path: '/book/sort', method: 'POST', body: { sort_mode: args?.sortMode } };
+    }
+    
+    // 超分相关
+    if (cmd === 'upscale_service_init' || cmd === 'init_pyo3_upscaler') {
+        return { path: '/upscale/init', method: 'POST', body: args };
+    }
+    if (cmd === 'upscale_service_request') {
+        return { path: '/upscale/request', method: 'POST', body: args };
+    }
+    if (cmd === 'upscale_service_cancel_page') {
+        return { path: `/upscale/cancel/${args?.taskId || 'current'}`, method: 'POST' };
+    }
+    if (cmd === 'check_pyo3_upscaler_availability') {
+        return { path: '/upscale/available', method: 'GET' };
+    }
+    if (cmd === 'get_pyo3_available_models') {
+        return { path: '/upscale/models', method: 'GET' };
+    }
+    if (cmd === 'get_pyo3_cache_stats') {
+        return { path: '/upscale/cache-stats', method: 'GET' };
+    }
+    if (cmd === 'upscale_service_set_enabled') {
+        return { path: '/upscale/enabled', method: 'POST', body: { enabled: args?.enabled } };
+    }
+    if (cmd === 'upscale_service_sync_conditions') {
+        return { path: '/upscale/conditions', method: 'POST', body: args };
+    }
+    if (cmd === 'upscale_service_set_current_book') {
+        return { path: '/upscale/current-book', method: 'POST', body: { book_path: args?.bookPath } };
+    }
+    if (cmd === 'upscale_service_set_current_page') {
+        return { path: '/upscale/current-page', method: 'POST', body: { page_index: args?.pageIndex } };
+    }
+    if (cmd === 'upscale_service_request_preload_range') {
+        return { path: '/upscale/preload-range', method: 'POST', body: args };
+    }
+    if (cmd === 'upscale_service_cancel_book') {
+        return { path: '/upscale/cancel-book', method: 'POST', body: { book_path: args?.bookPath } };
+    }
+    if (cmd === 'upscale_service_clear_cache') {
+        return { path: '/upscale/clear-cache', method: 'POST', body: { book_path: args?.bookPath } };
+    }
+    if (cmd === 'pyo3_cancel_job') {
+        return { path: '/upscale/cancel-job', method: 'POST', body: { job_key: args?.jobKey } };
+    }
+    
+    // 视频相关
+    if (cmd === 'generate_video_thumbnail') {
+        return { path: `/video/thumbnail?path=${encodeURIComponent(args?.videoPath as string)}&time_seconds=${args?.timeSeconds ?? 10}`, method: 'GET' };
+    }
+    if (cmd === 'get_video_duration') {
+        return { path: `/video/duration?path=${encodeURIComponent(args?.videoPath as string)}`, method: 'GET' };
+    }
+    if (cmd === 'is_video_file') {
+        return { path: `/video/check?path=${encodeURIComponent(args?.filePath as string)}`, method: 'GET' };
+    }
+    if (cmd === 'check_ffmpeg_available') {
+        return { path: '/system/ffmpeg', method: 'GET' };
+    }
+    
+    // 系统相关
+    if (cmd === 'get_startup_config') {
+        return { path: '/system/startup-config', method: 'GET' };
+    }
+    if (cmd === 'save_startup_config') {
+        return { path: '/system/startup-config', method: 'POST', body: args?.config };
+    }
+    if (cmd === 'update_startup_config_field') {
+        return { path: '/system/startup-config/field', method: 'POST', body: { field: args?.field, value: args?.value } };
+    }
+    if (cmd === 'get_home_dir') {
+        return { path: '/system/home-dir', method: 'GET' };
+    }
+    
+    // EMM 相关
+    if (cmd === 'find_emm_databases') {
+        return { path: '/emm/databases', method: 'GET' };
+    }
+    if (cmd === 'find_emm_setting_file') {
+        return { path: '/emm/setting-file', method: 'GET' };
+    }
+    if (cmd === 'load_emm_metadata') {
+        return { path: '/emm/metadata', method: 'GET' };
+    }
+    if (cmd === 'save_emm_json') {
+        return { path: '/emm/save', method: 'POST', body: args };
+    }
+    if (cmd === 'get_emm_json') {
+        return { path: `/emm/json?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    if (cmd === 'update_rating_data') {
+        return { path: '/emm/rating', method: 'POST', body: args };
+    }
+    if (cmd === 'update_manual_tags') {
+        return { path: '/emm/manual-tags', method: 'POST', body: args };
+    }
+    if (cmd === 'save_ai_translation') {
+        return { path: '/emm/ai-translation', method: 'POST', body: args };
+    }
+    
+    // 页面帧相关
+    if (cmd === 'pf_update_context') {
+        return { path: '/page-frame/context', method: 'POST', body: args };
+    }
+    
+    // 图片尺寸相关
+    if (cmd === 'get_image_dimensions') {
+        return { path: `/dimensions?path=${encodeURIComponent(args?.path as string)}`, method: 'GET' };
+    }
+    
+    return null;
 }
 
 /**
  * convertFileSrc 适配器 - 转换文件路径为可访问的 URL
- * 
- * 与 @tauri-apps/api/core 的 convertFileSrc 签名相同
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function convertFileSrc(path: string, _protocol?: string): string {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用原生转换
-        // 动态导入会有问题，这里直接构造 asset URL
-        return `asset://localhost/${encodeURIComponent(path)}`;
-    }
-    
-    // Web 模式：使用 Python 后端 HTTP API
     return `${PYTHON_API_BASE}/file?path=${encodeURIComponent(path)}`;
 }
 
@@ -94,12 +297,6 @@ export function convertFileSrc(path: string, _protocol?: string): string {
  * 转换压缩包内文件路径为可访问的 URL
  */
 export function convertArchiveFileSrc(archivePath: string, entryPath: string): string {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用 asset 协议
-        return `asset://localhost/${encodeURIComponent(archivePath)}?entry=${encodeURIComponent(entryPath)}`;
-    }
-    
-    // Web 模式：使用 Python 后端 HTTP API
     return `${PYTHON_API_BASE}/archive/extract?archive_path=${encodeURIComponent(archivePath)}&inner_path=${encodeURIComponent(entryPath)}`;
 }
 
@@ -107,13 +304,6 @@ export function convertArchiveFileSrc(archivePath: string, entryPath: string): s
  * 转换缩略图路径为可访问的 URL
  */
 export function convertThumbnailSrc(path: string, innerPath?: string, maxSize?: number): string {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用原生缩略图 API
-        // 这里返回一个占位符，实际由组件处理
-        return `thumbnail://${encodeURIComponent(path)}`;
-    }
-    
-    // Web 模式：使用 Python 后端 HTTP API
     let url = `${PYTHON_API_BASE}/thumbnail?path=${encodeURIComponent(path)}`;
     if (innerPath) {
         url += `&inner_path=${encodeURIComponent(innerPath)}`;
@@ -124,107 +314,46 @@ export function convertThumbnailSrc(path: string, innerPath?: string, maxSize?: 
     return url;
 }
 
-// SSE 连接管理
-let sseConnection: EventSource | null = null;
-const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
+// 事件监听器存储
+const eventListeners = new Map<string, Set<(event: { payload: unknown }) => void>>();
 
 /**
  * listen 适配器 - 监听后端事件
  * 
- * 与 @tauri-apps/api/event 的 listen 签名相同
+ * 注意：Python 后端使用 WebSocket 推送事件
  */
 export async function listen<T>(
     event: string,
     handler: (event: { payload: T }) => void
 ): Promise<() => void> {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用原生事件系统
-        const { listen: tauriListen } = await import('@tauri-apps/api/event');
-        return tauriListen<T>(event, handler);
-    }
-    
-    // Web 模式：使用 SSE
-    ensureSseConnection();
-    
     // 注册事件处理器
-    if (!eventHandlers.has(event)) {
-        eventHandlers.set(event, new Set());
+    if (!eventListeners.has(event)) {
+        eventListeners.set(event, new Set());
     }
-    eventHandlers.get(event)!.add(handler as (payload: unknown) => void);
+    eventListeners.get(event)!.add(handler as (event: { payload: unknown }) => void);
     
     // 返回取消监听函数
     return () => {
-        const handlers = eventHandlers.get(event);
+        const handlers = eventListeners.get(event);
         if (handlers) {
-            handlers.delete(handler as (payload: unknown) => void);
+            handlers.delete(handler as (event: { payload: unknown }) => void);
             if (handlers.size === 0) {
-                eventHandlers.delete(event);
+                eventListeners.delete(event);
             }
         }
     };
 }
 
 /**
- * emit 适配器 - 发送事件到后端
- * 
- * 与 @tauri-apps/api/event 的 emit 签名相同
+ * emit 适配器 - 发送事件
  */
 export async function emit(event: string, payload?: unknown): Promise<void> {
-    if (isRunningInTauri()) {
-        // Tauri 模式：使用原生事件系统
-        const { emit: tauriEmit } = await import('@tauri-apps/api/event');
-        return tauriEmit(event, payload);
-    }
-    
-    // Web 模式：通过 HTTP 发送事件
-    // 注意：SSE 是单向的，如果需要双向通信可以考虑 WebSocket
-    console.warn('[Adapter] emit in web mode is not fully supported');
-}
-
-/**
- * 确保 SSE 连接已建立
- */
-function ensureSseConnection(): void {
-    if (sseConnection && sseConnection.readyState !== EventSource.CLOSED) {
-        return;
-    }
-    
-    sseConnection = new EventSource(`${API_BASE_URL}/api/events`);
-    
-    sseConnection.onopen = () => {
-        console.log('[Adapter] SSE 连接已建立');
-    };
-    
-    sseConnection.onerror = (error) => {
-        console.error('[Adapter] SSE 连接错误:', error);
-        // 自动重连（EventSource 会自动重连，但我们可以添加额外逻辑）
-        setTimeout(() => {
-            if (sseConnection?.readyState === EventSource.CLOSED) {
-                console.log('[Adapter] 尝试重新连接 SSE...');
-                ensureSseConnection();
-            }
-        }, 3000);
-    };
-    
-    sseConnection.onmessage = (event) => {
-        // 默认消息处理
-        console.log('[Adapter] SSE 消息:', event.data);
-    };
-    
-    // 监听所有已注册的事件类型
-    // 注意：SSE 的 addEventListener 需要在服务端发送对应的 event 类型
-    sseConnection.addEventListener('connected', () => {
-        console.log('[Adapter] SSE 连接确认');
-    });
-}
-
-/**
- * 关闭 SSE 连接
- */
-export function closeSseConnection(): void {
-    if (sseConnection) {
-        sseConnection.close();
-        sseConnection = null;
+    // 触发本地监听器
+    const handlers = eventListeners.get(event);
+    if (handlers) {
+        for (const handler of handlers) {
+            handler({ payload });
+        }
     }
 }
 
@@ -235,87 +364,43 @@ export function getRunMode(): 'tauri' | 'web' {
     return isRunningInTauri() ? 'tauri' : 'web';
 }
 
-// 导出类型
-export type { UnlistenFn } from '@tauri-apps/api/event';
-
+// 导出类型（兼容旧代码）
+export type UnlistenFn = () => void;
 
 // ===== 窗口 API 适配器 =====
 
-/**
- * 安全获取当前窗口
- * 在浏览器中返回 null
- */
 export async function getCurrentWindow(): Promise<unknown | null> {
-    if (!isRunningInTauri()) {
-        return null;
-    }
-    const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-    return getCurrentWebviewWindow();
+    return null;
 }
 
-/**
- * 窗口操作的空实现（用于浏览器模式）
- */
 export const mockWindow = {
-    async minimize() { console.log('[Adapter] minimize not available in browser'); },
-    async maximize() { console.log('[Adapter] maximize not available in browser'); },
+    async minimize() { console.log('[Adapter] minimize not available in web mode'); },
+    async maximize() { console.log('[Adapter] maximize not available in web mode'); },
     async close() { window.close(); },
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async setFullscreen(_fullscreen: boolean) { console.log('[Adapter] setFullscreen not available in browser'); },
+    async setFullscreen(_fullscreen: boolean) { console.log('[Adapter] setFullscreen not available in web mode'); },
     async isFullscreen() { return false; },
-    async startDragging() { console.log('[Adapter] startDragging not available in browser'); },
+    async startDragging() { console.log('[Adapter] startDragging not available in web mode'); },
     async setTitle(title: string) { document.title = title; },
-    async toggleMaximize() { console.log('[Adapter] toggleMaximize not available in browser'); },
+    async toggleMaximize() { console.log('[Adapter] toggleMaximize not available in web mode'); },
 };
 
-/**
- * 获取窗口对象（Tauri 或 mock）
- */
 export async function getAppWindow() {
-    if (isRunningInTauri()) {
-        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-        return getCurrentWebviewWindow();
-    }
     return mockWindow;
 }
 
-
 // ===== Path API 适配器 =====
 
-/**
- * homeDir 适配器 - 获取用户主目录
- * 
- * 与 @tauri-apps/api/path 的 homeDir 签名相同
- */
 export async function homeDir(): Promise<string> {
-    if (isRunningInTauri()) {
-        const { homeDir: tauriHomeDir } = await import('@tauri-apps/api/path');
-        return tauriHomeDir();
-    }
-    
-    // Web 模式：尝试通过 API 获取，或返回 Windows 默认路径
     try {
         const result = await invoke<string>('get_home_dir');
         if (result) return result;
     } catch {
         // 忽略错误
     }
-    
-    // 返回 Windows 常见的默认路径
     return 'C:\\';
 }
 
-/**
- * appDataDir 适配器 - 获取应用数据目录
- * 
- * 与 @tauri-apps/api/path 的 appDataDir 签名相同
- */
 export async function appDataDir(): Promise<string> {
-    if (isRunningInTauri()) {
-        const { appDataDir: tauriAppDataDir } = await import('@tauri-apps/api/path');
-        return tauriAppDataDir();
-    }
-    
-    // Web 模式：返回空字符串
     return '';
 }

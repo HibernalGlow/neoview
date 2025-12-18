@@ -58,7 +58,10 @@ async def api_extract_file(
     archive_path: str = Query(..., description="压缩包路径"),
     inner_path: str = Query(..., description="压缩包内文件路径"),
 ):
-    """从压缩包提取单个文件"""
+    """
+    从压缩包提取单个文件
+    【性能优化】使用线程池执行，不阻塞事件循环
+    """
     if not Path(archive_path).exists():
         raise HTTPException(status_code=404, detail=f"压缩包不存在: {archive_path}")
     
@@ -66,7 +69,14 @@ async def api_extract_file(
     normalized_inner_path = inner_path.replace("\\", "/")
     
     try:
-        data = extract_file(archive_path, normalized_inner_path)
+        # 【性能优化】在线程池中执行同步的提取操作
+        loop = asyncio.get_event_loop()
+        data = await loop.run_in_executor(
+            _archive_executor,
+            extract_file,
+            archive_path,
+            normalized_inner_path
+        )
         mime_type = get_mime_type(normalized_inner_path)
         
         return Response(
@@ -87,12 +97,21 @@ async def api_extract_to_temp(
     archive_path: str = Query(..., description="压缩包路径"),
     inner_path: str = Query(..., description="压缩包内文件路径"),
 ) -> str:
-    """提取到临时文件，返回路径"""
+    """
+    提取到临时文件，返回路径
+    【性能优化】使用线程池执行
+    """
     if not Path(archive_path).exists():
         raise HTTPException(status_code=404, detail=f"压缩包不存在: {archive_path}")
     
     try:
-        temp_path = extract_to_temp(archive_path, inner_path)
+        loop = asyncio.get_event_loop()
+        temp_path = await loop.run_in_executor(
+            _archive_executor,
+            extract_to_temp,
+            archive_path,
+            inner_path
+        )
         return temp_path
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"文件不存在: {inner_path}")
@@ -139,3 +158,51 @@ async def api_read_text_from_archive(
         raise HTTPException(status_code=400, detail=f"无法使用 {encoding} 解码文件")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取失败: {e}")
+
+
+# ============================================================================
+# 批量预加载 API
+# ============================================================================
+
+class PreloadRequest(BaseModel):
+    """批量预加载请求"""
+    archive_path: str
+    inner_paths: List[str]
+
+
+@router.post("/archive/preload")
+async def api_preload_pages(request: PreloadRequest):
+    """
+    批量预加载压缩包内的多个文件到缓存
+    【性能优化】并行提取多个文件，加速后续访问
+    
+    返回成功预加载的文件数量
+    """
+    if not Path(request.archive_path).exists():
+        raise HTTPException(status_code=404, detail=f"压缩包不存在: {request.archive_path}")
+    
+    loop = asyncio.get_event_loop()
+    
+    async def preload_one(inner_path: str) -> bool:
+        """预加载单个文件"""
+        try:
+            normalized = inner_path.replace("\\", "/")
+            await loop.run_in_executor(
+                _archive_executor,
+                extract_file,
+                request.archive_path,
+                normalized
+            )
+            return True
+        except Exception:
+            return False
+    
+    # 并行预加载所有文件
+    results = await asyncio.gather(*[preload_one(p) for p in request.inner_paths])
+    success_count = sum(1 for r in results if r)
+    
+    return {
+        "success": True,
+        "preloaded": success_count,
+        "total": len(request.inner_paths)
+    }

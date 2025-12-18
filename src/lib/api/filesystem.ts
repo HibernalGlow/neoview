@@ -453,15 +453,36 @@ export async function preloadArchivePages(
   archivePath: string,
   pagePaths: string[]
 ): Promise<PreloadResult> {
-  // Python 后端暂不支持预加载，返回模拟结果
+  if (pagePaths.length === 0) {
+    return { total: 0, success: 0, failed: 0, totalBytes: 0, errors: null };
+  }
+  
   console.log(`⚡ 预加载请求: ${pagePaths.length} 页 from ${archivePath}`);
-  return {
-    total: pagePaths.length,
-    success: pagePaths.length,
-    failed: 0,
-    totalBytes: 0,
-    errors: null
-  };
+  
+  try {
+    // 调用后端批量预加载 API
+    const result = await apiPost<{ success: boolean; preloaded: number; total: number }>(
+      '/archive/preload',
+      { archive_path: archivePath, inner_paths: pagePaths }
+    );
+    
+    return {
+      total: result.total,
+      success: result.preloaded,
+      failed: result.total - result.preloaded,
+      totalBytes: 0,
+      errors: null
+    };
+  } catch (err) {
+    console.warn('预加载失败:', err);
+    return {
+      total: pagePaths.length,
+      success: 0,
+      failed: pagePaths.length,
+      totalBytes: 0,
+      errors: [String(err)]
+    };
+  }
 }
 
 export async function isSupportedArchive(path: string): Promise<boolean> {

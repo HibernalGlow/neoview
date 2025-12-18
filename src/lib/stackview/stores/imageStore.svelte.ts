@@ -214,47 +214,48 @@ export function createImageStore() {
       state.secondDimensions = null;
     }
     
-    // 异步加载当前图片
+    // 【性能优化】异步加载当前图片（不阻塞翻页操作）
+    // 使用 Promise 但不 await，让加载在后台进行
     if (!cached) {
-      try {
-        const image = await imagePool.get(currentIndex);
-        console.log(`🖼️ ImageStore: 异步加载完成 page=${currentIndex} url=${image?.url?.substring(0, 60)}...`);
-        if (image && lastLoadedIndex === currentIndex) {
+      const loadIndex = currentIndex; // 捕获当前索引
+      imagePool.get(loadIndex).then((image) => {
+        console.log(`🖼️ ImageStore: 异步加载完成 page=${loadIndex} url=${image?.url?.substring(0, 60)}...`);
+        // 只有当仍然是当前页时才更新状态
+        if (image && lastLoadedIndex === loadIndex) {
           state.currentUrl = image.url;
           state.dimensions = image.width && image.height 
             ? { width: image.width, height: image.height } 
             : null;
-          // 获取背景色（可能已在加载时计算好）
-          state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
-        }
-      } catch (err) {
-        state.error = String(err);
-      } finally {
-        if (lastLoadedIndex === currentIndex) {
+          state.backgroundColor = imagePool.getBackgroundColor(loadIndex) ?? null;
           state.loading = false;
         }
-      }
+      }).catch((err) => {
+        if (lastLoadedIndex === loadIndex) {
+          state.error = String(err);
+          state.loading = false;
+        }
+      });
     }
     
-    // 双页模式：异步加载第二张（独立于当前图片是否缓存）
-    // 使用之前计算的 shouldLoadSecond 来决定是否加载
-    if (shouldLoadSecond && !secondCached && lastLoadedIndex === currentIndex) {
+    // 【性能优化】双页模式：异步加载第二张（不阻塞）
+    if (shouldLoadSecond && !secondCached) {
       if (secondIndex < book.pages.length) {
-        try {
-          const secondImage = await imagePool.get(secondIndex);
-          if (lastLoadedIndex === currentIndex) {
+        const loadSecondIndex = secondIndex;
+        const loadCurrentIndex = currentIndex;
+        imagePool.get(loadSecondIndex).then((secondImage) => {
+          if (lastLoadedIndex === loadCurrentIndex) {
             state.secondUrl = secondImage?.url ?? null;
             state.secondDimensions = secondImage?.width && secondImage?.height 
               ? { width: secondImage.width, height: secondImage.height } 
               : null;
           }
-        } catch (err) {
+        }).catch((err) => {
           console.warn('Failed to load second page:', err);
-        }
+        });
       }
     }
     
-    // 后台预加载
+    // 后台预加载（不阻塞）
     imagePool.preloadRange(currentIndex, 4);
   }
   

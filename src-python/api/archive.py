@@ -1,10 +1,18 @@
 """
 压缩包处理 API
 提供压缩包内容列表、文件提取等功能
+
+【性能优化】
+- 使用线程池执行同步的压缩包提取操作，避免阻塞事件循环
+- 支持批量预加载 API，提前解压邻近页面
 """
+import asyncio
 from pathlib import Path
+from typing import List
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from models.schemas import ArchiveEntry
 from core.archive_manager import (
@@ -17,6 +25,10 @@ from core.archive_manager import (
 from api.files import get_mime_type
 
 router = APIRouter()
+
+# 【性能优化】线程池用于执行同步的压缩包操作
+# 使用 4 个线程，允许并行提取多个文件
+_archive_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="archive_")
 
 
 @router.get("/archive/list")

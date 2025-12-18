@@ -206,3 +206,5 @@
 - [x] 添加 `list_subfolders` 命令和 `list_subfolders_internal` 函数
 - [x] 修复 `listSubfolders` 前端 null 检查
 - [x] 添加 `get_home_dir` 命令，修复 Web 模式下 homeDir 返回值
+- [x] 添加 Book 导航命令：`next_page`, `previous_page`, `navigate_to_image`, `set_book_sort_mode`
+- [x] 修复 clippy 警告：使用方法引用替代闭包，`is_some_and` 替代 `map().unwrap_or(false)`

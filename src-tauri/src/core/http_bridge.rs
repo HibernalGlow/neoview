@@ -226,7 +226,7 @@ async fn execute_command(
         // ===== 文件系统命令 =====
         "path_exists" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let exists = std::path::Path::new(path).exists();
@@ -235,7 +235,7 @@ async fn execute_command(
         
         "browse_directory" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             // 直接使用文件系统操作
@@ -245,7 +245,7 @@ async fn execute_command(
         
         "load_directory_snapshot" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             // 返回目录快照格式
@@ -258,7 +258,7 @@ async fn execute_command(
         
         "read_directory" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let entries = read_directory_internal(path)?;
@@ -267,17 +267,17 @@ async fn execute_command(
         
         "get_file_info" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let info = get_file_info_internal(path)?;
             Ok(serde_json::to_value(info).unwrap_or_default())
         }
         
-        // get_file_metadata - 与 get_file_info 相同，返回 FsItem 格式
+        // get_file_metadata - 与 get_file_info 相同，返回 `FsItem` 格式
         "get_file_metadata" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let info = get_file_info_internal(path)?;
@@ -287,7 +287,7 @@ async fn execute_command(
         // list_subfolders - 列出子文件夹
         "list_subfolders" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let subfolders = list_subfolders_internal(path)?;
@@ -295,6 +295,24 @@ async fn execute_command(
         }
         
         // ===== Book 命令 =====
+        "open_book" => {
+            let path = args.get("path")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("Missing path parameter")?;
+            
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            let book = manager.open_book(path)?;
+            Ok(serde_json::to_value(book).unwrap_or_default())
+        }
+        
+        "close_book" => {
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            manager.close_book();
+            Ok(serde_json::Value::Null)
+        }
+        
         "get_current_book" => {
             let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
             let manager = book_state.lock().map_err(|e| e.to_string())?;
@@ -302,10 +320,63 @@ async fn execute_command(
             Ok(serde_json::to_value(book).unwrap_or_default())
         }
         
+        "navigate_to_page" => {
+            let page_index = args.get("pageIndex")
+                .and_then(serde_json::Value::as_i64)
+                .ok_or("Missing pageIndex parameter")?;
+            let page_index = usize::try_from(page_index).map_err(|_| "Invalid pageIndex")?;
+            
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            manager.navigate_to_page(page_index)?;
+            Ok(serde_json::Value::Null)
+        }
+        
+        "next_page" => {
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            let page = manager.next_page()?;
+            Ok(serde_json::json!(page))
+        }
+        
+        "previous_page" => {
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            let page = manager.previous_page()?;
+            Ok(serde_json::json!(page))
+        }
+        
+        "navigate_to_image" => {
+            let image_path = args.get("imagePath")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("Missing imagePath parameter")?;
+            
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            let page = manager.navigate_to_image(image_path)?;
+            Ok(serde_json::json!(page))
+        }
+        
+        "set_book_sort_mode" => {
+            let sort_mode_str = args.get("sortMode")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("Missing sortMode parameter")?;
+            
+            // 解析排序模式
+            let sort_mode: crate::models::PageSortMode = serde_json::from_value(
+                serde_json::Value::String(sort_mode_str.to_string())
+            ).map_err(|e| format!("Invalid sortMode: {e}"))?;
+            
+            let book_state = app_handle.state::<std::sync::Mutex<crate::core::BookManager>>();
+            let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+            let book = manager.set_sort_mode(sort_mode)?;
+            Ok(serde_json::to_value(book).unwrap_or_default())
+        }
+        
         // ===== 图片命令 =====
         "load_image_base64" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let data = load_image_base64_internal(path).await?;
@@ -314,7 +385,7 @@ async fn execute_command(
         
         "get_image_dimensions" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let dims = get_image_dimensions_internal(path).await?;
@@ -324,7 +395,7 @@ async fn execute_command(
         // ===== 压缩包命令 =====
         "list_archive_contents" => {
             let path = args.get("path")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing path parameter")?;
             
             let fs_state = app_handle.state::<crate::commands::fs_commands::FsState>();
@@ -336,10 +407,10 @@ async fn execute_command(
         
         "load_image_from_archive_base64" => {
             let archive_path = args.get("archivePath")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing archivePath parameter")?;
             let entry_path = args.get("entryPath")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing entryPath parameter")?;
             
             let fs_state = app_handle.state::<crate::commands::fs_commands::FsState>();
@@ -353,7 +424,7 @@ async fn execute_command(
         // ===== 缩略图命令 =====
         "has_thumbnail" => {
             let key = args.get("key")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing key parameter")?;
             
             let thumb_state = app_handle.state::<crate::commands::thumbnail_commands::ThumbnailState>();
@@ -364,7 +435,7 @@ async fn execute_command(
         
         "load_thumbnail_from_db" => {
             let key = args.get("key")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .ok_or("Missing key parameter")?;
             
             let thumb_state = app_handle.state::<crate::commands::thumbnail_commands::ThumbnailState>();
@@ -456,7 +527,7 @@ async fn execute_command(
 // ===== 内部辅助函数 =====
 
 /// 浏览目录 - 返回文件和文件夹列表
-/// 返回格式与前端 FsItem 类型匹配
+/// 返回格式与前端 `FsItem` 类型匹配
 fn browse_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
     let path = std::path::Path::new(path);
     if !path.exists() {
@@ -476,19 +547,14 @@ fn browse_directory_internal(path: &str) -> Result<Vec<serde_json::Value>, Strin
         let size = metadata.as_ref().map_or(0, std::fs::Metadata::len);
         
         // 检查是否为图片
-        let is_image = if is_dir {
-            false
-        } else {
-            entry_path.extension()
-                .and_then(|e| e.to_str())
-                .map(|e| image_exts.contains(&e.to_lowercase().as_str()))
-                .unwrap_or(false)
-        };
+        let is_image = !is_dir && entry_path.extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| image_exts.contains(&e.to_lowercase().as_str()));
         
         entries.push(serde_json::json!({
             "name": entry.file_name().to_string_lossy(),
             "path": entry_path.to_string_lossy(),
-            "isDir": is_dir,  // 与前端 FsItem 类型匹配
+            "isDir": is_dir,  // 与前端 `FsItem` 类型匹配
             "size": size,
             "isImage": is_image
         }));
@@ -510,26 +576,21 @@ fn get_file_info_internal(path: &str) -> Result<serde_json::Value, String> {
     
     // 图片扩展名列表
     let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp", "ico", "tiff", "tif", "svg", "jxl"];
-    let is_image = if is_dir {
-        false
-    } else {
-        path_obj.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| image_exts.contains(&e.to_lowercase().as_str()))
-            .unwrap_or(false)
-    };
+    let is_image = !is_dir && path_obj.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| image_exts.contains(&e.to_lowercase().as_str()));
     
     Ok(serde_json::json!({
         "path": path_obj.to_string_lossy(),
         "name": path_obj.file_name().map(|n| n.to_string_lossy().to_string()),
-        "isDir": is_dir,  // 与前端 FsItem 类型匹配
+        "isDir": is_dir,  // 与前端 `FsItem` 类型匹配
         "isImage": is_image,
         "size": metadata.len(),
         "readonly": metadata.permissions().readonly(),
     }))
 }
 
-/// 列出子文件夹（用于 FolderTree）
+/// 列出子文件夹（用于 `FolderTree`）
 fn list_subfolders_internal(path: &str) -> Result<Vec<serde_json::Value>, String> {
     let path = std::path::Path::new(path);
     if !path.exists() {

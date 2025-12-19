@@ -55,6 +55,8 @@ pub mod mmap_archive;
 pub mod custom_protocol;
 pub mod rkyv_index;
 pub mod stretto_cache;
+pub mod fast_path;
+pub mod profiling;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

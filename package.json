@@ -9,7 +9,8 @@
   },
   "type": "module",
   "resolutions": {
-    "yaml": "^2.4.2"
+    "yaml": "^2.4.2",
+    "supports-color": "^7.2.0"
   },
   "scripts": {
     "dev": "vite",
@@ -24,7 +25,7 @@
     "@eslint/compat": "^1.2.9",
     "@internationalized/date": "^3.8.1",
     "@lucide/svelte": "^0.554.0",
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@sveltejs/vite-plugin-svelte": "^6.0.0",
     "@tanstack/table-core": "^8.21.3",
     "@tauri-apps/cli": "^2.5.0",
     "@tsconfig/svelte": "^5.0.4",
@@ -76,6 +77,6 @@
     "tailwindcss": "^4.1.7",
     "tauri-plugin-clipboard-x-api": "^2.0.1",
     "viewerjs": "^1.11.7",
-    "zod": "^3.25.76"
+    "zod": "^4.1.0"
   }
 }

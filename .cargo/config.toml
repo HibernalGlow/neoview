@@ -1,0 +1,12 @@
+# 固定 PyO3 使用的 Python 路径，避免每次重编译
+[env]
+# 使用项目的 .venv 中的 Python（根据你的实际路径调整）
+# PYO3_PYTHON = ".venv/Scripts/python.exe"
+
+# 或者使用系统 Python
+PYO3_PYTHON = "python"
+
+# 告诉 cargo 不要因为这些环境变量变化而重编译
+[build]
+# 增量编译
+incremental = true

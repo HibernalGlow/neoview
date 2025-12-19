@@ -236,6 +236,10 @@ let penetrateMode = $derived(virtualMode
 let inlineTreeMode = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyInlineTreeMode : virtualPanelSettingsStore.bookmarkInlineTreeMode)
 	: globalInlineTreeModeValue);
+// 工具栏 tooltip 显示控制（默认关闭）
+let showToolbarTooltip = $derived(virtualMode 
+	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyShowToolbarTooltip : virtualPanelSettingsStore.bookmarkShowToolbarTooltip)
+	: false);
 let thumbnailWidthPercent = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyThumbnailWidthPercent : virtualPanelSettingsStore.bookmarkThumbnailWidthPercent)
 	: globalThumbnailWidthPercentValue);
@@ -327,6 +331,14 @@ function handleToggleInlineTreeMode() {
 		virtualPanelSettingsStore.toggleBookmarkInlineTreeMode();
 	} else {
 		onToggleInlineTree?.();
+	}
+}
+
+function handleToggleShowToolbarTooltip() {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.toggleHistoryShowToolbarTooltip();
+	} else if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.toggleBookmarkShowToolbarTooltip();
 	}
 }
 
@@ -823,7 +835,7 @@ async function handleReloadSelectedThumbnails() {
 
 	<!-- 功能按钮组 -->
 	<div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={multiSelectMode ? 'default' : 'ghost'}
@@ -839,7 +851,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={deleteMode ? 'default' : 'ghost'}
@@ -857,7 +869,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button 
 					variant={folderTreeConfig.visible || inlineTreeMode || treePanelExpanded ? 'default' : 'ghost'} 
@@ -879,7 +891,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={showSearchBar ? 'default' : 'ghost'}
@@ -895,7 +907,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={showMigrationBar ? 'default' : 'ghost'}
@@ -911,7 +923,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={showRandomTagBar ? 'default' : 'ghost'}
@@ -927,7 +939,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={penetrateMode ? 'default' : 'ghost'}
@@ -954,7 +966,7 @@ async function handleReloadSelectedThumbnails() {
 		</Tooltip.Root>
 
 		<!-- 视图样式按钮 -->
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button 
 					variant={viewPanelExpanded ? 'default' : 'ghost'} 
@@ -972,7 +984,7 @@ async function handleReloadSelectedThumbnails() {
 		</Tooltip.Root>
 
 		<!-- 更多设置按钮（展开/折叠设置栏） -->
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button 
 					variant={showMoreSettings ? 'secondary' : 'ghost'} 
@@ -1330,6 +1342,24 @@ async function handleReloadSelectedThumbnails() {
 
 			<Tabs.Content value="other" class="px-2 py-2 mt-0">
 				<div class="flex flex-wrap items-center gap-4 text-xs">
+					<!-- 工具栏 Tooltip 开关（仅在历史/书签模式下显示） -->
+					{#if virtualMode}
+						<div class="flex items-center gap-2">
+							<Settings2 class="h-3.5 w-3.5 text-muted-foreground" />
+							<span class="text-muted-foreground">工具栏提示:</span>
+							<Button 
+								variant={showToolbarTooltip ? 'default' : 'outline'} 
+								size="sm" 
+								class="h-6 text-xs px-2"
+								onclick={handleToggleShowToolbarTooltip}
+							>
+								{showToolbarTooltip ? '开' : '关'}
+							</Button>
+							<span class="text-muted-foreground/60 text-[10px]">
+								鼠标悬停时显示按钮提示
+							</span>
+						</div>
+					{/if}
 					<!-- 同步文件夹开关（仅在历史/书签模式下显示） -->
 					{#if virtualMode}
 						<div class="flex items-center gap-2">

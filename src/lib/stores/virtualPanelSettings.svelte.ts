@@ -21,6 +21,7 @@ export interface VirtualPanelSettings {
     folderTreeVisible: boolean;
     folderTreeLayout: TreePosition;
     folderTreeSize: number;
+    showToolbarTooltip: boolean;
 }
 
 const STORAGE_KEY_HISTORY = 'neoview-history-panel-settings';
@@ -40,7 +41,8 @@ function createDefaultSettings(): VirtualPanelSettings {
         thumbnailWidthPercent: 20,
         folderTreeVisible: false,
         folderTreeLayout: 'left',
-        folderTreeSize: 200
+        folderTreeSize: 200,
+        showToolbarTooltip: false
     };
 }
 
@@ -84,6 +86,7 @@ class VirtualPanelSettingsStore {
     get historyFolderTreeLayout() { return this.historySettings.folderTreeLayout; }
     get historyFolderTreeSize() { return this.historySettings.folderTreeSize; }
     get historyFolderTreeConfig() { return { visible: this.historySettings.folderTreeVisible, layout: this.historySettings.folderTreeLayout, size: this.historySettings.folderTreeSize }; }
+    get historyShowToolbarTooltip() { return this.historySettings.showToolbarTooltip; }
 
     // Bookmark panel getters
     get bookmarkViewStyle() { return this.bookmarkSettings.viewStyle; }
@@ -100,6 +103,7 @@ class VirtualPanelSettingsStore {
     get bookmarkFolderTreeLayout() { return this.bookmarkSettings.folderTreeLayout; }
     get bookmarkFolderTreeSize() { return this.bookmarkSettings.folderTreeSize; }
     get bookmarkFolderTreeConfig() { return { visible: this.bookmarkSettings.folderTreeVisible, layout: this.bookmarkSettings.folderTreeLayout, size: this.bookmarkSettings.folderTreeSize }; }
+    get bookmarkShowToolbarTooltip() { return this.bookmarkSettings.showToolbarTooltip; }
 
     // Generic getters by mode
     getSettings(mode: 'history' | 'bookmark'): VirtualPanelSettings {
@@ -165,6 +169,14 @@ class VirtualPanelSettingsStore {
         this.historySettings.sortOrder = newOrder;
         saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
     }
+    toggleHistoryShowToolbarTooltip() {
+        this.historySettings.showToolbarTooltip = !this.historySettings.showToolbarTooltip;
+        saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
+    }
+    setHistoryShowToolbarTooltip(value: boolean) {
+        this.historySettings.showToolbarTooltip = value;
+        saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
+    }
 
     // Bookmark panel setters
     setBookmarkViewStyle(value: FolderViewStyle) {
@@ -223,6 +235,14 @@ class VirtualPanelSettingsStore {
         const newOrder = order ?? (this.bookmarkSettings.sortField === field && this.bookmarkSettings.sortOrder === 'asc' ? 'desc' : 'asc');
         this.bookmarkSettings.sortField = field;
         this.bookmarkSettings.sortOrder = newOrder;
+        saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
+    }
+    toggleBookmarkShowToolbarTooltip() {
+        this.bookmarkSettings.showToolbarTooltip = !this.bookmarkSettings.showToolbarTooltip;
+        saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
+    }
+    setBookmarkShowToolbarTooltip(value: boolean) {
+        this.bookmarkSettings.showToolbarTooltip = value;
         saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
     }
 }

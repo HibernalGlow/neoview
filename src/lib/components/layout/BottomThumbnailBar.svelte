@@ -347,6 +347,12 @@
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
+		// 【关键】如果正在等待主图，跳过加载
+		if (thumbnailService.isWaitingForMainImage()) {
+			console.log('🖼️ BottomThumbnailBar: Skipping load, waiting for main image');
+			return;
+		}
+
 		const centerIndex = bookStore.currentPageIndex;
 		// 直接调用 thumbnailService，它内部会处理中央优先和去重
 		thumbnailService.loadThumbnails(centerIndex);
@@ -733,12 +739,10 @@
 			// 【关键】清空加载状态，防止旧任务继续执行
 			loadingIndices.clear();
 			noThumbnailPaths.clear();
-			// 清空上一本书的缩略图缓存
-			thumbnailCacheStore.setBook(currentBook.path);
-			// 设置 imagePool 当前书籍
-			imagePool.setCurrentBook(currentBook.path);
-			// 触发重新加载缩略图
-			scheduleLoadVisibleThumbnails();
+			// 【关键】通知 thumbnailService 书籍变化，设置等待主图标志
+			thumbnailService.handleBookChange(currentBook.path);
+			// 注意：不再在这里调用 scheduleLoadVisibleThumbnails
+			// 缩略图加载会在主图完成后由 thumbnailService.notifyMainImageReady 触发
 		}
 	});
 

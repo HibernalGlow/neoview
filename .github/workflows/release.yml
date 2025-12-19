@@ -28,7 +28,7 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 22
           cache: 'yarn'
 
       - name: setup python 3.11

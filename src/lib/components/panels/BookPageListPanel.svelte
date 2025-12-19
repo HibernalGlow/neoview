@@ -17,10 +17,12 @@
 		<h2 class="text-sm font-semibold">页面列表</h2>
 	</div>
 
-	<!-- 卡片容器 -->
-	<div class="flex-1 space-y-2 overflow-y-auto p-2">
+	<!-- 卡片容器 - 使用 min-h-0 确保 flex 子元素正确收缩 -->
+	<div class="flex min-h-0 flex-1 flex-col p-2">
 		{#each panelCards as card (card.id)}
-			<CardRenderer cardId={card.id} panelId="pageList" />
+			<div class="flex min-h-0 flex-1 flex-col">
+				<CardRenderer cardId={card.id} panelId="pageList" />
+			</div>
 		{/each}
 
 		{#if panelCards.length === 0}

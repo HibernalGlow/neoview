@@ -240,7 +240,7 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 	{#if isExpanded || hideHeader}
 		<div 
 			bind:this={contentRef}
-			class="{hideHeader ? '' : (compact ? 'px-2 pb-2' : 'px-3 pb-3')} overflow-auto {fullHeight ? 'flex-1 min-h-0 flex flex-col' : ''} {orientation === 'horizontal' ? 'flex-1' : ''}" 
+			class="{hideHeader ? '' : (compact ? 'px-2 pb-2' : 'px-3 pb-3')} {fullHeight ? 'relative flex-1 min-h-0 flex flex-col overflow-hidden' : 'overflow-auto'} {orientation === 'horizontal' ? 'flex-1' : ''}" 
 			style={height ? `height: ${height}px` : (fullHeight ? '' : '')}
 			transition:slide={{ duration: 200, axis: orientation === 'horizontal' ? 'x' : 'y' }}
 		>

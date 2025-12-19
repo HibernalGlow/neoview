@@ -244,6 +244,14 @@ pub fn run() {
             commands::previous_page,
             commands::navigate_to_image,
             commands::set_book_sort_mode,
+            // Archive cache commands
+            commands::get_cache_stats,
+            commands::clear_index_cache,
+            commands::invalidate_archive_cache,
+            commands::preheat_adjacent_archives,
+            commands::cancel_preheat,
+            commands::cancel_current_load,
+            commands::get_load_metrics,
             // Image commands
             commands::load_image,
             commands::load_image_base64,

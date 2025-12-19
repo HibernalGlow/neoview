@@ -1,28 +1,68 @@
-//! NeoView - Book Manager
+//! `NeoView` - Book Manager
 //! 书籍管理核心模块
 
+use crate::core::archive_index_cache::{ArchiveIndex, IndexCache, IndexEntry, is_image_file};
+use crate::core::archive_preheat::PreheatSystem;
+use crate::core::load_command_queue::{CommandQueue, LoadMetrics, LoadOptions, LoadResult, PerformanceMonitor};
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
 use crate::core::video_exts;
 use crate::models::{BookInfo, BookType, Page, PageSortMode};
+use log::{debug, info};
 use natural_sort_rs::natural_cmp;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub struct BookManager {
     current_book: Option<BookInfo>,
-    // 注意：预加载功能已移至 PageManager，此处不再维护预加载缓存
+    /// 索引缓存
+    index_cache: Arc<IndexCache>,
+    /// 预热系统
+    preheat_system: Arc<PreheatSystem>,
+    /// 命令队列
+    command_queue: Arc<CommandQueue>,
+    /// 性能监控
+    performance_monitor: Arc<PerformanceMonitor>,
 }
 
 impl BookManager {
     pub fn new() -> Self {
+        Self::with_cache(Arc::new(IndexCache::default()))
+    }
+
+    /// 使用指定的索引缓存创建 BookManager
+    pub fn with_cache(index_cache: Arc<IndexCache>) -> Self {
         Self {
             current_book: None,
+            index_cache,
+            preheat_system: Arc::new(PreheatSystem::default()),
+            command_queue: Arc::new(CommandQueue::new()),
+            performance_monitor: Arc::new(PerformanceMonitor::default()),
         }
+    }
+
+    /// 获取索引缓存
+    pub fn index_cache(&self) -> &Arc<IndexCache> {
+        &self.index_cache
+    }
+
+    /// 获取预热系统
+    pub fn preheat_system(&self) -> &Arc<PreheatSystem> {
+        &self.preheat_system
+    }
+
+    /// 获取命令队列
+    pub fn command_queue(&self) -> &Arc<CommandQueue> {
+        &self.command_queue
+    }
+
+    /// 获取性能监控
+    pub fn performance_monitor(&self) -> &Arc<PerformanceMonitor> {
+        &self.performance_monitor
     }
 
     /// 打开书籍
@@ -171,23 +211,31 @@ impl BookManager {
         Ok(())
     }
 
-    /// 加载压缩包中的图片页面
+    /// 加载压缩包中的图片页面（使用索引缓存）
     fn load_archive_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
-        use crate::core::archive::ArchiveManager;
+        let start = Instant::now();
+        
+        // 尝试从缓存获取索引
+        let index = if let Some(cached) = self.index_cache.get(path) {
+            debug!("📦 使用缓存索引: {}", path.display());
+            cached
+        } else {
+            // 缓存未命中，构建新索引
+            debug!("📦 构建新索引: {}", path.display());
+            let index = self.build_archive_index(path)?;
+            self.index_cache.put(path, index)
+        };
 
-        let archive_manager = ArchiveManager::new();
-        // 使用 list_contents 自动检测格式（支持 ZIP/RAR/7z）
-        let items = archive_manager.list_contents(path)?;
+        let index_time = start.elapsed().as_millis() as u64;
+        debug!("📦 索引加载耗时: {}ms", index_time);
 
-        // 过滤出图片/视频文件并按名称排序
-        let mut page_items: Vec<_> = items
-            .into_iter()
-            .filter(|item| {
-                if item.is_dir {
-                    return false;
-                }
-                let path = PathBuf::from(&item.name);
-                self.is_image_file(&path) || self.is_video_file(&path)
+        // 从索引构建页面列表
+        let mut page_items: Vec<&IndexEntry> = index
+            .entries
+            .iter()
+            .filter(|e| {
+                let p = PathBuf::from(&e.name);
+                self.is_image_file_static(&e.name) || self.is_video_file(&p)
             })
             .collect();
 
@@ -195,14 +243,11 @@ impl BookManager {
         page_items.sort_by(|a, b| natural_cmp::<str, _>(&a.name, &b.name));
 
         // 创建页面列表
-        for (index, item) in page_items.iter().enumerate() {
-            // 对于压缩包，计算 stable_hash
-            let path_key =
-                build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
+        for (idx, item) in page_items.iter().enumerate() {
+            let path_key = build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
             let stable_hash = calculate_path_hash(&path_key);
 
-            // 对于压缩包,path 使用压缩包内的文件路径
-            let page = Page::new(index, item.path.clone(), item.name.clone(), item.size)
+            let page = Page::new(idx, item.path.clone(), item.name.clone(), item.size)
                 .with_stable_hash(stable_hash)
                 .with_inner_path(Some(item.name.clone()))
                 .with_entry_index(item.entry_index)
@@ -211,7 +256,95 @@ impl BookManager {
         }
 
         book.total_pages = book.pages.len();
+
+        // 触发预热
+        self.preheat_system.trigger(path);
+
         Ok(())
+    }
+
+    /// 构建压缩包索引
+    fn build_archive_index(&self, path: &Path) -> Result<ArchiveIndex, String> {
+        use crate::core::archive::ArchiveManager;
+
+        let archive_manager = ArchiveManager::new();
+        let items = archive_manager.list_contents(path)?;
+
+        // 获取文件信息
+        let metadata = fs::metadata(path).map_err(|e| format!("获取文件信息失败: {e}"))?;
+        let mtime = metadata
+            .modified()
+            .map_err(|e| format!("获取修改时间失败: {e}"))?
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("时间转换失败: {e}"))?
+            .as_secs() as i64;
+        let size = metadata.len();
+
+        let mut index = ArchiveIndex::new(path.to_string_lossy().to_string(), mtime, size);
+
+        for item in items {
+            if item.is_dir {
+                continue;
+            }
+            index.add_entry(IndexEntry {
+                path: item.path.clone(),
+                name: item.name.clone(),
+                size: item.size,
+                entry_index: item.entry_index,
+                is_image: is_image_file(&item.name),
+                modified: item.modified,
+            });
+        }
+
+        Ok(index)
+    }
+
+    /// 异步打开书籍（支持取消）
+    pub fn open_book_async(&mut self, path: &str, options: LoadOptions) -> Result<BookInfo, String> {
+        let start = Instant::now();
+        let path_buf = PathBuf::from(path);
+
+        // 提交命令到队列
+        let command = self.command_queue.submit(path_buf.clone(), options.clone());
+
+        // 检查是否已取消
+        if command.is_cancelled() {
+            return Err("加载已取消".to_string());
+        }
+
+        // 执行加载
+        let result = self.open_book(path);
+
+        // 记录性能指标
+        let total_ms = start.elapsed().as_millis() as u64;
+        let page_count = result.as_ref().map(|b| b.total_pages).unwrap_or(0);
+
+        let metrics = LoadMetrics {
+            index_load_ms: 0, // TODO: 细分计时
+            first_page_ms: 0,
+            full_list_ms: total_ms,
+            total_ms,
+            page_count,
+            cache_hit: self.index_cache.get(&path_buf).is_some(),
+        };
+        self.performance_monitor.record(metrics);
+
+        // 完成命令
+        let load_result = LoadResult {
+            command_id: command.id,
+            success: result.is_ok(),
+            error: result.as_ref().err().cloned(),
+            duration_ms: total_ms,
+            page_count,
+        };
+        self.command_queue.complete(load_result);
+
+        result
+    }
+
+    /// 静态图片检查（不需要 self）
+    fn is_image_file_static(&self, name: &str) -> bool {
+        is_image_file(name)
     }
 
     /// 加载 EPUB 电子书中的图片页面

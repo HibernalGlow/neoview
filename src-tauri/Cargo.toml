@@ -66,6 +66,9 @@ trash = { version = "3.3", features = ["coinit_multithreaded"] }
 lru = "0.16.2"
 lz4_flex = "0.11"
 once_cell = "1.19"
+bincode = "1.3"  # 二进制序列化
+crc32fast = "1.4"  # 快速 CRC32 校验
+dirs = "5.0"  # 系统目录
 epub = "2.1"  # EPUB 解析（纯 Rust）
 natural-sort-rs = "0.1"  # 自然排序
 regex = "1.10"  # 正则表达式支持

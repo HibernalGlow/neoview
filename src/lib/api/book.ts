@@ -37,3 +37,70 @@ export async function navigateToImage(imagePath: string): Promise<number> {
 export async function setBookSortMode(sortMode: PageSortMode): Promise<BookInfo> {
 	return await invoke<BookInfo>('set_book_sort_mode', { sortMode });
 }
+
+// ============================================================================
+// 缓存管理 API
+// ============================================================================
+
+/** 缓存统计信息 */
+export interface CacheStats {
+	memory_count: number;
+	memory_size: number;
+	disk_count: number;
+	disk_size: number;
+	hits: number;
+	misses: number;
+	hit_rate: number;
+}
+
+/** 加载性能指标 */
+export interface LoadMetrics {
+	index_load_ms: number;
+	first_page_ms: number;
+	full_list_ms: number;
+	total_ms: number;
+	page_count: number;
+	cache_hit: boolean;
+}
+
+/** 缓存状态响应 */
+export interface CacheStatusResponse {
+	index_cache: CacheStats;
+	preheat_queue_size: number;
+	last_load_metrics: LoadMetrics | null;
+}
+
+/** 获取缓存状态 */
+export async function getCacheStats(): Promise<CacheStatusResponse> {
+	return await invoke<CacheStatusResponse>('get_cache_stats');
+}
+
+/** 清除索引缓存 */
+export async function clearIndexCache(): Promise<void> {
+	return await invoke('clear_index_cache');
+}
+
+/** 使指定压缩包的缓存失效 */
+export async function invalidateArchiveCache(path: string): Promise<void> {
+	return await invoke('invalidate_archive_cache', { path });
+}
+
+/** 预热相邻压缩包 */
+export async function preheatAdjacentArchives(path: string): Promise<void> {
+	return await invoke('preheat_adjacent_archives', { path });
+}
+
+/** 取消预热任务 */
+export async function cancelPreheat(): Promise<void> {
+	return await invoke('cancel_preheat');
+}
+
+/** 取消当前加载 */
+export async function cancelCurrentLoad(): Promise<void> {
+	return await invoke('cancel_current_load');
+}
+
+/** 获取最近加载性能指标 */
+export async function getLoadMetrics(): Promise<LoadMetrics | null> {
+	return await invoke<LoadMetrics | null>('get_load_metrics');
+}

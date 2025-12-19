@@ -1,6 +1,7 @@
 //! NeoView - Commands Module
 //! 导出所有 Tauri 命令
 
+pub mod archive_cache_commands;
 pub mod book_commands;
 pub mod comparison_commands;
 pub mod default;
@@ -27,6 +28,7 @@ pub mod ollama_commands;
 pub mod stream_commands;
 pub mod metadata_commands;
 
+pub use archive_cache_commands::*;
 pub use book_commands::*;
 pub use comparison_commands::*;
 pub use default::*;

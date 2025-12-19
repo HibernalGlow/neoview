@@ -313,6 +313,19 @@ class BookStore {
   }
 
   /**
+   * 取消当前加载操作
+   * 用于用户按 Escape 或切换到其他压缩包时
+   */
+  async cancelCurrentLoad() {
+    try {
+      await bookApi.cancelCurrentLoad();
+      console.log('🚫 已取消当前加载');
+    } catch (err) {
+      console.error('❌ 取消加载失败:', err);
+    }
+  }
+
+  /**
    * 设置超分图片数据
    * @deprecated 旧系统已弃用，超分图由 upscaleStore 写入 imagePool
    */

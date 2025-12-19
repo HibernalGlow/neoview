@@ -53,6 +53,8 @@ pub mod lru_image_cache;
 pub mod app_context;
 pub mod mmap_archive;
 pub mod custom_protocol;
+pub mod rkyv_index;
+pub mod stretto_cache;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

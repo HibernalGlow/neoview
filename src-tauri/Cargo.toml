@@ -85,6 +85,8 @@ reqwest = { version = "0.12", features = ["json"] }  # HTTP 客户端（Ollama �
 tauri-plugin-clipboard-x = "2"  # 系统剪贴板操作（文件复制/粘贴）
 mime_guess = "2.0"  # MIME 类型检测
 urlencoding = "2.1"  # URL 编解码
+rkyv = { version = "0.8", features = ["bytecheck"] }  # 零拷贝序列化
+stretto = "0.8"  # TinyLFU 高性能缓存
 # PDF: 前端使用 pdf.js 渲染
 
 [target.'cfg(target_os = "windows")'.dependencies]

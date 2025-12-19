@@ -28,6 +28,8 @@ export interface NeoViewSettings {
     hardwareAcceleration: boolean;
     temporaryDirectory: string;
     thumbnailDirectory: string;
+    /** 排除路径列表（不扫描这些路径的元数据） */
+    excludedPaths?: string[];
   };
   startup: {
     openLastFile: boolean;
@@ -230,7 +232,8 @@ const defaultSettings: NeoViewSettings = {
     language: 'zh-CN',
     hardwareAcceleration: true,
     temporaryDirectory: '',
-    thumbnailDirectory: 'D\\temp\\neoview'
+    thumbnailDirectory: 'D\\temp\\neoview',
+    excludedPaths: []
   },
   startup: {
     openLastFile: true,

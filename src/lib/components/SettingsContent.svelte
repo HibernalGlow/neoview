@@ -34,6 +34,7 @@
 	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
 	import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
 	import AboutPanel from '$lib/components/panels/AboutPanel.svelte';
+	import SystemSettingsPanel from '$lib/components/panels/SystemSettingsPanel.svelte';
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
@@ -136,6 +137,8 @@
 		>
 			{#if activeTab === 'general'}
 				<GeneralSettingsPanel />
+			{:else if activeTab === 'system'}
+				<SystemSettingsPanel />
 			{:else if activeTab === 'view'}
 				<ViewSettingsPanel />
 			{:else if activeTab === 'notify'}

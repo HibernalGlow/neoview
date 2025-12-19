@@ -17,6 +17,7 @@
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { getManualTags, type ManualTag } from '$lib/stores/emm/manualTagStore.svelte';
 	import { getFileMetadata } from '$lib/api';
+	import { isPathBlacklisted, addToRuntimeBlacklist } from '$lib/stores/pathBlacklist.svelte';
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
 	import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
@@ -557,10 +558,17 @@
 	}
 
 	// 异步加载目录总字节大小（仅在需要显示大小+时间时，对目录生效）
+	// 使用黑名单机制避免对系统保护文件夹的重复请求
 	$effect(() => {
 		if (!showSizeAndModified) return;
 		if (!item.isDir) return;
 		if (folderTotalSize !== null || folderSizeLoading) return;
+		
+		// 检查路径是否在黑名单中（系统保护文件夹或用户排除路径）
+		if (isPathBlacklisted(item.path)) {
+			folderTotalSize = 0; // 设置为0避免重复请求
+			return;
+		}
 
 		folderSizeLoading = true;
 		getFileMetadata(item.path)
@@ -568,7 +576,10 @@
 				folderTotalSize = meta.size ?? 0;
 			})
 			.catch((err) => {
-				console.debug('获取文件夹总大小失败:', item.path, err);
+				// 访问失败时添加到运行时黑名单，避免重复请求
+				addToRuntimeBlacklist(item.path);
+				folderTotalSize = 0; // 设置为0避免重复请求
+				console.debug('获取文件夹总大小失败（已加入黑名单）:', item.path, err);
 			})
 			.finally(() => {
 				folderSizeLoading = false;

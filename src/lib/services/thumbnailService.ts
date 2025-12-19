@@ -172,6 +172,12 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
 	if (!currentBook) return;
 
+	// 【关键】如果正在等待主图，不加载缩略图
+	if (isWaitingForMainImage) {
+		console.log('🖼️ ThumbnailService: Blocked - waiting for main image');
+		return;
+	}
+
 	// 清除之前的防抖计时器
 	if (debounceTimer) {
 		clearTimeout(debounceTimer);
@@ -382,6 +388,11 @@ function notifyMainImageReady(): void {
  * 处理页面变化
  */
 function handlePageChange(pageIndex: number): void {
+	// 【关键】如果正在等待主图，不加载缩略图
+	if (isWaitingForMainImage) {
+		console.log('🖼️ ThumbnailService: Skipping page change, waiting for main image');
+		return;
+	}
 	// 当前页变化时，加载附近的缩略图
 	void loadThumbnails(pageIndex);
 }

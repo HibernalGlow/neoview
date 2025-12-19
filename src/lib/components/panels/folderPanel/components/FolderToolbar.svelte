@@ -664,7 +664,7 @@ async function handleReloadSelectedThumbnails() {
 	<div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
 		{#if !virtualMode}
 			<!-- 普通文件夹模式：显示所有导航按钮 -->
-			<Tooltip.Root>
+			<Tooltip.Root disabled={!showToolbarTooltip}>
 				<Tooltip.Trigger>
 					<Button
 						variant="ghost"
@@ -681,7 +681,7 @@ async function handleReloadSelectedThumbnails() {
 				</Tooltip.Content>
 			</Tooltip.Root>
 
-			<Tooltip.Root>
+			<Tooltip.Root disabled={!showToolbarTooltip}>
 				<Tooltip.Trigger>
 					<Button
 						variant="ghost"
@@ -698,7 +698,7 @@ async function handleReloadSelectedThumbnails() {
 				</Tooltip.Content>
 			</Tooltip.Root>
 
-			<Tooltip.Root>
+			<Tooltip.Root disabled={!showToolbarTooltip}>
 				<Tooltip.Trigger>
 					<Button
 						variant="ghost"
@@ -715,7 +715,7 @@ async function handleReloadSelectedThumbnails() {
 				</Tooltip.Content>
 			</Tooltip.Root>
 
-			<Tooltip.Root>
+			<Tooltip.Root disabled={!showToolbarTooltip}>
 				<Tooltip.Trigger>
 					<Button
 						variant="ghost"
@@ -733,7 +733,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Root>
 		{/if}
 
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onRefresh}>
 					<RefreshCw class="h-4 w-4" />
@@ -750,7 +750,7 @@ async function handleReloadSelectedThumbnails() {
 
 	<!-- 同步文件夹按钮（仅在书签/历史模式下显示） -->
 	{#if virtualMode}
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant={virtualMode === 'history' 
@@ -776,7 +776,7 @@ async function handleReloadSelectedThumbnails() {
 		</Tooltip.Root>
 
 		<!-- 清理失效条目按钮 -->
-		<Tooltip.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
 				<Button
 					variant="ghost"
@@ -799,7 +799,7 @@ async function handleReloadSelectedThumbnails() {
 	{/if}
 
 	<!-- 排序按钮 -->
-	<Tooltip.Root>
+	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
 			<Button 
 				variant={sortPanelExpanded ? 'default' : (sortLockSettings.locked && !virtualMode ? 'secondary' : 'ghost')} 

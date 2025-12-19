@@ -83,6 +83,8 @@ smallvec = "1.13"  # 小型集合优化，避免堆分配
 ahash = "0.8"  # 更快的哈希算法，比 std::hash 快 2-3x
 reqwest = { version = "0.12", features = ["json"] }  # HTTP 客户端（Ollama 代理）
 tauri-plugin-clipboard-x = "2"  # 系统剪贴板操作（文件复制/粘贴）
+mime_guess = "2.0"  # MIME 类型检测
+urlencoding = "2.1"  # URL 编解码
 # PDF: 前端使用 pdf.js 渲染
 
 [target.'cfg(target_os = "windows")'.dependencies]

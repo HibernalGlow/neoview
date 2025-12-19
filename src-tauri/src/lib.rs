@@ -32,6 +32,7 @@ use core::cache_index_db::CacheIndexDb;
 use core::thumbnail_db::ThumbnailDb;
 use core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
+use core::custom_protocol::{handle_protocol_request, ProtocolState, PROTOCOL_NAME};
 use core::{ArchiveManager, BookManager, FsManager, ImageLoader};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -82,6 +83,11 @@ pub fn run() {
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_x::init())
+        // 🚀 注册 Custom Protocol (neoview://)
+        // 绕过 invoke 序列化开销，直接传输二进制数据
+        .register_uri_scheme_protocol(PROTOCOL_NAME, |ctx, request| {
+            handle_protocol_request(ctx.app_handle(), request)
+        })
         .setup(|app| {
             // 🚀 启动初始化：确保所有必需目录存在
             let startup_diagnostics = match core::startup_init::ensure_app_directories(app.handle()) {
@@ -104,11 +110,17 @@ pub fn run() {
             // 初始化文件系统管理器和压缩包管理器
             let fs_manager = FsManager::new();
             let archive_manager = ArchiveManager::new();
+            let archive_manager_arc = Arc::new(Mutex::new(archive_manager));
 
             app.manage(FsState {
                 fs_manager: Arc::new(Mutex::new(fs_manager)),
-                archive_manager: Arc::new(Mutex::new(archive_manager)),
+                archive_manager: Arc::clone(&archive_manager_arc),
             });
+
+            // 🚀 初始化 Custom Protocol 状态
+            let protocol_state = ProtocolState::new(Arc::clone(&archive_manager_arc));
+            app.manage(protocol_state);
+            log::info!("🌐 Custom Protocol (neoview://) 初始化完成");
 
             // 优化：增加目录缓存容量和TTL
             // 容量从 128 增加到 512，TTL 从 30s 增加到 120s
@@ -543,6 +555,13 @@ pub fn run() {
             commands::stream_commands::stream_search_v2,
             // Metadata commands
             commands::metadata_commands::get_image_metadata,
+            // Protocol commands (Custom Protocol 路径注册)
+            commands::protocol_commands::register_book_path,
+            commands::protocol_commands::batch_register_paths,
+            commands::protocol_commands::get_mmap_cache_stats,
+            commands::protocol_commands::clear_mmap_cache,
+            commands::protocol_commands::invalidate_mmap_cache,
+            commands::protocol_commands::clear_path_registry,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

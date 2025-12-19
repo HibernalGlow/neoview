@@ -51,6 +51,8 @@ pub mod dimension_scanner;
 // 新增模块
 pub mod lru_image_cache;
 pub mod app_context;
+pub mod mmap_archive;
+pub mod custom_protocol;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

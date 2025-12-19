@@ -55,7 +55,7 @@ jobs:
           PYO3_PYTHON: python
         run: |
           yarn install --frozen-lockfile
-          yarn tauri build --bundles msi,nsis -- --profile ci-release
+          npx tauri build --bundles msi,nsis -- --profile ci-release
 
       - name: verify installer
         shell: powershell

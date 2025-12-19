@@ -31,8 +31,6 @@ const BACKGROUND_BATCH_SIZE = 20;
 const BACKGROUND_LOAD_INTERVAL_MS = 200;
 // 缩略图最大尺寸
 const THUMBNAIL_MAX_SIZE = 256;
-// 切书后的初始延迟：100ms（更快响应）
-const INITIAL_DELAY_MS = 100;
 // 防抖时间：50ms（更快响应翻页）
 const DEBOUNCE_MS = 50;
 
@@ -54,6 +52,9 @@ let preloadVersion = 0;
 let backgroundLoadTimer: ReturnType<typeof setTimeout> | null = null;
 let backgroundLoadCenter: number = 0;
 let backgroundLoadRadius: number = INITIAL_PRELOAD_RANGE;
+
+// 主图加载完成信号（阻塞缩略图加载直到主图完成）
+let isWaitingForMainImage = false;
 
 // ===========================================================================
 // 事件监听
@@ -338,6 +339,7 @@ function cancelLoading(): void {
 
 /**
  * 处理书籍变化
+ * 【重要】切书时不立即加载缩略图，等待主图加载完成后再开始
  */
 function handleBookChange(bookPath: string): void {
 	if (currentBookPath === bookPath) return;
@@ -355,11 +357,25 @@ function handleBookChange(bookPath: string): void {
 	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存）
 	thumbnailCacheStore.setBook(bookPath);
 
-	// 延迟加载缩略图，让主页面先加载
-	setTimeout(() => {
-		const centerIndex = bookStore.currentPageIndex;
-		void loadThumbnails(centerIndex);
-	}, INITIAL_DELAY_MS);
+	// 【关键】标记等待主图完成，不再使用固定延迟
+	isWaitingForMainImage = true;
+
+	console.log('🖼️ ThumbnailService: Waiting for main image to load...');
+}
+
+/**
+ * 通知主图加载完成，开始加载缩略图
+ * 【外部调用】由 imageLoaderCore 在主图加载完成后调用
+ */
+function notifyMainImageReady(): void {
+	if (!isWaitingForMainImage) return;
+
+	console.log('🖼️ ThumbnailService: Main image ready, starting thumbnail load');
+	isWaitingForMainImage = false;
+
+	// 开始加载缩略图
+	const centerIndex = bookStore.currentPageIndex;
+	void loadThumbnails(centerIndex);
 }
 
 /**
@@ -418,6 +434,12 @@ export const thumbnailService = {
 	handleBookChange,
 	handlePageChange,
 	cancelLoading,
+
+	/** 通知主图加载完成，开始加载缩略图 */
+	notifyMainImageReady,
+
+	/** 检查是否正在等待主图 */
+	isWaitingForMainImage: () => isWaitingForMainImage,
 
 	/** 获取加载状态 */
 	isLoading: (pageIndex: number) => loadingIndices.has(pageIndex),

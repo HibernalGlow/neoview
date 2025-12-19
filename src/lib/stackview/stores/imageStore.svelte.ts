@@ -10,6 +10,7 @@ import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte'
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { calculateTargetScale } from '../utils/imageTransitionManager';
+import { thumbnailService } from '$lib/services/thumbnailService';
 import type { ZoomMode } from '$lib/settings/settingsManager';
 
 /**
@@ -188,6 +189,8 @@ export function createImageStore() {
       state.loading = false;
       // 更新延迟追踪（缓存命中）
       updateCacheHitLatencyTrace(cached.blob, currentIndex);
+      // 【关键】通知缩略图服务主图已就绪
+      thumbnailService.notifyMainImageReady();
     } else {
       state.loading = true;
     }
@@ -226,6 +229,8 @@ export function createImageStore() {
             : null;
           // 获取背景色（可能已在加载时计算好）
           state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
+          // 【关键】主图加载完成，通知缩略图服务开始加载
+          thumbnailService.notifyMainImageReady();
         }
       } catch (err) {
         state.error = String(err);

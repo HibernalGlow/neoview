@@ -106,14 +106,14 @@ impl ProtocolState {
 /// 解析协议请求
 #[derive(Debug)]
 pub enum ProtocolRequest {
-    /// 压缩包内图片: /image/{book_hash}/{entry_index}
+    /// 压缩包内图片: `/image/{book_hash}/{entry_index}`
     ArchiveImage {
         book_hash: String,
         entry_index: usize,
     },
-    /// 文件夹图片: /file/{path_hash}
+    /// 文件夹图片: `/file/{path_hash}`
     FileImage { path_hash: String },
-    /// 缩略图: /thumb/{key}
+    /// 缩略图: `/thumb/{key}`
     Thumbnail { key: String },
     /// 未知请求
     Unknown,
@@ -129,7 +129,7 @@ impl ProtocolRequest {
             ["image", book_hash, entry_index] => {
                 if let Ok(index) = entry_index.parse::<usize>() {
                     ProtocolRequest::ArchiveImage {
-                        book_hash: book_hash.to_string(),
+                        book_hash: (*book_hash).to_string(),
                         entry_index: index,
                     }
                 } else {
@@ -137,12 +137,11 @@ impl ProtocolRequest {
                 }
             }
             ["file", path_hash] => ProtocolRequest::FileImage {
-                path_hash: path_hash.to_string(),
+                path_hash: (*path_hash).to_string(),
             },
             ["thumb", key] => ProtocolRequest::Thumbnail {
                 key: urlencoding::decode(key)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|_| key.to_string()),
+                    .map_or_else(|_| (*key).to_string(), |s| s.to_string()),
             },
             _ => ProtocolRequest::Unknown,
         }
@@ -154,7 +153,7 @@ fn get_mime_type(path: &str) -> &'static str {
     let ext = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
+        .map(str::to_lowercase)
         .unwrap_or_default();
 
     match ext.as_str() {
@@ -201,12 +200,9 @@ fn handle_archive_image(
     entry_index: usize,
 ) -> Response<Vec<u8>> {
     // 从注册表获取路径
-    let book_path = match state.path_registry.get_path(book_hash) {
-        Some(path) => path,
-        None => {
-            warn!("📦 Protocol: 未找到书籍路径, hash={book_hash}");
-            return build_error_response(StatusCode::NOT_FOUND, "Book not found");
-        }
+    let Some(book_path) = state.path_registry.get_path(book_hash) else {
+        warn!("📦 Protocol: 未找到书籍路径, hash={book_hash}");
+        return build_error_response(StatusCode::NOT_FOUND, "Book not found");
     };
 
     debug!(
@@ -229,16 +225,13 @@ fn handle_archive_image(
 
     // 查找指定索引的图片条目
     let image_entries: Vec<_> = entries.iter().filter(|e| e.is_image).collect();
-    let entry = match image_entries.get(entry_index) {
-        Some(e) => e,
-        None => {
-            warn!(
-                "📦 Protocol: 条目索引越界, index={}, total={}",
-                entry_index,
-                image_entries.len()
-            );
-            return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
-        }
+    let Some(entry) = image_entries.get(entry_index) else {
+        warn!(
+            "📦 Protocol: 条目索引越界, index={}, total={}",
+            entry_index,
+            image_entries.len()
+        );
+        return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
     };
 
     // 提取图片数据
@@ -257,12 +250,9 @@ fn handle_archive_image(
 /// 处理文件图片请求
 fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>> {
     // 从注册表获取路径
-    let file_path = match state.path_registry.get_path(path_hash) {
-        Some(path) => path,
-        None => {
-            warn!("📁 Protocol: 未找到文件路径, hash={path_hash}");
-            return build_error_response(StatusCode::NOT_FOUND, "File not found");
-        }
+    let Some(file_path) = state.path_registry.get_path(path_hash) else {
+        warn!("📁 Protocol: 未找到文件路径, hash={path_hash}");
+        return build_error_response(StatusCode::NOT_FOUND, "File not found");
     };
 
     debug!("📁 Protocol: 加载文件图片, path={}", file_path.display());
@@ -290,23 +280,20 @@ fn handle_thumbnail(_state: &ProtocolState, key: &str) -> Response<Vec<u8>> {
 /// 处理协议请求
 pub fn handle_protocol_request(
     app: &tauri::AppHandle,
-    request: Request<Vec<u8>>,
+    request: &Request<Vec<u8>>,
 ) -> Response<Vec<u8>> {
     let uri = request.uri();
     let path = uri.path();
 
-    debug!("🌐 Protocol request: {}", path);
+    debug!("🌐 Protocol request: {path}");
 
     // 获取协议状态
-    let state = match app.try_state::<ProtocolState>() {
-        Some(state) => state,
-        None => {
-            error!("🌐 Protocol: 状态未初始化");
-            return build_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Protocol state not initialized",
-            );
-        }
+    let Some(state) = app.try_state::<ProtocolState>() else {
+        error!("🌐 Protocol: 状态未初始化");
+        return build_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Protocol state not initialized",
+        );
     };
 
     // 解析请求

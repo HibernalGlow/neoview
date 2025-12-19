@@ -2,13 +2,15 @@
  * 图片读取模块
  * 负责从文件系统或压缩包读取图片数据
  * 
- * 【双模式支持】
- * 1. IPC 模式：二进制 IPC + Blob（内存缓存）
- * 2. Tempfile 模式：解压到临时文件 + asset:// 协议
+ * 【三模式支持】
+ * 1. Protocol 模式：neoview:// 自定义协议（最快，绕过 IPC 序列化）
+ * 2. IPC 模式：二进制 IPC + Blob（内存缓存）
+ * 3. Tempfile 模式：解压到临时文件 + asset:// 协议
  * 
  * 【优化】
  * - 并行预加载 ±5 页到后端缓存
  * - Web Worker 解码避免阻塞主线程
+ * - Custom Protocol 绕过 invoke 序列化开销
  */
 
 import { convertFileSrc } from '@tauri-apps/api/core';
@@ -19,6 +21,7 @@ import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte'
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import * as pm from '$lib/api/pageManager';
+import { registerBookPath, getArchiveImageUrl, preloadArchiveImages } from '$lib/api/imageProtocol';
 
 // Tempfile 模式缓存（URL -> blob）
 const tempfileCache = new Map<string, { url: string; blob: Blob }>();
@@ -36,6 +39,13 @@ const PRELOAD_RANGE = 5; // ±5 页
 // PageManager 书籍同步状态（避免重复检查）
 let lastSyncedBookPath: string | null = null;
 
+// Custom Protocol 书籍哈希缓存
+let currentBookHash: string | null = null;
+let currentBookPathForHash: string | null = null;
+
+// 是否启用 Custom Protocol 模式
+let useProtocolMode = true;
+
 // 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function preExtractArchive(_archivePath: string): Promise<string | null> {
@@ -48,11 +58,35 @@ export function clearExtractCache(): void {
 	lastPreloadedPage = -1;
 	// 重置 PageManager 同步状态
 	lastSyncedBookPath = null;
+	// 重置 Custom Protocol 缓存
+	currentBookHash = null;
+	currentBookPathForHash = null;
+}
+
+/**
+ * 设置是否使用 Custom Protocol 模式
+ */
+export function setProtocolMode(enabled: boolean): void {
+	useProtocolMode = enabled;
+}
+
+/**
+ * 获取当前书籍的 Protocol 哈希
+ * 缓存哈希避免重复 IPC 调用
+ */
+async function getBookHash(bookPath: string): Promise<string> {
+	if (currentBookPathForHash === bookPath && currentBookHash) {
+		return currentBookHash;
+	}
+	currentBookHash = await registerBookPath(bookPath);
+	currentBookPathForHash = bookPath;
+	return currentBookHash;
 }
 
 /**
  * 【优化】触发并行预加载邻近页面
  * 异步执行，不阻塞当前加载
+ * 【新增】支持 Custom Protocol 预加载（利用浏览器缓存）
  */
 async function triggerParallelPreload(currentPage: number): Promise<void> {
 	const currentBook = bookStore.currentBook;
@@ -67,6 +101,19 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	const startPage = Math.max(0, currentPage - PRELOAD_RANGE);
 	const endPage = Math.min(totalPages - 1, currentPage + PRELOAD_RANGE);
 	
+	// 【优化】如果启用 Protocol 模式，使用浏览器预加载
+	if (useProtocolMode) {
+		try {
+			const bookHash = await getBookHash(currentBook.path);
+			const preloadCount = endPage - startPage;
+			preloadArchiveImages(bookHash, startPage, preloadCount);
+		} catch (err) {
+			console.warn('Protocol 预加载失败:', err);
+		}
+		return;
+	}
+	
+	// 回退：使用后端预加载
 	const pagePaths: string[] = [];
 	for (let i = startPage; i <= endPage; i++) {
 		if (i !== currentPage && currentBook.pages[i]) {
@@ -134,6 +181,34 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 			logImageTrace(traceId, 'tempfile cache hit', { cacheKey });
 			blob = cached.blob;
 			cacheHit = true;
+		} else if (useProtocolMode && !loadModeStore.isTempfileMode) {
+			// 【优化】Protocol 模式：使用 neoview:// 自定义协议（绕过 IPC 序列化）
+			logImageTrace(traceId, 'using protocol mode');
+			const loadStart = performance.now();
+			
+			try {
+				const bookHash = await getBookHash(currentBook.path);
+				const protocolUrl = getArchiveImageUrl(bookHash, pageIndex);
+				logImageTrace(traceId, 'protocol url', { protocolUrl });
+				
+				const response = await fetch(protocolUrl);
+				if (!response.ok) {
+					throw new Error(`Protocol fetch failed: ${response.status}`);
+				}
+				blob = await response.blob();
+				loadMs = performance.now() - loadStart;
+			} catch (err) {
+				// Protocol 失败，回退到 IPC 模式
+				console.warn('Protocol 模式失败，回退到 IPC:', err);
+				logImageTrace(traceId, 'protocol fallback to ipc', { error: String(err) });
+				const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
+				const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
+					traceId,
+					pageIndex
+				});
+				blob = result.blob;
+				loadMs = performance.now() - loadStart;
+			}
 		} else if (loadModeStore.isTempfileMode) {
 			// Tempfile 模式：解压到临时文件 + asset:// 协议
 			logImageTrace(traceId, 'using tempfile mode');

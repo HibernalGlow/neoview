@@ -86,7 +86,7 @@ pub fn run() {
         // 🚀 注册 Custom Protocol (neoview://)
         // 绕过 invoke 序列化开销，直接传输二进制数据
         .register_uri_scheme_protocol(PROTOCOL_NAME, |ctx, request| {
-            handle_protocol_request(ctx.app_handle(), request)
+            handle_protocol_request(ctx.app_handle(), &request)
         })
         .setup(|app| {
             // 🚀 启动初始化：确保所有必需目录存在

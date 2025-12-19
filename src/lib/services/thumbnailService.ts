@@ -406,12 +406,13 @@ export async function initThumbnailService(): Promise<void> {
 	if (isInitialized) return;
 
 	try {
-		eventUnlisten = await listen<ThumbnailReadyEvent>('thumbnail-ready', (event) => {
+		// 使用独立事件名 page-thumbnail-ready，避免与 thumbnailStoreV3 的 thumbnail-ready 冲突
+		eventUnlisten = await listen<ThumbnailReadyEvent>('page-thumbnail-ready', (event) => {
 			handleThumbnailReady(event.payload);
 		});
 
 		isInitialized = true;
-		console.log('🖼️ ThumbnailService: Initialized with backend event listener');
+		console.log('🖼️ ThumbnailService: Initialized with backend event listener (page-thumbnail-ready)');
 	} catch (error) {
 		console.error('Failed to initialize ThumbnailService:', error);
 	}

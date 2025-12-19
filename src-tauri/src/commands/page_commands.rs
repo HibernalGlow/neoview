@@ -340,7 +340,8 @@ pub async fn pm_preload_thumbnails(
                             log::debug!("🖼️ 推送缩略图事件: page {}, {}x{}", 
                                 index, item.width, item.height);
 
-                            if let Err(e) = app.emit("thumbnail-ready", &event) {
+                            // 使用独立事件名，避免与 thumbnailStoreV3 的 thumbnail-ready 冲突
+                            if let Err(e) = app.emit("page-thumbnail-ready", &event) {
                                 log::error!("🖼️ 推送缩略图事件失败: {}", e);
                             }
                             Some(index)

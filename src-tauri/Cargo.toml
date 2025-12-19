@@ -17,12 +17,25 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2.2.0", features = [] }
 
+# 本地 release：快速编译
 [profile.release]
-strip = true  # 自动剥离符号表
-opt-level = "z"  # 优化体积（可选"s"对比测试）
-lto = true  # 启用链接时优化
-codegen-units = 1  # 单代码生成单元提升优化空间
-panic = "abort"  # 移除panic unwind代码
+strip = true
+opt-level = 2         # 平衡优化，编译较快
+lto = "thin"          # 轻量 LTO，编译快
+codegen-units = 16    # 多单元并行编译
+panic = "abort"
+debug = false
+
+# CI 专用：极致性能优化（cargo build --profile ci-release）
+[profile.ci-release]
+inherits = "release"
+opt-level = 3         # 最高优化级别
+lto = "fat"           # 完整 LTO，跨 crate 深度优化
+codegen-units = 1     # 单代码生成单元，最大化优化
+overflow-checks = false  # 禁用溢出检查
+
+[profile.ci-release.build-override]
+opt-level = 3
 
 [dependencies]
 serde_json = "1.0"

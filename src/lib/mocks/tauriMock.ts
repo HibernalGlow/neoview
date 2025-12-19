@@ -78,6 +78,9 @@ export async function emit(event: string, payload?: unknown): Promise<void> {
 export async function appDataDir(): Promise<string> {
   return '/mock/app/data';
 }
+export async function homeDir(): Promise<string> {
+  return '/mock/home';
+}
 export async function join(...paths: string[]): Promise<string> {
   return paths.join('/');
 }

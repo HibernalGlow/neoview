@@ -44,10 +44,7 @@ let currentBookHash: string | null = null;
 let currentBookPathForHash: string | null = null;
 
 // 是否启用 Custom Protocol 模式
-// 注意：Custom Protocol 在开发模式 (http://localhost) 下不可用
-// 生产环境 (tauri://localhost 或 https://tauri.localhost) 下可用
-const isProductionMode = !window.location.href.startsWith('http://localhost');
-let useProtocolMode = isProductionMode; // 仅生产环境启用
+let useProtocolMode = true;
 
 // 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -351,108 +348,89 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 
 /**
  * 【新系统】使用 PageManager 读取页面
- * 【优化】优先使用 Custom Protocol (neoview://)，绕过 IPC 序列化开销
- * 回退到 PageManager IPC 模式
+ * 后端自动处理缓存和预加载，减少 IPC 调用
  * 
  * @param isCurrentPage 是否是当前页（true=gotoPage触发预加载，false=getPage不触发）
  */
 export async function readPageBlobV2(
-	pageIndex: number,
+	pageIndex: number, 
 	options: ReadPageOptions & { isCurrentPage?: boolean } = {}
 ): Promise<ReadResult> {
 	const { updateLatencyTrace = true, isCurrentPage = true } = options;
 	const startTime = performance.now();
 	const traceId = createImageTraceId('pm', pageIndex);
-
-	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex, isCurrentPage, useProtocolMode });
-
+	
+	logImageTrace(traceId, 'readPageBlobV2 start', { pageIndex, isCurrentPage });
+	
 	try {
+		// 检查 PageManager 是否已打开书籍（使用缓存避免重复 IPC）
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) {
 			throw new Error('没有打开的书籍');
 		}
-
-		let blob: Blob;
+		
+		// 书籍同步计时
 		let bookSyncMs = 0;
-		let loadMs = 0;
-		let dataSource: 'protocol' | 'ipc' = 'ipc';
-
-		// 【优化】压缩包优先使用 Custom Protocol 模式
-		if (useProtocolMode && currentBook.type === 'archive') {
-			logImageTrace(traceId, 'trying protocol mode');
-			const loadStart = performance.now();
-
-			try {
-				const bookHash = await getBookHash(currentBook.path);
-				const protocolUrl = getArchiveImageUrl(bookHash, pageIndex);
-				logImageTrace(traceId, 'protocol url', { protocolUrl });
-
-				const response = await fetch(protocolUrl);
-				if (!response.ok) {
-					throw new Error(`Protocol fetch failed: ${response.status}`);
-				}
-				blob = await response.blob();
-				loadMs = performance.now() - loadStart;
-				dataSource = 'protocol';
-				logImageTrace(traceId, 'protocol success', { loadMs, size: blob.size });
-			} catch (err) {
-				// Protocol 失败，回退到 PageManager IPC
-				console.warn('Protocol 模式失败，回退到 PageManager IPC:', err);
-				logImageTrace(traceId, 'protocol fallback to pm', { error: String(err) });
-				const result = await loadViaPageManager(pageIndex, isCurrentPage, traceId);
-				blob = result.blob;
-				bookSyncMs = result.bookSyncMs;
-				loadMs = result.loadMs;
-			}
-		} else {
-			// 非压缩包或禁用 Protocol，使用 PageManager IPC
-			const result = await loadViaPageManager(pageIndex, isCurrentPage, traceId);
-			blob = result.blob;
-			bookSyncMs = result.bookSyncMs;
-			loadMs = result.loadMs;
+		if (lastSyncedBookPath !== currentBook.path) {
+			const syncStart = performance.now();
+			logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
+			await pm.openBook(currentBook.path);
+			lastSyncedBookPath = currentBook.path;
+			bookSyncMs = performance.now() - syncStart;
 		}
-
+		
+		// IPC 调用计时（后端处理 + 网络传输）
+		const ipcStart = performance.now();
+		
+		// 使用 Raw 版本获取 ArrayBuffer，分离 Blob 创建时间
+		const buffer = isCurrentPage 
+			? await pm.gotoPageRaw(pageIndex)
+			: await pm.getPageRaw(pageIndex);
+		
+		const ipcMs = performance.now() - ipcStart;
+		
+		// Blob 创建计时
+		const blobStart = performance.now();
+		const blob = new Blob([buffer]);
+		const blobCreateMs = performance.now() - blobStart;
+		
 		const totalMs = performance.now() - startTime;
-
-		logImageTrace(traceId, 'readPageBlobV2 complete', {
-			size: blob.size,
+		
+		logImageTrace(traceId, 'readPageBlobV2 complete', { 
+			size: blob.size, 
 			bookSyncMs,
-			loadMs,
-			totalMs,
-			dataSource
+			ipcMs,
+			blobCreateMs,
+			totalMs 
 		});
-
+		
 		// 记录到 pipelineLatencyStore
 		pipelineLatencyStore.record({
 			timestamp: Date.now(),
 			pageIndex,
 			traceId,
 			bookSyncMs,
-			backendLoadMs: loadMs,
-			ipcTransferMs: dataSource === 'ipc' ? loadMs : 0,
-			blobCreateMs: 0,
+			backendLoadMs: ipcMs,
+			ipcTransferMs: ipcMs,
+			blobCreateMs,
 			totalMs,
 			dataSize: blob.size,
 			cacheHit: false,
 			isCurrentPage,
 			source: isCurrentPage ? 'current' : 'preload'
 		});
-
-		// 【优化】Protocol 模式使用浏览器预加载，IPC 模式触发后端预加载
+		
+		// 异步触发后端预加载（不阻塞当前请求）
 		if (isCurrentPage) {
-			if (useProtocolMode && currentBook.type === 'archive') {
-				triggerParallelPreload(pageIndex);
-			} else {
-				invoke('pm_trigger_preload').catch(() => {});
-			}
+			invoke('pm_trigger_preload').catch(() => {});
 		}
-
+		
 		// 更新延迟追踪（兼容旧系统）
 		if (updateLatencyTrace) {
 			const latencyTrace: LatencyTrace = {
-				dataSource: dataSource === 'protocol' ? 'protocol' : 'blob',
+				dataSource: 'blob',
 				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs,
+				loadMs: ipcMs,
 				totalMs,
 				cacheHit: false,
 				dataSize: blob.size,
@@ -460,44 +438,12 @@ export async function readPageBlobV2(
 			};
 			infoPanelStore.setLatencyTrace(latencyTrace);
 		}
-
+		
 		return { blob, traceId };
 	} catch (error) {
 		logImageTrace(traceId, 'readPageBlobV2 error', { error: String(error) });
 		throw error;
 	}
-}
-
-/**
- * 【内部】通过 PageManager IPC 加载页面
- */
-async function loadViaPageManager(
-	pageIndex: number,
-	isCurrentPage: boolean,
-	traceId: string
-): Promise<{ blob: Blob; bookSyncMs: number; loadMs: number }> {
-	const currentBook = bookStore.currentBook;
-	if (!currentBook) {
-		throw new Error('没有打开的书籍');
-	}
-
-	// 书籍同步计时
-	let bookSyncMs = 0;
-	if (lastSyncedBookPath !== currentBook.path) {
-		const syncStart = performance.now();
-		logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
-		await pm.openBook(currentBook.path);
-		lastSyncedBookPath = currentBook.path;
-		bookSyncMs = performance.now() - syncStart;
-	}
-
-	// IPC 调用计时
-	const ipcStart = performance.now();
-	const buffer = isCurrentPage ? await pm.gotoPageRaw(pageIndex) : await pm.getPageRaw(pageIndex);
-	const loadMs = performance.now() - ipcStart;
-
-	const blob = new Blob([buffer]);
-	return { blob, bookSyncMs, loadMs };
 }
 
 /**

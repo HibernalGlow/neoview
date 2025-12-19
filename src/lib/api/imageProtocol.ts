@@ -32,13 +32,12 @@ export async function registerBookPath(bookPath: string): Promise<string> {
 
 /**
  * 获取压缩包内图片的 URL
- * Tauri 2 Custom Protocol 格式: scheme://path (无 host)
  * @param bookHash 书籍路径哈希（通过 registerBookPath 获取）
  * @param entryIndex 图片在压缩包中的索引
  * @returns Custom Protocol URL
  */
 export function getArchiveImageUrl(bookHash: string, entryIndex: number): string {
-	return `${PROTOCOL_NAME}://image/${bookHash}/${entryIndex}`;
+	return `${PROTOCOL_NAME}://localhost/image/${bookHash}/${entryIndex}`;
 }
 
 /**
@@ -47,7 +46,7 @@ export function getArchiveImageUrl(bookHash: string, entryIndex: number): string
  * @returns Custom Protocol URL
  */
 export function getFileImageUrl(pathHash: string): string {
-	return `${PROTOCOL_NAME}://file/${pathHash}`;
+	return `${PROTOCOL_NAME}://localhost/file/${pathHash}`;
 }
 
 /**
@@ -56,7 +55,7 @@ export function getFileImageUrl(pathHash: string): string {
  * @returns Custom Protocol URL
  */
 export function getThumbUrl(key: string): string {
-	return `${PROTOCOL_NAME}://thumb/${encodeURIComponent(key)}`;
+	return `${PROTOCOL_NAME}://localhost/thumb/${encodeURIComponent(key)}`;
 }
 
 /**
@@ -110,7 +109,7 @@ export function preloadArchiveImages(bookHash: string, startIndex: number, count
 export async function isProtocolAvailable(): Promise<boolean> {
 	try {
 		// 尝试一个简单的请求
-		const response = await fetch(`${PROTOCOL_NAME}://health`);
+		const response = await fetch(`${PROTOCOL_NAME}://localhost/health`);
 		return response.ok;
 	} catch {
 		// 协议不可用时会抛出错误

@@ -14,7 +14,6 @@ import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError }
 import { readPageBlobV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
-import { thumbnailService } from '$lib/services/thumbnailService';
 
 /**
  * 更新缓存命中时的延迟追踪
@@ -254,7 +253,6 @@ export class ImageLoaderCore {
 	/**
 	 * 快速加载当前页（最高优先级，带渐进式加载）
 	 * 【优化】先返回图片，异步获取尺寸
-	 * 【关键】加载完成后通知 thumbnailService 开始加载缩略图
 	 */
 	async loadCurrentPage(): Promise<LoadResult> {
 		const pageIndex = bookStore.currentPageIndex;
@@ -269,8 +267,6 @@ export class ImageLoaderCore {
 			getImageDimensions(item.blob).then(dimensions => {
 				this.options.onDimensionsReady?.(pageIndex, dimensions);
 			});
-			// 【关键】通知缩略图服务主图已就绪
-			thumbnailService.notifyMainImageReady();
 			return {
 				url: item.url,
 				blob: item.blob,
@@ -280,10 +276,7 @@ export class ImageLoaderCore {
 		}
 
 		// 否则使用最高优先级加载
-		const result = await this.loadPage(pageIndex, LoadPriority.CRITICAL);
-		// 【关键】主图加载完成，通知缩略图服务开始加载
-		thumbnailService.notifyMainImageReady();
-		return result;
+		return this.loadPage(pageIndex, LoadPriority.CRITICAL);
 	}
 
 	/**

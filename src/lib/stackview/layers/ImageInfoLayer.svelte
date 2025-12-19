@@ -183,9 +183,9 @@
           <!-- 链路延迟追踪 -->
           {#if latencyTrace}
             <div class="latency-row">
-              <span class={latencyTrace.cacheHit ? 'text-green' : 'text-yellow'}>
-                {latencyTrace.dataSource === 'blob' ? '⚡' : '💾'}
-                {latencyTrace.dataSource}
+              <span class={latencyTrace.dataSource === 'protocol' ? 'text-green' : latencyTrace.cacheHit ? 'text-green' : 'text-yellow'}>
+                {latencyTrace.dataSource === 'protocol' ? '🚀' : latencyTrace.dataSource === 'blob' ? '⚡' : '💾'}
+                {latencyTrace.dataSource === 'protocol' ? 'Protocol' : latencyTrace.dataSource}
               </span>
               <span class="text-muted">
                 {latencyTrace.renderMode === 'img' ? '🖼️img' : '🎨canvas'}

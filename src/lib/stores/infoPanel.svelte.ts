@@ -42,8 +42,8 @@ export interface ViewerImageInfo {
 
 /** 链路延迟追踪信息 */
 export interface LatencyTrace {
-	/** 数据源模式 */
-	dataSource: 'blob' | 'tempfile';
+	/** 数据源模式: protocol=Custom Protocol, blob=IPC, tempfile=临时文件 */
+	dataSource: 'protocol' | 'blob' | 'tempfile';
 	/** 渲染模式 */
 	renderMode: 'img' | 'canvas';
 	/** IPC/提取耗时 (ms) */

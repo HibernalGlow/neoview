@@ -71,25 +71,15 @@ jobs:
             exit 1
           }
 
-      - name: prepare portable exe
+      - name: verify portable exe
         shell: powershell
         run: |
           $exePath = ".\src-tauri\target\ci-release\neoview.exe"
-
           if (!(Test-Path $exePath)) {
             Write-Error "neoview.exe not found at $exePath"
-            Get-ChildItem ".\src-tauri\target\ci-release" -Recurse | Select-Object FullName
             exit 1
           }
-
-          $bundleRoot = ".\src-tauri\target\ci-release\bundle"
-          $portableDir = Join-Path $bundleRoot "portable"
-          New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
-
-          $portableExe = Join-Path $portableDir "neoview.exe"
-          Copy-Item $exePath $portableExe -Force
-
-          Write-Host "Portable exe created at $portableExe"
+          Write-Host "Portable exe found at $exePath"
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -100,7 +90,7 @@ jobs:
           files: |
             ./src-tauri/target/ci-release/bundle/**/*setup*.exe
             ./src-tauri/target/ci-release/bundle/**/*.msi
-            ./src-tauri/target/ci-release/bundle/portable/neoview.exe
+            ./src-tauri/target/ci-release/neoview.exe
 
       # 触发 Extras-Glow 仓库的 schedule workflow
       - name: trigger extras-glow workflow

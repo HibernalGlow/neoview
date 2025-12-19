@@ -6,6 +6,7 @@
 import { onMount, onDestroy } from 'svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
+import { Slider } from '$lib/components/ui/slider';
 import { Search, Grid3x3, List, Image as ImageIcon } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
@@ -240,6 +241,27 @@ async function requestThumbnail(pageIndex: number) {
 	<div class="text-[10px] text-muted-foreground">
 		共 {items.length} 页 {searchQuery ? `(显示 ${filteredItems.length})` : ''}
 	</div>
+
+	<!-- 页面跳转 Slider -->
+	{#if items.length > 1}
+		<div class="flex items-center gap-2">
+			<span class="text-[10px] text-muted-foreground font-mono w-6 text-right">{currentPageIndex + 1}</span>
+			<Slider
+				type="single"
+				value={currentPageIndex}
+				min={0}
+				max={items.length - 1}
+				step={1}
+				class="flex-1"
+				onValueChange={(v: number) => {
+					if (v !== currentPageIndex) {
+						goToPage(v);
+					}
+				}}
+			/>
+			<span class="text-[10px] text-muted-foreground font-mono w-6">{items.length}</span>
+		</div>
+	{/if}
 
 	<!-- 页面列表 -->
 	<div class="flex-1 min-h-0 overflow-y-auto" bind:this={scrollContainer}>

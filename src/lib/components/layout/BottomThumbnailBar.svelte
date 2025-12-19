@@ -27,6 +27,7 @@
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import MagicCard from '../ui/MagicCard.svelte';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -790,7 +791,8 @@
 		role="application"
 		aria-label="底部缩略图栏"
 	>
-		<div
+		<MagicCard
+			gradientOpacity={0.4}
 			class="relative border-t shadow-lg"
 			style="height: {$bottomThumbnailBarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {bottomBarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({bottomBarBlur}px);"
 		>
@@ -991,6 +993,6 @@
 					showIndexInput={false}
 				/>
 			</div>
-		</div>
+		</MagicCard>
 	</div>
 {/if}

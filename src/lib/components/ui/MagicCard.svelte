@@ -12,6 +12,8 @@
     /** 光晕透明度 */
     gradientOpacity?: number;
     class?: string;
+    /** 自定义样式 */
+    style?: string;
     children?: import('svelte').Snippet;
   }
 
@@ -19,6 +21,7 @@
     gradientSize = 0,
     gradientOpacity = 0.5,
     class: className = "",
+    style = "",
     children
   }: Props = $props();
 
@@ -53,6 +56,7 @@
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
   class={cn("group relative overflow-hidden", className)}
+  {style}
 >
   <!-- 内容区 -->
   <div class="relative z-10 w-full h-full flex flex-col">

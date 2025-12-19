@@ -2,9 +2,11 @@
 	/**
 	 * Top Toolbar Component
 	 * 顶部工具栏 - 自动隐藏，包含标题栏、面包屑和图片操作按钮
+	 * 支持 MagicCard 鼠标跟随光效
 	 */
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
+	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import TitleBarSection from './TitleBarSection.svelte';
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -607,11 +609,16 @@
 	/>
 
 	<!-- 工具栏（图片操作） - 响应式布局：宽度不够时面包屏在上，工具栏在下 -->
-	<div
+	<MagicCard
 		class="border-b {isVisible ? 'shadow-lg' : ''}"
-		style="min-height: {$topToolbarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
+		gradientSize={150}
+		gradientOpacity={0.35}
 	>
-		<div class="mx-auto flex w-full max-w-[1280px] flex-col gap-1 px-2 py-1">
+		<div
+			class="w-full"
+			style="min-height: {$topToolbarHeight}px; background-color: color-mix(in oklch, var(--sidebar) {topToolbarOpacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({topToolbarBlur}px);"
+		>
+			<div class="mx-auto flex w-full max-w-[1280px] flex-col gap-1 px-2 py-1">
 			<!-- 第一行：关闭按钮 + 面包屑导航 + 页码信息（窄屏时独占一行） -->
 			<div class="flex min-w-0 items-center justify-start gap-2 md:justify-center">
 				<Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" onclick={handleClose}>
@@ -1509,7 +1516,8 @@
 		>
 			<GripHorizontal class="h-4 w-4" />
 		</button>
-	</div>
+		</div>
+	</MagicCard>
 </div>
 
 <!-- 触发区域（独立于工具栏，始终存在） -->

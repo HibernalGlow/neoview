@@ -3,9 +3,11 @@
 	/**
 	 * NeoView - Sidebar Component (shadcn-svelte 二级菜单重构 + 动态面板配置)
 	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
+	 * 支持 MagicCard 鼠标跟随光效
 	 */
 	import { Pin, PinOff, GripVertical } from '@lucide/svelte';
 	import { readable } from 'svelte/store';
+	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
 		activePanel,
 		setActivePanelTab,
@@ -192,57 +194,63 @@
 				class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
 			>
 				<!-- 一级菜单 - 图标模式 -->
-				<Sidebar.Root
-					collapsible="none"
-					class="!w-[calc(var(--sidebar-width-icon)_+_1px)]"
-					style="width: calc(var(--sidebar-width-icon) + 1px);"
+				<MagicCard
+					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
+					gradientSize={80}
+					gradientOpacity={0.4}
 				>
-					<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
-						<div class="flex flex-col gap-1">
-							<Button
-								variant={$leftSidebarPinned ? 'default' : 'ghost'}
-								size="icon"
-								class="h-9 w-9"
-								onclick={togglePin}
-								oncontextmenu={handlePinContextMenu}
-							>
-								{#if $leftSidebarPinned}
-									<PinOff class="h-4 w-4" />
-								{:else}
-									<Pin class="h-4 w-4" />
-								{/if}
-							</Button>
-						</div>
-					</Sidebar.Header>
+					<Sidebar.Root
+						collapsible="none"
+						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
+						style="width: calc(var(--sidebar-width-icon) + 1px);"
+					>
+						<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
+							<div class="flex flex-col gap-1">
+								<Button
+									variant={$leftSidebarPinned ? 'default' : 'ghost'}
+									size="icon"
+									class="h-9 w-9"
+									onclick={togglePin}
+									oncontextmenu={handlePinContextMenu}
+								>
+									{#if $leftSidebarPinned}
+										<PinOff class="h-4 w-4" />
+									{:else}
+										<Pin class="h-4 w-4" />
+									{/if}
+								</Button>
+							</div>
+						</Sidebar.Header>
 
-					<Sidebar.Content>
-						<Sidebar.Group>
-							<Sidebar.GroupContent class="px-0">
-								<Sidebar.Menu>
-									{#each leftPanels as panel (panel.id)}
-										{@const Icon = panel.icon}
-										<Sidebar.MenuItem>
-											<Sidebar.MenuButton
-												tooltipContentProps={{
-													hidden: false
-												}}
-												onclick={() => handleTabChange(panel.id)}
-												isActive={$activePanel === panel.id}
-												class="px-2"
-											>
-												{#snippet tooltipContent()}
-													{panel.title}
-												{/snippet}
-												<Icon />
-												<span>{panel.title}</span>
-											</Sidebar.MenuButton>
-										</Sidebar.MenuItem>
-									{/each}
-								</Sidebar.Menu>
-							</Sidebar.GroupContent>
-						</Sidebar.Group>
-					</Sidebar.Content>
-				</Sidebar.Root>
+						<Sidebar.Content>
+							<Sidebar.Group>
+								<Sidebar.GroupContent class="px-0">
+									<Sidebar.Menu>
+										{#each leftPanels as panel (panel.id)}
+											{@const Icon = panel.icon}
+											<Sidebar.MenuItem>
+												<Sidebar.MenuButton
+													tooltipContentProps={{
+														hidden: false
+													}}
+													onclick={() => handleTabChange(panel.id)}
+													isActive={$activePanel === panel.id}
+													class="px-2"
+												>
+													{#snippet tooltipContent()}
+														{panel.title}
+													{/snippet}
+													<Icon />
+													<span>{panel.title}</span>
+												</Sidebar.MenuButton>
+											</Sidebar.MenuItem>
+										{/each}
+									</Sidebar.Menu>
+								</Sidebar.GroupContent>
+							</Sidebar.Group>
+						</Sidebar.Content>
+					</Sidebar.Root>
+				</MagicCard>
 
 				<!-- 二级菜单 - 内容面板 -->
 				<Sidebar.Root

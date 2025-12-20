@@ -93,7 +93,9 @@ jobs:
             ./src-tauri/target/ci-release/neoview.exe
 
       # 触发 Extras-Glow 仓库的 schedule workflow
+      # 注意：需要 EXTRAS_GLOW_PAT 有 repo 权限才能触发跨仓库 workflow
       - name: trigger extras-glow workflow
+        continue-on-error: true
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.EXTRAS_GLOW_PAT }}

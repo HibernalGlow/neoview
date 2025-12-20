@@ -91,9 +91,11 @@ interface Props {
 	pendingRestore?: { scrollTop: number; selectedItemPath: string | null } | null;
 	// 恢复完成回调
 	onRestoreComplete?: () => void;
+	// 双击空白处回调
+	onEmptyDoubleClick?: () => void;
 }
 
-let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete }: Props = $props();
+let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete, onEmptyDoubleClick }: Props = $props();
 
 // 显示项（不过滤 - 搜索在 SearchResultList 中处理）
 let filteredItems = $derived(() => {
@@ -232,5 +234,6 @@ $effect(() => {
 		onSelectedIndexChange={handleSelectedIndexChange}
 		onItemSelect={handleItemSelect}
 		onItemDoubleClick={handleItemDoubleClick}
+		onEmptyDoubleClick={() => onEmptyDoubleClick?.()}
 	/>
 {/if}

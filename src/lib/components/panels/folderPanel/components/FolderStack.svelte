@@ -1232,6 +1232,25 @@
 			onOpenFolderAsBook?.(item);
 		}
 	}
+
+	// 处理双击空白处（返回上级/后退）
+	async function handleEmptyDoubleClick(layerIndex: number) {
+		if (layerIndex !== activeIndex) return;
+		
+		// 获取用户设置的双击空白处行为
+		const state = get(fileBrowserStore);
+		const action = state.doubleClickEmptyAction;
+		
+		if (action === 'none') return;
+		
+		if (action === 'goUp') {
+			// 返回上级目录
+			await popLayer();
+		} else if (action === 'goBack') {
+			// 后退（与工具栏后退按钮行为一致）
+			await popLayer();
+		}
+	}
 </script>
 
 <div class="folder-stack relative h-full w-full overflow-hidden">
@@ -1277,6 +1296,7 @@
 						showFullPath={getVirtualPathType(layer.path) === 'search'}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
+						onEmptyDoubleClick={() => handleEmptyDoubleClick(index)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
 						onSelectionChange={(payload) =>
 							globalStore.setSelectedItems(payload.selectedItems)}

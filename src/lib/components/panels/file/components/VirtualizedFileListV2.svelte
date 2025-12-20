@@ -37,6 +37,7 @@
 		onSelectedIndexChange = (payload: { index: number }) => {},
 		onItemSelect = (payload: { item: FsItem; index: number; multiSelect: boolean }) => {},
 		onItemDoubleClick = (payload: { item: FsItem; index: number }) => {},
+		onEmptyDoubleClick = () => {},
 		showFullPath = false
 	}: {
 		items?: FsItem[];
@@ -54,6 +55,7 @@
 		onSelectedIndexChange?: (payload: { index: number }) => void;
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
 		onItemDoubleClick?: (payload: { item: FsItem; index: number }) => void;
+		onEmptyDoubleClick?: () => void;
 		showFullPath?: boolean;
 	} = $props();
 
@@ -294,6 +296,22 @@
 		onItemDoubleClick({ item, index });
 	}
 
+	// 处理容器双击（空白处双击）
+	function handleContainerDoubleClick(e: MouseEvent) {
+		// 检查点击目标是否是容器本身或虚拟滚动的空白区域
+		const target = e.target as HTMLElement;
+		// 如果点击的是容器本身，或者是虚拟滚动的占位 div（没有 data-index 属性的子元素）
+		if (target === container || target.classList.contains('virtual-list-container')) {
+			onEmptyDoubleClick();
+			return;
+		}
+		// 检查是否点击在项目卡片之外的空白区域
+		const clickedOnItem = target.closest('[data-index]') || target.closest('.file-item-card');
+		if (!clickedOnItem) {
+			onEmptyDoubleClick();
+		}
+	}
+
 	// 处理勾选框切换 - 通过 onItemSelect 路由以支持链选模式
 	function handleToggleSelection(item: FsItem, index: number) {
 		// 使用 multiSelect: true 触发链选逻辑
@@ -429,6 +447,7 @@
 		aria-label="文件列表"
 		onscroll={handleScroll}
 		onkeydown={handleKeydown}
+		ondblclick={handleContainerDoubleClick}
 	>
 		<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
 			{#each virtualItems as virtualRow (virtualRow.index)}

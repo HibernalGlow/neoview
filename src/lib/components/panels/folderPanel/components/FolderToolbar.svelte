@@ -47,7 +47,8 @@ import {
 	FolderSync,
 	FilterX,
 	Lock,
-	Unlock
+	Unlock,
+	MousePointerClick
 } from '@lucide/svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
@@ -1421,6 +1422,26 @@ async function handleReloadSelectedThumbnails() {
 							{/each}
 						</div>
 					</div>
+
+					<!-- 双击空白处行为（仅在非虚拟模式下显示） -->
+					{#if !virtualMode}
+						<div class="flex items-center gap-2">
+							<MousePointerClick class="h-3.5 w-3.5 text-muted-foreground" />
+							<span class="text-muted-foreground">双击空白:</span>
+							<select 
+								class="h-6 bg-background border rounded text-xs px-1"
+								value={$fileBrowserStore.doubleClickEmptyAction}
+								onchange={(e) => fileBrowserStore.setDoubleClickEmptyAction((e.target as HTMLSelectElement).value as 'none' | 'goUp' | 'goBack')}
+							>
+								<option value="none">无操作</option>
+								<option value="goUp">返回上级</option>
+								<option value="goBack">后退</option>
+							</select>
+							<span class="text-muted-foreground/60 text-[10px]">
+								双击列表空白处的行为
+							</span>
+						</div>
+					{/if}
 				</div>
 			</Tabs.Content>
 		</Tabs.Root>

@@ -58,6 +58,8 @@ interface FileBrowserState {
   scrollPositions: Record<string, number>; // 保存文件列表的滚动位置
   // 勾选模式下点击卡片的行为: 'open' = 打开项目, 'select' = 选中/取消选中
   checkModeClickBehavior: CheckModeClickBehavior;
+  // 双击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
+  doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -127,7 +129,8 @@ const initialState: FileBrowserState = {
   inlineTreeRootPath: '',
   inlineTreeScrollTops: {},
   scrollPositions: {},
-  checkModeClickBehavior: 'open'
+  checkModeClickBehavior: 'open',
+  doubleClickEmptyAction: 'goUp'
 };
 
 /**
@@ -235,6 +238,7 @@ function createFileBrowserStore() {
       update(state => ({ ...state, inlineTreeScrollTops: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setCheckModeClickBehavior: (value: CheckModeClickBehavior) => update(state => ({ ...state, checkModeClickBehavior: value })),
+    setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => ({ ...state, doubleClickEmptyAction: value })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,
       visibleItems: items,

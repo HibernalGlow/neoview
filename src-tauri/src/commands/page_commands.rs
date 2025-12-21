@@ -389,27 +389,22 @@ pub async fn pm_preload_thumbnails(
 
 /// 快速生成缩略图（优化版本）
 /// - Windows 优先使用 WIC（硬件加速解码+缩放）
-/// - 使用有损 WebP 编码（比 lossless 快 10 倍）
+/// - 直接从 BGRA 编码 WebP，跳过中间转换
 fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> {
     // Windows: 优先使用 WIC（硬件加速解码+缩放，支持 AVIF/HEIC/JXL）
     #[cfg(target_os = "windows")]
     {
-        use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+        use crate::core::wic_decoder::decode_and_scale_with_wic;
         
         // WIC 直接解码并缩放到目标尺寸（一步完成，硬件加速）
         if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
-            if let Ok(img) = wic_result_to_dynamic_image(result) {
-                let width = img.width();
-                let height = img.height();
-                
-                // 使用有损 WebP 编码（质量 75，速度快）
-                if let Some(buffer) = encode_webp_lossy(&img, 75) {
-                    return Some(ThumbnailItem {
-                        data: buffer,
-                        width,
-                        height,
-                    });
-                }
+            // 直接从 BGRA 编码 WebP，避免中间转换
+            if let Some(buffer) = encode_webp_from_bgra(&result.pixels, result.width, result.height, 75) {
+                return Some(ThumbnailItem {
+                    data: buffer,
+                    width: result.width,
+                    height: result.height,
+                });
             }
         }
     }
@@ -452,6 +447,22 @@ fn encode_webp_lossy(img: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> 
     // 使用 webp crate 进行有损编码
     let encoder = webp::Encoder::from_rgba(&rgba, width, height);
     let webp_data = encoder.encode(quality as f32);
+    
+    Some(webp_data.to_vec())
+}
+
+/// 直接从 BGRA 数据编码 WebP（跳过中间转换，更快）
+#[cfg(target_os = "windows")]
+fn encode_webp_from_bgra(bgra: &[u8], width: u32, height: u32, quality: u8) -> Option<Vec<u8>> {
+    // BGRA -> RGBA 转换（原地修改副本）
+    let mut rgba = bgra.to_vec();
+    for chunk in rgba.chunks_exact_mut(4) {
+        chunk.swap(0, 2); // B <-> R
+    }
+    
+    // 使用 webp crate 进行有损编码
+    let encoder = webp::Encoder::from_rgba(&rgba, width, height);
+    let webp_data = encoder.encode(f32::from(quality));
     
     Some(webp_data.to_vec())
 }

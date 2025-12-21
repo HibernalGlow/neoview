@@ -8,6 +8,7 @@
  */
 
 import { globalCacheManager } from './globalCacheManager';
+import { decodeBase64 } from '$lib/workers/base64DecoderManager';
 
 // ============================================================================
 // 类型定义
@@ -91,12 +92,12 @@ async function blobUrlToBase64(blobUrl: string): Promise<{ data: string; mimeTyp
 
 /**
  * Base64 转 Blob URL（优化版）
- * 使用 fetch + data URL 利用浏览器原生解码
+ * 使用 Worker 解码，避免阻塞主线程
  */
 async function base64ToBlobUrlAsync(data: string, mimeType: string): Promise<string> {
 	try {
-		const response = await fetch(`data:${mimeType};base64,${data}`);
-		const blob = await response.blob();
+		const arrayBuffer = await decodeBase64(data, mimeType);
+		const blob = new Blob([arrayBuffer], { type: mimeType });
 		return URL.createObjectURL(blob);
 	} catch {
 		return '';
@@ -104,7 +105,7 @@ async function base64ToBlobUrlAsync(data: string, mimeType: string): Promise<str
 }
 
 /**
- * Base64 转 Blob URL（同步版，用于小数据）
+ * Base64 转 Blob URL（同步版，用于小数据或回退）
  */
 function base64ToBlobUrl(data: string, mimeType: string): string {
 	try {
@@ -187,8 +188,8 @@ class ThumbnailPersistenceAdapter {
 			return null;
 		}
 
-		// 3. 转换为 Blob URL
-		const url = base64ToBlobUrl(entry.data, entry.mimeType);
+		// 3. 使用异步解码转换为 Blob URL（避免阻塞主线程）
+		const url = await base64ToBlobUrlAsync(entry.data, entry.mimeType);
 		if (url) {
 			this.urlCache.set(key, url);
 		}
@@ -213,22 +214,32 @@ class ThumbnailPersistenceAdapter {
 
 	/**
 	 * 批量预热（从持久化存储恢复到内存）
+	 * 使用并行解码提升性能
 	 */
 	async warmupBook(bookPath: string, pageIndices: number[]): Promise<number> {
 		let loaded = 0;
 		
-		for (const pageIndex of pageIndices) {
-			const key = makeThumbnailKey(bookPath, pageIndex);
-			if (this.urlCache.has(key)) continue;
+		// 并行处理，每批 10 个
+		const batchSize = 10;
+		for (let i = 0; i < pageIndices.length; i += batchSize) {
+			const batch = pageIndices.slice(i, i + batchSize);
+			const results = await Promise.all(
+				batch.map(async (pageIndex) => {
+					const key = makeThumbnailKey(bookPath, pageIndex);
+					if (this.urlCache.has(key)) return false;
 
-			const entry = await this.cache.get(key);
-			if (entry) {
-				const url = base64ToBlobUrl(entry.data, entry.mimeType);
-				if (url) {
-					this.urlCache.set(key, url);
-					loaded++;
-				}
-			}
+					const entry = await this.cache.get(key);
+					if (entry) {
+						const url = await base64ToBlobUrlAsync(entry.data, entry.mimeType);
+						if (url) {
+							this.urlCache.set(key, url);
+							return true;
+						}
+					}
+					return false;
+				})
+			);
+			loaded += results.filter(Boolean).length;
 		}
 
 		return loaded;

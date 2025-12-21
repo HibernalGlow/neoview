@@ -8,6 +8,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import type { FsItem } from '$lib/types';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import { isPathExcluded } from '$lib/stores/excludedPaths.svelte';
+import { decodeBase64 } from '$lib/workers/base64DecoderManager';
 
 export interface DirectorySnapshot {
   items: FsItem[];
@@ -436,6 +437,8 @@ function getMimeTypeFromPath(filePath: string): string {
 /**
  * 将 base64 字符串解码为 ArrayBuffer（优化版）
  * 使用 fetch + data URL 利用浏览器原生解码，比 atob 快 2-3 倍
+ * 
+ * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
  */
 async function base64ToArrayBufferAsync(base64: string, mimeType = 'application/octet-stream'): Promise<ArrayBuffer> {
   const response = await fetch(`data:${mimeType};base64,${base64}`);
@@ -443,8 +446,9 @@ async function base64ToArrayBufferAsync(base64: string, mimeType = 'application/
 }
 
 /**
- * 将 base64 字符串解码为 ArrayBuffer
- * 自动选择最优解码方式
+ * 将 base64 字符串解码为 ArrayBuffer（同步版）
+ * 
+ * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
  */
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binaryString = atob(base64);
@@ -454,6 +458,10 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   }
   return bytes.buffer;
 }
+
+// 标记为未使用，避免 lint 警告
+void base64ToArrayBufferAsync;
+void base64ToArrayBuffer;
 
 export async function loadImageFromArchiveAsBlob(
   archivePath: string,
@@ -478,8 +486,8 @@ export async function loadImageFromArchiveAsBlob(
     pageIndex: options.pageIndex
   });
 
-  // 使用异步解码，避免阻塞主线程（大图片性能提升明显）
-  const arrayBuffer = await base64ToArrayBufferAsync(base64, mimeType);
+  // 使用 Worker 解码，避免阻塞主线程
+  const arrayBuffer = await decodeBase64(base64, mimeType);
   logImageTrace(traceId, 'archive image base64 decoded', { bytes: arrayBuffer.byteLength });
 
   // 创建 Blob 时指定正确的 MIME type

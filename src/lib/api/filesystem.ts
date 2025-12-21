@@ -434,35 +434,6 @@ function getMimeTypeFromPath(filePath: string): string {
   return mimeTypes[ext] || 'image/jpeg'; // 默认 JPEG
 }
 
-/**
- * 将 base64 字符串解码为 ArrayBuffer（优化版）
- * 使用 fetch + data URL 利用浏览器原生解码，比 atob 快 2-3 倍
- * 
- * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
- */
-async function base64ToArrayBufferAsync(base64: string, mimeType = 'application/octet-stream'): Promise<ArrayBuffer> {
-  const response = await fetch(`data:${mimeType};base64,${base64}`);
-  return response.arrayBuffer();
-}
-
-/**
- * 将 base64 字符串解码为 ArrayBuffer（同步版）
- * 
- * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
- */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-// 标记为未使用，避免 lint 警告
-void base64ToArrayBufferAsync;
-void base64ToArrayBuffer;
-
 export async function loadImageFromArchiveAsBlob(
   archivePath: string,
   filePath: string,

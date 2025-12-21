@@ -104,23 +104,6 @@ async function base64ToBlobUrlAsync(data: string, mimeType: string): Promise<str
 	}
 }
 
-/**
- * Base64 转 Blob URL（同步版，用于小数据或回退）
- */
-function base64ToBlobUrl(data: string, mimeType: string): string {
-	try {
-		const binary = atob(data);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) {
-			bytes[i] = binary.charCodeAt(i);
-		}
-		const blob = new Blob([bytes], { type: mimeType });
-		return URL.createObjectURL(blob);
-	} catch {
-		return '';
-	}
-}
-
 // ============================================================================
 // 持久化缩略图缓存
 // ============================================================================

@@ -111,36 +111,6 @@ export async function getBookInfo(): Promise<BookInfo | null> {
 }
 
 /**
- * 将 base64 字符串解码为 ArrayBuffer（优化版）
- * 使用 fetch + data URL 利用浏览器原生解码，比 atob 快 2-3 倍
- * 对于大数据（>100KB）性能提升更明显
- * 
- * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
- */
-async function base64ToArrayBufferAsync(base64: string, mimeType = 'application/octet-stream'): Promise<ArrayBuffer> {
-	const response = await fetch(`data:${mimeType};base64,${base64}`);
-	return response.arrayBuffer();
-}
-
-/**
- * 将 base64 字符串解码为 ArrayBuffer（同步版）
- * 
- * @deprecated 保留用于兼容，新代码请使用 decodeBase64()
- */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-	const binaryString = atob(base64);
-	const bytes = new Uint8Array(binaryString.length);
-	for (let i = 0; i < binaryString.length; i++) {
-		bytes[i] = binaryString.charCodeAt(i);
-	}
-	return bytes.buffer;
-}
-
-// 标记为未使用，避免 lint 警告
-void base64ToArrayBufferAsync;
-void base64ToArrayBuffer;
-
-/**
  * 跳转到指定页面（使用 Base64 传输）
  * 
  * 后端自动：
@@ -153,7 +123,6 @@ void base64ToArrayBuffer;
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
 	const base64 = await invoke<string>('pm_goto_page_base64', { index });
-	// 使用 Worker 解码，避免阻塞主线程
 	return decodeBase64ToBlob(base64);
 }
 
@@ -164,7 +133,6 @@ export async function gotoPage(index: number): Promise<Blob> {
  */
 export async function getPage(index: number): Promise<Blob> {
 	const base64 = await invoke<string>('pm_get_page_base64', { index });
-	// 使用 Worker 解码，避免阻塞主线程
 	return decodeBase64ToBlob(base64);
 }
 
@@ -173,7 +141,6 @@ export async function getPage(index: number): Promise<Blob> {
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
 	const base64 = await invoke<string>('pm_goto_page_base64', { index });
-	// 使用 Worker 解码，避免阻塞主线程
 	return decodeBase64(base64);
 }
 
@@ -182,7 +149,6 @@ export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
 	const base64 = await invoke<string>('pm_get_page_base64', { index });
-	// 使用 Worker 解码，避免阻塞主线程
 	return decodeBase64(base64);
 }
 

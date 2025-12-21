@@ -103,6 +103,39 @@ function getParentDirectory(path: string): string | null {
   return path.slice(0, separatorIndex);
 }
 
+// ============ 持久化设置 ============
+const EMPTY_CLICK_SETTINGS_KEY = 'neoview-empty-click-settings';
+
+interface EmptyClickSettings {
+  doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+  singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+  showEmptyAreaBackButton: boolean;
+}
+
+function loadEmptyClickSettings(): Partial<EmptyClickSettings> {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return {};
+    const saved = localStorage.getItem(EMPTY_CLICK_SETTINGS_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('[FileBrowserStore] 加载空白点击设置失败:', e);
+  }
+  return {};
+}
+
+function saveEmptyClickSettings(settings: EmptyClickSettings) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    localStorage.setItem(EMPTY_CLICK_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('[FileBrowserStore] 保存空白点击设置失败:', e);
+  }
+}
+
+const savedEmptyClickSettings = loadEmptyClickSettings();
+
 const initialState: FileBrowserState = {
   currentPath: '',
   items: [],
@@ -134,9 +167,9 @@ const initialState: FileBrowserState = {
   inlineTreeScrollTops: {},
   scrollPositions: {},
   checkModeClickBehavior: 'open',
-  doubleClickEmptyAction: 'goUp',
-  singleClickEmptyAction: 'none',
-  showEmptyAreaBackButton: false
+  doubleClickEmptyAction: savedEmptyClickSettings.doubleClickEmptyAction ?? 'goUp',
+  singleClickEmptyAction: savedEmptyClickSettings.singleClickEmptyAction ?? 'none',
+  showEmptyAreaBackButton: savedEmptyClickSettings.showEmptyAreaBackButton ?? false
 };
 
 /**
@@ -244,9 +277,33 @@ function createFileBrowserStore() {
       update(state => ({ ...state, inlineTreeScrollTops: value })),
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setCheckModeClickBehavior: (value: CheckModeClickBehavior) => update(state => ({ ...state, checkModeClickBehavior: value })),
-    setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => ({ ...state, doubleClickEmptyAction: value })),
-    setSingleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => ({ ...state, singleClickEmptyAction: value })),
-    setShowEmptyAreaBackButton: (value: boolean) => update(state => ({ ...state, showEmptyAreaBackButton: value })),
+    setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => {
+      const newState = { ...state, doubleClickEmptyAction: value };
+      saveEmptyClickSettings({
+        doubleClickEmptyAction: value,
+        singleClickEmptyAction: state.singleClickEmptyAction,
+        showEmptyAreaBackButton: state.showEmptyAreaBackButton
+      });
+      return newState;
+    }),
+    setSingleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => {
+      const newState = { ...state, singleClickEmptyAction: value };
+      saveEmptyClickSettings({
+        doubleClickEmptyAction: state.doubleClickEmptyAction,
+        singleClickEmptyAction: value,
+        showEmptyAreaBackButton: state.showEmptyAreaBackButton
+      });
+      return newState;
+    }),
+    setShowEmptyAreaBackButton: (value: boolean) => update(state => {
+      const newState = { ...state, showEmptyAreaBackButton: value };
+      saveEmptyClickSettings({
+        doubleClickEmptyAction: state.doubleClickEmptyAction,
+        singleClickEmptyAction: state.singleClickEmptyAction,
+        showEmptyAreaBackButton: value
+      });
+      return newState;
+    }),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,
       visibleItems: items,

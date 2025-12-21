@@ -90,7 +90,21 @@ async function blobUrlToBase64(blobUrl: string): Promise<{ data: string; mimeTyp
 }
 
 /**
- * Base64 转 Blob URL
+ * Base64 转 Blob URL（优化版）
+ * 使用 fetch + data URL 利用浏览器原生解码
+ */
+async function base64ToBlobUrlAsync(data: string, mimeType: string): Promise<string> {
+	try {
+		const response = await fetch(`data:${mimeType};base64,${data}`);
+		const blob = await response.blob();
+		return URL.createObjectURL(blob);
+	} catch {
+		return '';
+	}
+}
+
+/**
+ * Base64 转 Blob URL（同步版，用于小数据）
  */
 function base64ToBlobUrl(data: string, mimeType: string): string {
 	try {

@@ -49,6 +49,7 @@
 		PanelRight
 	} from '@lucide/svelte';
 	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+	import { pageTransferModeStore } from '$lib/stores/pageTransferMode.svelte';
 
 	// Props
 	interface Props {
@@ -535,6 +536,23 @@
 							{:else}
 								<PaintbrushVertical class="h-4 w-4" />
 								<span>canvas</span>
+							{/if}
+						</div>
+						<span class="text-muted-foreground text-xs">点击切换</span>
+					</div>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>传输模式</DropdownMenu.Label>
+				<DropdownMenu.Item onclick={() => pageTransferModeStore.toggle()}>
+					<div class="flex w-full items-center justify-between">
+						<div class="flex items-center gap-2">
+							{#if pageTransferModeStore.isBinary}
+								<Zap class="h-4 w-4" />
+								<span>Binary (直接)</span>
+							{:else}
+								<HardDrive class="h-4 w-4" />
+								<span>Base64</span>
 							{/if}
 						</div>
 						<span class="text-muted-foreground text-xs">点击切换</span>

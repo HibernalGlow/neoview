@@ -147,10 +147,10 @@
 	role="button"
 	tabindex="0"
 >
-	<!-- 勾选框（勾选模式）- 矩形拖拽条样式 -->
+	<!-- 勾选框（勾选模式）- 正方形图标，扩大透明点击区域 -->
 	{#if isCheckMode}
 		<button
-			class="group/checkbox shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 self-stretch flex items-center"
+			class="group/checkbox shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 self-stretch flex items-center px-2"
 			onclick={(e) => {
 				e.stopPropagation();
 				onToggleSelection?.();
@@ -158,21 +158,21 @@
 			aria-label={isChecked ? '取消选择' : '选择'}
 		>
 			<div
-				class="flex w-6 h-full min-h-[3rem] items-center justify-center rounded-md border-2 transition-all duration-200 {isChecked
+				class="flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 {isChecked
 					? 'border-primary bg-primary text-primary-foreground shadow-md'
 					: 'border-input bg-background hover:border-primary hover:bg-accent'}"
 			>
 				{#if isChecked}
-					<Check class="h-4 w-4 animate-in zoom-in-50 duration-200" />
+					<Check class="h-3.5 w-3.5 animate-in zoom-in-50 duration-200" />
 				{/if}
 			</div>
 		</button>
 	{/if}
 
-	<!-- 删除按钮（删除模式）- 矩形拖拽条样式 -->
+	<!-- 删除按钮（删除模式）- 正方形图标，扩大透明点击区域 -->
 	{#if isDeleteMode}
 		<button
-			class="group/delete shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 self-stretch flex items-center"
+			class="group/delete shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 self-stretch flex items-center px-2"
 			onclick={(e) => {
 				e.stopPropagation();
 				onDelete?.();
@@ -181,9 +181,9 @@
 			aria-label="删除"
 		>
 			<div
-				class="flex w-6 h-full min-h-[3rem] items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive/90 hover:shadow-lg"
+				class="flex h-5 w-5 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive/90 hover:shadow-lg"
 			>
-				<X class="h-4 w-4" />
+				<X class="h-3.5 w-3.5" />
 			</div>
 		</button>
 	{/if}

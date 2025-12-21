@@ -562,6 +562,9 @@ pub fn run() {
             commands::protocol_commands::clear_mmap_cache,
             commands::protocol_commands::invalidate_mmap_cache,
             commands::protocol_commands::clear_path_registry,
+            // Image streaming commands (流式图片加载)
+            commands::image_stream_commands::stream_image_from_archive,
+            commands::image_stream_commands::should_use_stream,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -52,6 +52,7 @@ pub mod dimension_scanner;
 pub mod lru_image_cache;
 pub mod app_context;
 pub mod mmap_archive;
+pub mod buffer_pool;
 pub mod custom_protocol;
 pub mod rkyv_index;
 pub mod stretto_cache;

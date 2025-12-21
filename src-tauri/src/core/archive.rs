@@ -423,14 +423,17 @@ impl ArchiveManager {
             .by_name(file_path)
             .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
 
-        let mut buffer = Vec::new();
+        // 使用缓冲区池，预分配解压后大小
+        let uncompressed_size = zip_file.size() as usize;
+        let mut buffer = crate::core::buffer_pool::IMAGE_BUFFER_POOL
+            .acquire_with_capacity(uncompressed_size);
+        
         let start = Instant::now();
         zip_file
             .read_to_end(&mut buffer)
             .map_err(|e| format!("读取文件失败: {}", e))?;
 
         let elapsed = start.elapsed();
-        // try to get compressed size if available
         let compressed = zip_file.compressed_size();
         let uncompressed = buffer.len() as u64;
         let ratio = if uncompressed > 0 {

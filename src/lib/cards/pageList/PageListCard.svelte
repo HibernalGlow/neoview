@@ -328,6 +328,9 @@ async function requestThumbnail(pageIndex: number) {
 					{@const thumb = getThumbnail(item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
 					<button
 						data-page-index={item.index}
 						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''} {isCurrentAndUpscaled ? 'upscaled-glow-grid' : ''}"
@@ -342,6 +345,18 @@ async function requestThumbnail(pageIndex: number) {
 								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
 							{:else}
 								<ImageIcon class="h-6 w-6 text-muted-foreground" />
+							{/if}
+							<!-- 超分状态角标 -->
+							{#if statusCfg}
+								<div class="absolute top-0.5 right-0.5 px-1 py-0.5 text-[8px] font-medium rounded {statusCfg.class}" title={conditionName ? `条件: ${conditionName}` : ''}>
+									{statusCfg.label}
+								</div>
+							{/if}
+							<!-- 条件名称角标（仅当有条件且未完成时显示） -->
+							{#if conditionName && upscaleStatus !== 'completed'}
+								<div class="absolute bottom-0.5 left-0.5 px-1 py-0.5 text-[8px] font-medium rounded bg-purple-500/80 text-white truncate max-w-[90%]" title="条件: {conditionName}">
+									{conditionName}
+								</div>
 							{/if}
 						</div>
 						<div class="flex items-center gap-1">

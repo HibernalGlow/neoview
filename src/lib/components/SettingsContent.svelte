@@ -27,7 +27,7 @@
 	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
-	import ArchiveSettingsPanel from '$lib/components/panels/ArchiveSettingsPanel.svelte';
+	import BookSettingsPanel from '$lib/components/panels/BookSettingsPanel.svelte';
 	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
 	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
@@ -167,7 +167,7 @@
 			{:else if activeTab === 'theme'}
 				<ThemePanel />
 			{:else if activeTab === 'book'}
-				<ArchiveSettingsPanel />
+				<BookSettingsPanel />
 			{:else if activeTab === 'performance'}
 				<PerformanceSettingsPanel />
 			{:else if activeTab === 'data'}

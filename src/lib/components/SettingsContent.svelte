@@ -9,7 +9,6 @@
 		Palette,
 		Zap,
 		Monitor,
-		Archive,
 		Eye,
 		BookOpen,
 		LayoutDashboard,
@@ -40,7 +39,6 @@
 		{ value: 'general', label: '通用', icon: Settings },
 		{ value: 'system', label: '系统', icon: Monitor },
 		{ value: 'image', label: '影像', icon: Palette },
-		{ value: 'archive', label: '压缩包', icon: Archive },
 		{ value: 'view', label: '视图', icon: Eye },
 		{ value: 'notify', label: '通知', icon: Bell },
 		{ value: 'book', label: '书籍', icon: BookOpen },
@@ -168,7 +166,7 @@
 				</div>
 			{:else if activeTab === 'theme'}
 				<ThemePanel />
-			{:else if activeTab === 'archive'}
+			{:else if activeTab === 'book'}
 				<ArchiveSettingsPanel />
 			{:else if activeTab === 'performance'}
 				<PerformanceSettingsPanel />

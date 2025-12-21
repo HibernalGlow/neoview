@@ -327,47 +327,45 @@ pub async fn pm_preload_thumbnails(
         manager.get_archive_manager_clone()
     };
     
-    // 在后台任务中并行生成缩略图 - 不再需要锁 PageManager
+    // 在后台任务中并行生成缩略图 - 使用 spawn_blocking 运行 rayon
     tokio::spawn(async move {
-        use futures::stream::{self, StreamExt};
         use rayon::prelude::*;
         
-        // 使用 rayon 并行处理（CPU 密集型任务）
-        let results: Vec<_> = pages_to_load
-            .par_iter()
-            .map(|(index, page_info)| {
-                // 1. 加载图片数据（从压缩包或文件系统）
-                let data = match book_type {
-                    crate::core::page_manager::BookType::Archive => {
-                        if let Some(ref am) = archive_manager {
-                            am.load_image_from_archive_binary(
-                                std::path::Path::new(&book_path),
-                                &page_info.inner_path
-                            ).ok()
-                        } else {
-                            None
+        // 使用 spawn_blocking 运行 CPU 密集型的 rayon 并行任务
+        let results = tokio::task::spawn_blocking(move || {
+            pages_to_load
+                .par_iter()
+                .filter_map(|(index, page_info)| {
+                    // 1. 加载图片数据（从压缩包或文件系统）
+                    let data = match book_type {
+                        crate::core::page_manager::BookType::Archive => {
+                            if let Some(ref am) = archive_manager {
+                                am.load_image_from_archive_binary(
+                                    std::path::Path::new(&book_path),
+                                    &page_info.inner_path
+                                ).ok()
+                            } else {
+                                None
+                            }
                         }
-                    }
-                    _ => {
-                        std::fs::read(&page_info.inner_path).ok()
-                    }
-                };
-                
-                let Some(data) = data else {
-                    return None;
-                };
-                
-                // 2. 生成缩略图（使用 WIC 或 image crate）
-                let thumbnail = generate_thumbnail_fast(&data, size);
-                
-                thumbnail.map(|item| (*index, item))
-            })
-            .collect();
+                        _ => {
+                            std::fs::read(&page_info.inner_path).ok()
+                        }
+                    };
+                    
+                    let data = data?;
+                    
+                    // 2. 生成缩略图（使用 WIC 或 image crate）
+                    let thumbnail = generate_thumbnail_fast(&data, size)?;
+                    
+                    Some((*index, thumbnail))
+                })
+                .collect::<Vec<_>>()
+        }).await.unwrap_or_default();
         
         // 推送结果到前端
-        for result in results.into_iter().flatten() {
-            let (index, item) = result;
-            
+        let success_count = results.len();
+        for (index, item) in results {
             use base64::{Engine as _, engine::general_purpose::STANDARD};
             let data_base64 = STANDARD.encode(&item.data);
             
@@ -383,7 +381,7 @@ pub async fn pm_preload_thumbnails(
             }
         }
         
-        log::info!("🖼️ [PageCommand] 缩略图生成完成");
+        log::info!("🖼️ [PageCommand] 缩略图生成完成: {} 个", success_count);
     });
     
     Ok(result_indices)

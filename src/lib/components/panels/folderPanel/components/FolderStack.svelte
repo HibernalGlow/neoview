@@ -1237,6 +1237,10 @@
 	async function handleEmptyDoubleClick(layerIndex: number) {
 		if (layerIndex !== activeIndex) return;
 		
+		// 虚拟路径（书签/历史）模式下不响应
+		const currentLayer = layers[layerIndex];
+		if (currentLayer && isVirtualPath(currentLayer.path)) return;
+		
 		// 获取用户设置的双击空白处行为
 		const state = get(fileBrowserStore);
 		const action = state.doubleClickEmptyAction;
@@ -1256,6 +1260,10 @@
 	async function handleEmptySingleClick(layerIndex: number) {
 		if (layerIndex !== activeIndex) return;
 		
+		// 虚拟路径（书签/历史）模式下不响应
+		const currentLayer = layers[layerIndex];
+		if (currentLayer && isVirtualPath(currentLayer.path)) return;
+		
 		// 获取用户设置的单击空白处行为
 		const state = get(fileBrowserStore);
 		const action = state.singleClickEmptyAction;
@@ -1274,13 +1282,15 @@
 	// 处理返回按钮点击
 	async function handleBackButtonClick(layerIndex: number) {
 		if (layerIndex !== activeIndex) return;
+		
+		// 虚拟路径（书签/历史）模式下不响应
+		const currentLayer = layers[layerIndex];
+		if (currentLayer && isVirtualPath(currentLayer.path)) return;
+		
 		await popLayer();
 	}
 
-	// 是否显示空白区域返回按钮
-	let showEmptyAreaBackButton = $derived(get(fileBrowserStore).showEmptyAreaBackButton);
-	
-	// 订阅 fileBrowserStore 的设置变化
+	// 是否显示空白区域返回按钮（虚拟路径模式下不显示）
 	let showBackButtonValue = $state(false);
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
@@ -1288,6 +1298,13 @@
 		});
 		return unsubscribe;
 	});
+	
+	// 计算当前层是否应该显示返回按钮
+	function shouldShowBackButton(layerPath: string): boolean {
+		// 虚拟路径（书签/历史）模式下不显示
+		if (isVirtualPath(layerPath)) return false;
+		return showBackButtonValue;
+	}
 </script>
 
 <div class="folder-stack relative h-full w-full overflow-hidden">
@@ -1331,7 +1348,7 @@
 						thumbnailWidthPercent={$thumbnailWidthPercent}
 						bannerWidthPercent={$bannerWidthPercent}
 						showFullPath={getVirtualPathType(layer.path) === 'search'}
-						showBackButton={showBackButtonValue}
+						showBackButton={shouldShowBackButton(layer.path)}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onEmptyDoubleClick={() => handleEmptyDoubleClick(index)}

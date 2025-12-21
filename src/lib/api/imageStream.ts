@@ -2,7 +2,7 @@
  * 图片流式加载 API
  * 
  * 使用 Tauri Channel 实现大图片的流式传输
- * 边接收边解码，减少首字节延迟
+ * ZIP 格式支持真正的边解压边传输
  */
 
 import { invoke, Channel } from '@tauri-apps/api/core';
@@ -14,15 +14,16 @@ import { toBytes } from 'fast-base64';
 interface StreamChunk {
 	type: 'chunk';
 	index: number;
-	total: number;
 	data: string; // Base64
 	size: number;
+	estimatedTotal: number | null;
 }
 
 /** 传输完成 */
 interface StreamComplete {
 	type: 'complete';
 	totalBytes: number;
+	totalChunks: number;
 	elapsedMs: number;
 }
 
@@ -38,15 +39,18 @@ type ImageStreamOutput = StreamChunk | StreamComplete | StreamError;
 /** 流式加载选项 */
 export interface StreamLoadOptions {
 	/** 进度回调 */
-	onProgress?: (loaded: number, total: number) => void;
+	onProgress?: (loaded: number, total: number | null) => void;
 	/** 首块回调（用于渐进式显示） */
 	onFirstChunk?: (partialBlob: Blob) => void;
+	/** 每块回调（用于实时更新） */
+	onChunk?: (chunk: Uint8Array, index: number) => void;
 }
 
 /** 流式加载结果 */
 export interface StreamLoadResult {
 	blob: Blob;
 	totalBytes: number;
+	totalChunks: number;
 	elapsedMs: number;
 }
 
@@ -55,8 +59,8 @@ export interface StreamLoadResult {
 /**
  * 流式加载压缩包图片
  * 
- * 对于大文件，边接收边解码，实现渐进式加载
- * 首块数据可以立即显示，提升用户体验
+ * ZIP 格式：真正的边解压边传输，首块数据可立即显示
+ * RAR/7z 格式：先解压再分块传输
  */
 export async function streamImageFromArchive(
 	archivePath: string,
@@ -65,9 +69,8 @@ export async function streamImageFromArchive(
 ): Promise<StreamLoadResult> {
 	return new Promise((resolve, reject) => {
 		const chunks: Uint8Array[] = [];
-		let totalChunks = 0;
-		let receivedChunks = 0;
-		let totalBytes = 0;
+		let loadedBytes = 0;
+		let estimatedTotal: number | null = null;
 
 		// 创建 Channel 接收流数据
 		const channel = new Channel<ImageStreamOutput>();
@@ -77,14 +80,22 @@ export async function streamImageFromArchive(
 				try {
 					// 使用 fast-base64 解码
 					const bytes = await toBytes(output.data);
-					chunks[output.index] = bytes;
-					receivedChunks++;
-					totalChunks = output.total;
+					chunks.push(bytes);
+					loadedBytes += bytes.length;
+					
+					// 更新预估总大小
+					if (output.estimatedTotal) {
+						estimatedTotal = output.estimatedTotal;
+					}
 
 					// 进度回调
 					if (options.onProgress) {
-						const loaded = chunks.reduce((sum, c) => sum + (c?.length || 0), 0);
-						options.onProgress(loaded, totalBytes || loaded * totalChunks / receivedChunks);
+						options.onProgress(loadedBytes, estimatedTotal);
+					}
+
+					// 每块回调
+					if (options.onChunk) {
+						options.onChunk(bytes, output.index);
 					}
 
 					// 首块回调（用于渐进式显示）
@@ -98,15 +109,12 @@ export async function streamImageFromArchive(
 				}
 			} else if (output.type === 'complete') {
 				// 合并所有块
-				const allBytes = new Uint8Array(
-					chunks.reduce((sum, c) => sum + (c?.length || 0), 0)
-				);
+				const totalSize = chunks.reduce((sum, c) => sum + c.length, 0);
+				const allBytes = new Uint8Array(totalSize);
 				let offset = 0;
 				for (const chunk of chunks) {
-					if (chunk) {
-						allBytes.set(chunk, offset);
-						offset += chunk.length;
-					}
+					allBytes.set(chunk, offset);
+					offset += chunk.length;
 				}
 
 				const mimeType = getMimeTypeFromPath(filePath);
@@ -115,6 +123,7 @@ export async function streamImageFromArchive(
 				resolve({
 					blob,
 					totalBytes: output.totalBytes,
+					totalChunks: output.totalChunks,
 					elapsedMs: output.elapsedMs,
 				});
 			} else if (output.type === 'error') {

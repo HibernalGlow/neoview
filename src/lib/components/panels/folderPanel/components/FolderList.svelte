@@ -93,9 +93,15 @@ interface Props {
 	onRestoreComplete?: () => void;
 	// 双击空白处回调
 	onEmptyDoubleClick?: () => void;
+	// 单击空白处回调
+	onEmptySingleClick?: () => void;
+	// 返回按钮点击回调
+	onBackButtonClick?: () => void;
+	// 是否显示返回按钮
+	showBackButton?: boolean;
 }
 
-let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete, onEmptyDoubleClick }: Props = $props();
+let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete, onEmptyDoubleClick, onEmptySingleClick, onBackButtonClick, showBackButton = false }: Props = $props();
 
 // 显示项（不过滤 - 搜索在 SearchResultList 中处理）
 let filteredItems = $derived(() => {
@@ -230,10 +236,13 @@ $effect(() => {
 		isDeleteMode={$deleteMode}
 		selectedItems={$selectedItems}
 		{viewMode}
+		{showBackButton}
 		onSelectionChange={handleSelectionChange}
 		onSelectedIndexChange={handleSelectedIndexChange}
 		onItemSelect={handleItemSelect}
 		onItemDoubleClick={handleItemDoubleClick}
 		onEmptyDoubleClick={() => onEmptyDoubleClick?.()}
+		onEmptySingleClick={() => onEmptySingleClick?.()}
+		onBackButtonClick={() => onBackButtonClick?.()}
 	/>
 {/if}

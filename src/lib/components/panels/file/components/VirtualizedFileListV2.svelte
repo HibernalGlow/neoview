@@ -19,6 +19,7 @@
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { updateVisibility } from '$lib/stores/visibilityMonitor.svelte';
+	import { ChevronUp } from '@lucide/svelte';
 
 	// Props
 	const {
@@ -38,6 +39,9 @@
 		onItemSelect = (payload: { item: FsItem; index: number; multiSelect: boolean }) => {},
 		onItemDoubleClick = (payload: { item: FsItem; index: number }) => {},
 		onEmptyDoubleClick = () => {},
+		onEmptySingleClick = () => {},
+		onBackButtonClick = () => {},
+		showBackButton = false,
 		showFullPath = false
 	}: {
 		items?: FsItem[];
@@ -56,6 +60,9 @@
 		onItemSelect?: (payload: { item: FsItem; index: number; multiSelect: boolean }) => void;
 		onItemDoubleClick?: (payload: { item: FsItem; index: number }) => void;
 		onEmptyDoubleClick?: () => void;
+		onEmptySingleClick?: () => void;
+		onBackButtonClick?: () => void;
+		showBackButton?: boolean;
 		showFullPath?: boolean;
 	} = $props();
 
@@ -312,6 +319,22 @@
 		}
 	}
 
+	// 处理容器单击（空白处单击）
+	function handleContainerClick(e: MouseEvent) {
+		// 检查点击目标是否是容器本身或虚拟滚动的空白区域
+		const target = e.target as HTMLElement;
+		// 如果点击的是容器本身，或者是虚拟滚动的占位 div
+		if (target === container || target.classList.contains('virtual-list-container')) {
+			onEmptySingleClick();
+			return;
+		}
+		// 检查是否点击在项目卡片之外的空白区域
+		const clickedOnItem = target.closest('[data-index]') || target.closest('.file-item-card');
+		if (!clickedOnItem) {
+			onEmptySingleClick();
+		}
+	}
+
 	// 处理勾选框切换 - 通过 onItemSelect 路由以支持链选模式
 	function handleToggleSelection(item: FsItem, index: number) {
 		// 使用 multiSelect: true 触发链选逻辑
@@ -447,6 +470,7 @@
 		aria-label="文件列表"
 		onscroll={handleScroll}
 		onkeydown={handleKeydown}
+		onclick={handleContainerClick}
 		ondblclick={handleContainerDoubleClick}
 	>
 		<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
@@ -510,6 +534,18 @@
 				</div>
 			{/each}
 		</div>
+
+		<!-- 空白区域返回按钮 -->
+		{#if showBackButton}
+			<button
+				class="empty-area-back-button flex items-center justify-center gap-2 w-full py-4 mt-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-lg border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+				onclick={(e) => { e.stopPropagation(); onBackButtonClick(); }}
+				type="button"
+			>
+				<ChevronUp class="h-5 w-5" />
+				<span class="text-sm">点击返回上级目录</span>
+			</button>
+		{/if}
 	</div>
 
 	<!-- 侧边进度条滑块 -->

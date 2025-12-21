@@ -60,6 +60,10 @@ interface FileBrowserState {
   checkModeClickBehavior: CheckModeClickBehavior;
   // 双击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
   doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+  // 单击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
+  singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+  // 是否在空白区域显示返回按钮提示
+  showEmptyAreaBackButton: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
@@ -130,7 +134,9 @@ const initialState: FileBrowserState = {
   inlineTreeScrollTops: {},
   scrollPositions: {},
   checkModeClickBehavior: 'open',
-  doubleClickEmptyAction: 'goUp'
+  doubleClickEmptyAction: 'goUp',
+  singleClickEmptyAction: 'none',
+  showEmptyAreaBackButton: false
 };
 
 /**
@@ -239,6 +245,8 @@ function createFileBrowserStore() {
     setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
     setCheckModeClickBehavior: (value: CheckModeClickBehavior) => update(state => ({ ...state, checkModeClickBehavior: value })),
     setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => ({ ...state, doubleClickEmptyAction: value })),
+    setSingleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => ({ ...state, singleClickEmptyAction: value })),
+    setShowEmptyAreaBackButton: (value: boolean) => update(state => ({ ...state, showEmptyAreaBackButton: value })),
     setVisibleItems: (items: FsItem[]) => update(state => ({
       ...state,
       visibleItems: items,

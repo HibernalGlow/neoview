@@ -1437,8 +1437,35 @@ async function handleReloadSelectedThumbnails() {
 								<option value="goUp">返回上级</option>
 								<option value="goBack">后退</option>
 							</select>
+						</div>
+
+						<div class="flex items-center gap-2">
+							<MousePointerClick class="h-3.5 w-3.5 text-muted-foreground" />
+							<span class="text-muted-foreground">单击空白:</span>
+							<select 
+								class="h-6 bg-background border rounded text-xs px-1"
+								value={$fileBrowserStore.singleClickEmptyAction}
+								onchange={(e) => fileBrowserStore.setSingleClickEmptyAction((e.target as HTMLSelectElement).value as 'none' | 'goUp' | 'goBack')}
+							>
+								<option value="none">无操作</option>
+								<option value="goUp">返回上级</option>
+								<option value="goBack">后退</option>
+							</select>
+						</div>
+
+						<div class="flex items-center gap-2">
+							<ChevronUp class="h-3.5 w-3.5 text-muted-foreground" />
+							<span class="text-muted-foreground">返回按钮:</span>
+							<Button 
+								variant={$fileBrowserStore.showEmptyAreaBackButton ? 'default' : 'outline'} 
+								size="sm" 
+								class="h-6 text-xs px-2"
+								onclick={() => fileBrowserStore.setShowEmptyAreaBackButton(!$fileBrowserStore.showEmptyAreaBackButton)}
+							>
+								{$fileBrowserStore.showEmptyAreaBackButton ? '显示' : '隐藏'}
+							</Button>
 							<span class="text-muted-foreground/60 text-[10px]">
-								双击列表空白处的行为
+								列表底部显示返回按钮
 							</span>
 						</div>
 					{/if}

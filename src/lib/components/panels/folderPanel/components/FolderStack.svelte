@@ -1251,6 +1251,43 @@
 			await popLayer();
 		}
 	}
+
+	// 处理单击空白处（返回上级/后退）
+	async function handleEmptySingleClick(layerIndex: number) {
+		if (layerIndex !== activeIndex) return;
+		
+		// 获取用户设置的单击空白处行为
+		const state = get(fileBrowserStore);
+		const action = state.singleClickEmptyAction;
+		
+		if (action === 'none') return;
+		
+		if (action === 'goUp') {
+			// 返回上级目录
+			await popLayer();
+		} else if (action === 'goBack') {
+			// 后退
+			await popLayer();
+		}
+	}
+
+	// 处理返回按钮点击
+	async function handleBackButtonClick(layerIndex: number) {
+		if (layerIndex !== activeIndex) return;
+		await popLayer();
+	}
+
+	// 是否显示空白区域返回按钮
+	let showEmptyAreaBackButton = $derived(get(fileBrowserStore).showEmptyAreaBackButton);
+	
+	// 订阅 fileBrowserStore 的设置变化
+	let showBackButtonValue = $state(false);
+	$effect(() => {
+		const unsubscribe = fileBrowserStore.subscribe((state) => {
+			showBackButtonValue = state.showEmptyAreaBackButton;
+		});
+		return unsubscribe;
+	});
 </script>
 
 <div class="folder-stack relative h-full w-full overflow-hidden">
@@ -1294,9 +1331,12 @@
 						thumbnailWidthPercent={$thumbnailWidthPercent}
 						bannerWidthPercent={$bannerWidthPercent}
 						showFullPath={getVirtualPathType(layer.path) === 'search'}
+						showBackButton={showBackButtonValue}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
 						onEmptyDoubleClick={() => handleEmptyDoubleClick(index)}
+						onEmptySingleClick={() => handleEmptySingleClick(index)}
+						onBackButtonClick={() => handleBackButtonClick(index)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
 						onSelectionChange={(payload) =>
 							globalStore.setSelectedItems(payload.selectedItems)}

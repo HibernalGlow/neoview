@@ -390,14 +390,15 @@ pub async fn pm_preload_thumbnails(
 }
 
 /// 快速生成缩略图（优化版本）
+/// - Windows 优先使用 WIC（硬件加速解码+缩放）
 /// - 使用有损 WebP 编码（比 lossless 快 10 倍）
-/// - Windows 优先使用 WIC（硬件加速）
 fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> {
-    // Windows: 优先使用 WIC
+    // Windows: 优先使用 WIC（硬件加速解码+缩放，支持 AVIF/HEIC/JXL）
     #[cfg(target_os = "windows")]
     {
         use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
         
+        // WIC 直接解码并缩放到目标尺寸（一步完成，硬件加速）
         if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
             if let Ok(img) = wic_result_to_dynamic_image(result) {
                 let width = img.width();
@@ -415,7 +416,7 @@ fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> 
         }
     }
     
-    // 回退到 image crate
+    // 非 Windows 或 WIC 失败：回退到 image crate
     use image::ImageReader;
     use std::io::Cursor;
     
@@ -430,7 +431,7 @@ fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> 
     let new_width = (orig_width as f32 * scale) as u32;
     let new_height = (orig_height as f32 * scale) as u32;
     
-    // 使用更快的缩放算法
+    // 使用 Triangle 滤波器（速度和质量的平衡）
     let thumbnail = img.resize(new_width, new_height, image::imageops::FilterType::Triangle);
     
     // 使用有损 WebP 编码

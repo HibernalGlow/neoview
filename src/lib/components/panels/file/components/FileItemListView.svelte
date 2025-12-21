@@ -199,16 +199,23 @@
 					<img
 						src={thumbnail}
 						alt={item.name}
+						loading="lazy"
+						decoding="async"
 						class="h-full w-full object-cover transition-transform group-hover/item:scale-105"
 					/>
-				{:else if item.isDir}
-					<Folder class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
-				{:else if isArchive}
-					<FileArchive class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
-				{:else if item.isImage}
-					<Image class="text-primary group-hover/item:text-primary h-8 w-8 transition-colors" />
 				{:else}
-					<File class="h-8 w-8 text-gray-400 transition-colors group-hover/item:text-gray-500" />
+					<!-- 骨架屏占位：缩略图加载中显示动画 -->
+					<div class="absolute inset-0 bg-accent animate-pulse rounded"></div>
+					<!-- 图标叠加在骨架屏上 -->
+					{#if item.isDir}
+						<Folder class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+					{:else if isArchive}
+						<FileArchive class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+					{:else if item.isImage}
+						<Image class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+					{:else}
+						<File class="relative h-8 w-8 text-gray-400/50 transition-colors group-hover/item:text-gray-500" />
+					{/if}
 				{/if}
 
 				<!-- 阅读标记 -->

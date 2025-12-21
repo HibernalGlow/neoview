@@ -204,6 +204,7 @@
 
 	// Thumbnail loading for visible items - V3 版本
 	// 复刻 NeeView 架构：后端为主，前端只通知可见区域
+	// 优化：增加 debounce 到 32ms（2帧），减少快速滚动时的请求频率
 	const handleVisibleRangeChange = debounce(() => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
@@ -242,7 +243,7 @@
 			visiblePaths.map((p) => p.path),
 			currentPath
 		);
-	}, 16); // 16ms debounce (一帧，极速响应)
+	}, 32); // 32ms debounce（2帧，平衡响应速度和请求频率）
 
 	// 当 virtualItems 变化时触发缩略图加载
 	$effect(() => {
@@ -342,20 +343,24 @@
 		dispatch('itemSelect', { item, index, multiSelect: true });
 	}
 
+	// 键盘导航优化：使用 requestAnimationFrame 避免阻塞主线程，改善 INP
 	function handleKeydown(e: KeyboardEvent) {
 		if (items.length === 0) return;
-		let nextIndex = selectedIndex;
 
 		const nav = (delta: number) => {
 			e.preventDefault();
-			let next = selectedIndex + delta;
-			next = Math.max(0, Math.min(items.length - 1, next));
-			if (next !== selectedIndex) {
-				onSelectedIndexChange({ index: next });
-				dispatch('selectedIndexChange', { index: next });
-				const rowIndex = Math.floor(next / columns);
-				$virtualizer.scrollToIndex(rowIndex, { align: 'auto', behavior: 'smooth' });
-			}
+			// 使用 requestAnimationFrame 延迟滚动，避免阻塞输入响应
+			requestAnimationFrame(() => {
+				let next = selectedIndex + delta;
+				next = Math.max(0, Math.min(items.length - 1, next));
+				if (next !== selectedIndex) {
+					onSelectedIndexChange({ index: next });
+					dispatch('selectedIndexChange', { index: next });
+					const rowIndex = Math.floor(next / columns);
+					// 使用 'auto' 行为减少动画开销
+					$virtualizer.scrollToIndex(rowIndex, { align: 'auto', behavior: 'auto' });
+				}
+			});
 		};
 
 		switch (e.key) {
@@ -373,19 +378,23 @@
 				break;
 			case 'Home':
 				e.preventDefault();
-				if (selectedIndex !== 0) {
-					onSelectedIndexChange({ index: 0 });
-					$virtualizer.scrollToIndex(0, { align: 'start', behavior: 'smooth' });
-				}
+				requestAnimationFrame(() => {
+					if (selectedIndex !== 0) {
+						onSelectedIndexChange({ index: 0 });
+						$virtualizer.scrollToIndex(0, { align: 'start', behavior: 'auto' });
+					}
+				});
 				break;
 			case 'End':
 				e.preventDefault();
-				const last = items.length - 1;
-				if (selectedIndex !== last) {
-					onSelectedIndexChange({ index: last });
-					const lastRowIndex = Math.floor(last / columns);
-					$virtualizer.scrollToIndex(lastRowIndex, { align: 'end', behavior: 'smooth' });
-				}
+				requestAnimationFrame(() => {
+					const last = items.length - 1;
+					if (selectedIndex !== last) {
+						onSelectedIndexChange({ index: last });
+						const lastRowIndex = Math.floor(last / columns);
+						$virtualizer.scrollToIndex(lastRowIndex, { align: 'end', behavior: 'auto' });
+					}
+				});
 				break;
 			default:
 				return;

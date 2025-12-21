@@ -107,24 +107,31 @@
 			<img
 				src={thumbnail}
 				alt={item.name}
+				loading="lazy"
+				decoding="async"
 				class="h-full w-full object-cover transition-transform group-hover/card:scale-105"
 			/>
-		{:else if item.isDir}
-			<div class="flex h-full w-full items-center justify-center">
-				<Folder class="text-primary h-16 w-16" />
-			</div>
-		{:else if isArchive}
-			<div class="flex h-full w-full items-center justify-center">
-				<FileArchive class="text-primary h-16 w-16" />
-			</div>
-		{:else if item.isImage}
-			<div class="flex h-full w-full items-center justify-center">
-				<Image class="text-primary h-16 w-16" />
-			</div>
 		{:else}
-			<div class="flex h-full w-full items-center justify-center">
-				<File class="h-16 w-16 text-gray-400" />
-			</div>
+			<!-- 骨架屏占位：缩略图加载中显示动画 -->
+			<div class="absolute inset-0 bg-accent animate-pulse"></div>
+			<!-- 图标叠加在骨架屏上 -->
+			{#if item.isDir}
+				<div class="relative flex h-full w-full items-center justify-center">
+					<Folder class="text-primary/50 h-16 w-16" />
+				</div>
+			{:else if isArchive}
+				<div class="relative flex h-full w-full items-center justify-center">
+					<FileArchive class="text-primary/50 h-16 w-16" />
+				</div>
+			{:else if item.isImage}
+				<div class="relative flex h-full w-full items-center justify-center">
+					<Image class="text-primary/50 h-16 w-16" />
+				</div>
+			{:else}
+				<div class="relative flex h-full w-full items-center justify-center">
+					<File class="h-16 w-16 text-gray-400/50" />
+				</div>
+			{/if}
 		{/if}
 
 		<!-- 阅读标记 -->

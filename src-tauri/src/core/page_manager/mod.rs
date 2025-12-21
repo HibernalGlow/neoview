@@ -805,21 +805,45 @@ impl PageContentManager {
     /// 
     /// 从页面数据生成 WebP 格式的缩略图
     pub async fn generate_page_thumbnail(&self, index: usize, max_size: u32) -> Result<ThumbnailItem, String> {
+        let total_start = std::time::Instant::now();
+        
         let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
         let page_info = book.get_page(index).ok_or("页面不存在")?;
         let book_path = &book.path;
         let book_type = book.book_type;
 
         // 加载页面数据
+        let load_start = std::time::Instant::now();
         let (data, _mime_type) = self.load_page_data(book_path, book_type, page_info).await?;
+        let load_elapsed = load_start.elapsed();
 
         // 使用 image crate 生成缩略图
-        Self::generate_thumbnail_from_data(&data, max_size)
+        let gen_start = std::time::Instant::now();
+        let result = Self::generate_thumbnail_from_data(&data, max_size);
+        let gen_elapsed = gen_start.elapsed();
+        
+        let total_elapsed = total_start.elapsed();
+        
+        // 只在耗时超过 100ms 时打印详细日志
+        if total_elapsed.as_millis() > 100 {
+            log::info!(
+                "🖼️ [Thumbnail] page={} total={}ms (load={}ms, gen={}ms) data_size={}KB",
+                index,
+                total_elapsed.as_millis(),
+                load_elapsed.as_millis(),
+                gen_elapsed.as_millis(),
+                data.len() / 1024
+            );
+        }
+        
+        result
     }
 
     /// 从图片数据生成缩略图
     /// 优先使用 WIC（支持 AVIF/HEIC/JXL），失败时回退到 image crate
     fn generate_thumbnail_from_data(data: &[u8], max_size: u32) -> Result<ThumbnailItem, String> {
+        let start = std::time::Instant::now();
+        
         // Windows: 优先使用 WIC 内置缩放（支持 AVIF/HEIC/JXL 等）
         #[cfg(target_os = "windows")]
         {
@@ -827,13 +851,35 @@ impl PageContentManager {
             use image::ImageFormat;
             use std::io::Cursor;
 
+            let wic_start = std::time::Instant::now();
             if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
+                let wic_decode_elapsed = wic_start.elapsed();
+                
+                let convert_start = std::time::Instant::now();
                 if let Ok(img) = wic_result_to_dynamic_image(result) {
+                    let convert_elapsed = convert_start.elapsed();
+                    
                     let width = img.width();
                     let height = img.height();
                     
+                    let encode_start = std::time::Instant::now();
                     let mut buffer = Vec::new();
                     if img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP).is_ok() {
+                        let encode_elapsed = encode_start.elapsed();
+                        let total_elapsed = start.elapsed();
+                        
+                        // 只在耗时超过 50ms 时打印详细日志
+                        if total_elapsed.as_millis() > 50 {
+                            log::debug!(
+                                "🖼️ [ThumbnailGen] WIC total={}ms (decode={}ms, convert={}ms, encode={}ms) size={}x{}",
+                                total_elapsed.as_millis(),
+                                wic_decode_elapsed.as_millis(),
+                                convert_elapsed.as_millis(),
+                                encode_elapsed.as_millis(),
+                                width, height
+                            );
+                        }
+                        
                         return Ok(ThumbnailItem {
                             data: buffer,
                             width,
@@ -848,19 +894,24 @@ impl PageContentManager {
         use image::ImageReader;
         use std::io::Cursor;
 
+        let decode_start = std::time::Instant::now();
         let img = ImageReader::new(Cursor::new(data))
             .with_guessed_format()
             .map_err(|e| format!("无法识别图片格式: {}", e))?
             .decode()
             .map_err(|e| format!("解码图片失败: {}", e))?;
+        let decode_elapsed = decode_start.elapsed();
 
         let (orig_width, orig_height) = (img.width(), img.height());
         let scale = (max_size as f32 / orig_width.max(orig_height) as f32).min(1.0);
         let new_width = (orig_width as f32 * scale) as u32;
         let new_height = (orig_height as f32 * scale) as u32;
 
+        let resize_start = std::time::Instant::now();
         let thumbnail = img.thumbnail(new_width, new_height);
+        let resize_elapsed = resize_start.elapsed();
 
+        let encode_start = std::time::Instant::now();
         let mut buffer = Vec::new();
         {
             use image::codecs::webp::WebPEncoder;
@@ -873,6 +924,22 @@ impl PageContentManager {
                 thumbnail.color().into(),
             ).map_err(|e| format!("编码 WebP 失败: {}", e))?;
         }
+        let encode_elapsed = encode_start.elapsed();
+        
+        let total_elapsed = start.elapsed();
+        
+        // 只在耗时超过 50ms 时打印详细日志
+        if total_elapsed.as_millis() > 50 {
+            log::debug!(
+                "🖼️ [ThumbnailGen] ImageCrate total={}ms (decode={}ms, resize={}ms, encode={}ms) {}x{} -> {}x{}",
+                total_elapsed.as_millis(),
+                decode_elapsed.as_millis(),
+                resize_elapsed.as_millis(),
+                encode_elapsed.as_millis(),
+                orig_width, orig_height,
+                thumbnail.width(), thumbnail.height()
+            );
+        }
 
         Ok(ThumbnailItem {
             data: buffer,
@@ -884,5 +951,13 @@ impl PageContentManager {
     /// 获取总页数
     pub fn total_pages(&self) -> usize {
         self.current_book.as_ref().map(|b| b.total_pages).unwrap_or(0)
+    }
+    
+    /// 获取 ArchiveManager 的克隆（用于并行处理）
+    pub fn get_archive_manager_clone(&self) -> Option<ArchiveManager> {
+        self.archive_manager
+            .lock()
+            .ok()
+            .map(|guard| guard.clone())
     }
 }

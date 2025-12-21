@@ -7,7 +7,7 @@ use crate::core::page_frame::{
 };
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageManagerStats,
-    ThumbnailReadyEvent,
+    ThumbnailReadyEvent, ThumbnailItem, PageInfo,
 };
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
@@ -274,95 +274,187 @@ pub async fn pm_preload_thumbnails(
 ) -> Result<Vec<usize>, String> {
     let size = max_size.unwrap_or(256);
     
-    // 验证书籍已打开
-    {
+    // 提前获取所有需要的信息，避免后续锁竞争
+    let (book_path, book_type, page_infos) = {
         let manager = state.manager.lock().await;
-        manager.current_book_info()
+        let book = manager.current_book_info()
             .ok_or("没有打开的书籍")?;
-    }
+        
+        let book_path = book.path.clone();
+        let book_type = book.book_type;
+        
+        // 收集所有页面信息
+        let page_infos: Vec<_> = indices.iter()
+            .filter_map(|&idx| {
+                manager.get_page_info(idx).map(|info| (idx, info))
+            })
+            .collect();
+        
+        (book_path, book_type, page_infos)
+    };
     
-    if indices.is_empty() {
+    if page_infos.is_empty() {
         return Ok(vec![]);
     }
     
     // 按距离中心排序（中央优先策略）
-    let mut pages_to_load = indices.clone();
+    let mut pages_to_load: Vec<_> = page_infos;
     if let Some(center) = center_index {
-        sort_by_distance_from_center(&mut pages_to_load, center);
-        log::debug!("🖼️ [PageCommand] 按距离中心 {} 排序后: {:?}", center, pages_to_load);
+        pages_to_load.sort_by(|(a, _), (b, _)| {
+            let dist_a = (*a as isize - center as isize).unsigned_abs();
+            let dist_b = (*b as isize - center as isize).unsigned_abs();
+            match dist_a.cmp(&dist_b) {
+                std::cmp::Ordering::Equal => b.cmp(a),
+                other => other,
+            }
+        });
     }
     
-    log::debug!("🖼️ [PageCommand] preload_thumbnails: loading {} pages: {:?}",
-        pages_to_load.len(), pages_to_load);
+    let result_indices: Vec<usize> = pages_to_load.iter().map(|(idx, _)| *idx).collect();
     
-    let result_indices = pages_to_load.clone();
-    let manager_arc = Arc::clone(&state.manager);
-    
-    // 并行度：同时处理的缩略图数量（根据 CPU 核心数动态调整）
+    // 并行度：同时处理的缩略图数量
     let parallelism = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
-        .min(8); // 最多 8 个并行任务
+        .min(8);
     
-    // 在后台任务中并行生成缩略图
+    log::info!("🖼️ [PageCommand] 开始并行生成 {} 个缩略图 (并行度: {})", 
+        pages_to_load.len(), parallelism);
+    
+    // 获取 ArchiveManager 的克隆（用于并行解压）
+    let archive_manager = {
+        let manager = state.manager.lock().await;
+        manager.get_archive_manager_clone()
+    };
+    
+    // 在后台任务中并行生成缩略图 - 不再需要锁 PageManager
     tokio::spawn(async move {
         use futures::stream::{self, StreamExt};
+        use rayon::prelude::*;
         
-        log::info!("🖼️ [PageCommand] 开始并行生成 {} 个缩略图 (并行度: {})", 
-            pages_to_load.len(), parallelism);
-        
-        // 使用 buffer_unordered 实现并行处理
-        let results: Vec<_> = stream::iter(pages_to_load)
-            .map(|index| {
-                let manager_arc = Arc::clone(&manager_arc);
-                let app = app.clone();
-                async move {
-                    log::debug!("🖼️ [PageCommand] 生成缩略图: page {}", index);
-                    
-                    let result = {
-                        let manager = manager_arc.lock().await;
-                        manager.generate_page_thumbnail(index, size).await
-                    };
-
-                    match result {
-                        Ok(item) => {
-                            // Base64 编码缩略图数据
-                            use base64::{Engine as _, engine::general_purpose::STANDARD};
-                            let data_base64 = STANDARD.encode(&item.data);
-
-                            let event = ThumbnailReadyEvent {
-                                index,
-                                data: format!("data:image/webp;base64,{}", data_base64),
-                                width: item.width,
-                                height: item.height,
-                            };
-
-                            log::debug!("🖼️ 推送缩略图事件: page {}, {}x{}", 
-                                index, item.width, item.height);
-
-                            // 使用独立事件名，避免与 thumbnailStoreV3 的 thumbnail-ready 冲突
-                            if let Err(e) = app.emit("page-thumbnail-ready", &event) {
-                                log::error!("🖼️ 推送缩略图事件失败: {}", e);
-                            }
-                            Some(index)
-                        }
-                        Err(e) => {
-                            log::warn!("🖼️ 生成缩略图失败: page {}: {}", index, e);
+        // 使用 rayon 并行处理（CPU 密集型任务）
+        let results: Vec<_> = pages_to_load
+            .par_iter()
+            .map(|(index, page_info)| {
+                // 1. 加载图片数据（从压缩包或文件系统）
+                let data = match book_type {
+                    crate::core::page_manager::BookType::Archive => {
+                        if let Some(ref am) = archive_manager {
+                            am.load_image_from_archive_binary(
+                                std::path::Path::new(&book_path),
+                                &page_info.inner_path
+                            ).ok()
+                        } else {
                             None
                         }
                     }
-                }
+                    _ => {
+                        std::fs::read(&page_info.inner_path).ok()
+                    }
+                };
+                
+                let Some(data) = data else {
+                    return None;
+                };
+                
+                // 2. 生成缩略图（使用 WIC 或 image crate）
+                let thumbnail = generate_thumbnail_fast(&data, size);
+                
+                thumbnail.map(|item| (*index, item))
             })
-            .buffer_unordered(parallelism)
-            .collect()
-            .await;
+            .collect();
         
-        let success_count = results.iter().filter(|r| r.is_some()).count();
-        log::info!("🖼️ [PageCommand] 缩略图生成完成: {}/{} 成功", 
-            success_count, results.len());
+        // 推送结果到前端
+        for result in results.into_iter().flatten() {
+            let (index, item) = result;
+            
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            let data_base64 = STANDARD.encode(&item.data);
+            
+            let event = ThumbnailReadyEvent {
+                index,
+                data: format!("data:image/webp;base64,{data_base64}"),
+                width: item.width,
+                height: item.height,
+            };
+            
+            if let Err(e) = app.emit("page-thumbnail-ready", &event) {
+                log::error!("🖼️ 推送缩略图事件失败: {e}");
+            }
+        }
+        
+        log::info!("🖼️ [PageCommand] 缩略图生成完成");
     });
     
     Ok(result_indices)
+}
+
+/// 快速生成缩略图（优化版本）
+/// - 使用有损 WebP 编码（比 lossless 快 10 倍）
+/// - Windows 优先使用 WIC（硬件加速）
+fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> {
+    // Windows: 优先使用 WIC
+    #[cfg(target_os = "windows")]
+    {
+        use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+        
+        if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
+            if let Ok(img) = wic_result_to_dynamic_image(result) {
+                let width = img.width();
+                let height = img.height();
+                
+                // 使用有损 WebP 编码（质量 75，速度快）
+                if let Some(buffer) = encode_webp_lossy(&img, 75) {
+                    return Some(ThumbnailItem {
+                        data: buffer,
+                        width,
+                        height,
+                    });
+                }
+            }
+        }
+    }
+    
+    // 回退到 image crate
+    use image::ImageReader;
+    use std::io::Cursor;
+    
+    let img = ImageReader::new(Cursor::new(data))
+        .with_guessed_format()
+        .ok()?
+        .decode()
+        .ok()?;
+    
+    let (orig_width, orig_height) = (img.width(), img.height());
+    let scale = (max_size as f32 / orig_width.max(orig_height) as f32).min(1.0);
+    let new_width = (orig_width as f32 * scale) as u32;
+    let new_height = (orig_height as f32 * scale) as u32;
+    
+    // 使用更快的缩放算法
+    let thumbnail = img.resize(new_width, new_height, image::imageops::FilterType::Triangle);
+    
+    // 使用有损 WebP 编码
+    let buffer = encode_webp_lossy(&thumbnail, 75)?;
+    
+    Some(ThumbnailItem {
+        data: buffer,
+        width: thumbnail.width(),
+        height: thumbnail.height(),
+    })
+}
+
+/// 有损 WebP 编码（使用 webp crate 实现真正的有损编码）
+fn encode_webp_lossy(img: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> {
+    // 转换为 RGBA8
+    let rgba = img.to_rgba8();
+    let width = rgba.width();
+    let height = rgba.height();
+    
+    // 使用 webp crate 进行有损编码
+    let encoder = webp::Encoder::from_rgba(&rgba, width, height);
+    let webp_data = encoder.encode(quality as f32);
+    
+    Some(webp_data.to_vec())
 }
 
 // ===== PageFrame 命令 =====

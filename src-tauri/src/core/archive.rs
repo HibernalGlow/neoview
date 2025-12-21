@@ -97,6 +97,7 @@ pub struct ArchiveEntry {
 }
 
 /// 压缩包管理器
+#[derive(Clone)]
 pub struct ArchiveManager {
     /// 支持的图片格式
     image_extensions: Vec<String>,

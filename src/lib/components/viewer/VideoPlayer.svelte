@@ -657,6 +657,12 @@
 		if (hideControlsTimeout) {
 			clearTimeout(hideControlsTimeout);
 		}
+		// 【修复内存泄漏】清理预览防抖定时器
+		if (previewDebounceTimer) {
+			clearTimeout(previewDebounceTimer);
+		}
+		// 【修复内存泄漏】清理帧缓存和临时视频元素
+		clearFrameCache();
 		if (videoUrl && !src) {
 			URL.revokeObjectURL(videoUrl);
 		}

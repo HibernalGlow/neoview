@@ -7,6 +7,7 @@
   - HoverScrollLayer 直接操作 scrollLeft/scrollTop
 -->
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { LayerZIndex } from '../types/layer';
   import type { PanoramaUnit, PanoramaImage } from '../stores/panoramaStore.svelte';
   import { getPanoramaStore } from '../stores/panoramaStore.svelte';
@@ -17,6 +18,16 @@
   
   // 获取全景 store 用于直接触发预加载
   const panoramaStore = getPanoramaStore();
+  
+  // 【修复内存泄漏】组件销毁时清理定时器
+  onDestroy(() => {
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+    }
+    if (preloadTimeout) {
+      clearTimeout(preloadTimeout);
+    }
+  });
   
   let {
     units = [],

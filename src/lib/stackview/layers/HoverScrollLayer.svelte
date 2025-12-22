@@ -193,6 +193,9 @@
   
   let resizeObserver: ResizeObserver | null = null;
   let mutationObserver: MutationObserver | null = null;
+  // 【修复内存泄漏】将 mutationTimeout 和 initTimeout 提升到组件作用域
+  let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
+  let initTimeout: ReturnType<typeof setTimeout> | null = null;
   
   onMount(() => {
     window.addEventListener('mousemove', onMouseMove, { passive: true });
@@ -200,7 +203,7 @@
     window.addEventListener('resize', updateRect, { passive: true });
     
     // 延迟初始化，等待 DOM 渲染
-    setTimeout(() => {
+    initTimeout = setTimeout(() => {
       updateTargetContainer();
     }, 100);
     
@@ -212,7 +215,6 @@
       resizeObserver.observe(layerRef);
       
       // 监听 DOM 变化
-      let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
       mutationObserver = new MutationObserver(() => {
         if (mutationTimeout) clearTimeout(mutationTimeout);
         mutationTimeout = setTimeout(() => {
@@ -241,6 +243,14 @@
     
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
+    }
+    
+    // 【修复内存泄漏】清理所有定时器
+    if (mutationTimeout) {
+      clearTimeout(mutationTimeout);
+    }
+    if (initTimeout) {
+      clearTimeout(initTimeout);
     }
   });
   

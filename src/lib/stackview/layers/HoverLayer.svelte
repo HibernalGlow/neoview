@@ -155,6 +155,8 @@
 
 	let resizeObserver: ResizeObserver | null = null;
 	let mutationObserver: MutationObserver | null = null;
+	// 【修复内存泄漏】将 mutationTimeout 提升到组件作用域
+	let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	onMount(() => {
 		window.addEventListener('mousemove', onMouseMove, { passive: true });
@@ -172,7 +174,6 @@
 			
 			// 【性能优化】使用 MutationObserver 监听 DOM 变化（带防抖）
 			// 当书籍切换时，frame-layer 元素会被替换
-			let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
 			mutationObserver = new MutationObserver(() => {
 				// 防抖：100ms 内只触发一次
 				if (mutationTimeout) clearTimeout(mutationTimeout);
@@ -206,6 +207,11 @@
 
 		if (rafId !== null) {
 			cancelAnimationFrame(rafId);
+		}
+		
+		// 【修复内存泄漏】清理防抖定时器
+		if (mutationTimeout) {
+			clearTimeout(mutationTimeout);
 		}
 	});
 </script>

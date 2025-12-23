@@ -9,6 +9,10 @@
   - 在 Worker 中预解码，不阻塞主线程
   - ImageBitmap 可直接绘制到 Canvas，无需重复解码
   - 支持 GPU 加速
+  
+  【无闪烁切换】
+  - 保持旧图片显示，直到新图片解码完成
+  - 解码完成后立即替换，无灰屏
 -->
 <script lang="ts">
   import { onDestroy } from 'svelte';
@@ -50,12 +54,13 @@
   
   let canvas: HTMLCanvasElement;
   let currentBitmap: ImageBitmap | null = null;
-  let isLoading = $state(true);
   let hasError = $state(false);
   let naturalWidth = $state(0);
   let naturalHeight = $state(0);
-  // 记录当前加载的 URL，避免重复加载
-  let loadedUrl = '';
+  // 记录当前显示的 URL
+  let renderedUrl = '';
+  // 当前正在加载的 URL（用于取消过时的加载）
+  let pendingUrl = '';
   
   // 获取显示 URL（优先超分图，响应式）
   let displayUrl = $derived.by(() => {
@@ -70,7 +75,8 @@
   $effect(() => {
     const currentUrl = displayUrl;
     const currentBlob = blob;
-    if (currentUrl !== loadedUrl || currentBlob) {
+    // 只有 URL 真正变化时才加载
+    if (currentUrl && currentUrl !== renderedUrl) {
       loadAndRender(currentUrl, currentBlob);
     }
   });
@@ -78,7 +84,8 @@
   async function loadAndRender(imageUrl: string, imageBlob?: Blob) {
     if (!canvas || !imageUrl) return;
     
-    isLoading = true;
+    // 标记正在加载的 URL
+    pendingUrl = imageUrl;
     hasError = false;
     
     try {
@@ -93,6 +100,11 @@
         blobToUse = await response.blob();
       }
       
+      // 检查是否已被新的加载请求取代
+      if (pendingUrl !== imageUrl) {
+        return; // 放弃过时的加载
+      }
+      
       if (!blobToUse) {
         throw new Error('No image data available');
       }
@@ -100,34 +112,37 @@
       // 在 Worker 中解码
       const result = await decodeImageInWorker(blobToUse);
       
-      // 释放旧的 bitmap
-      if (currentBitmap) {
-        currentBitmap.close();
+      // 再次检查是否已被取代
+      if (pendingUrl !== imageUrl) {
+        result.bitmap.close(); // 释放不需要的 bitmap
+        return;
       }
-      currentBitmap = result.bitmap;
-      naturalWidth = result.width;
-      naturalHeight = result.height;
-      loadedUrl = imageUrl;
       
-      // 设置 canvas 尺寸（内部分辨率）
+      // 【关键】先设置 canvas 尺寸和绘制，再释放旧 bitmap
+      // 这样可以避免闪烁
       canvas.width = result.width;
       canvas.height = result.height;
       
-      // 绘制到 canvas
       const ctx = canvas.getContext('2d', { 
-        alpha: false,  // 不需要透明度，提升性能
-        desynchronized: true  // 异步渲染，减少延迟
+        alpha: false,
+        desynchronized: true
       });
       
       if (ctx) {
         ctx.drawImage(result.bitmap, 0, 0);
       }
       
-      isLoading = false;
+      // 绘制完成后再释放旧的 bitmap
+      if (currentBitmap) {
+        currentBitmap.close();
+      }
+      currentBitmap = result.bitmap;
+      naturalWidth = result.width;
+      naturalHeight = result.height;
+      renderedUrl = imageUrl;
       
       // 模拟 img.onload 事件
       if (onload) {
-        // 创建一个模拟的事件对象，target 包含 naturalWidth/naturalHeight
         const fakeEvent = new Event('load');
         Object.defineProperty(fakeEvent, 'target', {
           value: {
@@ -142,14 +157,15 @@
       }
       
     } catch (error) {
-      console.error('CanvasImage 加载失败:', error);
-      hasError = true;
-      isLoading = false;
+      // 只有当前加载才显示错误
+      if (pendingUrl === imageUrl) {
+        console.error('CanvasImage 加载失败:', error);
+        hasError = true;
+      }
     }
   }
   
   onDestroy(() => {
-    // 释放 ImageBitmap
     if (currentBitmap) {
       currentBitmap.close();
       currentBitmap = null;
@@ -160,7 +176,6 @@
 <canvas
   bind:this={canvas}
   class="canvas-image {className}"
-  class:loading={isLoading}
   class:error={hasError}
   style:transform={transform || undefined}
   style:clip-path={clipPath || undefined}
@@ -183,10 +198,6 @@
     backface-visibility: hidden;
     image-rendering: -webkit-optimize-contrast;
     content-visibility: visible;
-  }
-  
-  .canvas-image.loading {
-    opacity: 0.7;
   }
   
   .canvas-image.error {

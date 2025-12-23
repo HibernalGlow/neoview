@@ -289,15 +289,22 @@
 	let itemRating = $state<number | null>(null);
 	let ratingStoreRef: typeof import('$lib/stores/emm/ratingStore').ratingStore | null = null;
 
-	// 加载评分（文件夹或文件）
+	// 加载评分（仅文件夹使用 ratingStore，压缩包直接从 emmMetadata 获取）
 	$effect(() => {
-		if (enableEMM && item.path) {
+		if (enableEMM && item.path && item.isDir) {
+			// 文件夹：从 ratingStore 获取
 			import('$lib/stores/emm/ratingStore').then(({ ratingStore }) => {
 				ratingStoreRef = ratingStore;
 				ratingStore.getRating(item.path).then((rating) => {
 					itemRating = rating?.value ?? null;
 				});
 			});
+		} else if (!item.isDir) {
+			// 压缩包：评分从 emmMetadata 获取，这里只初始化 ratingStoreRef 用于设置评分
+			import('$lib/stores/emm/ratingStore').then(({ ratingStore }) => {
+				ratingStoreRef = ratingStore;
+			});
+			itemRating = null;
 		} else {
 			itemRating = null;
 		}
@@ -306,11 +313,11 @@
 	// 获取有效评分
 	function getEffectiveRating(): number | null {
 		// 文件夹：使用 itemRating（从缩略图数据库获取）
-		// 文件（压缩包）：优先使用 emmMetadata 中的 rating，否则使用 itemRating
+		// 文件（压缩包）：直接使用 emmMetadata 中的 rating
 		if (item.isDir) {
 			return itemRating;
 		}
-		return emmMetadata?.rating ?? itemRating;
+		return emmMetadata?.rating ?? null;
 	}
 
 	// 设置手动评分

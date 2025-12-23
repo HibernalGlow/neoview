@@ -279,9 +279,21 @@ export class StackImageLoader {
   }
 
   /**
+   * 【性能优化】直接缓存背景色（由 CanvasImage 调用，复用已解码的 ImageBitmap）
+   */
+  cacheBackgroundColor(pageIndex: number, color: string): void {
+    this.backgroundColorCache.set(pageIndex, color);
+  }
+
+  /**
    * 计算并缓存背景色
+   * @deprecated 优先使用 cacheBackgroundColor + computeBackgroundColorFromBitmap
    */
   private async computeAndCacheBackgroundColor(pageIndex: number, url: string): Promise<void> {
+    // 如果已经有缓存（可能由 CanvasImage 设置），跳过
+    if (this.backgroundColorCache.has(pageIndex)) {
+      return;
+    }
     try {
       const color = await computeAutoBackgroundColor(url);
       if (color) {

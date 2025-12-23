@@ -8,6 +8,7 @@
   【性能优势】
   - 在 Worker 中预解码，不阻塞主线程
   - ImageBitmap 可直接绘制到 Canvas，无需重复解码
+  - 复用 ImageBitmap 计算背景色，避免二次解码
   - 支持 GPU 加速
   
   【无闪烁切换】
@@ -18,6 +19,8 @@
   import { onDestroy } from 'svelte';
   import { decodeImageInWorker } from '$lib/workers/imageDecoderManager';
   import { imagePool } from '../stores/imagePool.svelte';
+  import { computeBackgroundColorFromBitmap } from '$lib/utils/autoBackground';
+  import { stackImageLoader } from '../utils/stackImageLoader';
   
   interface Props {
     /** 页面索引（用于超分图替换） */
@@ -130,6 +133,13 @@
       
       if (ctx) {
         ctx.drawImage(result.bitmap, 0, 0);
+      }
+      
+      // 【性能优化】复用 ImageBitmap 计算背景色，避免二次解码
+      const bgColor = computeBackgroundColorFromBitmap(result.bitmap, imageUrl);
+      if (bgColor) {
+        // 缓存背景色到 stackImageLoader
+        stackImageLoader.cacheBackgroundColor(pageIndex, bgColor);
       }
       
       // 绘制完成后再释放旧的 bitmap

@@ -707,6 +707,15 @@
 			clearTimeout(scrollDebounceTimer);
 			scrollDebounceTimer = null;
 		}
+		// 【修复内存泄漏】清理显示/隐藏定时器
+		if (hideTimeout) {
+			clearTimeout(hideTimeout);
+			hideTimeout = undefined;
+		}
+		if (showTimeout) {
+			clearTimeout(showTimeout);
+			showTimeout = undefined;
+		}
 	});
 
 	$effect(() => {

@@ -721,7 +721,10 @@
 	$effect(() => {
 		const windowState = $viewerState.pageWindow;
 		if (!bookStore.currentBook || !windowState) return;
-		scheduleLoadVisibleThumbnails();
+		// 【优化】只在底栏可见时才触发加载，避免不必要的请求
+		if (isVisible) {
+			scheduleLoadVisibleThumbnails();
+		}
 	});
 
 	// 根据阅读方向获取排序后的页面
@@ -755,12 +758,16 @@
 		}
 	});
 
-	// 当高度变化时重新加载可见缩略图
+	// 【修复】移除高度变化时的重新加载逻辑
+	// 原来的代码会因为 thumbnailSnapshot.size 变化而形成循环触发
+	// 高度变化只影响显示样式，不需要重新加载缩略图数据
+	let lastBarHeight = $state($bottomThumbnailBarHeight);
 	$effect(() => {
-		const currentBook = bookStore.currentBook;
-		if (currentBook && thumbnailSnapshot.size > 0) {
-			// 重新加载当前可见的缩略图以适应新高度
-			scheduleLoadVisibleThumbnails();
+		const newHeight = $bottomThumbnailBarHeight;
+		// 只在高度真正变化时触发（用户拖拽调整），而不是每次 snapshot 变化
+		if (newHeight !== lastBarHeight) {
+			lastBarHeight = newHeight;
+			// 高度变化不需要重新加载缩略图，样式会自动适应
 		}
 	});
 

@@ -153,12 +153,12 @@ const SHARED_SORT_SETTINGS_KEY = 'neoview-folder-sort-shared';
 const SHARED_TAB_BAR_SETTINGS_KEY = 'neoview-tab-bar-shared';
 
 // ============ Shared Tab Bar Settings ============
-// 标签栏位置和宽度设置
-export type TabBarLayout = 'top' | 'left' | 'right' | 'bottom';
-// 面包屑位置：上下左右
-export type BreadcrumbPosition = 'top' | 'left' | 'right' | 'bottom';
-// 工具栏位置：上下左右
-export type ToolbarPosition = 'top' | 'left' | 'right' | 'bottom';
+// 标签栏位置和宽度设置（none = 隐藏）
+export type TabBarLayout = 'none' | 'top' | 'left' | 'right' | 'bottom';
+// 面包屑位置：上下左右（none = 隐藏）
+export type BreadcrumbPosition = 'none' | 'top' | 'left' | 'right' | 'bottom';
+// 工具栏位置：上下左右（none = 隐藏）
+export type ToolbarPosition = 'none' | 'top' | 'left' | 'right' | 'bottom';
 
 interface SharedTabBarSettings {
 	tabBarLayout: TabBarLayout;
@@ -173,9 +173,9 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 		if (saved) {
 			const parsed = JSON.parse(saved);
 			return {
-				tabBarLayout: parsed.tabBarLayout ?? 'top',
+				tabBarLayout: parsed.tabBarLayout ?? 'none',
 				tabBarWidth: parsed.tabBarWidth ?? 160,
-				breadcrumbPosition: parsed.breadcrumbPosition ?? 'top',
+				breadcrumbPosition: parsed.breadcrumbPosition ?? 'none',
 				toolbarPosition: parsed.toolbarPosition ?? 'top'
 			};
 		}
@@ -183,9 +183,9 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 		console.error('[FolderTabStore] Failed to load shared tab bar settings:', e);
 	}
 	return {
-		tabBarLayout: 'top',
+		tabBarLayout: 'none',
 		tabBarWidth: 160,
-		breadcrumbPosition: 'top',
+		breadcrumbPosition: 'none',
 		toolbarPosition: 'top'
 	};
 }

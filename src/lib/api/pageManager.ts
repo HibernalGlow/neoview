@@ -12,6 +12,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { pageTransferModeStore } from '$lib/stores/pageTransferMode.svelte';
+import { showToast } from '$lib/utils/toast';
 
 // Base64 解码（仅在 base64 模式下使用）
 async function decodeBase64ToBlob(base64: string): Promise<Blob> {
@@ -24,6 +25,21 @@ async function decodeBase64(base64: string): Promise<ArrayBuffer> {
 	const { toBytes } = await import('fast-base64');
 	const bytes = await toBytes(base64);
 	return bytes.buffer;
+}
+
+/**
+ * 包装 invoke 调用，失败时显示 toast
+ */
+async function invokeWithToast<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
+	try {
+		return await invoke<T>(cmd, args);
+	} catch (error) {
+		const mode = pageTransferModeStore.mode;
+		const msg = `页面加载失败 [${mode}]: ${error}`;
+		console.error(`❌ [PageManager] ${msg}`);
+		showToast.error(msg);
+		throw error;
+	}
 }
 
 // ===== 类型定义 =====
@@ -142,11 +158,11 @@ export async function gotoPage(index: number): Promise<Blob> {
 	
 	if (pageTransferModeStore.isBinary) {
 		// 直接二进制传输，跳过 Base64
-		const data = await invoke<ArrayBuffer>('pm_goto_page', { index });
+		const data = await invokeWithToast<ArrayBuffer>('pm_goto_page', { index });
 		return new Blob([data]);
 	} else {
-		// Base64 传输（回退模式）
-		const base64 = await invoke<string>('pm_goto_page_base64', { index });
+		// Base64 传输
+		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
 		return decodeBase64ToBlob(base64);
 	}
 }
@@ -158,10 +174,10 @@ export async function gotoPage(index: number): Promise<Blob> {
  */
 export async function getPage(index: number): Promise<Blob> {
 	if (pageTransferModeStore.isBinary) {
-		const data = await invoke<ArrayBuffer>('pm_get_page', { index });
+		const data = await invokeWithToast<ArrayBuffer>('pm_get_page', { index });
 		return new Blob([data]);
 	} else {
-		const base64 = await invoke<string>('pm_get_page_base64', { index });
+		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
 		return decodeBase64ToBlob(base64);
 	}
 }
@@ -171,9 +187,9 @@ export async function getPage(index: number): Promise<Blob> {
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
 	if (pageTransferModeStore.isBinary) {
-		return invoke<ArrayBuffer>('pm_goto_page', { index });
+		return invokeWithToast<ArrayBuffer>('pm_goto_page', { index });
 	} else {
-		const base64 = await invoke<string>('pm_goto_page_base64', { index });
+		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
 		return decodeBase64(base64);
 	}
 }
@@ -183,9 +199,9 @@ export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
 	if (pageTransferModeStore.isBinary) {
-		return invoke<ArrayBuffer>('pm_get_page', { index });
+		return invokeWithToast<ArrayBuffer>('pm_get_page', { index });
 	} else {
-		const base64 = await invoke<string>('pm_get_page_base64', { index });
+		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
 		return decodeBase64(base64);
 	}
 }

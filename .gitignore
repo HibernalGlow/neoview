@@ -41,4 +41,4 @@ request.md
 .ask_continue_port
 src-python/.hypothesis/*
 src-python/.hypothesis/*
-Trace-20251223T142922.json
+Trace*.json

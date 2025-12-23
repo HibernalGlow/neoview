@@ -26,7 +26,34 @@ export default defineConfig({
 				'@tauri-apps/plugin-cli': path.resolve('./src/lib/mocks/tauriMock.ts'),
 				'@tauri-apps/plugin-shell': path.resolve('./src/lib/mocks/tauriMock.ts'),
 			} : {})
-		}
+		},
+		// 【优化】确保依赖去重，避免多个版本
+		dedupe: [
+			'svelte',
+			'bits-ui',
+			'runed',
+			'svelte-toolbelt',
+			'@floating-ui/core',
+			'@floating-ui/dom',
+			'@internationalized/date',
+			'@tanstack/table-core',
+			'@tauri-apps/api',
+		]
+	},
+	// 【优化】预构建依赖，减少重复打包
+	optimizeDeps: {
+		include: [
+			'svelte',
+			'bits-ui',
+			'runed',
+			'svelte-toolbelt',
+			'@floating-ui/core',
+			'@floating-ui/dom',
+			'@internationalized/date',
+			'@tanstack/table-core',
+		],
+		// 强制预构建，避免运行时重复
+		force: false,
 	},
 	server: {
 		port: 1420,
@@ -47,6 +74,19 @@ export default defineConfig({
 				main: path.resolve(__dirname, 'index.html'),
 				settings: path.resolve(__dirname, 'settings.html'),
 				cardwindow: path.resolve(__dirname, 'cardwindow.html')
+			},
+			output: {
+				// 【优化】手动分块，避免重复
+				manualChunks: {
+					// UI 组件库
+					'vendor-ui': ['bits-ui', 'svelte-toolbelt', 'runed'],
+					// 浮动 UI
+					'vendor-floating': ['@floating-ui/core', '@floating-ui/dom'],
+					// 日期处理
+					'vendor-date': ['@internationalized/date'],
+					// 表格
+					'vendor-table': ['@tanstack/table-core'],
+				}
 			}
 		}
 	}

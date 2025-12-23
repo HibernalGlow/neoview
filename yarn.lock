@@ -1036,6 +1036,13 @@
   dependencies:
     "@tauri-apps/api" "^2.8.0"
 
+"@tauri-apps/plugin-log@^2.7.1":
+  version "2.7.1"
+  resolved "https://registry.npmmirror.com/@tauri-apps/plugin-log/-/plugin-log-2.7.1.tgz#2bade235293e0548816d10c29456a457abe59f51"
+  integrity sha512-jdb+o0wxQc8PjnLktgGpOs9Dh1YupaOGDXzO+Y8peA1UZ1ep3eXv4E1oiJ7nIQVN0XUFDDhnn3aBszl8ijhR+A==
+  dependencies:
+    "@tauri-apps/api" "^2.8.0"
+
 "@tauri-apps/plugin-shell@^2.3.3":
   version "2.3.3"
   resolved "https://registry.npmmirror.com/@tauri-apps/plugin-shell/-/plugin-shell-2.3.3.tgz#ddbd9253d55e18343c6179243fd4fd2075bf15e8"

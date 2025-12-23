@@ -1,70 +1,60 @@
 /**
  * 统一日志工具
- * 在生产环境中禁用调试日志，避免性能损耗
+ * 使用 Tauri 官方 plugin-log，支持分级日志和生产环境过滤
  */
+
+import {
+  trace as tauriTrace,
+  debug as tauriDebug,
+  info as tauriInfo,
+  warn as tauriWarn,
+  error as tauriError
+} from '@tauri-apps/plugin-log';
 
 // 检测是否为开发环境
 const isDev = import.meta.env.DEV;
-
-// 日志级别
-export enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  NONE = 4
-}
-
-// 当前日志级别（生产环境只显示警告和错误）
-let currentLevel: LogLevel = isDev ? LogLevel.DEBUG : LogLevel.WARN;
-
-/**
- * 设置日志级别
- */
-export function setLogLevel(level: LogLevel): void {
-  currentLevel = level;
-}
-
-/**
- * 获取当前日志级别
- */
-export function getLogLevel(): LogLevel {
-  return currentLevel;
-}
 
 /**
  * 调试日志（仅开发环境）
  */
 export function debug(...args: unknown[]): void {
-  if (currentLevel <= LogLevel.DEBUG) {
-    console.log(...args);
+  if (isDev) {
+    const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+    tauriDebug(message);
   }
 }
 
 /**
- * 信息日志（仅开发环境）
+ * 信息日志
  */
 export function info(...args: unknown[]): void {
-  if (currentLevel <= LogLevel.INFO) {
-    console.log(...args);
-  }
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  tauriInfo(message);
 }
 
 /**
  * 警告日志
  */
 export function warn(...args: unknown[]): void {
-  if (currentLevel <= LogLevel.WARN) {
-    console.warn(...args);
-  }
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  tauriWarn(message);
 }
 
 /**
  * 错误日志
  */
 export function error(...args: unknown[]): void {
-  if (currentLevel <= LogLevel.ERROR) {
-    console.error(...args);
+  const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  tauriError(message);
+}
+
+/**
+ * 追踪日志（最详细级别，仅开发环境）
+ */
+export function trace(...args: unknown[]): void {
+  if (isDev) {
+    const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+    tauriTrace(message);
   }
 }
 
@@ -73,6 +63,7 @@ export function error(...args: unknown[]): void {
  */
 export function createLogger(prefix: string) {
   return {
+    trace: (...args: unknown[]) => trace(`[${prefix}]`, ...args),
     debug: (...args: unknown[]) => debug(`[${prefix}]`, ...args),
     info: (...args: unknown[]) => info(`[${prefix}]`, ...args),
     warn: (...args: unknown[]) => warn(`[${prefix}]`, ...args),
@@ -82,12 +73,10 @@ export function createLogger(prefix: string) {
 
 // 默认导出
 export default {
+  trace,
   debug,
   info,
   warn,
   error,
-  setLogLevel,
-  getLogLevel,
-  createLogger,
-  LogLevel
+  createLogger
 };

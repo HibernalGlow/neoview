@@ -5,9 +5,12 @@
   - 超分图替换
   - GPU 加速
   - 样式统一
+  - 根据 loadModeStore 切换 img/canvas 渲染
 -->
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
+  import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+  import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
     pageIndex: number;
@@ -42,18 +45,36 @@
       : url;
     return result;
   });
+  
+  // 是否使用 Canvas 渲染
+  let useCanvas = $derived(loadModeStore.isCanvasMode);
 </script>
 
-<img
-  src={displayUrl}
-  {alt}
-  class="frame-image {className}"
-  style:transform={transform || undefined}
-  style:clip-path={clipPath || undefined}
-  style={style || undefined}
-  onload={onload}
-  draggable="false"
-/>
+{#if useCanvas}
+  <!-- Canvas 渲染模式：Worker 预解码，性能更好 -->
+  <CanvasImage
+    {pageIndex}
+    url={displayUrl}
+    {alt}
+    {transform}
+    {clipPath}
+    {style}
+    class={className}
+    {onload}
+  />
+{:else}
+  <!-- img 渲染模式：传统方式 -->
+  <img
+    src={displayUrl}
+    {alt}
+    class="frame-image {className}"
+    style:transform={transform || undefined}
+    style:clip-path={clipPath || undefined}
+    style={style || undefined}
+    onload={onload}
+    draggable="false"
+  />
+{/if}
 
 <style>
   .frame-image {

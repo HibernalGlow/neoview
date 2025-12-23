@@ -69,10 +69,9 @@ async function loadTranslationDict() {
 		const dictPath = await findEMMTranslationFile();
 		if (dictPath) {
 			translationDict = await loadEMMTranslationDict(dictPath);
-			console.log('[ManualTagEditor] 已加载翻译字典');
 		}
 	} catch (e) {
-		console.error('[ManualTagEditor] 加载翻译字典失败:', e);
+		// 加载翻译字典失败，静默处理
 	}
 }
 
@@ -198,7 +197,6 @@ async function handleAddTag() {
 		await loadTags();
 		dispatch('change', { manualTags });
 		newTag = '';
-		console.log(`[ManualTagEditor] 批量添加标签: ${successCount}/${targetPaths.length} 成功`);
 	}
 }
 
@@ -219,7 +217,6 @@ async function handleBatchRemoveTag() {
 		await loadTags();
 		dispatch('change', { manualTags });
 		newTag = '';
-		console.log(`[ManualTagEditor] 批量删除标签: ${successCount}/${targetPaths.length} 成功`);
 	}
 }
 

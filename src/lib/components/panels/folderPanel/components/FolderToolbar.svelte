@@ -428,10 +428,7 @@ function handleToggleDeleteStrategy(e: MouseEvent) {
 }
 
 function handleClearTreeCache() {
-	const stats = directoryTreeCache.getStats();
-	console.log(`[FolderToolbar] 清除内存树缓存，当前缓存条目: ${stats.size}, 加载中: ${stats.loading}`);
 	directoryTreeCache.clear();
-	console.log('[FolderToolbar] 内存树缓存已清除');
 	// 刷新当前目录
 	onRefresh?.();
 }

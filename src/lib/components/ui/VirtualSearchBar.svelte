@@ -41,12 +41,6 @@
 			item.path.toLowerCase().includes(lowerKeyword)
 		);
 
-		console.log('[VirtualSearchBar] 前端搜索', {
-			keyword,
-			itemCount: items.length,
-			resultCount: results.length
-		});
-
 		onSearch(results, keyword);
 	}
 

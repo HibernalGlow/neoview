@@ -70,17 +70,14 @@
         // 更新本地页码（这会触发现有的预加载系统）
         bookStore.setCurrentPageIndexLocal(visibleUnit.startIndex);
         
-        // 调试日志
-        const firstPage = units[0].startIndex;
-        const lastPage = units[units.length - 1].startIndex;
-        console.log(`📜 滚动状态: visibleIdx=${visibleUnitIndex}, pageIdx=${visibleUnit.startIndex}, range=[${firstPage}, ${lastPage}], direction=${direction}, totalUnits=${units.length}`);
+        // 日志已移除，避免滚动时的性能损耗
       }
       
       // 检测是否接近边缘，需要加载更多
       const edgeInfo = checkNearEdge();
       
       if (edgeInfo.needsPreload) {
-        console.log(`🔄 全景滚动预加载: targetPageIndex=${edgeInfo.targetPageIndex}, nearEnd=${edgeInfo.nearEnd}, nearStart=${edgeInfo.nearStart}`);
+        // 日志已移除，避免滚动时的性能损耗
         // 直接调用 panoramaStore 触发预加载
         panoramaStore.loadPanorama(edgeInfo.targetPageIndex, pageMode);
       }
@@ -156,14 +153,14 @@
     // 接近数组末尾 = 需要加载更高页码
     if (nearArrayEnd && lastLoadedPage + step < totalPages) {
       const targetPageIndex = lastLoadedPage + step;
-      console.log(`📍 边缘检测: 接近数组末尾(高页码), visibleIdx=${visibleUnitIndex}, lastLoaded=${lastLoadedPage}, target=${targetPageIndex}, direction=${direction}`);
+      // 日志已移除
       return { needsPreload: true, targetPageIndex, nearEnd: true, nearStart: false };
     }
     
     // 接近数组开头 = 需要加载更低页码
     if (nearArrayStart && firstLoadedPage > 0) {
       const targetPageIndex = Math.max(0, firstLoadedPage - step);
-      console.log(`📍 边缘检测: 接近数组开头(低页码), visibleIdx=${visibleUnitIndex}, firstLoaded=${firstLoadedPage}, target=${targetPageIndex}, direction=${direction}`);
+      // 日志已移除
       return { needsPreload: true, targetPageIndex, nearEnd: false, nearStart: true };
     }
     

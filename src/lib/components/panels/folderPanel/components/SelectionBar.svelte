@@ -134,7 +134,6 @@ function handleClose() {
 					size="sm"
 					class="h-7 px-2"
 					onclick={(e) => {
-					console.log('[SelectionBar] 链选按钮被点击', e);
 					toggleChainSelectMode($activeTabId);
 				}}
 				>

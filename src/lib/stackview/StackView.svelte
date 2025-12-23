@@ -34,6 +34,10 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
+	import { createLogger } from '$lib/utils/logger';
+
+	// 创建日志器（仅开发环境输出）
+	const log = createLogger('StackView');
 
 	// 导入外部 stores
 	import {
@@ -222,8 +226,8 @@
 		const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
 		const orient = $legacyOrientation as 'horizontal' | 'vertical';
 
-		console.log(
-			`🔄 StackView: viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}, currentPageMode=${ctx.pageMode}`
+		log.debug(
+			`viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}, currentPageMode=${ctx.pageMode}`
 		);
 
 		// 根据旧模式设置 BookContext
@@ -231,14 +235,14 @@
 			ctx.setPanoramaEnabled(true);
 			// 进入全景模式时，使用之前的 pageMode
 			if (!wasInPanorama) {
-				console.log(`🔄 StackView: 进入全景，保持 pageMode=${ctx.pageMode}`);
+				log.debug(`进入全景，保持 pageMode=${ctx.pageMode}`);
 				wasInPanorama = true;
 			}
 			// 全景模式中保持当前 pageMode 不变
 		} else {
 			// 从全景退出时，保持之前的 pageMode
 			if (wasInPanorama) {
-				console.log(`🔄 StackView: 退出全景，保持 pageMode=${ctx.pageMode}`);
+				log.debug(`退出全景，保持 pageMode=${ctx.pageMode}`);
 				ctx.setPanoramaEnabled(false);
 				wasInPanorama = false;
 				// 不设置 pageMode，保持全景期间的状态
@@ -247,7 +251,7 @@
 				ctx.setPanoramaEnabled(false);
 				ctx.setPageMode(mode);
 				lastNonPanoramaPageMode = mode;
-				console.log(`🔄 StackView: 非全景模式，设置 pageMode=${mode}`);
+				log.debug(`非全景模式，设置 pageMode=${mode}`);
 			}
 		}
 		ctx.setOrientation(orient);
@@ -256,7 +260,7 @@
 	// 从 BookContext 获取视图状态
 	let pageMode = $derived.by(() => {
 		const mode = bookContext?.pageMode ?? 'single';
-		console.log(`📖 StackView: 派生 pageMode=${mode}, isPanorama=${bookContext?.panoramaEnabled}`);
+		// 移除 $derived.by 内的日志，避免频繁计算时的性能损耗
 		return mode;
 	});
 	let isPanorama = $derived(bookContext?.panoramaEnabled ?? false);
@@ -412,7 +416,7 @@
 	$effect(() => {
 		const isSplit = isCurrentPageSplit;
 		currentPageShouldSplit.set(isSplit);
-		console.log(`🔄 Sync currentPageShouldSplit: ${isSplit}`);
+		// 日志已移除，避免频繁触发时的性能损耗
 	});
 
 	// 【同步2】subPageIndex → currentSplitHalf
@@ -428,12 +432,12 @@
 			const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
 			const newHalf = sub === 0 ? firstHalf : secondHalf;
 			
-			console.log(`🔄 Sync from subPageIndex: ${sub} -> currentSplitHalf: ${newHalf}`);
+			// 日志已移除，避免频繁触发时的性能损耗
 			currentSplitHalf = newHalf;
 		} else {
 			// 非分割页面
 			if (currentSplitHalf !== null) {
-				console.log(`🔄 Reset currentSplitHalf to null (not split page)`);
+				// 日志已移除
 				currentSplitHalf = null;
 			}
 		}
@@ -622,13 +626,13 @@
 	// 所有翻页入口最终都调用 pageLeft/pageRight，确保逻辑一致
 
 	function handlePrevPage() {
-		console.log(`⬅️ handlePrevPage: 委托给 pageLeft()`);
+		// 日志已移除
 		resetScrollPosition();
 		void pageLeft();
 	}
 
 	function handleNextPage() {
-		console.log(`➡️ handleNextPage: 委托给 pageRight()`);
+		// 日志已移除
 		resetScrollPosition();
 		void pageRight();
 	}
@@ -637,8 +641,8 @@
 	function handlePanoramaScroll(e: Event) {
 		// 检查是否是自定义事件
 		if (e instanceof CustomEvent && e.detail?.visiblePageIndex !== undefined) {
-			const { visiblePageIndex, nearEnd, nearStart } = e.detail;
-			console.log(`🔄 全景滚动预加载: pageIndex=${visiblePageIndex}, nearEnd=${nearEnd}, nearStart=${nearStart}`);
+			const { visiblePageIndex } = e.detail;
+			// 日志已移除，避免滚动时的性能损耗
 			// 触发预加载：以目标页为中心预加载
 			panoramaStore.loadPanorama(visiblePageIndex, pageMode);
 		}
@@ -728,16 +732,11 @@
 		const currentPageMode = pageMode;
 		const currentPanorama = isPanorama;
 
-		console.log(
-			`🔁 StackView effect: pageIndex=${pageIndex}, pageMode=${currentPageMode}, isPanorama=${currentPanorama}, lastPageMode=${lastPageMode}`
-		);
+		// 日志已移除，避免频繁触发时的性能损耗
 
 		if (book && page) {
 			// 检测模式是否变化
 			const modeChanged = currentPageMode !== lastPageMode || currentPanorama !== lastPanorama;
-			console.log(
-				`🔁 StackView: modeChanged=${modeChanged}, currentPageMode=${currentPageMode}, lastPageMode=${lastPageMode}`
-			);
 			lastPageMode = currentPageMode;
 			lastPanorama = currentPanorama;
 
@@ -748,9 +747,6 @@
 			// 根据模式加载
 			if (currentPanorama) {
 				// 全景模式：使用全景 store
-				console.log(
-					`🔁 StackView: 全景模式加载 pageIndex=${pageIndex}, pageMode=${currentPageMode}`
-				);
 				panoramaStore.setEnabled(true);
 				panoramaStore.loadPanorama(pageIndex, currentPageMode);
 			} else {

@@ -18,7 +18,6 @@
 
 	// 处理开关变化
 	function handleSettingChange() {
-		console.log('🔄 开关状态变化，触发保存事件');
 		dispatch('change');
 	}
 </script>

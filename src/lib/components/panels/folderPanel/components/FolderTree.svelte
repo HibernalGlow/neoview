@@ -77,11 +77,8 @@
 		try {
 			const stats = await TreeCache.getCacheStats();
 			if (stats.totalNodes === 0) {
-				console.log('[FolderTree] 缓存为空，需要初始化');
 				return false;
 			}
-
-			console.log(`[FolderTree] 从缓存恢复: ${stats.totalNodes} 节点, ${stats.expandedNodes} 展开`);
 
 			// 获取所有展开的路径
 			const expandedPaths = await TreeCache.getExpandedPaths();
@@ -219,7 +216,6 @@
 					.filter((n): n is TreeNode => n !== null);
 
 				if (node.children.length > 0) {
-					console.log(`[FolderTree] 缓存命中: ${node.path} (${node.children.length} 子节点)`);
 					roots = [...roots];
 					return;
 				}
@@ -266,10 +262,7 @@
 				TreeCache.saveNode(parentCacheNode),
 				TreeCache.saveNodes(childCacheNodes)
 			]).catch(() => {});
-
-			console.log(`[FolderTree] 加载目录: ${node.path} (${subfolders.length} 子目录)`);
 		} catch (err) {
-			console.error('[FolderTree] Failed to load children:', err);
 			node.error = err instanceof Error ? err.message : '加载失败';
 			node.children = [];
 		}
@@ -372,7 +365,6 @@
 				}
 
 				if (hasChanges) {
-					console.log(`[FolderTree] 检测到变化: ${node.path}`);
 					// 更新节点的子节点
 					node.children = newFolders.map((folder) => {
 						// 保留已展开的子节点状态

@@ -163,7 +163,6 @@
 							const type = getSubtitleType(subPage.innerPath);
 							if (type && content) {
 								subtitleData = parseSubtitleContent(content, type, subPage.innerPath);
-								console.log(`[VideoContainer] 加载压缩包内字幕: ${subPage.innerPath}`);
 								return;
 							}
 						} catch (e) {
@@ -182,7 +181,6 @@
 						const type = getSubtitleType(subName);
 						if (type && content) {
 							subtitleData = parseSubtitleContent(content, type, subName);
-							console.log(`[VideoContainer] 加载文件系统字幕: ${subPath}`);
 							return;
 						}
 					} catch (e) {
@@ -366,7 +364,6 @@
 				if (type && content) {
 					clearSubtitle();
 					subtitleData = parseSubtitleContent(content, type, filename);
-					console.log(`[VideoContainer] 手动加载字幕: ${filename}`);
 				}
 			}
 		} catch (err) {

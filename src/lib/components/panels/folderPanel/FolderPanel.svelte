@@ -9,7 +9,7 @@ import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 const panelCards = $derived(cardConfigStore.getPanelCards('folder'));
 
 $effect(() => {
-	console.log('[FolderPanel] 卡片列表:', panelCards);
+	// 日志已移除，避免频繁触发时的性能损耗
 });
 </script>
 

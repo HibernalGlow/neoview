@@ -343,17 +343,14 @@
 
 	// 初始化根层（不添加历史记录，用于历史导航）
 	async function initRootWithoutHistory(path: string) {
-		console.log('[FolderStack] initRootWithoutHistory 开始, path:', path);
 		// 更新最后导航路径，防止 $effect 重复处理
 		updateLastNavigatedPath(path);
 		const layer = await createLayer(path);
-		console.log('[FolderStack] createLayer 完成, layer.path:', layer.path, 'items.length:', layer.items.length);
 		layers = [layer];
 		activeIndex = 0;
 		// 使用 setPath 的第二个参数禁止添加历史记录
 		globalStore.setPath(path, false);
 		globalStore.setItems(layer.items);
-		console.log('[FolderStack] initRootWithoutHistory 完成');
 	}
 
 	// 虚拟路径订阅清理函数
@@ -587,8 +584,6 @@
 	 * @param targetPath 目标路径
 	 */
 	async function handleHistoryNavigation(targetPath: string): Promise<void> {
-		console.log('[FolderStack] handleHistoryNavigation 开始, targetPath:', targetPath, 'layers:', layers.map(l => l.path));
-		
 		// 更新最后导航路径，防止 $effect 重复处理
 		updateLastNavigatedPath(targetPath);
 		
@@ -597,7 +592,6 @@
 		
 		if (targetIndex !== -1) {
 			// 找到了，直接切换到该层，保留整个 stack
-			console.log('[FolderStack] 在 layers 中找到目标路径, index:', targetIndex);
 			switchToLayer(targetIndex);
 			return;
 		}
@@ -608,7 +602,6 @@
 		const parentLayerIndex = findParentLayerIndex(targetPath);
 		if (parentLayerIndex !== -1) {
 			// 目标路径是某个层的子目录，截断到该层之后，然后加载目标路径
-			console.log('[FolderStack] 目标路径是 layers[', parentLayerIndex, '] 的子目录，截断并重建');
 			layers = layers.slice(0, parentLayerIndex + 1);
 			// 在父层之后推入目标路径
 			const newLayer = await createLayer(targetPath);
@@ -633,7 +626,6 @@
 		
 		if (childLayerIndex !== -1) {
 			// 目标路径是某个层的父目录，在该层之前插入目标路径
-			console.log('[FolderStack] 目标路径是 layers[', childLayerIndex, '] 的父目录，在前面插入');
 			
 			// 获取多层父目录路径（包括目标路径的父目录）
 			const parentPaths = getParentPaths(targetPath, PRELOAD_PARENT_COUNT - 1);
@@ -654,7 +646,6 @@
 		}
 		
 		// 4. 目标路径与现有层完全无关，需要完全重建
-		console.log('[FolderStack] 目标路径与现有层无关，完全重建');
 		await initRootWithoutHistory(targetPath);
 	}
 
@@ -837,10 +828,8 @@
 			layers = [...newLayers.reverse(), ...layers];
 			// 调整 activeIndex（因为在开头插入了新层）
 			activeIndex = activeIndex + newLayers.length;
-			
-			console.log('[FolderStack] 预加载父目录完成, 新增:', pathsToLoad.length, '层');
 		} catch (err) {
-			console.debug('[FolderStack] 预加载父目录失败:', err);
+			// 预加载失败不影响主流程
 		}
 	}
 
@@ -946,29 +935,23 @@
 	$effect(() => {
 		const targetPath = initialPath;
 		
-		console.log('[FolderStack] 初始化 $effect 触发, tabId:', tabId, 'initialPath:', targetPath, 'lastNavigatedPath:', lastNavigatedPath, 'layers.length:', layers.length, 'isProcessingNavCommand:', isProcessingNavCommand);
-		
 		// 如果 initialPath 为空，跳过
 		if (!targetPath) {
-			console.log('[FolderStack] initialPath 为空，跳过');
 			return;
 		}
 		
 		// 如果正在处理导航命令，跳过（让 navigationCommand 的 $effect 处理）
 		if (isProcessingNavCommand) {
-			console.log('[FolderStack] 正在处理导航命令，跳过 initialPath $effect');
 			return;
 		}
 		
 		// 如果路径已经被导航函数处理过，跳过
 		if (normalizePath(lastNavigatedPath) === normalizePath(targetPath)) {
-			console.log('[FolderStack] 路径已被导航函数处理，跳过:', targetPath);
 			return;
 		}
 		
 		// 情况1：首次初始化（layers 为空）
 		if (layers.length === 0) {
-			console.log('[FolderStack] 首次初始化:', targetPath);
 			lastNavigatedPath = targetPath;
 			initRootWithoutHistory(targetPath);
 			return;
@@ -977,7 +960,6 @@
 		// 情况2：检查当前活动层是否已经是目标路径
 		const currentActivePath = layers[activeIndex]?.path;
 		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(targetPath)) {
-			console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', targetPath);
 			lastNavigatedPath = targetPath;
 			return;
 		}
@@ -985,7 +967,6 @@
 		// 情况3：检查 layers 中是否包含目标路径（用于标签页切换时恢复状态）
 		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
 		if (targetLayerIndex !== -1) {
-			console.log('[FolderStack] 在 layers 中找到目标路径，切换到层:', targetLayerIndex);
 			lastNavigatedPath = targetPath;
 			switchToLayer(targetLayerIndex);
 			return;
@@ -995,22 +976,18 @@
 		// 这通常发生在标签页切换或外部导航请求时
 		// 同标签页内的历史导航应该通过 navigationCommand 处理，这里只做兜底
 		// 为了避免与 navigationCommand 冲突，延迟执行
-		console.log('[FolderStack] initialPath 变化但不在 layers 中，延迟检查是否需要处理');
 		const pathToHandle = targetPath;
 		setTimeout(() => {
 			// 再次检查是否已被处理
 			if (normalizePath(lastNavigatedPath) === normalizePath(pathToHandle)) {
-				console.log('[FolderStack] 路径已被其他函数处理，跳过:', pathToHandle);
 				return;
 			}
 			// 检查当前活动层是否已经是目标路径
 			const currentPath = layers[activeIndex]?.path;
 			if (currentPath && normalizePath(currentPath) === normalizePath(pathToHandle)) {
-				console.log('[FolderStack] 当前活动层已是目标路径，无需操作:', pathToHandle);
 				lastNavigatedPath = pathToHandle;
 				return;
 			}
-			console.log('[FolderStack] 延迟后仍需处理，使用 handleHistoryNavigation:', pathToHandle);
 			lastNavigatedPath = pathToHandle;
 			handleHistoryNavigation(pathToHandle);
 		}, 50);
@@ -1037,7 +1014,6 @@
 		const targetIndex = displayItems.findIndex(item => item.path === focusPath);
 		
 		if (targetIndex !== -1) {
-			console.log('[FolderStack] 找到待聚焦文件, index:', targetIndex, 'path:', focusPath);
 			// 设置 selectedIndex
 			layers[activeIndex].selectedIndex = targetIndex;
 			// 同时添加到选中列表（高亮显示）
@@ -1045,10 +1021,7 @@
 			// 延迟触发滚动，确保虚拟列表完全渲染后再滚动居中
 			setTimeout(() => {
 				scrollToSelectedToken++;
-				console.log('[FolderStack] 触发滚动到选中项, token:', scrollToSelectedToken);
 			}, 250);
-		} else {
-			console.log('[FolderStack] 未找到待聚焦文件:', focusPath);
 		}
 		
 		// 清除 pendingFocusPath
@@ -1061,11 +1034,10 @@
 			const children = await FileSystemAPI.browseDirectory(folderPath);
 			// 只有当文件夹只有一个子文件时才穿透
 			if (children.length === 1 && !children[0].isDir) {
-				console.log('[FolderStack] Penetrate mode: found single child file:', children[0].path);
 				return children[0];
 			}
 		} catch (error) {
-			console.debug('[FolderStack] 穿透模式读取目录失败:', folderPath, error);
+			// 穿透模式读取目录失败，静默处理
 		}
 		return null;
 	}

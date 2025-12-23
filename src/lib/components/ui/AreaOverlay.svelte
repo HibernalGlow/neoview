@@ -26,7 +26,6 @@
 	function handleAreaClick(area: ViewArea, event: MouseEvent) {
 		// 如果任一边栏打开，则不处理区域点击
 		if (sidebarOpen || rightSidebarOpen) {
-			console.log('边栏已打开，禁用区域点击响应');
 			return;
 		}
 		
@@ -38,11 +37,8 @@
 		const action = keyBindingsStore.findActionByAreaClick(area, button as 'left' | 'right' | 'middle', clickType as 'click' | 'double-click');
 		
 		if (action) {
-			console.log(`区域点击: ${area}, 按键: ${button}, 动作: ${clickType}, 触发操作: ${action}`);
 			// 触发操作事件
 			dispatch('areaAction', { action, area, button, clickType });
-		} else {
-			console.log(`区域点击: ${area}, 按键: ${button}, 动作: ${clickType}, 未找到对应操作`);
 		}
 	}
 
@@ -50,13 +46,10 @@
 	function handleContextMenu(event: MouseEvent) {
 		// 如果任一边栏打开，则不处理右键菜单
 		if (sidebarOpen || rightSidebarOpen) {
-			console.log('边栏已打开，禁用区域右键响应');
 			return;
 		}
 		
 		event.preventDefault();
-		const area = (event.currentTarget as HTMLElement).dataset.area as ViewArea;
-		console.log(`右键点击区域: ${area}`);
 	}
 
 	// 监听全局事件

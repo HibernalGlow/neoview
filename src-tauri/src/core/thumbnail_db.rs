@@ -1157,15 +1157,43 @@ impl ThumbnailDb {
     }
 
     /// 获取单个记录的 rating_data
+    /// 如果 rating_data 为空，会尝试从 emm_json 中提取 rating
     pub fn get_rating_data(&self, key: &str) -> SqliteResult<Option<String>> {
+        use serde_json::Value;
+        
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut stmt = conn.prepare("SELECT rating_data FROM thumbs WHERE key = ?1")?;
-        let result: Option<String> = stmt.query_row(params![key], |row| row.get(0)).ok();
+        // 同时查询 rating_data 和 emm_json
+        let mut stmt = conn.prepare("SELECT rating_data, emm_json FROM thumbs WHERE key = ?1")?;
+        let result: Option<(Option<String>, Option<String>)> = stmt
+            .query_row(params![key], |row| Ok((row.get(0)?, row.get(1)?)))
+            .ok();
 
-        Ok(result)
+        if let Some((rating_data, emm_json)) = result {
+            // 优先使用 rating_data
+            if rating_data.is_some() {
+                return Ok(rating_data);
+            }
+            // 从 emm_json 中提取 rating 作为 fallback
+            if let Some(ref json_str) = emm_json {
+                if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                    if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                        if rating > 0.0 {
+                            let now = chrono::Local::now().timestamp_millis();
+                            return Ok(Some(serde_json::json!({
+                                "value": rating,
+                                "source": "emm",
+                                "timestamp": now
+                            }).to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// 批量获取 rating_data（用于排序）
@@ -1254,22 +1282,61 @@ impl ThumbnailDb {
     }
 
     /// 获取指定目录下所有条目的 rating_data（用于计算文件夹平均评分）
+    /// 如果 rating_data 为空，会尝试从 emm_json 中提取 rating
     pub fn get_rating_data_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<String>)>> {
+        use serde_json::Value;
+        
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
         let pattern = format!("{}%", prefix);
+        // 同时查询 rating_data 和 emm_json
         let mut stmt = conn.prepare(
-            "SELECT key, rating_data FROM thumbs WHERE key LIKE ?1 AND rating_data IS NOT NULL"
+            "SELECT key, rating_data, emm_json FROM thumbs WHERE key LIKE ?1 AND (rating_data IS NOT NULL OR emm_json IS NOT NULL)"
         )?;
 
-        let results: Vec<(String, Option<String>)> = stmt
-            .query_map(params![pattern], |row| {
-                Ok((row.get(0)?, row.get(1)?))
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
+        let now = chrono::Local::now().timestamp_millis();
+        let mut results: Vec<(String, Option<String>)> = Vec::new();
+        
+        let rows = stmt.query_map(params![pattern], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?, row.get::<_, Option<String>>(2)?))
+        })?;
+
+        for row_result in rows {
+            if let Ok((key, rating_data, emm_json)) = row_result {
+                // 优先使用 rating_data
+                let effective_rating = if rating_data.is_some() {
+                    rating_data
+                } else if let Some(ref json_str) = emm_json {
+                    // 从 emm_json 中提取 rating 作为 fallback
+                    if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                        if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
+                            if rating > 0.0 {
+                                Some(serde_json::json!({
+                                    "value": rating,
+                                    "source": "emm",
+                                    "timestamp": now
+                                }).to_string())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                // 只添加有评分的记录
+                if effective_rating.is_some() {
+                    results.push((key, effective_rating));
+                }
+            }
+        }
 
         Ok(results)
     }

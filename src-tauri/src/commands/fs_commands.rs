@@ -2256,6 +2256,7 @@ pub async fn get_last_deleted_item() -> Result<Option<TrashItem>, String> {
 }
 
 /// 撤回上一次删除（恢复最近删除的项目）
+/// 如果删除的是文件夹，会同时恢复文件夹内的所有文件
 #[tauri::command]
 pub async fn undo_last_delete() -> Result<Option<String>, String> {
     spawn_blocking(|| {
@@ -2263,23 +2264,46 @@ pub async fn undo_last_delete() -> Result<Option<String>, String> {
         let items = trash::os_limited::list()
             .map_err(|e| format!("获取回收站列表失败: {}", e))?;
         
+        if items.is_empty() {
+            return Ok(None);
+        }
+        
         // 找到最近删除的项目
         let latest = items
-            .into_iter()
+            .iter()
             .max_by_key(|item| item.time_deleted);
         
-        match latest {
-            Some(item) => {
-                let original_path = item.original_path().to_string_lossy().to_string();
+        let latest = match latest {
+            Some(item) => item,
+            None => return Ok(None),
+        };
+        
+        let latest_time = latest.time_deleted;
+        let original_path = latest.original_path().to_string_lossy().to_string();
+        
+        // 收集同一时间删除的所有项目（删除文件夹时，内部文件会有相同或相近的删除时间）
+        // 同时也收集路径前缀匹配的项目（属于同一文件夹的内容）
+        let items_to_restore: Vec<_> = items
+            .into_iter()
+            .filter(|item| {
+                let item_path = item.original_path().to_string_lossy().to_string();
+                let time_diff = (item.time_deleted as i64 - latest_time as i64).abs();
                 
-                // 恢复该项目
-                trash::os_limited::restore_all([item])
-                    .map_err(|e| format!("恢复失败: {}", e))?;
-                
-                Ok(Some(original_path))
-            }
-            None => Ok(None),
+                // 条件1: 删除时间相差在2秒内（同一批次删除）
+                // 条件2: 路径是最近删除项目的子路径（属于同一文件夹）
+                time_diff <= 2 || item_path.starts_with(&format!("{}\\", original_path)) || item_path.starts_with(&format!("{}/", original_path))
+            })
+            .collect();
+        
+        if items_to_restore.is_empty() {
+            return Ok(None);
         }
+        
+        // 恢复所有相关项目
+        trash::os_limited::restore_all(items_to_restore)
+            .map_err(|e| format!("恢复失败: {}", e))?;
+        
+        Ok(Some(original_path))
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {}", e))?

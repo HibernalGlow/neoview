@@ -34,10 +34,6 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
-	import { createLogger } from '$lib/utils/logger';
-
-	// 创建日志器（仅开发环境输出）
-	const log = createLogger('StackView');
 
 	// 导入外部 stores
 	import {
@@ -226,23 +222,17 @@
 		const mode = $legacyViewMode as 'single' | 'double' | 'panorama';
 		const orient = $legacyOrientation as 'horizontal' | 'vertical';
 
-		log.debug(
-			`viewMode=${mode}, wasInPanorama=${wasInPanorama}, lastNonPanoramaPageMode=${lastNonPanoramaPageMode}, currentPageMode=${ctx.pageMode}`
-		);
-
 		// 根据旧模式设置 BookContext
 		if (mode === 'panorama') {
 			ctx.setPanoramaEnabled(true);
 			// 进入全景模式时，使用之前的 pageMode
 			if (!wasInPanorama) {
-				log.debug(`进入全景，保持 pageMode=${ctx.pageMode}`);
 				wasInPanorama = true;
 			}
 			// 全景模式中保持当前 pageMode 不变
 		} else {
 			// 从全景退出时，保持之前的 pageMode
 			if (wasInPanorama) {
-				log.debug(`退出全景，保持 pageMode=${ctx.pageMode}`);
 				ctx.setPanoramaEnabled(false);
 				wasInPanorama = false;
 				// 不设置 pageMode，保持全景期间的状态
@@ -251,7 +241,6 @@
 				ctx.setPanoramaEnabled(false);
 				ctx.setPageMode(mode);
 				lastNonPanoramaPageMode = mode;
-				log.debug(`非全景模式，设置 pageMode=${mode}`);
 			}
 		}
 		ctx.setOrientation(orient);

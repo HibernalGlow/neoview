@@ -28,19 +28,41 @@
   let containerRef = $state<HTMLDivElement | null>(null);
   let mouseX = $state(-200);
   let mouseY = $state(-200);
+  // 【性能优化】缓存容器尺寸，避免每次 mousemove 都读取
+  let cachedSize = $state({ width: 300, height: 200 });
 
-  // 动态计算光晕大小：取卡片宽高的较小值的 60%
+  // 动态计算光晕大小：使用缓存的尺寸
   const dynamicSize = $derived(() => {
     if (gradientSize > 0) return gradientSize;
-    if (!containerRef) return 150;
-    const { width, height } = containerRef.getBoundingClientRect();
-    return Math.min(width, height) * 0.6;
+    return Math.min(cachedSize.width, cachedSize.height) * 0.6;
+  });
+
+  // 【性能优化】使用 ResizeObserver 监听尺寸变化，而不是每次 mousemove 都读取
+  $effect(() => {
+    if (!containerRef) return;
+    
+    // 初始化尺寸
+    const rect = containerRef.getBoundingClientRect();
+    cachedSize = { width: rect.width, height: rect.height };
+    
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        cachedSize = { 
+          width: entry.contentRect.width, 
+          height: entry.contentRect.height 
+        };
+      }
+    });
+    
+    observer.observe(containerRef);
+    
+    return () => observer.disconnect();
   });
 
   function handleMouseMove(e: MouseEvent) {
-    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
+    // 【性能优化】使用 offsetX/offsetY，不需要 getBoundingClientRect
+    mouseX = e.offsetX;
+    mouseY = e.offsetY;
   }
 
   function handleMouseLeave() {

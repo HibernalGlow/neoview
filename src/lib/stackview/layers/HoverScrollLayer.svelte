@@ -32,17 +32,28 @@
   let currentMouseY = 0;
   let isHovering = false;
   
+  // 【性能优化】使用 RAF 批量更新 rect，避免强制重排
+  let rectUpdateScheduled = false;
+  
   function updateTargetContainer() {
     targetContainer = document.querySelector(targetSelector) as HTMLElement | null;
-    if (targetContainer) {
-      cachedRect = targetContainer.getBoundingClientRect();
-    }
+    // 不立即获取 rect，等下一帧
+    scheduleRectUpdate();
+  }
+  
+  function scheduleRectUpdate() {
+    if (rectUpdateScheduled) return;
+    rectUpdateScheduled = true;
+    requestAnimationFrame(() => {
+      rectUpdateScheduled = false;
+      if (targetContainer) {
+        cachedRect = targetContainer.getBoundingClientRect();
+      }
+    });
   }
   
   function updateRect() {
-    if (targetContainer) {
-      cachedRect = targetContainer.getBoundingClientRect();
-    }
+    scheduleRectUpdate();
   }
   
   // 核心滚动逻辑 - 倍率滚动

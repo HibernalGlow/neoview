@@ -22,7 +22,8 @@
 		PanelLeft,
 		PanelRight,
 		Crosshair,
-		MoreVertical
+		MoreVertical,
+		EyeOff
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
@@ -325,10 +326,19 @@
 				</Tooltip.Root>
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content class="w-48">
-				<!-- 标签栏位置选项（用图标显示4个方向） -->
+				<!-- 标签栏位置选项（用图标显示4个方向 + 隐藏） -->
 				<DropdownMenu.Label>标签栏位置</DropdownMenu.Label>
 				<DropdownMenu.Separator />
 				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$tabBarLayout === 'none' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetTabBarLayout('none')}
+						title="隐藏"
+					>
+						<EyeOff class="h-4 w-4" />
+					</Button>
 					<Button
 						variant={$tabBarLayout === 'top' ? 'default' : 'ghost'}
 						size="icon"
@@ -363,11 +373,20 @@
 					</Button>
 				</div>
 
-				<!-- 面包屑位置选项（用图标显示4个方向） -->
+				<!-- 面包屑位置选项（用图标显示4个方向 + 隐藏） -->
 				<DropdownMenu.Separator />
 				<DropdownMenu.Label>面包屑位置</DropdownMenu.Label>
 				<DropdownMenu.Separator />
 				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$breadcrumbPosition === 'none' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetBreadcrumbPosition('none')}
+						title="隐藏"
+					>
+						<EyeOff class="h-4 w-4" />
+					</Button>
 					<Button
 						variant={$breadcrumbPosition === 'top' ? 'default' : 'ghost'}
 						size="icon"
@@ -402,11 +421,20 @@
 					</Button>
 				</div>
 
-				<!-- 工具栏位置选项（用图标显示4个方向） -->
+				<!-- 工具栏位置选项（用图标显示4个方向 + 隐藏） -->
 				<DropdownMenu.Separator />
 				<DropdownMenu.Label>工具栏位置</DropdownMenu.Label>
 				<DropdownMenu.Separator />
 				<div class="flex justify-center gap-1 px-2 py-1">
+					<Button
+						variant={$toolbarPosition === 'none' ? 'default' : 'ghost'}
+						size="icon"
+						class="h-7 w-7"
+						onclick={() => handleSetToolbarPosition('none')}
+						title="隐藏"
+					>
+						<EyeOff class="h-4 w-4" />
+					</Button>
 					<Button
 						variant={$toolbarPosition === 'top' ? 'default' : 'ghost'}
 						size="icon"

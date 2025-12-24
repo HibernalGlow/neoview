@@ -30,7 +30,7 @@ tasks:
     cmds:
       - node scripts/version.mjs show
 
-  version:set:
+  v:
     desc: Set version in package.json, tauri.conf.json and Cargo.toml
     dir: '{{.PROJECT_DIR}}'
     vars:

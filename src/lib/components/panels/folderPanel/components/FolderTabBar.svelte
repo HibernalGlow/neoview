@@ -39,9 +39,9 @@
 		isVirtualPath,
 		getVirtualPathType,
 		recentlyClosedTabs,
-		tabBarLayout,
-		breadcrumbPosition,
-		toolbarPosition,
+		folderTabBarLayout as tabBarLayout,
+		folderBreadcrumbPosition as breadcrumbPosition,
+		folderToolbarPosition as toolbarPosition,
 		type TabBarLayout,
 		type BreadcrumbPosition,
 		type ToolbarPosition
@@ -143,16 +143,17 @@
 		onScrollToFocused?.();
 	}
 
+	// FolderTabBar 只用于 folder 面板，所以固定传 'folder'
 	function handleSetTabBarLayout(layout: TabBarLayout) {
-		folderTabActions.setTabBarLayout(layout);
+		folderTabActions.setTabBarLayout(layout, 'folder');
 	}
 
 	function handleSetBreadcrumbPosition(position: BreadcrumbPosition) {
-		folderTabActions.setBreadcrumbPosition(position);
+		folderTabActions.setBreadcrumbPosition(position, 'folder');
 	}
 
 	function handleSetToolbarPosition(position: ToolbarPosition) {
-		folderTabActions.setToolbarPosition(position);
+		folderTabActions.setToolbarPosition(position, 'folder');
 	}
 
 	// 中键点击关闭

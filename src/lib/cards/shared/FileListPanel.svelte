@@ -23,10 +23,8 @@
 	import {
 		folderTabActions,
 		isVirtualPath,
-		tabBarLayout,
-		tabBarWidth,
-		breadcrumbPosition,
-		toolbarPosition
+		getPanelLayoutStores,
+		type PanelMode as StorePanelMode
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
 	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
@@ -48,6 +46,14 @@
 
 	// ==================== Context 初始化 ====================
 	const ctx = createFolderContext(propInitialPath);
+
+	// ==================== 按面板类型获取布局 stores ====================
+	const panelMode: StorePanelMode = ctx.panelMode as StorePanelMode;
+	const layoutStores = getPanelLayoutStores(panelMode);
+	const tabBarLayout = layoutStores.tabBarLayout;
+	const tabBarWidth = layoutStores.tabBarWidth;
+	const breadcrumbPosition = layoutStores.breadcrumbPosition;
+	const toolbarPosition = layoutStores.toolbarPosition;
 
 	// ==================== 共享操作初始化 ====================
 	const actions = createAllFileActions(ctx, propInitialPath);

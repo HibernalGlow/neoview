@@ -16,17 +16,24 @@
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
-	import { LayoutGrid, Settings2, PanelTop, PanelBottom, PanelLeft, PanelRight, EyeOff, Columns3, Navigation, Wrench } from '@lucide/svelte';
+	import { LayoutGrid, Settings2, PanelTop, PanelBottom, PanelLeft, PanelRight, EyeOff, Columns3, Navigation, Wrench, Folder, Bookmark, History } from '@lucide/svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import {
-		tabBarLayout,
-		breadcrumbPosition,
-		toolbarPosition,
+		folderTabBarLayout,
+		folderBreadcrumbPosition,
+		folderToolbarPosition,
+		bookmarkTabBarLayout,
+		bookmarkBreadcrumbPosition,
+		bookmarkToolbarPosition,
+		historyTabBarLayout,
+		historyBreadcrumbPosition,
+		historyToolbarPosition,
 		folderTabActions,
 		type TabBarLayout,
 		type BreadcrumbPosition,
-		type ToolbarPosition
+		type ToolbarPosition,
+		type PanelMode
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 
 	let activeTab = $state('layout');
@@ -232,191 +239,254 @@
 		</Tabs.List>
 
 		<Tabs.Content value="settings" class="mt-4 space-y-4">
-	<!-- 文件面板组件显示设置 -->
+	<!-- 文件面板组件显示设置 - 按面板类型分开 -->
 	<div class="rounded-lg border bg-card/40 p-4 space-y-4">
 		<h4 class="text-sm font-medium">文件面板组件</h4>
-		<p class="text-muted-foreground text-xs">管理标签栏、面包屑、工具栏的显示位置</p>
+		<p class="text-muted-foreground text-xs">分别管理文件夹、书签、历史面板的标签栏、面包屑、工具栏显示位置</p>
 		
-		<!-- 标签栏位置 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<Columns3 class="h-4 w-4 text-muted-foreground" />
-				<span class="text-sm">标签栏</span>
-				<span class="text-xs text-muted-foreground ml-auto">
-					{$tabBarLayout === 'none' ? '隐藏' : 
-					 $tabBarLayout === 'top' ? '顶部' :
-					 $tabBarLayout === 'bottom' ? '底部' :
-					 $tabBarLayout === 'left' ? '左侧' : '右侧'}
-				</span>
+		<!-- 文件夹面板 -->
+		<div class="space-y-2 border-b pb-3">
+			<div class="flex items-center gap-2 mb-2">
+				<Folder class="h-4 w-4 text-blue-500" />
+				<span class="text-sm font-medium">文件夹面板</span>
 			</div>
-			<div class="flex justify-center gap-1">
-				<Button
-					variant={$tabBarLayout === 'none' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setTabBarLayout('none')}
-					title="隐藏"
-				>
-					<EyeOff class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$tabBarLayout === 'top' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setTabBarLayout('top')}
-					title="顶部"
-				>
-					<PanelTop class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$tabBarLayout === 'bottom' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setTabBarLayout('bottom')}
-					title="底部"
-				>
-					<PanelBottom class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$tabBarLayout === 'left' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setTabBarLayout('left')}
-					title="左侧"
-				>
-					<PanelLeft class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$tabBarLayout === 'right' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setTabBarLayout('right')}
-					title="右侧"
-				>
-					<PanelRight class="h-4 w-4" />
-				</Button>
-			</div>
-		</div>
-
-		<!-- 面包屑位置 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<Navigation class="h-4 w-4 text-muted-foreground" />
-				<span class="text-sm">面包屑</span>
-				<span class="text-xs text-muted-foreground ml-auto">
-					{$breadcrumbPosition === 'none' ? '隐藏' : 
-					 $breadcrumbPosition === 'top' ? '顶部' :
-					 $breadcrumbPosition === 'bottom' ? '底部' :
-					 $breadcrumbPosition === 'left' ? '左侧' : '右侧'}
-				</span>
-			</div>
-			<div class="flex justify-center gap-1">
-				<Button
-					variant={$breadcrumbPosition === 'none' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setBreadcrumbPosition('none')}
-					title="隐藏"
-				>
-					<EyeOff class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$breadcrumbPosition === 'top' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setBreadcrumbPosition('top')}
-					title="顶部"
-				>
-					<PanelTop class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$breadcrumbPosition === 'bottom' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setBreadcrumbPosition('bottom')}
-					title="底部"
-				>
-					<PanelBottom class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$breadcrumbPosition === 'left' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setBreadcrumbPosition('left')}
-					title="左侧"
-				>
-					<PanelLeft class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$breadcrumbPosition === 'right' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setBreadcrumbPosition('right')}
-					title="右侧"
-				>
-					<PanelRight class="h-4 w-4" />
-				</Button>
+			<div class="grid grid-cols-3 gap-2 text-xs">
+				<!-- 标签栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Columns3 class="h-3 w-3" />
+						<span>标签栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$folderTabBarLayout === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'folder')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 面包屑 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Navigation class="h-3 w-3" />
+						<span>面包屑</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$folderBreadcrumbPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'folder')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 工具栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Wrench class="h-3 w-3" />
+						<span>工具栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$folderToolbarPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'folder')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
 			</div>
 		</div>
 
-		<!-- 工具栏位置 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2">
-				<Wrench class="h-4 w-4 text-muted-foreground" />
-				<span class="text-sm">工具栏</span>
-				<span class="text-xs text-muted-foreground ml-auto">
-					{$toolbarPosition === 'none' ? '隐藏' : 
-					 $toolbarPosition === 'top' ? '顶部' :
-					 $toolbarPosition === 'bottom' ? '底部' :
-					 $toolbarPosition === 'left' ? '左侧' : '右侧'}
-				</span>
+		<!-- 书签面板 -->
+		<div class="space-y-2 border-b pb-3">
+			<div class="flex items-center gap-2 mb-2">
+				<Bookmark class="h-4 w-4 text-amber-500" />
+				<span class="text-sm font-medium">书签面板</span>
 			</div>
-			<div class="flex justify-center gap-1">
-				<Button
-					variant={$toolbarPosition === 'none' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setToolbarPosition('none')}
-					title="隐藏"
-				>
-					<EyeOff class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$toolbarPosition === 'top' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setToolbarPosition('top')}
-					title="顶部"
-				>
-					<PanelTop class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$toolbarPosition === 'bottom' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setToolbarPosition('bottom')}
-					title="底部"
-				>
-					<PanelBottom class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$toolbarPosition === 'left' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setToolbarPosition('left')}
-					title="左侧"
-				>
-					<PanelLeft class="h-4 w-4" />
-				</Button>
-				<Button
-					variant={$toolbarPosition === 'right' ? 'default' : 'outline'}
-					size="sm"
-					class="h-8 w-8 p-0"
-					onclick={() => folderTabActions.setToolbarPosition('right')}
-					title="右侧"
-				>
-					<PanelRight class="h-4 w-4" />
-				</Button>
+			<div class="grid grid-cols-3 gap-2 text-xs">
+				<!-- 标签栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Columns3 class="h-3 w-3" />
+						<span>标签栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$bookmarkTabBarLayout === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'bookmark')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 面包屑 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Navigation class="h-3 w-3" />
+						<span>面包屑</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$bookmarkBreadcrumbPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'bookmark')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 工具栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Wrench class="h-3 w-3" />
+						<span>工具栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$bookmarkToolbarPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'bookmark')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- 历史面板 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2 mb-2">
+				<History class="h-4 w-4 text-green-500" />
+				<span class="text-sm font-medium">历史面板</span>
+			</div>
+			<div class="grid grid-cols-3 gap-2 text-xs">
+				<!-- 标签栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Columns3 class="h-3 w-3" />
+						<span>标签栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$historyTabBarLayout === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'history')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 面包屑 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Navigation class="h-3 w-3" />
+						<span>面包屑</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$historyBreadcrumbPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'history')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
+				<!-- 工具栏 -->
+				<div class="space-y-1">
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<Wrench class="h-3 w-3" />
+						<span>工具栏</span>
+					</div>
+					<div class="flex gap-0.5">
+						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+							<Button
+								variant={$historyToolbarPosition === pos ? 'default' : 'ghost'}
+								size="sm"
+								class="h-6 w-6 p-0"
+								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'history')}
+								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
+							>
+								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
+								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
+								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
+								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
+								{:else}<PanelRight class="h-3 w-3" />{/if}
+							</Button>
+						{/each}
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>

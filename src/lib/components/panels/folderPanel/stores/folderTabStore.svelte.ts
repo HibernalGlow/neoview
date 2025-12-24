@@ -159,48 +159,79 @@ export type TabBarLayout = 'none' | 'top' | 'left' | 'right' | 'bottom';
 export type BreadcrumbPosition = 'none' | 'top' | 'left' | 'right' | 'bottom';
 // 工具栏位置：上下左右（none = 隐藏）
 export type ToolbarPosition = 'none' | 'top' | 'left' | 'right' | 'bottom';
+// 面板模式类型
+export type PanelMode = 'folder' | 'bookmark' | 'history';
 
-interface SharedTabBarSettings {
+interface PanelLayoutSettings {
 	tabBarLayout: TabBarLayout;
 	tabBarWidth: number; // 左右布局时的宽度
 	breadcrumbPosition: BreadcrumbPosition; // 面包屑位置
 	toolbarPosition: ToolbarPosition; // 工具栏位置
 }
 
-function loadSharedTabBarSettings(): SharedTabBarSettings {
+// 按面板类型存储的布局设置
+interface PerPanelLayoutSettings {
+	folder: PanelLayoutSettings;
+	bookmark: PanelLayoutSettings;
+	history: PanelLayoutSettings;
+}
+
+// 默认设置
+const defaultPanelLayoutSettings: PanelLayoutSettings = {
+	tabBarLayout: 'none',
+	tabBarWidth: 160,
+	breadcrumbPosition: 'none',
+	toolbarPosition: 'top'
+};
+
+function loadPerPanelLayoutSettings(): PerPanelLayoutSettings {
 	try {
 		const saved = localStorage.getItem(SHARED_TAB_BAR_SETTINGS_KEY);
 		if (saved) {
 			const parsed = JSON.parse(saved);
+			// 兼容旧版本：如果是旧格式（没有 folder/bookmark/history 键），迁移到新格式
+			if (parsed.tabBarLayout !== undefined && parsed.folder === undefined) {
+				// 旧格式，迁移
+				const oldSettings: PanelLayoutSettings = {
+					tabBarLayout: parsed.tabBarLayout ?? 'none',
+					tabBarWidth: parsed.tabBarWidth ?? 160,
+					breadcrumbPosition: parsed.breadcrumbPosition ?? 'none',
+					toolbarPosition: parsed.toolbarPosition ?? 'top'
+				};
+				return {
+					folder: oldSettings,
+					bookmark: { ...defaultPanelLayoutSettings },
+					history: { ...defaultPanelLayoutSettings }
+				};
+			}
+			// 新格式
 			return {
-				tabBarLayout: parsed.tabBarLayout ?? 'none',
-				tabBarWidth: parsed.tabBarWidth ?? 160,
-				breadcrumbPosition: parsed.breadcrumbPosition ?? 'none',
-				toolbarPosition: parsed.toolbarPosition ?? 'top'
+				folder: { ...defaultPanelLayoutSettings, ...parsed.folder },
+				bookmark: { ...defaultPanelLayoutSettings, ...parsed.bookmark },
+				history: { ...defaultPanelLayoutSettings, ...parsed.history }
 			};
 		}
 	} catch (e) {
-		console.error('[FolderTabStore] Failed to load shared tab bar settings:', e);
+		console.error('[FolderTabStore] Failed to load per-panel layout settings:', e);
 	}
-	// 默认隐藏标签页和面包屑
+	// 默认设置
 	return {
-		tabBarLayout: 'none',
-		tabBarWidth: 160,
-		breadcrumbPosition: 'none',
-		toolbarPosition: 'top'
+		folder: { ...defaultPanelLayoutSettings },
+		bookmark: { ...defaultPanelLayoutSettings },
+		history: { ...defaultPanelLayoutSettings }
 	};
 }
 
-function saveSharedTabBarSettings(settings: SharedTabBarSettings) {
+function savePerPanelLayoutSettings(settings: PerPanelLayoutSettings) {
 	try {
 		localStorage.setItem(SHARED_TAB_BAR_SETTINGS_KEY, JSON.stringify(settings));
 	} catch (e) {
-		console.error('[FolderTabStore] Failed to save shared tab bar settings:', e);
+		console.error('[FolderTabStore] Failed to save per-panel layout settings:', e);
 	}
 }
 
-// 加载共享标签栏设置
-const sharedTabBarSettings = loadSharedTabBarSettings();
+// 加载按面板类型的布局设置
+let perPanelLayoutSettings = loadPerPanelLayoutSettings();
 
 // ============ Shared Folder Tree Settings ============
 // 这些设置在所有文件夹面板页签之间共享
@@ -600,13 +631,57 @@ export const tabCanGoForwardTab = derived(store, ($store) => $store.tabNavHistor
 // 最近关闭的标签页
 export const recentlyClosedTabs = derived(recentlyClosedTabsStore, ($tabs) => $tabs);
 
-// 标签栏位置和宽度
-export const tabBarLayout = writable<TabBarLayout>(sharedTabBarSettings.tabBarLayout);
-export const tabBarWidth = writable<number>(sharedTabBarSettings.tabBarWidth);
-// 面包屑位置
-export const breadcrumbPosition = writable<BreadcrumbPosition>(sharedTabBarSettings.breadcrumbPosition);
-// 工具栏位置
-export const toolbarPosition = writable<ToolbarPosition>(sharedTabBarSettings.toolbarPosition);
+// 按面板类型的布局设置 stores
+// folder 面板
+export const folderTabBarLayout = writable<TabBarLayout>(perPanelLayoutSettings.folder.tabBarLayout);
+export const folderTabBarWidth = writable<number>(perPanelLayoutSettings.folder.tabBarWidth);
+export const folderBreadcrumbPosition = writable<BreadcrumbPosition>(perPanelLayoutSettings.folder.breadcrumbPosition);
+export const folderToolbarPosition = writable<ToolbarPosition>(perPanelLayoutSettings.folder.toolbarPosition);
+
+// bookmark 面板
+export const bookmarkTabBarLayout = writable<TabBarLayout>(perPanelLayoutSettings.bookmark.tabBarLayout);
+export const bookmarkTabBarWidth = writable<number>(perPanelLayoutSettings.bookmark.tabBarWidth);
+export const bookmarkBreadcrumbPosition = writable<BreadcrumbPosition>(perPanelLayoutSettings.bookmark.breadcrumbPosition);
+export const bookmarkToolbarPosition = writable<ToolbarPosition>(perPanelLayoutSettings.bookmark.toolbarPosition);
+
+// history 面板
+export const historyTabBarLayout = writable<TabBarLayout>(perPanelLayoutSettings.history.tabBarLayout);
+export const historyTabBarWidth = writable<number>(perPanelLayoutSettings.history.tabBarWidth);
+export const historyBreadcrumbPosition = writable<BreadcrumbPosition>(perPanelLayoutSettings.history.breadcrumbPosition);
+export const historyToolbarPosition = writable<ToolbarPosition>(perPanelLayoutSettings.history.toolbarPosition);
+
+// 兼容旧代码：默认使用 folder 面板的设置
+export const tabBarLayout = folderTabBarLayout;
+export const tabBarWidth = folderTabBarWidth;
+export const breadcrumbPosition = folderBreadcrumbPosition;
+export const toolbarPosition = folderToolbarPosition;
+
+// 获取指定面板的布局设置 stores
+export function getPanelLayoutStores(mode: PanelMode) {
+	switch (mode) {
+		case 'bookmark':
+			return {
+				tabBarLayout: bookmarkTabBarLayout,
+				tabBarWidth: bookmarkTabBarWidth,
+				breadcrumbPosition: bookmarkBreadcrumbPosition,
+				toolbarPosition: bookmarkToolbarPosition
+			};
+		case 'history':
+			return {
+				tabBarLayout: historyTabBarLayout,
+				tabBarWidth: historyTabBarWidth,
+				breadcrumbPosition: historyBreadcrumbPosition,
+				toolbarPosition: historyToolbarPosition
+			};
+		default:
+			return {
+				tabBarLayout: folderTabBarLayout,
+				tabBarWidth: folderTabBarWidth,
+				breadcrumbPosition: folderBreadcrumbPosition,
+				toolbarPosition: folderToolbarPosition
+			};
+	}
+}
 
 // ============ Actions ============
 
@@ -891,67 +966,67 @@ export const folderTabActions = {
 	},
 
 	/**
-	 * 设置标签栏位置
+	 * 设置标签栏位置（按面板类型）
 	 */
-	setTabBarLayout(layout: TabBarLayout) {
-		sharedTabBarSettings.tabBarLayout = layout;
-		saveSharedTabBarSettings(sharedTabBarSettings);
-		tabBarLayout.set(layout);
+	setTabBarLayout(layout: TabBarLayout, mode: PanelMode = 'folder') {
+		perPanelLayoutSettings[mode].tabBarLayout = layout;
+		savePerPanelLayoutSettings(perPanelLayoutSettings);
+		getPanelLayoutStores(mode).tabBarLayout.set(layout);
 	},
 
 	/**
-	 * 获取标签栏位置
+	 * 获取标签栏位置（按面板类型）
 	 */
-	getTabBarLayout(): TabBarLayout {
-		return sharedTabBarSettings.tabBarLayout;
+	getTabBarLayout(mode: PanelMode = 'folder'): TabBarLayout {
+		return perPanelLayoutSettings[mode].tabBarLayout;
 	},
 
 	/**
-	 * 设置标签栏宽度（左右布局时）
+	 * 设置标签栏宽度（左右布局时，按面板类型）
 	 */
-	setTabBarWidth(width: number) {
-		sharedTabBarSettings.tabBarWidth = width;
-		saveSharedTabBarSettings(sharedTabBarSettings);
-		tabBarWidth.set(width);
+	setTabBarWidth(width: number, mode: PanelMode = 'folder') {
+		perPanelLayoutSettings[mode].tabBarWidth = width;
+		savePerPanelLayoutSettings(perPanelLayoutSettings);
+		getPanelLayoutStores(mode).tabBarWidth.set(width);
 	},
 
 	/**
-	 * 获取标签栏宽度
+	 * 获取标签栏宽度（按面板类型）
 	 */
-	getTabBarWidth(): number {
-		return sharedTabBarSettings.tabBarWidth;
+	getTabBarWidth(mode: PanelMode = 'folder'): number {
+		return perPanelLayoutSettings[mode].tabBarWidth;
 	},
 
 	/**
-	 * 设置面包屑位置
+	 * 设置面包屑位置（按面板类型）
 	 */
-	setBreadcrumbPosition(position: BreadcrumbPosition) {
-		sharedTabBarSettings.breadcrumbPosition = position;
-		saveSharedTabBarSettings(sharedTabBarSettings);
-		breadcrumbPosition.set(position);
+	setBreadcrumbPosition(position: BreadcrumbPosition, mode: PanelMode = 'folder') {
+		perPanelLayoutSettings[mode].breadcrumbPosition = position;
+		savePerPanelLayoutSettings(perPanelLayoutSettings);
+		getPanelLayoutStores(mode).breadcrumbPosition.set(position);
 	},
 
 	/**
-	 * 获取面包屑位置
+	 * 获取面包屑位置（按面板类型）
 	 */
-	getBreadcrumbPosition(): BreadcrumbPosition {
-		return sharedTabBarSettings.breadcrumbPosition;
+	getBreadcrumbPosition(mode: PanelMode = 'folder'): BreadcrumbPosition {
+		return perPanelLayoutSettings[mode].breadcrumbPosition;
 	},
 
 	/**
-	 * 设置工具栏位置
+	 * 设置工具栏位置（按面板类型）
 	 */
-	setToolbarPosition(position: ToolbarPosition) {
-		sharedTabBarSettings.toolbarPosition = position;
-		saveSharedTabBarSettings(sharedTabBarSettings);
-		toolbarPosition.set(position);
+	setToolbarPosition(position: ToolbarPosition, mode: PanelMode = 'folder') {
+		perPanelLayoutSettings[mode].toolbarPosition = position;
+		savePerPanelLayoutSettings(perPanelLayoutSettings);
+		getPanelLayoutStores(mode).toolbarPosition.set(position);
 	},
 
 	/**
-	 * 获取工具栏位置
+	 * 获取工具栏位置（按面板类型）
 	 */
-	getToolbarPosition(): ToolbarPosition {
-		return sharedTabBarSettings.toolbarPosition;
+	getToolbarPosition(mode: PanelMode = 'folder'): ToolbarPosition {
+		return perPanelLayoutSettings[mode].toolbarPosition;
 	},
 
 	/**

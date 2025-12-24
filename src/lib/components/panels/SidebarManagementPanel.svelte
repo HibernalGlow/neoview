@@ -16,8 +16,18 @@
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
-	import { LayoutGrid, Settings2 } from '@lucide/svelte';
+	import { LayoutGrid, Settings2, PanelTop, PanelBottom, PanelLeft, PanelRight, EyeOff, Columns3, Navigation, Wrench } from '@lucide/svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
+	import { Button } from '$lib/components/ui/button';
+	import {
+		tabBarLayout,
+		breadcrumbPosition,
+		toolbarPosition,
+		folderTabActions,
+		type TabBarLayout,
+		type BreadcrumbPosition,
+		type ToolbarPosition
+	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 
 	let activeTab = $state('layout');
 
@@ -222,6 +232,195 @@
 		</Tabs.List>
 
 		<Tabs.Content value="settings" class="mt-4 space-y-4">
+	<!-- 文件面板组件显示设置 -->
+	<div class="rounded-lg border bg-card/40 p-4 space-y-4">
+		<h4 class="text-sm font-medium">文件面板组件</h4>
+		<p class="text-muted-foreground text-xs">管理标签栏、面包屑、工具栏的显示位置</p>
+		
+		<!-- 标签栏位置 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<Columns3 class="h-4 w-4 text-muted-foreground" />
+				<span class="text-sm">标签栏</span>
+				<span class="text-xs text-muted-foreground ml-auto">
+					{$tabBarLayout === 'none' ? '隐藏' : 
+					 $tabBarLayout === 'top' ? '顶部' :
+					 $tabBarLayout === 'bottom' ? '底部' :
+					 $tabBarLayout === 'left' ? '左侧' : '右侧'}
+				</span>
+			</div>
+			<div class="flex justify-center gap-1">
+				<Button
+					variant={$tabBarLayout === 'none' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setTabBarLayout('none')}
+					title="隐藏"
+				>
+					<EyeOff class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$tabBarLayout === 'top' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setTabBarLayout('top')}
+					title="顶部"
+				>
+					<PanelTop class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$tabBarLayout === 'bottom' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setTabBarLayout('bottom')}
+					title="底部"
+				>
+					<PanelBottom class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$tabBarLayout === 'left' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setTabBarLayout('left')}
+					title="左侧"
+				>
+					<PanelLeft class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$tabBarLayout === 'right' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setTabBarLayout('right')}
+					title="右侧"
+				>
+					<PanelRight class="h-4 w-4" />
+				</Button>
+			</div>
+		</div>
+
+		<!-- 面包屑位置 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<Navigation class="h-4 w-4 text-muted-foreground" />
+				<span class="text-sm">面包屑</span>
+				<span class="text-xs text-muted-foreground ml-auto">
+					{$breadcrumbPosition === 'none' ? '隐藏' : 
+					 $breadcrumbPosition === 'top' ? '顶部' :
+					 $breadcrumbPosition === 'bottom' ? '底部' :
+					 $breadcrumbPosition === 'left' ? '左侧' : '右侧'}
+				</span>
+			</div>
+			<div class="flex justify-center gap-1">
+				<Button
+					variant={$breadcrumbPosition === 'none' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setBreadcrumbPosition('none')}
+					title="隐藏"
+				>
+					<EyeOff class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$breadcrumbPosition === 'top' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setBreadcrumbPosition('top')}
+					title="顶部"
+				>
+					<PanelTop class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$breadcrumbPosition === 'bottom' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setBreadcrumbPosition('bottom')}
+					title="底部"
+				>
+					<PanelBottom class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$breadcrumbPosition === 'left' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setBreadcrumbPosition('left')}
+					title="左侧"
+				>
+					<PanelLeft class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$breadcrumbPosition === 'right' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setBreadcrumbPosition('right')}
+					title="右侧"
+				>
+					<PanelRight class="h-4 w-4" />
+				</Button>
+			</div>
+		</div>
+
+		<!-- 工具栏位置 -->
+		<div class="space-y-2">
+			<div class="flex items-center gap-2">
+				<Wrench class="h-4 w-4 text-muted-foreground" />
+				<span class="text-sm">工具栏</span>
+				<span class="text-xs text-muted-foreground ml-auto">
+					{$toolbarPosition === 'none' ? '隐藏' : 
+					 $toolbarPosition === 'top' ? '顶部' :
+					 $toolbarPosition === 'bottom' ? '底部' :
+					 $toolbarPosition === 'left' ? '左侧' : '右侧'}
+				</span>
+			</div>
+			<div class="flex justify-center gap-1">
+				<Button
+					variant={$toolbarPosition === 'none' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setToolbarPosition('none')}
+					title="隐藏"
+				>
+					<EyeOff class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$toolbarPosition === 'top' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setToolbarPosition('top')}
+					title="顶部"
+				>
+					<PanelTop class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$toolbarPosition === 'bottom' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setToolbarPosition('bottom')}
+					title="底部"
+				>
+					<PanelBottom class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$toolbarPosition === 'left' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setToolbarPosition('left')}
+					title="左侧"
+				>
+					<PanelLeft class="h-4 w-4" />
+				</Button>
+				<Button
+					variant={$toolbarPosition === 'right' ? 'default' : 'outline'}
+					size="sm"
+					class="h-8 w-8 p-0"
+					onclick={() => folderTabActions.setToolbarPosition('right')}
+					title="右侧"
+				>
+					<PanelRight class="h-4 w-4" />
+				</Button>
+			</div>
+		</div>
+	</div>
+
 	<!-- 自动隐藏时间设置 -->
 	<div class="mt-4 grid grid-cols-2 gap-4 rounded-lg border bg-card/40 p-4">
 		<div class="space-y-2">

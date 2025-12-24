@@ -35,7 +35,7 @@ export const PANEL_DEFINITIONS = {
 		icon: History,
 		emoji: '📚',
 		defaultPosition: 'left' as PanelPosition,
-		defaultVisible: true,
+		defaultVisible: false, // 默认隐藏
 		defaultOrder: 1,
 		canMove: true,
 		canHide: true,
@@ -46,7 +46,7 @@ export const PANEL_DEFINITIONS = {
 		icon: Bookmark,
 		emoji: '🔖',
 		defaultPosition: 'left' as PanelPosition,
-		defaultVisible: true,
+		defaultVisible: false, // 默认隐藏
 		defaultOrder: 2,
 		canMove: true,
 		canHide: true,

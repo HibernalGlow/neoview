@@ -182,6 +182,7 @@ function loadSharedTabBarSettings(): SharedTabBarSettings {
 	} catch (e) {
 		console.error('[FolderTabStore] Failed to load shared tab bar settings:', e);
 	}
+	// 默认隐藏标签页和面包屑
 	return {
 		tabBarLayout: 'none',
 		tabBarWidth: 160,

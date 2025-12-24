@@ -34,15 +34,55 @@ const selectedItems = tabSelectedItems;
 const multiSelectMode = tabMultiSelectMode;
 const deleteMode = tabDeleteMode;
 
+// ============ 随机排序种子缓存 ============
+const randomSeedCache = new Map<string, number>();
+const MAX_SEED_CACHE_SIZE = 100;
+
+function getRandomSeedForPath(path: string): number {
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+	if (randomSeedCache.has(normalizedPath)) {
+		return randomSeedCache.get(normalizedPath)!;
+	}
+	const seed = Math.random() * 2147483647 | 0;
+	if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+		const firstKey = randomSeedCache.keys().next().value;
+		if (firstKey) randomSeedCache.delete(firstKey);
+	}
+	randomSeedCache.set(normalizedPath, seed);
+	return seed;
+}
+
+function seededRandom(seed: number): () => number {
+	return function() {
+		let t = seed += 0x6D2B79F5;
+		t = Math.imul(t ^ t >>> 15, t | 1);
+		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+
+function seededShuffle<T>(items: T[], seed: number): T[] {
+	const shuffled = [...items];
+	const random = seededRandom(seed);
+	for (let i = shuffled.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	}
+	return shuffled;
+}
+
 // sortedItems 需要从 tabItems 派生
-function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
+// path 参数用于随机排序种子记忆
+function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder, path?: string): FsItem[] {
+	// 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
 	if (field === 'random') {
-		const shuffled = [...items];
-		for (let i = shuffled.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-		}
-		return shuffled;
+		const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
+		const folders = items.filter(item => item.isDir);
+		const files = items.filter(item => !item.isDir);
+		const shuffledFolders = seededShuffle(folders, seed);
+		const shuffledFiles = seededShuffle(files, seed + 1);
+		const result = [...shuffledFolders, ...shuffledFiles];
+		return order === 'asc' ? result : result.reverse();
 	}
 	if (field === 'rating') {
 		const defaultRating = getDefaultRating();
@@ -74,8 +114,9 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 	});
 }
 
-const sortedItems = derived([tabItems, tabSortConfig], ([$items, $config]) => {
-	return sortItems($items, $config.field, $config.order);
+// 传入 currentPath 以支持随机排序种子记忆
+const sortedItems = derived([tabItems, tabSortConfig, tabCurrentPath], ([$items, $config, $path]) => {
+	return sortItems($items, $config.field, $config.order, $path);
 });
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';

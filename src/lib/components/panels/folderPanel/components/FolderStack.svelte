@@ -63,6 +63,44 @@
 	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 
+	// ============ 随机排序种子缓存 ============
+	// 为每个目录路径缓存随机种子，确保返回上级后随机顺序不变
+	const randomSeedCache = new Map<string, number>();
+	const MAX_SEED_CACHE_SIZE = 100;
+
+	function getRandomSeedForPath(path: string): number {
+		const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+		if (randomSeedCache.has(normalizedPath)) {
+			return randomSeedCache.get(normalizedPath)!;
+		}
+		const seed = Math.random() * 2147483647 | 0;
+		if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+			const firstKey = randomSeedCache.keys().next().value;
+			if (firstKey) randomSeedCache.delete(firstKey);
+		}
+		randomSeedCache.set(normalizedPath, seed);
+		return seed;
+	}
+
+	function seededRandom(seed: number): () => number {
+		return function() {
+			let t = seed += 0x6D2B79F5;
+			t = Math.imul(t ^ t >>> 15, t | 1);
+			t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+			return ((t ^ t >>> 14) >>> 0) / 4294967296;
+		};
+	}
+
+	function seededShuffle<T>(items: T[], seed: number): T[] {
+		const shuffled = [...items];
+		const random = seededRandom(seed);
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+		return shuffled;
+	}
+
 	export interface NavigationCommand {
 		type: 'init' | 'push' | 'pop' | 'goto' | 'history';
 		path?: string;
@@ -204,15 +242,22 @@
 	});
 
 	// 排序函数 - skipFolderFirst 用于虚拟路径，让文件夹和文件平等排序
-	function sortItems(items: FsItem[], field: string, order: string, skipFolderFirst = false): FsItem[] {
-		// 随机排序特殊处理
+	// path 参数用于随机排序种子记忆
+	function sortItems(items: FsItem[], field: string, order: string, skipFolderFirst = false, path?: string): FsItem[] {
+		// 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
 		if (field === 'random') {
-			const shuffled = [...items];
-			for (let i = shuffled.length - 1; i > 0; i--) {
-				const j = Math.floor(Math.random() * (i + 1));
-				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+			const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
+			if (skipFolderFirst) {
+				// 虚拟路径：文件夹和文件一起随机
+				return seededShuffle(items, seed);
 			}
-			return shuffled;
+			// 普通路径：文件夹和文件分开随机，保持文件夹在前
+			const folders = items.filter(item => item.isDir);
+			const files = items.filter(item => !item.isDir);
+			const shuffledFolders = seededShuffle(folders, seed);
+			const shuffledFiles = seededShuffle(files, seed + 1);
+			const result = [...shuffledFolders, ...shuffledFiles];
+			return order === 'asc' ? result : result.reverse();
 		}
 
 		// rating 排序特殊处理
@@ -314,7 +359,8 @@
 		// 搜索结果现在也通过 FolderStack 显示，不需要额外过滤
 		// 虚拟路径下文件夹和文件平等排序
 		const skipFolderFirst = isVirtualPath(layer.path);
-		result = sortItems(result, config.field, config.order, skipFolderFirst);
+		// 传入 layer.path 以支持随机排序种子记忆
+		result = sortItems(result, config.field, config.order, skipFolderFirst, layer.path);
 		return result;
 	}
 

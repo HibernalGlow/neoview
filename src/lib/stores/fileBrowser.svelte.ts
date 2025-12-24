@@ -81,6 +81,69 @@ function isBookCandidate(item: FsItem): boolean {
   return isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
+// ============ 随机排序种子缓存 ============
+// 为每个目录路径缓存随机种子，确保返回上级后随机顺序不变
+const randomSeedCache = new Map<string, number>();
+const MAX_SEED_CACHE_SIZE = 100;
+
+/**
+ * 获取或创建目录的随机种子
+ */
+function getRandomSeedForPath(path: string): number {
+  const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+  
+  if (randomSeedCache.has(normalizedPath)) {
+    return randomSeedCache.get(normalizedPath)!;
+  }
+  
+  // 生成新种子
+  const seed = Math.random() * 2147483647 | 0;
+  
+  // 缓存大小限制，删除最早的
+  if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+    const firstKey = randomSeedCache.keys().next().value;
+    if (firstKey) randomSeedCache.delete(firstKey);
+  }
+  
+  randomSeedCache.set(normalizedPath, seed);
+  return seed;
+}
+
+/**
+ * 清除目录的随机种子（用于强制重新随机）
+ */
+export function clearRandomSeedForPath(path: string): void {
+  const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+  randomSeedCache.delete(normalizedPath);
+}
+
+/**
+ * 使用种子的伪随机数生成器 (Mulberry32)
+ */
+function seededRandom(seed: number): () => number {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * 使用种子的 Fisher-Yates 洗牌算法
+ */
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const shuffled = [...items];
+  const random = seededRandom(seed);
+  
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  return shuffled;
+}
+
 function shuffleItems<T>(input: T[]): T[] {
   const list = [...input];
   for (let i = list.length - 1; i > 0; i--) {
@@ -183,12 +246,16 @@ function getItemType(item: FsItem): string {
   return '3_file';
 }
 
-export function sortItems(items: FsItem[], field: SortField, order: SortOrder): FsItem[] {
+export function sortItems(items: FsItem[], field: SortField, order: SortOrder, path?: string): FsItem[] {
+  // 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
   if (field === 'random') {
+    const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
     const folders = items.filter(item => item.isDir);
     const nonFolders = items.filter(item => !item.isDir);
-    const randomized = [...shuffleItems(folders), ...shuffleItems(nonFolders)];
-    return order === 'asc' ? randomized : randomized.reverse();
+    const shuffledFolders = seededShuffle(folders, seed);
+    const shuffledFiles = seededShuffle(nonFolders, seed + 1); // 文件用不同种子
+    const result = [...shuffledFolders, ...shuffledFiles];
+    return order === 'asc' ? result : result.reverse();
   }
 
   return [...items].sort((a, b) => {
@@ -348,10 +415,12 @@ function createFileBrowserStore() {
 
         try {
           const snapshot = await FileSystemAPI.loadDirectorySnapshot(parentPath);
+          // 传入 parentPath 以支持随机排序种子记忆
           const sortedItems = sortItems(
             snapshot.items,
             currentState.sortField,
-            currentState.sortOrder
+            currentState.sortOrder,
+            parentPath
           );
 
           update(state => ({

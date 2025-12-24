@@ -29,6 +29,69 @@ export interface FolderHistoryEntry {
 	sortOrder: FolderSortOrder;
 }
 
+// ============ 随机排序种子缓存 ============
+// 为每个目录路径缓存随机种子，确保返回上级后随机顺序不变
+const randomSeedCache = new Map<string, number>();
+const MAX_SEED_CACHE_SIZE = 100; // 最多缓存 100 个目录的种子
+
+/**
+ * 获取或创建目录的随机种子
+ */
+function getRandomSeedForPath(path: string): number {
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+	
+	if (randomSeedCache.has(normalizedPath)) {
+		return randomSeedCache.get(normalizedPath)!;
+	}
+	
+	// 生成新种子
+	const seed = Math.random() * 2147483647 | 0;
+	
+	// 缓存大小限制，删除最早的
+	if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+		const firstKey = randomSeedCache.keys().next().value;
+		if (firstKey) randomSeedCache.delete(firstKey);
+	}
+	
+	randomSeedCache.set(normalizedPath, seed);
+	return seed;
+}
+
+/**
+ * 清除目录的随机种子（用于强制重新随机）
+ */
+export function clearRandomSeedForPath(path: string): void {
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+	randomSeedCache.delete(normalizedPath);
+}
+
+/**
+ * 使用种子的伪随机数生成器 (Mulberry32)
+ */
+function seededRandom(seed: number): () => number {
+	return function() {
+		let t = seed += 0x6D2B79F5;
+		t = Math.imul(t ^ t >>> 15, t | 1);
+		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+
+/**
+ * 使用种子的 Fisher-Yates 洗牌算法
+ */
+function seededShuffle<T>(items: T[], seed: number): T[] {
+	const shuffled = [...items];
+	const random = seededRandom(seed);
+	
+	for (let i = shuffled.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	}
+	
+	return shuffled;
+}
+
 export interface FolderPanelState {
 	// 当前路径
 	currentPath: string;
@@ -237,7 +300,7 @@ export const items = derived(state, ($state) => $state.items);
 
 // 排序后的文件列表
 export const sortedItems = derived(state, ($state) => {
-	return sortItems($state.items, $state.sortField, $state.sortOrder);
+	return sortItems($state.items, $state.sortField, $state.sortOrder, $state.currentPath);
 });
 
 // 选中项
@@ -329,16 +392,17 @@ export const itemCount = derived(state, ($state) => $state.items.length);
 
 // ============ Helper Functions ============
 
-function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder): FsItem[] {
-	// 随机排序特殊处理
+function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrder, path?: string): FsItem[] {
+	// 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
 	if (field === 'random') {
-		const shuffled = [...items];
-		// Fisher-Yates 洗牌算法
-		for (let i = shuffled.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-		}
-		return shuffled;
+		const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
+		// 文件夹和文件分开随机，保持文件夹在前
+		const folders = items.filter(item => item.isDir);
+		const files = items.filter(item => !item.isDir);
+		const shuffledFolders = seededShuffle(folders, seed);
+		const shuffledFiles = seededShuffle(files, seed + 1); // 文件用不同种子
+		const result = [...shuffledFolders, ...shuffledFiles];
+		return order === 'asc' ? result : result.reverse();
 	}
 
 	// rating 排序：使用 folderRatingStore.getEffectiveRating 获取评分
@@ -1012,7 +1076,8 @@ export const folderPanelActions = {
 		
 		if (itemsToUse.length === 0) return null;
 		
-		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder);
+		// 传入 currentPath 以支持随机排序种子记忆
+		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, currentState.currentPath);
 		const bookItems = sortedItemList.filter(isBookCandidate);
 		
 		if (bookItems.length === 0) return null;
@@ -1041,10 +1106,10 @@ export const folderPanelActions = {
 	async findAdjacentBookPathAsync(currentBookPath: string | null, direction: 'next' | 'previous'): Promise<string | null> {
 		const currentState = get(state);
 		let itemsToUse = currentState.items;
+		let dirPath = currentState.currentPath;
 		
 		// 如果 items 为空，尝试从文件系统加载
 		if (itemsToUse.length === 0) {
-			let dirPath = currentState.currentPath;
 			if (!dirPath && currentBookPath) {
 				const normalized = currentBookPath.replace(/\\/g, '/');
 				const lastSlash = normalized.lastIndexOf('/');
@@ -1066,7 +1131,8 @@ export const folderPanelActions = {
 		
 		if (itemsToUse.length === 0) return null;
 		
-		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder);
+		// 传入 dirPath 以支持随机排序种子记忆
+		const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, dirPath);
 		const bookItems = sortedItemList.filter(isBookCandidate);
 		
 		if (bookItems.length === 0) return null;

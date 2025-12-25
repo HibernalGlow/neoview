@@ -1,16 +1,8 @@
 /**
- * PreDecodeCache - 预解码缓存
+ * PreDecodeCache - 预解码缓存（Svelte 5 响应式）
  * 
  * 存储已解码的 HTMLImageElement，避免翻页时重复解码
- * 
- * 核心原理：
- * - 浏览器对同一个 URL 的图片有解码缓存
- * - 调用 img.decode() 后，浏览器会在后台完成解码
- * - 再次使用相同 URL 时，浏览器直接使用已解码的数据
- * 
- * 参考 OpenComic 的实现：
- * - rendered[index] = scale; // 标记已渲染
- * - await img.decode(); // 确保解码完成
+ * 使用 $state version 触发响应式更新
  */
 
 import { isAnimatedImage } from '$lib/utils/imageUtils';
@@ -45,10 +37,13 @@ export interface PreDecodeCacheStats {
 }
 
 // ============================================================================
-// PreDecodeCache 类
+// PreDecodeCacheStore 类（响应式）
 // ============================================================================
 
-export class PreDecodeCache {
+class PreDecodeCacheStore {
+  /** 响应式版本号，用于触发 UI 更新 */
+  version = $state(0);
+  
   /** 缓存: pageIndex -> PreDecodedEntry */
   private cache = new Map<number, PreDecodedEntry>();
   
@@ -71,6 +66,11 @@ export class PreDecodeCache {
     this.maxSize = maxSize;
   }
   
+  /** 递增版本号，触发响应式更新 */
+  private bumpVersion(): void {
+    this.version++;
+  }
+  
   /**
    * 设置当前书籍（切书时清空缓存）
    */
@@ -83,13 +83,10 @@ export class PreDecodeCache {
   
   /**
    * 获取预解码的图片
-   * @param pageIndex 页面索引
-   * @returns 已解码的图片元素，如果未缓存返回 null
    */
   get(pageIndex: number): PreDecodedEntry | null {
     const entry = this.cache.get(pageIndex);
     if (entry) {
-      // 更新时间戳（LRU）
       entry.timestamp = Date.now();
       this.hits++;
       return entry;
@@ -100,8 +97,6 @@ export class PreDecodeCache {
   
   /**
    * 获取预解码的 URL
-   * @param pageIndex 页面索引
-   * @returns Blob URL，如果未缓存返回 undefined
    */
   getUrl(pageIndex: number): string | undefined {
     const entry = this.cache.get(pageIndex);
@@ -130,34 +125,24 @@ export class PreDecodeCache {
   
   /**
    * 预解码并缓存
-   * 
-   * @param pageIndex 页面索引
-   * @param url Blob URL
-   * @param skipAnimated 是否跳过动图（默认 true）
-   * @returns Promise<PreDecodedEntry | null>
    */
   async preDecodeAndCache(
     pageIndex: number, 
     url: string,
     skipAnimated = true
   ): Promise<PreDecodedEntry | null> {
-    // 已缓存，直接返回
     if (this.cache.has(pageIndex)) {
       return this.cache.get(pageIndex)!;
     }
     
-    // 正在预解码，等待完成
     if (this.pending.has(pageIndex)) {
-      // 等待一小段时间后重试
       await new Promise(resolve => setTimeout(resolve, 50));
       return this.cache.get(pageIndex) ?? null;
     }
     
-    // 标记为正在预解码
     this.pending.add(pageIndex);
     
     try {
-      // 检查是否为动图（动图不预解码，保持动画）
       if (skipAnimated) {
         const isAnimated = await isAnimatedImage(url);
         if (isAnimated) {
@@ -166,16 +151,13 @@ export class PreDecodeCache {
         }
       }
       
-      // 创建图片元素
       const img = new Image();
       img.src = url;
       
-      // 等待解码完成
       const startTime = performance.now();
       await img.decode();
       const decodeTime = performance.now() - startTime;
       
-      // 创建缓存条目
       const entry: PreDecodedEntry = {
         img,
         url,
@@ -184,18 +166,14 @@ export class PreDecodeCache {
         height: img.naturalHeight,
       };
       
-      // 检查缓存是否已满，需要淘汰
       if (this.cache.size >= this.maxSize) {
         this.evictLRU();
       }
       
-      // 存入缓存
       this.cache.set(pageIndex, entry);
       
-      // 触发状态变化事件（通知 UI 更新）
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('predecode-change', { detail: { pageIndex } }));
-      }
+      // 触发响应式更新
+      this.bumpVersion();
       
       console.log(`✅ 预解码完成: 页码 ${pageIndex + 1}, 耗时 ${decodeTime.toFixed(1)}ms, 尺寸 ${entry.width}x${entry.height}`);
       
@@ -225,10 +203,10 @@ export class PreDecodeCache {
     if (oldestKey !== null) {
       const entry = this.cache.get(oldestKey);
       if (entry) {
-        // 释放图片引用
         entry.img.src = '';
       }
       this.cache.delete(oldestKey);
+      this.bumpVersion();
       console.log(`🗑️ 淘汰预解码缓存: 页码 ${oldestKey + 1}`);
     }
   }
@@ -237,7 +215,6 @@ export class PreDecodeCache {
    * 清除所有缓存
    */
   clear(): void {
-    // 释放所有图片引用
     for (const entry of this.cache.values()) {
       entry.img.src = '';
     }
@@ -245,6 +222,7 @@ export class PreDecodeCache {
     this.pending.clear();
     this.hits = 0;
     this.misses = 0;
+    this.bumpVersion();
     console.log('🧹 预解码缓存已清空');
   }
   
@@ -267,7 +245,6 @@ export class PreDecodeCache {
    */
   setMaxSize(maxSize: number): void {
     this.maxSize = maxSize;
-    // 如果当前缓存超出新限制，淘汰多余的
     while (this.cache.size > this.maxSize) {
       this.evictLRU();
     }
@@ -278,4 +255,4 @@ export class PreDecodeCache {
 // 单例导出
 // ============================================================================
 
-export const preDecodeCache = new PreDecodeCache();
+export const preDecodeCache = new PreDecodeCacheStore();

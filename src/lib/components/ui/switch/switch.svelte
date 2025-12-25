@@ -6,13 +6,21 @@
 		ref = $bindable(null),
 		class: className,
 		checked = $bindable(false),
+		onCheckedChange,
 		...restProps
 	}: WithoutChildrenOrChild<SwitchPrimitive.RootProps> = $props();
+
+	// 处理 checked 变化，同时支持 bind:checked 和 onCheckedChange
+	function handleCheckedChange(newChecked: boolean) {
+		checked = newChecked;
+		onCheckedChange?.(newChecked);
+	}
 </script>
 
 <SwitchPrimitive.Root
 	bind:ref
-	bind:checked
+	{checked}
+	onCheckedChange={handleCheckedChange}
 	data-slot="switch"
 	class={cn(
 		"data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:border-ring focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 shadow-xs peer inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent outline-none transition-all focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",

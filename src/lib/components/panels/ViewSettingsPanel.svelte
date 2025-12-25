@@ -297,10 +297,18 @@
 			<div class="space-y-3 pl-6">
 				<!-- 自动隐藏光标 -->
 				<div class="space-y-2">
-					<label class="flex items-center gap-2">
-						<Switch bind:checked={currentSettings.view.mouseCursor.autoHide} />
-						<span class="text-sm font-medium">自动隐藏光标</span>
-					</label>
+					<div class="flex items-center justify-between gap-2">
+						<Label class="text-sm">自动隐藏光标</Label>
+						<Switch
+							checked={currentSettings.view.mouseCursor.autoHide}
+							onCheckedChange={(checked) => {
+								const latest = settingsManager.getSettings();
+								settingsManager.updateNestedSettings('view', {
+									mouseCursor: { ...latest.view.mouseCursor, autoHide: checked }
+								});
+							}}
+						/>
+					</div>
 					<p class="text-muted-foreground text-xs">
 						没有鼠标操作时隐藏光标。如果在设定时间内未操作鼠标，则隐藏光标。
 					</p>
@@ -317,7 +325,16 @@
 									min="0.5"
 									max="5.0"
 									step="0.1"
-									bind:value={currentSettings.view.mouseCursor.hideDelay}
+									value={currentSettings.view.mouseCursor.hideDelay}
+									oninput={(e) => {
+										const val = parseFloat((e.target as HTMLInputElement).value);
+										if (!Number.isNaN(val)) {
+											const latest = settingsManager.getSettings();
+											settingsManager.updateNestedSettings('view', {
+												mouseCursor: { ...latest.view.mouseCursor, hideDelay: Math.max(0.5, Math.min(val, 5.0)) }
+											});
+										}
+									}}
 									class="w-20"
 								/>
 								<span class="text-muted-foreground text-xs">秒</span>
@@ -327,7 +344,13 @@
 							min={0.5}
 							max={5.0}
 							step={0.1}
-							bind:value={currentSettings.view.mouseCursor.hideDelay as any}
+							value={currentSettings.view.mouseCursor.hideDelay as any}
+							onValueChange={(v) => {
+								const latest = settingsManager.getSettings();
+								settingsManager.updateNestedSettings('view', {
+									mouseCursor: { ...latest.view.mouseCursor, hideDelay: Array.isArray(v) ? v[0] : v }
+								});
+							}}
 							class="w-full max-w-xs"
 							type="single"
 						/>
@@ -343,7 +366,16 @@
 									min="5"
 									max="100"
 									step="1"
-									bind:value={currentSettings.view.mouseCursor.showMovementThreshold}
+									value={currentSettings.view.mouseCursor.showMovementThreshold}
+									oninput={(e) => {
+										const val = parseInt((e.target as HTMLInputElement).value, 10);
+										if (!Number.isNaN(val)) {
+											const latest = settingsManager.getSettings();
+											settingsManager.updateNestedSettings('view', {
+												mouseCursor: { ...latest.view.mouseCursor, showMovementThreshold: Math.max(5, Math.min(val, 100)) }
+											});
+										}
+									}}
 									class="w-20"
 								/>
 								<span class="text-muted-foreground text-xs">像素</span>
@@ -353,7 +385,13 @@
 							min={5}
 							max={100}
 							step={1}
-							bind:value={currentSettings.view.mouseCursor.showMovementThreshold as any}
+							value={currentSettings.view.mouseCursor.showMovementThreshold as any}
+							onValueChange={(v) => {
+								const latest = settingsManager.getSettings();
+								settingsManager.updateNestedSettings('view', {
+									mouseCursor: { ...latest.view.mouseCursor, showMovementThreshold: Array.isArray(v) ? v[0] : v }
+								});
+							}}
 							class="w-full max-w-xs"
 							type="single"
 						/>
@@ -361,10 +399,18 @@
 
 					<!-- 操作鼠标按钮以重新显示 -->
 					<div class="space-y-2">
-						<label class="flex items-center gap-2">
-							<Switch bind:checked={currentSettings.view.mouseCursor.showOnButtonClick} />
-							<span class="text-sm">操作鼠标按钮以重新显示</span>
-						</label>
+						<div class="flex items-center justify-between gap-2">
+							<Label class="text-sm">操作鼠标按钮以重新显示</Label>
+							<Switch
+								checked={currentSettings.view.mouseCursor.showOnButtonClick}
+								onCheckedChange={(checked) => {
+									const latest = settingsManager.getSettings();
+									settingsManager.updateNestedSettings('view', {
+										mouseCursor: { ...latest.view.mouseCursor, showOnButtonClick: checked }
+									});
+								}}
+							/>
+						</div>
 					</div>
 				{/if}
 			</div>

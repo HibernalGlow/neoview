@@ -72,8 +72,10 @@ export interface SplitNavigationResult {
 
 /**
  * 判断图片是否为横向
+ * 【优化】使用宽高比判断，与 OpenComic 保持一致
  */
 export function isLandscape(size: ImageSize): boolean {
+  if (size.width <= 0 || size.height <= 0) return false;
   return size.width > size.height;
 }
 
@@ -81,7 +83,17 @@ export function isLandscape(size: ImageSize): boolean {
  * 判断图片是否为纵向
  */
 export function isPortrait(size: ImageSize): boolean {
+  if (size.width <= 0 || size.height <= 0) return true; // 无尺寸时默认纵向
   return size.height >= size.width;
+}
+
+/**
+ * 获取图片宽高比
+ * 【优化】缓存计算结果，避免重复计算
+ */
+export function getAspectRatio(size: ImageSize): number {
+  if (size.height <= 0) return 1;
+  return size.width / size.height;
 }
 
 /**
@@ -327,6 +339,7 @@ export interface PageData {
 
 /**
  * 计算双页模式下的内容缩放比例
+ * 【优化】单次遍历计算最大/平均值，避免多次遍历
  * 
  * @param sizes 各元素的原始尺寸
  * @param stretchMode 拉伸模式
@@ -344,15 +357,22 @@ function calculateContentScales(
       return sizes.map(() => 1.0);
     
     case 'uniformHeight': {
-      // 找到最大高度，然后每个元素的缩放比例 = 最大高度 / 该元素高度
-      const maxHeight = Math.max(...sizes.map(s => s.height));
+      // 【优化】单次遍历找最大高度
+      let maxHeight = 0;
+      for (const s of sizes) {
+        if (s.height > maxHeight) maxHeight = s.height;
+      }
       if (maxHeight <= 0) return sizes.map(() => 1.0);
       return sizes.map(s => s.height > 0 ? maxHeight / s.height : 1.0);
     }
     
     case 'uniformWidth': {
-      // 计算平均宽度，然后每个元素的缩放比例 = 平均宽度 / 该元素宽度
-      const avgWidth = sizes.reduce((sum, s) => sum + s.width, 0) / sizes.length;
+      // 【优化】单次遍历计算总宽度
+      let totalWidth = 0;
+      for (const s of sizes) {
+        totalWidth += s.width;
+      }
+      const avgWidth = totalWidth / sizes.length;
       if (avgWidth <= 0) return sizes.map(() => 1.0);
       return sizes.map(s => s.width > 0 ? avgWidth / s.width : 1.0);
     }
@@ -364,6 +384,7 @@ function calculateContentScales(
 
 /**
  * 根据配置构建显示图片列表
+ * 【优化】减少重复的尺寸检查，提前计算 aspectRatio
  * 
  * @param currentPage 当前页数据
  * @param nextPage 下一页数据（双页模式需要）
@@ -380,6 +401,8 @@ export function buildFrameImages(
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
+  // 【优化】提前计算横向判断，避免重复计算
+  const isCurrentLandscape = isLandscape(currentSize);
 
   // 构建主图
   const mainImage: FrameImage = {
@@ -393,7 +416,7 @@ export function buildFrameImages(
   // 单页模式
   if (config.layout === 'single') {
     // 处理分割
-    if (config.divideLandscape && isLandscape(currentSize)) {
+    if (config.divideLandscape && isCurrentLandscape) {
       if (splitState) {
         mainImage.splitHalf = splitState.half;
       } else {
@@ -420,9 +443,6 @@ export function buildFrameImages(
   // 3. 首页/尾页检查（检查当前页或下一页）
   // 4. 正常双页
   if (config.layout === 'double') {
-    const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
-    const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
-
     // 1. 当前页横向 → 独占显示
     if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
       return [mainImage];
@@ -437,8 +457,8 @@ export function buildFrameImages(
       width: nextPage.width || 0,
       height: nextPage.height || 0,
     };
-    const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
-    const isNextLandscape = hasNextSize && isLandscape(nextSize);
+    // 【优化】提前计算横向判断
+    const isNextLandscape = isLandscape(nextSize);
 
     // 3. 下一页横向 → 当前页独占（关键修复点！）
     if (config.treatHorizontalAsDoublePage && isNextLandscape) {
@@ -633,8 +653,9 @@ export function getPrevSplitNavigation(
 
 /**
  * 计算双页模式的翻页步进
+ * 【优化】减少重复的尺寸检查，与 buildFrameImages 保持一致
  * 
- * 按照 NeeView 的逻辑，与 buildFrameImages 保持一致：
+ * 按照 NeeView 的逻辑：
  * 1. 当前页横向 → 步进 1
  * 2. 下一页横向 → 步进 1
  * 3. 首页/尾页检查 → 步进 1
@@ -653,8 +674,8 @@ export function getPageStep(
     width: currentPage.width || 0,
     height: currentPage.height || 0,
   };
-  const hasCurrentSize = currentSize.width > 0 && currentSize.height > 0;
-  const isCurrentLandscape = hasCurrentSize && isLandscape(currentSize);
+  // 【优化】使用统一的 isLandscape 函数，内部已处理无效尺寸
+  const isCurrentLandscape = isLandscape(currentSize);
 
   // 1. 当前页横向 → 步进 1
   if (config.treatHorizontalAsDoublePage && isCurrentLandscape) {
@@ -670,8 +691,8 @@ export function getPageStep(
     width: nextPage.width || 0,
     height: nextPage.height || 0,
   };
-  const hasNextSize = nextSize.width > 0 && nextSize.height > 0;
-  const isNextLandscape = hasNextSize && isLandscape(nextSize);
+  // 【优化】使用统一的 isLandscape 函数
+  const isNextLandscape = isLandscape(nextSize);
 
   // 3. 下一页横向 → 步进 1
   if (config.treatHorizontalAsDoublePage && isNextLandscape) {

@@ -57,6 +57,8 @@
 		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
 		// 穿透模式：内部压缩包信息列表（支持多个）
 		penetrateInfoList?: Array<{ originalName: string; translatedTitle?: string | null; isAiTranslated: boolean }>;
+		// 穿透模式：纯媒体文件夹（只包含图片/视频/文本，点击直接作为 book 打开）
+		isPureMediaFolder?: boolean;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
 		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean; isManual?: boolean }[];
@@ -101,6 +103,7 @@
 		isReadCompleted,
 		emmMetadata,
 		penetrateInfoList = [],
+		isPureMediaFolder = false,
 		folderAverageRating,
 		folderManualRating,
 		displayTags,
@@ -290,6 +293,18 @@
 								</span>
 							</Tooltip.Trigger>
 							<Tooltip.Content><p>视频数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<!-- 纯媒体文件夹标识（穿透模式下点击直接打开） -->
+					{#if isPureMediaFolder}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span class="bg-primary/20 text-primary inline-flex items-center gap-1 rounded-md px-2 py-0.5 border border-primary/30">
+									<Image class="h-3 w-3" />
+									<span class="font-medium text-xs">媒体</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>纯媒体文件夹，点击直接打开</p></Tooltip.Content>
 						</Tooltip.Root>
 					{/if}
 					{#if getEffectiveRating() !== null || item.isDir}

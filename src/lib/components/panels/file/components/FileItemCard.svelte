@@ -158,6 +158,8 @@
 		translatedTitle?: string;
 		isAiTranslated?: boolean;
 	}>>([]);
+	// 穿透模式：纯媒体文件夹（只包含图片/视频/文本，不包含压缩包和子文件夹）
+	let isPureMediaFolder = $state(false);
 
 	// 订阅穿透模式
 	$effect(() => {
@@ -176,6 +178,23 @@
 		return unsubscribe;
 	});
 
+	// 辅助函数：判断是否为媒体文件（图片/视频/文本）
+	function isMediaFile(name: string): boolean {
+		const ext = name.split('.').pop()?.toLowerCase() || '';
+		// 图片格式
+		const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff', 'svg', 'ico'];
+		// 视频格式
+		const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'];
+		// 文本格式
+		const textExts = ['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'ts', 'log'];
+		return imageExts.includes(ext) || videoExts.includes(ext) || textExts.includes(ext);
+	}
+
+	// 辅助函数：判断是否为压缩包
+	function isArchiveFile(name: string): boolean {
+		return /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(name);
+	}
+
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
 		// 在 effect 开始时读取所有依赖，确保被追踪
@@ -188,18 +207,21 @@
 		// 不是文件夹则跳过
 		if (!isDir) {
 			penetrateChildFiles = [];
+			isPureMediaFolder = false;
 			return;
 		}
 		
 		// 配置为 'none' 时不显示
 		if (showMode === 'none') {
 			penetrateChildFiles = [];
+			isPureMediaFolder = false;
 			return;
 		}
 
 		// 配置为 'penetrate' 时只在穿透模式开启时显示
 		if (showMode === 'penetrate' && !isPenetrate) {
 			penetrateChildFiles = [];
+			isPureMediaFolder = false;
 			return;
 		}
 
@@ -207,8 +229,17 @@
 		const timeoutId = setTimeout(() => {
 			// 加载文件夹内容
 			FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
+			// 检测是否为纯媒体文件夹（只包含媒体文件，不包含压缩包和子文件夹）
+			const hasSubDir = children.some(c => c.isDir);
+			const hasArchive = children.some(c => !c.isDir && isArchiveFile(c.name));
+			const mediaFiles = children.filter(c => !c.isDir && isMediaFile(c.name));
+			const allFilesAreMedia = children.filter(c => !c.isDir).every(c => isMediaFile(c.name));
+			
+			// 纯媒体文件夹：无子文件夹、无压缩包、所有文件都是媒体文件、且至少有一个媒体文件
+			isPureMediaFolder = !hasSubDir && !hasArchive && allFilesAreMedia && mediaFiles.length > 0;
+			
 			// 过滤出压缩包文件
-			const archives = children.filter(c => !c.isDir && /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(c.name));
+			const archives = children.filter(c => !c.isDir && isArchiveFile(c.name));
 			
 			// countMode: 'single' 只处理单个压缩包，'all' 处理所有
 			if (countMode === 'single' && archives.length !== 1) {
@@ -279,6 +310,7 @@
 			});
 		}).catch(() => {
 				penetrateChildFiles = [];
+				isPureMediaFolder = false;
 			});
 		}, 50); // 50ms 延迟，让主列表先渲染
 		
@@ -691,6 +723,7 @@
 		{isReadCompleted}
 		emmMetadata={mergedEmmMetadata}
 		penetrateInfoList={penetrateInfoList}
+		{isPureMediaFolder}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}
@@ -699,7 +732,14 @@
 		{previewLoading}
 		{previewItems}
 		bind:previewIconElement
-		{onClick}
+		onClick={() => {
+			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开
+			if (penetrateModeEnabled && isPureMediaFolder && item.isDir) {
+				onOpenAsBook?.();
+			} else {
+				onClick?.();
+			}
+		}}
 		{onContextMenu}
 		{onToggleSelection}
 		{onDelete}
@@ -733,11 +773,19 @@
 		{isArchive}
 		{isReadCompleted}
 		emmMetadata={mergedEmmMetadata}
+		{isPureMediaFolder}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
 		{displayTags}
 		{getEffectiveRating}
-		{onClick}
+		onClick={() => {
+			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开
+			if (penetrateModeEnabled && isPureMediaFolder && item.isDir) {
+				onOpenAsBook?.();
+			} else {
+				onClick?.();
+			}
+		}}
 		{onContextMenu}
 		{onOpenAsBook}
 		onSetRating={handleSetRating}

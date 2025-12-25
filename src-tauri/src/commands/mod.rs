@@ -28,6 +28,7 @@ pub mod ollama_commands;
 pub mod stream_commands;
 pub mod metadata_commands;
 pub mod protocol_commands;
+pub mod streaming_commands;
 
 pub use archive_cache_commands::*;
 pub use book_commands::*;
@@ -52,3 +53,4 @@ pub use ollama_commands::*;
 pub use stream_commands::*;
 pub use metadata_commands::*;
 pub use protocol_commands::*;
+pub use streaming_commands::*;

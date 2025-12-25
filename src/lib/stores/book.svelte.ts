@@ -31,6 +31,7 @@ import type {
   SwitchToastPageContext,
   ContentRef,
 } from './book/types';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 
 // Re-export SwitchToastContext for external use
 export type { SwitchToastContext };
@@ -45,6 +46,23 @@ class BookStore {
     pathStack: [],
     singleFileMode: false,
     originalFilePath: null,
+  });
+
+  // 流式扫描状态
+  private streamingState = $state<{
+    /** 是否正在流式加载 */
+    isStreaming: boolean;
+    /** 已扫描的页面数 */
+    scannedCount: number;
+    /** 预估总页数 */
+    estimatedTotal: number | null;
+    /** 取消监听函数 */
+    unlisten: UnlistenFn | null;
+  }>({
+    isStreaming: false,
+    scannedCount: 0,
+    estimatedTotal: null,
+    unlisten: null,
   });
 
   // 每页超分状态映射: pageIndex -> 'none' | 'preupscaled' | 'done' | 'failed'
@@ -150,6 +168,19 @@ class BookStore {
     return this.state.originalFilePath;
   }
 
+  /** 是否正在流式加载 */
+  get isStreaming(): boolean {
+    return this.streamingState.isStreaming;
+  }
+
+  /** 流式加载进度 */
+  get streamingProgress(): { scanned: number; total: number | null } {
+    return {
+      scanned: this.streamingState.scannedCount,
+      total: this.streamingState.estimatedTotal,
+    };
+  }
+
   /**
    * 设置单文件模式
    * 用于视频/图片打开时正确记录历史
@@ -218,6 +249,8 @@ class BookStore {
 
   /**
    * 打开 Book (自动检测类型)
+   * 
+   * 对于压缩包类型，支持流式加载：先返回首批页面让 UI 响应，后台继续扫描
    */
   async openBook(path: string, options: OpenBookOptions = {}) {
     try {
@@ -234,54 +267,19 @@ class BookStore {
       this.state.pathStack = [{ path }];
       infoPanelStore.resetAll();
 
-      // 使用通用的 openBook API (它会自动检测类型)
-      const book = await bookApi.openBook(path);
-      console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+      // 取消之前的流式扫描
+      await this.cancelStreamingScan();
 
-      const targetPage = clampInitialPage(book.totalPages, options.initialPage);
-      book.currentPage = targetPage;
-
-      this.state.currentBook = book;
-      this.syncAppStateBookSlice();
-      this.state.viewerOpen = true;
+      // 检测是否为压缩包，决定是否使用流式打开
+      const isArchive = this.isArchivePath(path);
       
-      // 【优化】异步执行非阻塞操作，不等待
-      if (targetPage > 0 && book.totalPages > 0) {
-        bookApi.navigateToPage(targetPage).catch(navErr => {
-          console.error('❌ Error navigating to initial page after open:', navErr);
-        });
+      if (isArchive && options.useStreaming !== false) {
+        // 流式打开压缩包
+        await this.openBookStreaming(path, options);
+      } else {
+        // 普通打开
+        await this.openBookNormal(path, options);
       }
-      
-      // 【优化】异步同步信息面板，不阻塞
-      this.syncInfoPanelBookInfo().catch(() => {});
-      this.syncFileBrowserSelection(path);
-
-      // 【优化】异步添加历史记录，不阻塞（如果 skipHistory 为 true 则跳过）
-      if (!options.skipHistory) {
-        import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
-          const pathStack = this.buildPathStack();
-          console.log('📚 [History] Adding history:', { pathStack, targetPage, totalPages: book.totalPages, displayName: book.name });
-          unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
-        }).catch((err) => {
-          console.error('❌ [History] Failed to add history:', err);
-        });
-      }
-
-      this.showBookSwitchToastIfEnabled();
-
-      // 重置所有页面的超分状态
-      this.resetAllPageUpscaleStatus();
-
-      // 【优化】初始化预计算页面分布（O(1) 翻页查表）
-      import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
-        pageDistributionStore.initialize();
-        console.log('📊 页面分布已初始化，帧数:', pageDistributionStore.frameCount);
-      }).catch((err) => {
-        console.warn('⚠️ 页面分布初始化失败:', err);
-      });
-
-      // 触发重置预超分进度事件
-      window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
       console.error('❌ Error opening book:', err);
       this.state.error = String(err);
@@ -291,6 +289,190 @@ class BookStore {
       infoPanelStore.resetBookInfo();
     } finally {
       this.state.loading = false;
+    }
+  }
+
+  /**
+   * 检测路径是否为压缩包
+   */
+  private isArchivePath(path: string): boolean {
+    const ext = path.split('.').pop()?.toLowerCase() ?? '';
+    return ['zip', 'rar', '7z', 'cbz', 'cbr', 'cb7'].includes(ext);
+  }
+
+  /**
+   * 普通方式打开书籍（原有逻辑）
+   */
+  private async openBookNormal(path: string, options: OpenBookOptions) {
+    // 使用通用的 openBook API (它会自动检测类型)
+    const book = await bookApi.openBook(path);
+    console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+
+    const targetPage = clampInitialPage(book.totalPages, options.initialPage);
+    book.currentPage = targetPage;
+
+    this.state.currentBook = book;
+    this.syncAppStateBookSlice();
+    this.state.viewerOpen = true;
+    
+    // 【优化】异步执行非阻塞操作，不等待
+    if (targetPage > 0 && book.totalPages > 0) {
+      bookApi.navigateToPage(targetPage).catch(navErr => {
+        console.error('❌ Error navigating to initial page after open:', navErr);
+      });
+    }
+    
+    // 【优化】异步同步信息面板，不阻塞
+    this.syncInfoPanelBookInfo().catch(() => {});
+    this.syncFileBrowserSelection(path);
+
+    // 【优化】异步添加历史记录，不阻塞（如果 skipHistory 为 true 则跳过）
+    if (!options.skipHistory) {
+      import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+        const pathStack = this.buildPathStack();
+        console.log('📚 [History] Adding history:', { pathStack, targetPage, totalPages: book.totalPages, displayName: book.name });
+        unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
+      }).catch((err) => {
+        console.error('❌ [History] Failed to add history:', err);
+      });
+    }
+
+    this.showBookSwitchToastIfEnabled();
+
+    // 重置所有页面的超分状态
+    this.resetAllPageUpscaleStatus();
+
+    // 【优化】初始化预计算页面分布（O(1) 翻页查表）
+    import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
+      pageDistributionStore.initialize();
+      console.log('📊 页面分布已初始化，帧数:', pageDistributionStore.frameCount);
+    }).catch((err) => {
+      console.warn('⚠️ 页面分布初始化失败:', err);
+    });
+
+    // 触发重置预超分进度事件
+    window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
+  }
+
+  /**
+   * 流式打开压缩包
+   * 
+   * 1. 快速返回首批页面，让 UI 立即响应
+   * 2. 后台继续扫描，增量更新页面列表
+   */
+  private async openBookStreaming(path: string, options: OpenBookOptions) {
+    const { openBookStreaming, cancelStreamingScan } = await import('$lib/api/streaming');
+    
+    console.log('🚀 流式打开压缩包:', path);
+    this.streamingState.isStreaming = true;
+    this.streamingState.scannedCount = 0;
+    this.streamingState.estimatedTotal = null;
+
+    // 监听流式扫描进度
+    const unlisten = await openBookStreaming(
+      path,
+      // onInitial: 首批页面回调
+      async (result) => {
+        console.log('📦 首批页面:', result.initial_pages.length, '预估总数:', result.estimated_total);
+        
+        // 先用普通方式打开（获取完整的 Book 结构）
+        // 后端会使用缓存或快速扫描
+        const book = await bookApi.openBook(path);
+        
+        const targetPage = clampInitialPage(book.totalPages, options.initialPage);
+        book.currentPage = targetPage;
+
+        this.state.currentBook = book;
+        this.syncAppStateBookSlice();
+        this.state.viewerOpen = true;
+        
+        // 更新流式状态
+        this.streamingState.scannedCount = result.initial_pages.length;
+        this.streamingState.estimatedTotal = result.estimated_total ?? book.totalPages;
+
+        // 异步操作
+        if (targetPage > 0 && book.totalPages > 0) {
+          bookApi.navigateToPage(targetPage).catch(navErr => {
+            console.error('❌ Error navigating to initial page after open:', navErr);
+          });
+        }
+        
+        this.syncInfoPanelBookInfo().catch(() => {});
+        this.syncFileBrowserSelection(path);
+
+        if (!options.skipHistory) {
+          import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+            const pathStack = this.buildPathStack();
+            unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
+          }).catch(() => {});
+        }
+
+        this.showBookSwitchToastIfEnabled();
+        this.resetAllPageUpscaleStatus();
+
+        import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
+          pageDistributionStore.initialize();
+        }).catch(() => {});
+
+        window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
+      },
+      // onProgress: 进度回调（增量更新）
+      (entries, scannedCount) => {
+        console.log('📊 扫描进度:', scannedCount, '新增:', entries.length);
+        this.streamingState.scannedCount = scannedCount;
+        
+        // 触发页面列表更新事件（UI 可以监听）
+        window.dispatchEvent(new CustomEvent('streaming-scan-progress', {
+          detail: { scannedCount, entries }
+        }));
+      },
+      // onComplete: 完成回调
+      (totalCount) => {
+        console.log('✅ 流式扫描完成，总页数:', totalCount);
+        this.streamingState.isStreaming = false;
+        this.streamingState.scannedCount = totalCount;
+        this.streamingState.estimatedTotal = totalCount;
+        this.streamingState.unlisten = null;
+        
+        // 触发完成事件
+        window.dispatchEvent(new CustomEvent('streaming-scan-complete', {
+          detail: { totalCount }
+        }));
+        
+        // 重新初始化页面分布（使用完整页面列表）
+        import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
+          pageDistributionStore.initialize();
+        }).catch(() => {});
+      },
+      // onError: 错误回调
+      (error) => {
+        console.error('❌ 流式扫描错误:', error);
+        this.streamingState.isStreaming = false;
+        this.streamingState.unlisten = null;
+        // 不设置 error 状态，因为首批页面可能已经加载成功
+      }
+    );
+
+    this.streamingState.unlisten = unlisten;
+  }
+
+  /**
+   * 取消流式扫描
+   */
+  async cancelStreamingScan() {
+    if (this.streamingState.unlisten) {
+      this.streamingState.unlisten();
+      this.streamingState.unlisten = null;
+    }
+    
+    if (this.streamingState.isStreaming) {
+      try {
+        const { cancelStreamingScan } = await import('$lib/api/streaming');
+        await cancelStreamingScan();
+      } catch (err) {
+        console.warn('取消流式扫描失败:', err);
+      }
+      this.streamingState.isStreaming = false;
     }
   }
 
@@ -312,6 +494,9 @@ class BookStore {
     this.lastEmmMetadataForCurrentBook = null;
     this.state.upscaledImageData = null;
     infoPanelStore.resetAll();
+
+    // 取消流式扫描
+    this.cancelStreamingScan().catch(() => {});
 
     // 重置页面超分状态
     this.resetAllPageUpscaleStatus();

@@ -246,6 +246,7 @@ pub fn run() {
         })
         .manage(Mutex::new(BookManager::new()))
         .manage(Mutex::new(ImageLoader::default()))
+        .manage(commands::streaming_commands::StreamingScannerState::default())
         .invoke_handler(tauri::generate_handler![
             // Book commands
             commands::open_book,
@@ -256,6 +257,10 @@ pub fn run() {
             commands::previous_page,
             commands::navigate_to_image,
             commands::set_book_sort_mode,
+            // Streaming commands (异步列表扫描)
+            commands::open_book_fast,
+            commands::cancel_streaming_scan,
+            commands::get_archive_entry_count,
             // Archive cache commands
             commands::get_cache_stats,
             commands::clear_index_cache,

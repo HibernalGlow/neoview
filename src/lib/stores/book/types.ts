@@ -35,6 +35,8 @@ export interface OpenBookOptions {
   initialPage?: number;
   /** 跳过添加历史记录 */
   skipHistory?: boolean;
+  /** 是否使用流式打开（压缩包默认启用，设为 false 可禁用） */
+  useStreaming?: boolean;
 }
 
 // ==================== Toast 上下文 ====================

@@ -58,6 +58,7 @@ pub mod rkyv_index;
 pub mod stretto_cache;
 pub mod fast_path;
 pub mod profiling;
+pub mod streaming_archive;
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

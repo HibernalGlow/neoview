@@ -6,13 +6,14 @@
   - GPU 加速
   - 样式统一
   - 根据 loadModeStore 切换 img/canvas 渲染
-  - 颜色滤镜应用
+  - 颜色滤镜应用（支持仅黑白模式）
 -->
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
   import { stackImageLoader } from '../utils/stackImageLoader';
-  import { filterStore } from '$lib/stores/filterStore.svelte';
+  import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
+  import { generateCssFilter } from '$lib/utils/colorFilters';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -37,14 +38,43 @@
     onload,
   }: Props = $props();
   
-  // 滤镜 CSS
-  let filterCss = $state('');
+  // 滤镜设置
+  let filterSettings = $state<FilterSettings | null>(null);
+  // 当前图像是否为黑白
+  let isBlackAndWhite = $state(false);
+  // 上一次检测的 URL
+  let lastCheckedUrl = '';
   
   $effect(() => {
-    const unsubscribe = filterStore.subscribe(() => {
-      filterCss = filterStore.getCssFilter();
+    const unsubscribe = filterStore.subscribe((s) => {
+      filterSettings = s;
     });
     return unsubscribe;
+  });
+  
+  // 检测图像是否为黑白（仅在启用「仅黑白」时）
+  $effect(() => {
+    const checkUrl = displayUrl;
+    if (filterSettings?.colorizeEnabled && filterSettings?.onlyBlackAndWhite && checkUrl !== lastCheckedUrl) {
+      lastCheckedUrl = checkUrl;
+      filterStore.checkIsBlackAndWhite(checkUrl).then((result) => {
+        isBlackAndWhite = result;
+      });
+    }
+  });
+  
+  // 计算实际的滤镜 CSS
+  let filterCss = $derived.by(() => {
+    if (!filterSettings) return '';
+    
+    // 如果启用「仅黑白」且当前图像不是黑白，则跳过上色滤镜
+    if (filterSettings.colorizeEnabled && filterSettings.onlyBlackAndWhite && !isBlackAndWhite) {
+      // 创建一个临时设置，禁用上色
+      const tempSettings = { ...filterSettings, colorizeEnabled: false };
+      return generateCssFilter(tempSettings);
+    }
+    
+    return filterStore.getCssFilter();
   });
   
   // 获取显示 URL（优先级：超分图 > 预解码 > 原始 URL）

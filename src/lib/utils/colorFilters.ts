@@ -274,6 +274,7 @@ export interface FilterSettings {
   colorizeEnabled: boolean;
   colorizePreset: string;
   customColors: ColorPoint[];
+  onlyBlackAndWhite: boolean;  // 仅对黑白图像应用上色
   // 基础滤镜
   brightness: number;    // 100 = 正常
   contrast: number;      // 100 = 正常
@@ -291,6 +292,7 @@ export const defaultFilterSettings: FilterSettings = {
   colorizeEnabled: false,
   colorizePreset: 'redAndBlueGray',
   customColors: [],
+  onlyBlackAndWhite: false,
   brightness: 100,
   contrast: 100,
   saturation: 100,
@@ -299,6 +301,73 @@ export const defaultFilterSettings: FilterSettings = {
   invert: false,
   negative: false,
 };
+
+/**
+ * 检测图像是否为黑白图
+ * 通过分析像素饱和度判断
+ */
+export async function isBlackAndWhiteImage(imageUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const width = Math.min(img.width, 100);  // 采样尺寸，避免大图性能问题
+        const height = Math.min(img.height, 100);
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        const data = ctx.getImageData(0, 0, width, height).data;
+        
+        let saturationSum = 0;
+        let saturationMax = 0;
+        let count = 0;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // 忽略接近纯黑或纯白的像素
+          if ((r > 5 && r < 250) || (g > 5 && g < 250) || (b > 5 && b < 250)) {
+            const diff1 = Math.abs(r - b);
+            const diff2 = Math.abs(g - r);
+            const diff3 = Math.abs(b - g);
+            const s = (diff1 + diff2 + diff3) / 2 / 2.55;
+            
+            saturationSum += s;
+            count++;
+            if (saturationMax < s) saturationMax = s;
+          }
+        }
+        
+        if (count === 0) {
+          // 纯黑或纯白图像
+          resolve(true);
+          return;
+        }
+        
+        const avgSaturation = saturationSum / count;
+        // 平均饱和度 < 5 且最大饱和度 < 10 视为黑白图
+        resolve(avgSaturation < 5 && saturationMax < 10);
+      } catch {
+        resolve(false);
+      }
+    };
+    
+    img.onerror = () => resolve(false);
+    img.src = imageUrl;
+  });
+}
 
 /**
  * 生成 CSS filter 字符串

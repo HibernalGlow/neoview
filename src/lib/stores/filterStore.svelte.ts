@@ -12,6 +12,7 @@ import {
   generateSvgFilter,
   generateCssFilter,
   getActiveColors,
+  isBlackAndWhiteImage,
 } from '$lib/utils/colorFilters';
 
 // 滤镜 ID（用于 SVG filter 引用）
@@ -136,6 +137,15 @@ export const filterStore = {
     });
   },
 
+  /** 设置仅黑白 */
+  setOnlyBlackAndWhite: (enabled: boolean): void => {
+    update(s => {
+      const newSettings = { ...s, onlyBlackAndWhite: enabled };
+      saveSettings(newSettings);
+      return newSettings;
+    });
+  },
+
   /** 设置亮度 */
   setBrightness: (value: number): void => {
     update(s => {
@@ -206,6 +216,9 @@ export const filterStore = {
     saveSettings(newSettings);
     updateSvgFilter(newSettings);
   },
+
+  /** 检查图像是否为黑白（用于仅黑白模式） */
+  checkIsBlackAndWhite: isBlackAndWhiteImage,
 
   /** 初始化（页面加载时调用） */
   init: (): void => {

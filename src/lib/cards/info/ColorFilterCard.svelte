@@ -30,6 +30,13 @@ function toggleColorize() {
   }
 }
 
+// 切换仅黑白
+function toggleOnlyBlackAndWhite() {
+  if (settings) {
+    filterStore.setOnlyBlackAndWhite(!settings.onlyBlackAndWhite);
+  }
+}
+
 // 切换反色
 function toggleInvert() {
   if (settings) {
@@ -84,6 +91,16 @@ function resetFilters() {
             <option value={preset}>{presetNames[preset] || preset}</option>
           {/each}
         </select>
+        
+        <label class="flex items-center gap-2 cursor-pointer text-xs">
+          <input
+            type="checkbox"
+            checked={settings.onlyBlackAndWhite}
+            onchange={toggleOnlyBlackAndWhite}
+            class="w-3.5 h-3.5 rounded border-border"
+          />
+          <span class="text-muted-foreground">仅黑白图像</span>
+        </label>
       {/if}
     </div>
 

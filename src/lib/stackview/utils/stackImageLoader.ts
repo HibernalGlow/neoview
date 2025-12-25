@@ -12,7 +12,7 @@ import { getImageLoaderCore, type ImageLoaderCore } from '$lib/components/viewer
 import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
 import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
-import { preDecodeCache } from '../stores/preDecodeCache';
+import { preDecodeCache } from '../stores/preDecodeCache.svelte';
 import { renderQueue } from '../stores/renderQueue';
 
 // ============================================================================

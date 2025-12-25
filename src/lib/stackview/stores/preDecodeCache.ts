@@ -192,6 +192,11 @@ export class PreDecodeCache {
       // 存入缓存
       this.cache.set(pageIndex, entry);
       
+      // 触发状态变化事件（通知 UI 更新）
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('predecode-change', { detail: { pageIndex } }));
+      }
+      
       console.log(`✅ 预解码完成: 页码 ${pageIndex + 1}, 耗时 ${decodeTime.toFixed(1)}ms, 尺寸 ${entry.width}x${entry.height}`);
       
       return entry;

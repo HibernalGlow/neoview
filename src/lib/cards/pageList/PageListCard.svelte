@@ -2,17 +2,20 @@
 /**
  * 页面列表卡片
  * 显示当前书籍的所有页面并支持跳转
+ * 
+ * 【翻页性能优化】显示预解码/预加载状态
  */
 import { onMount, onDestroy } from 'svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Slider } from '$lib/components/ui/slider';
-import { Search, Grid3x3, List, Image as ImageIcon } from '@lucide/svelte';
+import { Search, Grid3x3, List, Image as ImageIcon, Zap, Download } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { preDecodeCache } from '$lib/stackview/stores/preDecodeCache';
 import type { Page } from '$lib/types';
 import PageContextMenu from './PageContextMenu.svelte';
 
@@ -26,11 +29,13 @@ interface PageItem {
 }
 
 let items = $state<PageItem[]>([]);
-let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
 let unsubscribeThumbnailCache: (() => void) | null = null;
 let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
 let scrollContainer: HTMLDivElement | undefined;
+
+// 预解码状态更新触发器（通过事件驱动，不使用定时器）
+let preDecodeVersion = $state(0);
 
 // 右键菜单状态
 let contextMenu = $state<{
@@ -122,6 +127,38 @@ const statusConfig: Record<UpscaleStatusType, { label: string; class: string } |
 	'failed': { label: '失败', class: 'bg-red-500/80 text-white' },
 };
 
+// 预解码/预加载状态类型
+type PreloadStatusType = 'decoded' | 'loaded' | 'none';
+
+/**
+ * 获取页面的预加载状态
+ * @returns 'decoded' | 'loaded' | 'none'
+ */
+function getPreloadStatus(pageIndex: number): PreloadStatusType {
+	// 依赖 preDecodeVersion 和 imagePoolVersion 触发响应式更新
+	void preDecodeVersion;
+	void imagePoolVersion;
+	
+	// 优先检查预解码状态（翻页即时）
+	if (preDecodeCache.has(pageIndex)) {
+		return 'decoded';
+	}
+	
+	// 检查预加载状态（Blob 缓存，需解码）
+	if (imagePool.has(pageIndex)) {
+		return 'loaded';
+	}
+	
+	return 'none';
+}
+
+// 预加载状态配置
+const preloadStatusConfig: Record<PreloadStatusType, { icon: 'zap' | 'download'; class: string; tooltip: string } | null> = {
+	'decoded': { icon: 'zap', class: 'text-green-500', tooltip: '已预解码（翻页即时）' },
+	'loaded': { icon: 'download', class: 'text-blue-500', tooltip: '已预加载（需解码）' },
+	'none': null,
+};
+
 // 自动滚动到当前页
 $effect(() => {
 	const idx = currentPageIndex;
@@ -153,15 +190,24 @@ $effect(() => {
 // 强制更新触发器
 let updateTrigger = $state(0);
 
+// 预解码状态变化事件处理
+function handlePreDecodeChange() {
+	preDecodeVersion++;
+}
+
 onMount(() => {
 	// 订阅缩略图缓存变化
 	unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
 		updateTrigger++;
 	});
+	
+	// 监听预解码状态变化事件（由 preDecodeCache 触发）
+	window.addEventListener('predecode-change', handlePreDecodeChange);
 });
 
 onDestroy(() => {
 	unsubscribeThumbnailCache?.();
+	window.removeEventListener('predecode-change', handlePreDecodeChange);
 });
 
 function getThumbnail(pageIndex: number): ThumbnailEntry | null {
@@ -257,6 +303,8 @@ async function requestThumbnail(pageIndex: number) {
 					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
 					{@const statusCfg = statusConfig[upscaleStatus]}
 					{@const conditionName = getPageConditionName(item.index)}
+					{@const preloadStatus = getPreloadStatus(item.index)}
+					{@const preloadCfg = preloadStatusConfig[preloadStatus]}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -264,6 +312,16 @@ async function requestThumbnail(pageIndex: number) {
 						oncontextmenu={(e) => handleContextMenu(e, item)}
 					>
 						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+						<!-- 预解码/预加载状态图标 -->
+						{#if preloadCfg}
+							<span class="{preloadCfg.class}" title={preloadCfg.tooltip}>
+								{#if preloadCfg.icon === 'zap'}
+									<Zap class="h-3 w-3 fill-current" />
+								{:else}
+									<Download class="h-3 w-3" />
+								{/if}
+							</span>
+						{/if}
 						<span class="truncate flex-1">{item.name}</span>
 						{#if conditionName}
 							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>

@@ -103,7 +103,7 @@
   - 最后使用原始 URL
   - _Requirements: 1.2_
 
-- [ ] 5.2 添加 IntersectionObserver 优化（可选）
+- [x] 5.2 添加 IntersectionObserver 优化（可选）
   - 创建 IntersectionObserver 监测图片可见性
   - 设置 rootMargin 为 2000px
   - 只有即将可见的图片才触发解码
@@ -155,3 +155,12 @@
   - 预解码缓存命中率 > 80%
 - [ ] 9.3 内存验证
   - 内存占用增加 < 100MB
+
+## 10. 页面列表面板状态同步
+
+- [x] 10.1 修改 `PageListPanel.svelte`
+  - 从 `bookStore` 获取真实页面数据
+  - 从 `preDecodeCache` 获取预解码状态
+  - 从 `imagePool` 获取预加载状态
+  - 添加状态指示器（图标 + 标签）
+  - 定时刷新状态（500ms 间隔）

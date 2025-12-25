@@ -22,7 +22,7 @@
 
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3 } from '@lucide/svelte';
+	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3, Sparkles } from '@lucide/svelte';
 	import { thumbnailService } from '$lib/services/thumbnailService';
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
@@ -45,6 +45,7 @@
 	);
 	let bottomBarOpacity = $derived(settings.panels?.bottomBarOpacity ?? 85);
 	let bottomBarBlur = $derived(settings.panels?.bottomBarBlur ?? 12);
+	let progressBarGlow = $derived(settings.panels?.progressBarGlow ?? false);
 	let lastReadingDirection = $state<'left-to-right' | 'right-to-left' | null>(null);
 
 	// 监听设置变化
@@ -211,6 +212,10 @@
 				detail: { show: showHoverAreasOverlay }
 			})
 		);
+	}
+
+	function toggleProgressBarGlow() {
+		settingsManager.updateNestedSettings('panels', { progressBarGlow: !progressBarGlow });
 	}
 
 	function handleResizeStart(e: MouseEvent) {
@@ -891,6 +896,22 @@
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p>显示/隐藏 上下左右边栏悬停触发区域</p>
+					</Tooltip.Content>
+				</Tooltip.Root>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						<Button
+							variant={progressBarGlow ? 'default' : 'ghost'}
+							size="sm"
+							class="h-6"
+							onclick={toggleProgressBarGlow}
+						>
+							<Sparkles class="mr-1 h-3 w-3" />
+							<span class="text-xs">荧光</span>
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						<p>进度条缓慢荧光闪烁（避免画面完全静止）</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			</div>

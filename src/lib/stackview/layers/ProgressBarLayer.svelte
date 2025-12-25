@@ -30,9 +30,10 @@
   let progressColor = $state('#FDFBF7');
   let progressBlinking = $state(false);
 
-  // 阅读方向
+  // 阅读方向和进度条荧光设置
   let settings = $state(settingsManager.getSettings());
   let readingDirection: ReadingDirection = $derived(settings.book.readingDirection);
+  let progressBarGlow = $derived(settings.panels?.progressBarGlow ?? false);
 
   settingsManager.addListener((newSettings) => {
     settings = newSettings;
@@ -146,6 +147,7 @@
       <div
         class="reading-bar"
         class:animate-pulse={progressBlinking}
+        class:ambient-glow={progressBarGlow && !progressBlinking}
         class:rtl={readingDirection === 'right-to-left'}
         style:width="{((currentPageIndex + 1) / totalPages) * 100}%"
         style:background-color={progressColor}
@@ -270,5 +272,21 @@
 
   .animate-pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* 缓慢持续荧光闪烁效果（避免画面完全静止） */
+  .ambient-glow {
+    animation: ambient-glow 4s ease-in-out infinite;
+  }
+
+  @keyframes ambient-glow {
+    0%, 100% {
+      box-shadow: 0 0 4px rgba(255, 255, 255, 0.3), 0 0 8px currentColor;
+      filter: brightness(1);
+    }
+    50% {
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5), 0 0 16px currentColor, 0 0 24px currentColor;
+      filter: brightness(1.15);
+    }
   }
 </style>

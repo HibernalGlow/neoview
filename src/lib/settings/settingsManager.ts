@@ -188,6 +188,8 @@ export interface NeoViewSettings {
     };
     /** 页面列表是否跟随底部进度条跳转 */
     pageListFollowProgress: boolean;
+    /** 进度条荧光闪烁效果（避免画面完全静止） */
+    progressBarGlow: boolean;
   };
   bindings: {
     mouse: {
@@ -380,7 +382,8 @@ const defaultSettings: NeoViewSettings = {
       showDelaySec: 0.0,
       hideDelaySec: 0.0
     },
-    pageListFollowProgress: true
+    pageListFollowProgress: true,
+    progressBarGlow: false
   },
   bindings: {
     mouse: {

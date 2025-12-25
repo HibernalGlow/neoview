@@ -798,14 +798,35 @@
 	$effect(() => {
 		if (!containerRef) return;
 
+		// 从设置中读取鼠标光标配置
+		const mouseCursorSettings = settingsManager.getSettings().view.mouseCursor;
+		const autoHideEnabled = mouseCursorSettings?.autoHide ?? true;
+		const hideDelayMs = (mouseCursorSettings?.hideDelay ?? 1.0) * 1000; // 转换为毫秒
+
 		// 创建鼠标自动隐藏控制器
 		cursorAutoHide = createCursorAutoHide({
 			target: containerRef,
-			hideDelay: 3000,
-			enabled: true
+			hideDelay: hideDelayMs,
+			enabled: autoHideEnabled
 		});
 
+		// 监听设置变化
+		const handleSettingsChange = (s: typeof settingsManager extends { getSettings: () => infer T } ? T : never) => {
+			const newAutoHide = s.view.mouseCursor?.autoHide ?? true;
+			const newHideDelay = (s.view.mouseCursor?.hideDelay ?? 1.0) * 1000;
+			
+			if (cursorAutoHide) {
+				if (newAutoHide) {
+					cursorAutoHide.enable();
+				} else {
+					cursorAutoHide.disable();
+				}
+			}
+		};
+		settingsManager.addListener(handleSettingsChange);
+
 		return () => {
+			settingsManager.removeListener(handleSettingsChange);
 			cursorAutoHide?.destroy();
 			cursorAutoHide = null;
 		};

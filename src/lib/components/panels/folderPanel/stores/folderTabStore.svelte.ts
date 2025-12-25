@@ -109,6 +109,8 @@ export interface FolderTabState {
 	showSearchBar: boolean;
 	// 迁移栏可见
 	showMigrationBar: boolean;
+	// 穿透设置栏可见
+	showPenetrateSettingsBar: boolean;
 	// 穿透模式
 	penetrateMode: boolean;
 	// 点击文件夹在新标签页打开模式
@@ -429,6 +431,7 @@ function createDefaultTabState(id: string, homePath: string = '', sourceTab?: Fo
 		isSearching: false,
 		showSearchBar: false,
 		showMigrationBar: false,
+		showPenetrateSettingsBar: false,
 		penetrateMode: false,
 		openInNewTabMode: false,
 		deleteStrategy: 'trash',
@@ -582,6 +585,7 @@ export const tabSearchResults = globalSearchResults; // 使用全局 store
 export const tabIsSearching = derived(activeTab, ($tab) => $tab?.isSearching || false);
 export const tabShowSearchBar = derived(activeTab, ($tab) => $tab?.showSearchBar || false);
 export const tabShowMigrationBar = derived(activeTab, ($tab) => $tab?.showMigrationBar || false);
+export const tabShowPenetrateSettingsBar = derived(activeTab, ($tab) => $tab?.showPenetrateSettingsBar || false);
 export const tabPenetrateMode = derived(activeTab, ($tab) => $tab?.penetrateMode || false);
 export const tabOpenInNewTabMode = derived(activeTab, ($tab) => $tab?.openInNewTabMode || false);
 export const tabDeleteStrategy = derived(activeTab, ($tab) => $tab?.deleteStrategy || 'trash');
@@ -1598,6 +1602,13 @@ export const folderTabActions = {
 	 */
 	toggleShowMigrationBar() {
 		updateActiveTab((tab) => ({ ...tab, showMigrationBar: !tab.showMigrationBar }));
+	},
+
+	/**
+	 * 切换穿透设置栏可见性
+	 */
+	toggleShowPenetrateSettingsBar() {
+		updateActiveTab((tab) => ({ ...tab, showPenetrateSettingsBar: !tab.showPenetrateSettingsBar }));
 	},
 
 	// ============ Folder Tree ============

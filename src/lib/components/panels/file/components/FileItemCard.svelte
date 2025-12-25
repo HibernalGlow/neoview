@@ -151,6 +151,7 @@
 	let penetrateModeEnabled = $state(false);
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
+	let penetratePureMediaFolderOpen = $state(true);
 	// 支持多个内部文件
 	let penetrateChildFiles = $state<Array<{
 		name: string;
@@ -174,6 +175,7 @@
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
 			penetrateShowInnerFile = state.penetrateShowInnerFile;
 			penetrateInnerFileCount = state.penetrateInnerFileCount;
+			penetratePureMediaFolderOpen = state.penetratePureMediaFolderOpen;
 		});
 		return unsubscribe;
 	});
@@ -733,8 +735,8 @@
 		{previewItems}
 		bind:previewIconElement
 		onClick={() => {
-			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开
-			if (penetrateModeEnabled && isPureMediaFolder && item.isDir) {
+			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开（需要开启配置）
+			if (penetrateModeEnabled && penetratePureMediaFolderOpen && isPureMediaFolder && item.isDir) {
 				onOpenAsBook?.();
 			} else {
 				onClick?.();
@@ -779,8 +781,8 @@
 		{displayTags}
 		{getEffectiveRating}
 		onClick={() => {
-			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开
-			if (penetrateModeEnabled && isPureMediaFolder && item.isDir) {
+			// 穿透模式下，纯媒体文件夹点击直接作为 book 打开（需要开启配置）
+			if (penetrateModeEnabled && penetratePureMediaFolderOpen && isPureMediaFolder && item.isDir) {
 				onOpenAsBook?.();
 			} else {
 				onClick?.();

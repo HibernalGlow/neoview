@@ -83,6 +83,7 @@ import {
 	tabItemCount,
 	tabShowSearchBar,
 	tabShowMigrationBar,
+	tabShowPenetrateSettingsBar,
 	tabPenetrateMode,
 	tabOpenInNewTabMode,
 	tabDeleteStrategy,
@@ -126,6 +127,7 @@ const globalSortConfig = tabSortConfig;
 const globalItemCount = tabItemCount;
 const globalShowSearchBar = tabShowSearchBar;
 const globalShowMigrationBar = tabShowMigrationBar;
+const globalShowPenetrateSettingsBar = tabShowPenetrateSettingsBar;
 const globalPenetrateMode = tabPenetrateMode;
 const globalOpenInNewTabMode = tabOpenInNewTabMode;
 const globalDeleteStrategy = tabDeleteStrategy;
@@ -163,6 +165,7 @@ let globalDeleteModeValue = $state(false);
 let globalSortConfigValue = $state<{ field: FolderSortField; order: 'asc' | 'desc' }>({ field: 'name', order: 'asc' });
 let globalShowSearchBarValue = $state(false);
 let globalShowMigrationBarValue = $state(false);
+let globalShowPenetrateSettingsBarValue = $state(false);
 let globalPenetrateModeValue = $state(false);
 let globalInlineTreeModeValue = $state(false);
 let globalThumbnailWidthPercentValue = $state(20);
@@ -187,6 +190,7 @@ $effect(() => {
 		globalSortConfig.subscribe(v => globalSortConfigValue = v),
 		globalShowSearchBar.subscribe(v => globalShowSearchBarValue = v),
 		globalShowMigrationBar.subscribe(v => globalShowMigrationBarValue = v),
+		globalShowPenetrateSettingsBar.subscribe(v => globalShowPenetrateSettingsBarValue = v),
 		globalPenetrateMode.subscribe(v => globalPenetrateModeValue = v),
 		globalInlineTreeMode.subscribe(v => globalInlineTreeModeValue = v),
 		globalThumbnailWidthPercent.subscribe(v => globalThumbnailWidthPercentValue = v),
@@ -231,6 +235,9 @@ let showSearchBar = $derived(virtualMode
 let showMigrationBar = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyShowMigrationBar : virtualPanelSettingsStore.bookmarkShowMigrationBar)
 	: globalShowMigrationBarValue);
+let showPenetrateSettingsBar = $derived(virtualMode 
+	? false // 虚拟模式暂不支持穿透设置栏
+	: globalShowPenetrateSettingsBarValue);
 let penetrateMode = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyPenetrateMode : virtualPanelSettingsStore.bookmarkPenetrateMode)
 	: globalPenetrateModeValue);
@@ -946,10 +953,8 @@ async function handleReloadSelectedThumbnails() {
 					onclick={handleTogglePenetrateMode}
 					oncontextmenu={(e: MouseEvent) => {
 						e.preventDefault();
-						// 只有穿透模式开启时，右键才能切换新标签打开功能
-						if (penetrateMode) {
-							folderTabActions.toggleOpenInNewTabMode();
-						}
+						// 右键切换穿透设置栏显示
+						folderTabActions.toggleShowPenetrateSettingsBar();
 					}}
 				>
 					<CornerDownRight class="h-4 w-4" />
@@ -957,9 +962,7 @@ async function handleReloadSelectedThumbnails() {
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{penetrateMode ? '穿透模式：当文件夹只有一个子文件时直接打开' : '穿透模式'}</p>
-				{#if penetrateMode}
-					<p class="text-muted-foreground text-xs">右键切换穿透失败时新标签打开 {openInNewTabMode ? '(已开启)' : ''}</p>
-				{/if}
+				<p class="text-muted-foreground text-xs">右键打开穿透设置栏</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 
@@ -1303,6 +1306,20 @@ async function handleReloadSelectedThumbnails() {
 							<option value="single">单文件</option>
 							<option value="all">多文件</option>
 						</select>
+					</div>
+
+					<!-- 纯媒体文件夹点击直接打开 -->
+					<div class="flex items-center gap-2">
+						<Image class="h-3.5 w-3.5 text-muted-foreground" />
+						<span class="text-muted-foreground">媒体文件夹:</span>
+						<Button 
+							variant={$fileBrowserStore.penetratePureMediaFolderOpen ? 'default' : 'outline'} 
+							size="sm" 
+							class="h-6 text-xs"
+							onclick={() => fileBrowserStore.setPenetratePureMediaFolderOpen(!$fileBrowserStore.penetratePureMediaFolderOpen)}
+						>
+							{$fileBrowserStore.penetratePureMediaFolderOpen ? '点击打开' : '点击进入'}
+						</Button>
 					</div>
 
 					<!-- 缩略图大小 -->

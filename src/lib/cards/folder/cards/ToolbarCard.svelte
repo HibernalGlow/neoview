@@ -8,13 +8,14 @@
 	import TagChip from '$lib/components/ui/TagChip.svelte';
 	import FolderToolbar from '$lib/components/panels/folderPanel/components/FolderToolbar.svelte';
 	import MigrationBar from '$lib/components/panels/folderPanel/components/MigrationBar.svelte';
+	import PenetrateSettingsBar from '$lib/components/panels/folderPanel/components/PenetrateSettingsBar.svelte';
 	import SelectionBar from '$lib/components/panels/folderPanel/components/SelectionBar.svelte';
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import VirtualSearchBar from '$lib/components/ui/VirtualSearchBar.svelte';
 	import FavoriteTagPanel from '$lib/components/panels/folderPanel/components/FavoriteTagPanel.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderTabActions, isVirtualPath, tabShowPenetrateSettingsBar } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
@@ -239,6 +240,11 @@
 		showManager={ctx.showMigrationManager}
 		onToggleManager={handleToggleMigrationManager}
 	/>
+{/if}
+
+<!-- 穿透设置栏 -->
+{#if $tabShowPenetrateSettingsBar && !isVirtualInstance}
+	<PenetrateSettingsBar />
 {/if}
 
 <!-- 随机标签栏 -->

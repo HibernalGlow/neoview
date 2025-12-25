@@ -39,6 +39,10 @@ interface FileBrowserState {
   // 显示内部文件数量: 'single' | 'all'
   // single: 仅显示单个文件夹内的单压缩包, all: 显示所有内部压缩包
   penetrateInnerFileCount: 'single' | 'all';
+  // 穿透层数：自动穿透嵌套单子文件夹的最大层数（默认3层）
+  penetrateMaxDepth: number;
+  // 纯媒体文件夹点击直接打开
+  penetratePureMediaFolderOpen: boolean;
   showSearchBar: boolean;
   showMigrationBar: boolean;
   showMigrationManager: boolean;
@@ -217,6 +221,8 @@ const initialState: FileBrowserState = {
   isPenetrateMode: false,
   penetrateShowInnerFile: 'penetrate',
   penetrateInnerFileCount: 'single',
+  penetrateMaxDepth: 3,
+  penetratePureMediaFolderOpen: true,
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
@@ -331,6 +337,8 @@ function createFileBrowserStore() {
     setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
     setPenetrateShowInnerFile: (value: 'none' | 'penetrate' | 'always') => update(state => ({ ...state, penetrateShowInnerFile: value })),
     setPenetrateInnerFileCount: (value: 'single' | 'all') => update(state => ({ ...state, penetrateInnerFileCount: value })),
+    setPenetrateMaxDepth: (value: number) => update(state => ({ ...state, penetrateMaxDepth: value })),
+    setPenetratePureMediaFolderOpen: (value: boolean) => update(state => ({ ...state, penetratePureMediaFolderOpen: value })),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),

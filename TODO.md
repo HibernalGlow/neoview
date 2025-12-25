@@ -1,57 +1,46 @@
 
 
-raing排序又不生效
-### 页面移动=视频快进
-
 ### 使用 Susie 插件
 
-### 排除文件夹
 
-- _MACOSX
-- .DS_Store
-- Thumbs.db
+项目中超过800行的文件
 
-### 页面设置
+  以下是项目中超过800行的源代码文件（按行数降序排列）：
 
-- 左侧项目是默认值，右侧项目是书籍打开时的行为。
-- 页面位置
-  - 首页：恢复，否则默认
-- 页面排序方式
-  - 名称个：恢复，否则默认
-- 页面显示模式
-  - 单页显示：继续
-- 书籍打开方向
-  - 右开（从右向左）：继续
+  Rust 后端文件 (src-tauri)
+   1. src-tauri\src\commands\fs_commands.rs: 2096 lines - 文件系统命令
+   2. src-tauri\src\core\thumbnail_db.rs: 1976 lines - 缩略图数据库
+   3. src-tauri\src\commands\benchmark_commands.rs: 1610 lines - 基准测试命令
+   4. src-tauri\src\core\archive.rs: 1457 lines - 归档文件处理
+   5. src-tauri\src\commands\thumbnail_commands.rs: 1295 lines - 缩略图命令
+   6. src-tauri\src\core\thumbnail_service_v3.rs: 1353 lines - 缩略图服务v3
+   7. src-tauri\src\core\upscale_service.rs: 1249 lines - 图像放大服务
+   8. src-tauri\src\core\page_manager\mod.rs: 859 lines - 页面管理器
+   9. src-tauri\src\core\thumbnail_generator.rs: 886 lines - 缩略图生成器
+   10. src-tauri\src\core\fs_manager.rs: 808 lines - 文件系统管理器
 
+  前端 Svelte/TypeScript 文件 (src)
+   1. src\lib\components\panels\folderPanel\stores\folderTabStore.svelte.ts: 1761 lines - 文件夹标签页状态管理
+   2. src\lib\components\panels\emm\EmmPanelSection.svelte: 1720 lines - EMM面板组件
+   3. src\lib\components\layout\TopToolbar.svelte: 1415 lines - 顶部工具栏
+   4. src\lib\components\panels\folderPanel\components\FolderToolbar.svelte: 1412 lines - 文件夹工具栏
+   5. src\App.svelte: 1121 lines - 主应用组件
+   6. src\lib\stores\keybindings.svelte.ts: 1089 lines - 键盘绑定状态管理
+   7. src\lib\components\panels\folderPanel\components\FolderStack.svelte: 1285 lines - 文件夹堆栈组件
+   8. src\lib\stores\book.svelte.ts: 1279 lines - 书籍状态管理
+   9. src\lib\components\viewer\VideoPlayer.svelte: 1256 lines - 视频播放器组件
+   10. src\lib\api\filesystem.ts: 887 lines - 文件系统API
+   11. src\lib\cards\ai\AiServiceConfigCard.svelte: 951 lines - AI服务配置卡片
+   12. src\lib\components\panels\folderPanel\stores\folderPanelStore.svelte.ts: 1023 lines - 文件夹面板状态管理
+   13. src\lib\components\layout\BottomThumbnailBar.svelte: 930 lines - 底部缩略图栏
+   14. src\lib\stackview\StackView.svelte: 881 lines - 堆栈视图组件
+   15. src\lib\stores\settingsManager.svelte.ts: 811 lines - 设置管理器
 
-### 分割横向页面
-- 自动旋转
-  - 标准：继续
+✦ 这些文件可能需要考虑重构以提高代码的可维护性。特别是超过2000行的文件（如fs_commands.rs和thumbnail_db.rs）建议拆分成     
+  更小的模块。
 
-- 关：恢复，否则默认
-- 横向页面视为双页：关：恢复，否则默认
-
-### 首页单独显示
-
-- 开：恢复，否则默认
-
-### 尾页单独显示
-
-- 开：恢复，否则默认
-
-### 载入子文件夹
-
-- 由于要搜索待打开文件夹下的所有内容，根据打开位置的不同负载可能会变得很高。
-- 开：恢复，否则默认
-- 基准比例：100%（恢复，否则默认）
-
-### 子文件夹
-
-- 仅有子文件夹时询问是否载入
-- 如果打开的书籍没有可显示的页面，并且存在子文件夹时，弹出对话框询问是否要载入子文件夹。
-- 关：仅有一个子文件夹时无需确认直接载入
-- 没有页面且仅有一个子文件夹时自动载入子文件夹：开
-
+持久化更多设置里的内部文件显示数量 单击双击空白处行为 列表底部返回按钮 这些都没有持久化
+超分条件总像素量条件
 ### 页面移动超过尾页时的行为
 
 - 无变化
@@ -159,18 +148,6 @@ raing排序又不生效
 ### 删除正在阅读的书籍后打开下一本书
 
 - 开
-
-### 将添加文件插入到排序位置
-
-- 书架实时反映信息。如果设置开启，将添加文件插入到当育
-- 开
-
-### 显示隐藏文件
-
-- 开
-
-### 从显示中过滤 RAR分卷文件
-
 - 对于名为“.part【数字】.rar”的 RAR 分卷文件，列表中仅显
 - 关
 

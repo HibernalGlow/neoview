@@ -272,6 +272,14 @@ class BookStore {
       // 重置所有页面的超分状态
       this.resetAllPageUpscaleStatus();
 
+      // 【优化】初始化预计算页面分布（O(1) 翻页查表）
+      import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
+        pageDistributionStore.initialize();
+        console.log('📊 页面分布已初始化，帧数:', pageDistributionStore.frameCount);
+      }).catch((err) => {
+        console.warn('⚠️ 页面分布初始化失败:', err);
+      });
+
       // 触发重置预超分进度事件
       window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     } catch (err) {
@@ -307,6 +315,11 @@ class BookStore {
 
     // 重置页面超分状态
     this.resetAllPageUpscaleStatus();
+
+    // 【优化】重置预计算页面分布
+    import('$lib/stores/pageDistributionStore.svelte').then(({ pageDistributionStore }) => {
+      pageDistributionStore.reset();
+    }).catch(() => {});
 
     // 触发重置预超分进度事件
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));

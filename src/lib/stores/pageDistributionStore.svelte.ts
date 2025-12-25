@@ -9,6 +9,11 @@
  * 2. 支持双页模式下的横向图独占
  * 3. 支持首页/尾页单独显示
  * 4. 支持空白页对齐
+ * 
+ * 集成方式：
+ * - 在书籍打开时自动初始化
+ * - 提供 getPageStep() 供 ui.svelte.ts 使用
+ * - 提供 getNextPageIndex() / getPrevPageIndex() 供翻页使用
  */
 
 import {
@@ -322,6 +327,124 @@ class PageDistributionStore {
    */
   getCurrentPageIndices(): number[] {
     return this._manager.getPageIndicesByFrame(this._state.currentFrameIndex);
+  }
+
+  // ============================================================================
+  // 翻页辅助方法（供 ui.svelte.ts 使用）
+  // ============================================================================
+
+  /**
+   * 获取翻页步进
+   * 根据当前帧计算应该跳过多少物理页
+   * O(1) 查表
+   */
+  getPageStepForIndex(pageIndex: number): number {
+    if (!this._state.initialized) {
+      return 1;
+    }
+    const frameIndex = this._manager.getFrameIndexByPage(pageIndex);
+    if (frameIndex < 0) {
+      return 1;
+    }
+    return this._manager.getFrameStep(frameIndex);
+  }
+
+  /**
+   * 获取下一页的物理索引
+   * O(1) 查表
+   * 
+   * @param currentPageIndex 当前物理页索引
+   * @returns 下一页的物理索引，如果已是最后返回 -1
+   */
+  getNextPageIndex(currentPageIndex: number): number {
+    if (!this._state.initialized) {
+      return currentPageIndex + 1;
+    }
+
+    // 获取当前帧
+    const currentFrameIndex = this._manager.getFrameIndexByPage(currentPageIndex);
+    if (currentFrameIndex < 0) {
+      return currentPageIndex + 1;
+    }
+
+    // 获取下一帧
+    const nextFrameIndex = this._manager.getNextFrameIndex(currentFrameIndex);
+    if (nextFrameIndex < 0) {
+      return -1; // 已是最后一帧
+    }
+
+    // 获取下一帧的第一个物理页
+    const nextPageIndices = this._manager.getPageIndicesByFrame(nextFrameIndex);
+    if (nextPageIndices.length === 0) {
+      return -1;
+    }
+
+    return nextPageIndices[0];
+  }
+
+  /**
+   * 获取上一页的物理索引
+   * O(1) 查表
+   * 
+   * @param currentPageIndex 当前物理页索引
+   * @returns 上一页的物理索引，如果已是第一页返回 -1
+   */
+  getPrevPageIndex(currentPageIndex: number): number {
+    if (!this._state.initialized) {
+      return Math.max(0, currentPageIndex - 1);
+    }
+
+    // 获取当前帧
+    const currentFrameIndex = this._manager.getFrameIndexByPage(currentPageIndex);
+    if (currentFrameIndex < 0) {
+      return Math.max(0, currentPageIndex - 1);
+    }
+
+    // 获取上一帧
+    const prevFrameIndex = this._manager.getPrevFrameIndex(currentFrameIndex);
+    if (prevFrameIndex < 0) {
+      return -1; // 已是第一帧
+    }
+
+    // 获取上一帧的第一个物理页
+    const prevPageIndices = this._manager.getPageIndicesByFrame(prevFrameIndex);
+    if (prevPageIndices.length === 0) {
+      return -1;
+    }
+
+    return prevPageIndices[0];
+  }
+
+  /**
+   * 检查是否为双页帧
+   * O(1) 查表
+   */
+  isDoublePageFrame(pageIndex: number): boolean {
+    if (!this._state.initialized) {
+      return false;
+    }
+    const frameIndex = this._manager.getFrameIndexByPage(pageIndex);
+    if (frameIndex < 0) {
+      return false;
+    }
+    const frame = this._manager.getFrame(frameIndex);
+    return frame?.isDoublePage ?? false;
+  }
+
+  /**
+   * 获取帧内的所有页面（包括空白页信息）
+   * O(1) 查表
+   */
+  getFrameItems(pageIndex: number): FrameDistribution['items'] {
+    if (!this._state.initialized) {
+      return [];
+    }
+    const frameIndex = this._manager.getFrameIndexByPage(pageIndex);
+    if (frameIndex < 0) {
+      return [];
+    }
+    const frame = this._manager.getFrame(frameIndex);
+    return frame?.items ?? [];
   }
 }
 

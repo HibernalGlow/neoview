@@ -10,6 +10,7 @@ import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
+import { pageDistributionStore } from './pageDistributionStore.svelte';
 
 // ============================================================================
 // 类型定义
@@ -245,10 +246,19 @@ function getPageStep(): number {
 		pageMode = currentViewMode === 'double' ? 'double' : 'single';
 	}
 	
+	// 单页模式固定步进 1
 	if (pageMode !== 'double') {
 		return 1;
 	}
 	
+	// 【优化】使用预计算的页面分布，O(1) 查表
+	const currentIndex = bookStore.currentPageIndex;
+	const step = pageDistributionStore.getPageStepForIndex(currentIndex);
+	if (step > 0) {
+		return step;
+	}
+	
+	// 降级：使用原有的实时计算逻辑
 	const settings = settingsManager.getSettings();
 	const treatHorizontalAsDoublePage = settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false;
 	const singleFirstPageMode = settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault';
@@ -263,7 +273,6 @@ function getPageStep(): number {
 	const book = bookStore.currentBook;
 	if (!book || !book.pages) return 2;
 	
-	const currentIndex = bookStore.currentPageIndex;
 	const currentPage = book.pages[currentIndex];
 	if (!currentPage) return 1;
 	
@@ -407,18 +416,23 @@ export function toggleViewMode() {
 		const alt: ViewMode = locked === 'single' ? 'panorama' : 'single';
 		const next: ViewMode = currentMode === locked ? alt : locked;
 		viewMode.set(next);
+		// 【优化】同步更新预计算页面分布
+		pageDistributionStore.setDoublePage(next === 'double');
 		return;
 	}
 
 	viewMode.update((mode) => {
-		if (mode === 'single') return 'double';
-		if (mode === 'double') return 'panorama';
-		return 'single';
+		const next = mode === 'single' ? 'double' : mode === 'double' ? 'panorama' : 'single';
+		// 【优化】同步更新预计算页面分布
+		pageDistributionStore.setDoublePage(next === 'double');
+		return next;
 	});
 }
 
 export function setViewMode(mode: ViewMode) {
 	viewMode.set(mode);
+	// 【优化】同步更新预计算页面分布
+	pageDistributionStore.setDoublePage(mode === 'double');
 }
 
 export function toggleViewModeLock(mode: ViewMode) {

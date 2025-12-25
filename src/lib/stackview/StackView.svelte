@@ -920,6 +920,7 @@
 			imageSize={hoverImageSize}
 			{alignMode}
 			zoomMode={currentZoomMode}
+			{hoverScrollEnabled}
 			onImageLoad={handleImageLoad}
 		/>
 
@@ -934,6 +935,7 @@
 				imageSize={hoverImageSize}
 				{alignMode}
 				zoomMode={currentZoomMode}
+				{hoverScrollEnabled}
 			/>
 		{/if}
 	{/if}

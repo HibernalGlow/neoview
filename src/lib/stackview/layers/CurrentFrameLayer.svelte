@@ -37,6 +37,7 @@
 		imageSize = { width: 0, height: 0 },
 		alignMode = 'center',
 		zoomMode = 'fit' as ZoomMode,
+		hoverScrollEnabled = false,
 		onImageLoad
 	}: {
 		frame: Frame;
@@ -49,6 +50,7 @@
 		imageSize?: { width: number; height: number };
 		alignMode?: 'center' | 'left' | 'right';
 		zoomMode?: ZoomMode;
+		hoverScrollEnabled?: boolean; // 悬停滚动是否开启
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
 
@@ -270,6 +272,12 @@
 			}
 		}
 
+		// 悬停滚动模式：使用 inline-flex 支持滚动到边缘
+		// 非悬停滚动模式：使用 flex 确保居中
+		if (hoverScrollEnabled) {
+			classes.push('hover-scroll-mode');
+		}
+
 		return classes.join(' ');
 	});
 </script>
@@ -333,15 +341,20 @@
 	}
 
 	.scroll-frame-content {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		justify-content: center;
-		/* 居中：当内容小于容器时居中，大于容器时可滚动到边缘 */
+		/* 居中：当内容小于容器时居中 */
 		min-width: 100%;
 		min-height: 100%;
 		/* GPU 加速 */
 		will-change: transform;
 		transform: translateZ(0);
+	}
+
+	/* 悬停滚动模式：使用 inline-flex 支持滚动到边缘 */
+	.scroll-frame-container.hover-scroll-mode .scroll-frame-content {
+		display: inline-flex;
 	}
 
 	.frame-empty {

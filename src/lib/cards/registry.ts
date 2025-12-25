@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette, Play } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -200,6 +200,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'colorFilter',
 		title: '颜色滤镜',
 		icon: Palette,
+		defaultPanel: 'info',
+		canHide: true,
+	},
+	'pageTransition': {
+		id: 'pageTransition',
+		title: '翻页动画',
+		icon: Play,
 		defaultPanel: 'info',
 		canHide: true,
 	},

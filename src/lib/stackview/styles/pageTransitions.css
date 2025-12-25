@@ -1,0 +1,195 @@
+/**
+ * 翻页动画样式
+ * 参考 OpenComic 的翻页动画实现
+ */
+
+/* ============================================
+   淡入淡出动画 (fade)
+   ============================================ */
+.page-transition-fade-enter-next {
+  opacity: 0;
+}
+.page-transition-fade-enter-next.active {
+  opacity: 1;
+}
+.page-transition-fade-leave-next {
+  opacity: 1;
+}
+.page-transition-fade-leave-next.active {
+  opacity: 0;
+}
+
+.page-transition-fade-enter-prev {
+  opacity: 0;
+}
+.page-transition-fade-enter-prev.active {
+  opacity: 1;
+}
+.page-transition-fade-leave-prev {
+  opacity: 1;
+}
+.page-transition-fade-leave-prev.active {
+  opacity: 0;
+}
+
+/* ============================================
+   水平滑动动画 (slide)
+   ============================================ */
+.page-transition-slide-enter-next {
+  transform: translateX(100%);
+}
+.page-transition-slide-enter-next.active {
+  transform: translateX(0);
+}
+.page-transition-slide-leave-next {
+  transform: translateX(0);
+}
+.page-transition-slide-leave-next.active {
+  transform: translateX(-100%);
+}
+
+.page-transition-slide-enter-prev {
+  transform: translateX(-100%);
+}
+.page-transition-slide-enter-prev.active {
+  transform: translateX(0);
+}
+.page-transition-slide-leave-prev {
+  transform: translateX(0);
+}
+.page-transition-slide-leave-prev.active {
+  transform: translateX(100%);
+}
+
+/* ============================================
+   垂直滑动动画 (slideUp)
+   ============================================ */
+.page-transition-slideUp-enter-next {
+  transform: translateY(100%);
+}
+.page-transition-slideUp-enter-next.active {
+  transform: translateY(0);
+}
+.page-transition-slideUp-leave-next {
+  transform: translateY(0);
+}
+.page-transition-slideUp-leave-next.active {
+  transform: translateY(-100%);
+}
+
+.page-transition-slideUp-enter-prev {
+  transform: translateY(-100%);
+}
+.page-transition-slideUp-enter-prev.active {
+  transform: translateY(0);
+}
+.page-transition-slideUp-leave-prev {
+  transform: translateY(0);
+}
+.page-transition-slideUp-leave-prev.active {
+  transform: translateY(100%);
+}
+
+/* ============================================
+   缩放动画 (zoom)
+   ============================================ */
+.page-transition-zoom-enter-next {
+  transform: scale(0.8);
+  opacity: 0;
+}
+.page-transition-zoom-enter-next.active {
+  transform: scale(1);
+  opacity: 1;
+}
+.page-transition-zoom-leave-next {
+  transform: scale(1);
+  opacity: 1;
+}
+.page-transition-zoom-leave-next.active {
+  transform: scale(1.2);
+  opacity: 0;
+}
+
+.page-transition-zoom-enter-prev {
+  transform: scale(1.2);
+  opacity: 0;
+}
+.page-transition-zoom-enter-prev.active {
+  transform: scale(1);
+  opacity: 1;
+}
+.page-transition-zoom-leave-prev {
+  transform: scale(1);
+  opacity: 1;
+}
+.page-transition-zoom-leave-prev.active {
+  transform: scale(0.8);
+  opacity: 0;
+}
+
+/* ============================================
+   翻转动画 (flip)
+   ============================================ */
+.page-transition-flip-enter-next {
+  transform: perspective(1000px) rotateY(-90deg);
+  opacity: 0;
+}
+.page-transition-flip-enter-next.active {
+  transform: perspective(1000px) rotateY(0deg);
+  opacity: 1;
+}
+.page-transition-flip-leave-next {
+  transform: perspective(1000px) rotateY(0deg);
+  opacity: 1;
+}
+.page-transition-flip-leave-next.active {
+  transform: perspective(1000px) rotateY(90deg);
+  opacity: 0;
+}
+
+.page-transition-flip-enter-prev {
+  transform: perspective(1000px) rotateY(90deg);
+  opacity: 0;
+}
+.page-transition-flip-enter-prev.active {
+  transform: perspective(1000px) rotateY(0deg);
+  opacity: 1;
+}
+.page-transition-flip-leave-prev {
+  transform: perspective(1000px) rotateY(0deg);
+  opacity: 1;
+}
+.page-transition-flip-leave-prev.active {
+  transform: perspective(1000px) rotateY(-90deg);
+  opacity: 0;
+}
+
+/* ============================================
+   通用动画容器样式
+   ============================================ */
+.page-transition-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.page-transition-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* 当前页面层 */
+.page-transition-current {
+  z-index: 2;
+}
+
+/* 进入/离开页面层 */
+.page-transition-entering,
+.page-transition-leaving {
+  z-index: 1;
+}

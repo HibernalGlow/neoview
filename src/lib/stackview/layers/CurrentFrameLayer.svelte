@@ -6,13 +6,23 @@
   - 使用浏览器原生滚动，硬件加速
   - HoverScrollLayer 直接操作 scrollLeft/scrollTop
   - 无需 transform-origin，性能最优
+  
+  【翻页动画】支持多种翻页动画效果：
+  - 淡入淡出、滑动、缩放、翻转等
+  - 通过 pageTransitionStore 控制
 -->
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
 	import { LayerZIndex } from '../types/layer';
 	import type { Frame } from '../types/frame';
 	import { getImageTransform, getClipPath } from '../utils/transform';
 	import FrameImage from '../components/FrameImage.svelte';
 	import '../styles/frameLayer.css';
+	import {
+		pageTransitionStore,
+		easingCssMap,
+		type PageTransitionSettings
+	} from '$lib/stores/pageTransitionStore.svelte';
 
 	import type { ZoomMode } from '$lib/settings/settingsManager';
 
@@ -23,12 +33,9 @@
 		orientation = 'horizontal',
 		scale = 1,
 		rotation = 0,
-		// 视口和图片尺寸（用于计算边界）
 		viewportSize = { width: 0, height: 0 },
 		imageSize = { width: 0, height: 0 },
-		// 对齐模式：center（默认居中）、left（居左）、right（居右）
 		alignMode = 'center',
-		// 缩放模式：用于决定图片如何填充视口
 		zoomMode = 'fit' as ZoomMode,
 		onImageLoad
 	}: {
@@ -44,6 +51,82 @@
 		zoomMode?: ZoomMode;
 		onImageLoad?: (e: Event, index: number) => void;
 	} = $props();
+
+	// 翻页动画状态
+	let transitionSettings = $state<PageTransitionSettings | null>(null);
+	let animationClass = $state('');
+	let animationStyle = $state('');
+	
+	// 记录上一次的页面索引
+	let lastPageIndex = -1;
+	let isFirstRender = true;
+
+	onMount(() => {
+		const unsubscribe = pageTransitionStore.subscribe((s) => {
+			transitionSettings = s;
+		});
+		return unsubscribe;
+	});
+
+	// 获取当前页面索引
+	function getCurrentPageIndex(): number {
+		return frame?.images[0]?.physicalIndex ?? -1;
+	}
+
+	// 触发翻页动画
+	async function triggerAnimation(dir: 'next' | 'prev') {
+		if (!transitionSettings || transitionSettings.type === 'none') return;
+		
+		const { type, duration, easing } = transitionSettings;
+		const easingCss = easingCssMap[easing];
+		
+		// 设置初始状态（动画起点）
+		animationClass = `page-transition-${type}-enter-${dir}`;
+		animationStyle = '';
+		
+		// 等待 DOM 更新
+		await tick();
+		
+		// 强制重绘
+		void document.body.offsetHeight;
+		
+		// 设置过渡并触发动画
+		animationStyle = `transition: transform ${duration}ms ${easingCss}, opacity ${duration}ms ${easingCss}`;
+		animationClass = `page-transition-${type}-enter-${dir} active`;
+		
+		// 动画结束后清理
+		setTimeout(() => {
+			animationClass = '';
+			animationStyle = '';
+		}, duration + 50);
+	}
+
+	// 监听 frame 变化
+	$effect(() => {
+		const currentIndex = getCurrentPageIndex();
+		
+		// 跳过首次渲染和无效索引
+		if (isFirstRender || currentIndex === -1) {
+			isFirstRender = false;
+			lastPageIndex = currentIndex;
+			return;
+		}
+		
+		// 页面没有变化
+		if (currentIndex === lastPageIndex) return;
+		
+		// 检查动画是否启用
+		if (!transitionSettings?.enabled) {
+			lastPageIndex = currentIndex;
+			return;
+		}
+		
+		// 判断翻页方向并触发动画
+		const dir = currentIndex > lastPageIndex ? 'next' : 'prev';
+		lastPageIndex = currentIndex;
+		
+		triggerAnimation(dir);
+	});
 
 	// 【性能优化】原生滚动方案：不再使用 transform-origin
 	// HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop
@@ -192,18 +275,19 @@
 </script>
 
 {#if frame.images.length > 0}
-	<!-- 【性能优化】可滚动容器，用于原生滚动 -->
+	<!-- 【翻页动画】动画容器 -->
 	<div
-		class="scroll-frame-container {layoutClass}"
+		class="scroll-frame-container {layoutClass} {animationClass}"
 		data-layer="CurrentFrameLayer"
 		data-layer-id="current"
 		style:z-index={LayerZIndex.CURRENT_FRAME}
+		style={animationStyle}
 	>
 		<div
 			class="scroll-frame-content"
 			style:transform={transformStyle}
 		>
-			{#each frame.images as img, i (i)}
+			{#each frame.images as img, i (img.physicalIndex)}
 				<FrameImage
 					pageIndex={img.physicalIndex}
 					url={img.url}
@@ -237,8 +321,10 @@
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
 		/* GPU 加速 */
-		will-change: scroll-position;
+		will-change: scroll-position, transform, opacity;
 		-webkit-overflow-scrolling: touch;
+		/* 翻页动画基础 */
+		backface-visibility: hidden;
 	}
 
 	/* 隐藏 Webkit 滚动条 */
@@ -279,5 +365,99 @@
 
 	.scroll-frame-container.frame-align-right .scroll-frame-content {
 		justify-content: flex-end;
+	}
+
+	/* ============================================
+	   翻页动画样式（内联以确保优先级）
+	   ============================================ */
+	
+	/* 淡入淡出 */
+	.scroll-frame-container.page-transition-fade-enter-next,
+	.scroll-frame-container.page-transition-fade-enter-prev {
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-fade-enter-next.active,
+	.scroll-frame-container.page-transition-fade-enter-prev.active {
+		opacity: 1;
+	}
+
+	/* 水平滑动 - 下一页 */
+	.scroll-frame-container.page-transition-slide-enter-next {
+		transform: translateX(30%);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-slide-enter-next.active {
+		transform: translateX(0);
+		opacity: 1;
+	}
+
+	/* 水平滑动 - 上一页 */
+	.scroll-frame-container.page-transition-slide-enter-prev {
+		transform: translateX(-30%);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-slide-enter-prev.active {
+		transform: translateX(0);
+		opacity: 1;
+	}
+
+	/* 垂直滑动 - 下一页 */
+	.scroll-frame-container.page-transition-slideUp-enter-next {
+		transform: translateY(30%);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-slideUp-enter-next.active {
+		transform: translateY(0);
+		opacity: 1;
+	}
+
+	/* 垂直滑动 - 上一页 */
+	.scroll-frame-container.page-transition-slideUp-enter-prev {
+		transform: translateY(-30%);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-slideUp-enter-prev.active {
+		transform: translateY(0);
+		opacity: 1;
+	}
+
+	/* 缩放 - 下一页 */
+	.scroll-frame-container.page-transition-zoom-enter-next {
+		transform: scale(0.9);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-zoom-enter-next.active {
+		transform: scale(1);
+		opacity: 1;
+	}
+
+	/* 缩放 - 上一页 */
+	.scroll-frame-container.page-transition-zoom-enter-prev {
+		transform: scale(1.1);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-zoom-enter-prev.active {
+		transform: scale(1);
+		opacity: 1;
+	}
+
+	/* 翻转 - 下一页 */
+	.scroll-frame-container.page-transition-flip-enter-next {
+		transform: perspective(1000px) rotateY(-15deg);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-flip-enter-next.active {
+		transform: perspective(1000px) rotateY(0deg);
+		opacity: 1;
+	}
+
+	/* 翻转 - 上一页 */
+	.scroll-frame-container.page-transition-flip-enter-prev {
+		transform: perspective(1000px) rotateY(15deg);
+		opacity: 0;
+	}
+	.scroll-frame-container.page-transition-flip-enter-prev.active {
+		transform: perspective(1000px) rotateY(0deg);
+		opacity: 1;
 	}
 </style>

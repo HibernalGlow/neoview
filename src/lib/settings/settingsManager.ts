@@ -186,6 +186,8 @@ export interface NeoViewSettings {
       showDelaySec: number;
       hideDelaySec: number;
     };
+    /** 页面列表是否跟随底部进度条跳转 */
+    pageListFollowProgress: boolean;
   };
   bindings: {
     mouse: {
@@ -377,7 +379,8 @@ const defaultSettings: NeoViewSettings = {
     autoHideTiming: {
       showDelaySec: 0.0,
       hideDelaySec: 0.0
-    }
+    },
+    pageListFollowProgress: true
   },
   bindings: {
     mouse: {

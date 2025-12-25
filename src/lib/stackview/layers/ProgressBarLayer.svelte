@@ -274,19 +274,17 @@
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
-  /* 缓慢持续荧光闪烁效果（避免画面完全静止） */
+  /* 缓慢闪烁效果（避免画面完全静止） */
   .ambient-glow {
-    animation: ambient-glow 4s ease-in-out infinite;
+    animation: slow-blink 5s ease-in-out infinite;
   }
 
-  @keyframes ambient-glow {
+  @keyframes slow-blink {
     0%, 100% {
-      box-shadow: 0 0 4px rgba(255, 255, 255, 0.3), 0 0 8px currentColor;
-      filter: brightness(1);
+      opacity: 1;
     }
     50% {
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.5), 0 0 16px currentColor, 0 0 24px currentColor;
-      filter: brightness(1.15);
+      opacity: 0.5;
     }
   }
 </style>

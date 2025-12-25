@@ -6,11 +6,13 @@
   - GPU 加速
   - 样式统一
   - 根据 loadModeStore 切换 img/canvas 渲染
+  - 颜色滤镜应用
 -->
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
   import { stackImageLoader } from '../utils/stackImageLoader';
+  import { filterStore } from '$lib/stores/filterStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -35,11 +37,21 @@
     onload,
   }: Props = $props();
   
+  // 滤镜 CSS
+  let filterCss = $state('');
+  
+  $effect(() => {
+    const unsubscribe = filterStore.subscribe(() => {
+      filterCss = filterStore.getCssFilter();
+    });
+    return unsubscribe;
+  });
+  
   // 获取显示 URL（优先级：超分图 > 预解码 > 原始 URL）
   // 【翻页性能优化】优先使用预解码的 URL
   let displayUrl = $derived.by(() => {
     // 依赖版本号以建立响应式关系
-    const version = imagePool.version;
+    const _version = imagePool.version;
     
     // 1. 检查超分图
     const hasUpscaled = imagePool.hasUpscaled(pageIndex);
@@ -59,6 +71,14 @@
   
   // 是否使用 Canvas 渲染
   let useCanvas = $derived(loadModeStore.isCanvasMode);
+  
+  // 合并样式（包含滤镜）
+  let combinedStyle = $derived.by(() => {
+    const parts: string[] = [];
+    if (style) parts.push(style);
+    if (filterCss) parts.push(`filter: ${filterCss}`);
+    return parts.join('; ');
+  });
 </script>
 
 {#if useCanvas}
@@ -69,7 +89,7 @@
     {alt}
     {transform}
     {clipPath}
-    {style}
+    style={combinedStyle}
     class={className}
     {onload}
   />
@@ -81,6 +101,7 @@
     class="frame-image {className}"
     style:transform={transform || undefined}
     style:clip-path={clipPath || undefined}
+    style:filter={filterCss || undefined}
     style={style || undefined}
     onload={onload}
     draggable="false"

@@ -35,6 +35,7 @@
 		storage: () => import('./info/StorageCard.svelte'),
 		time: () => import('./info/TimeCard.svelte'),
 		sidebarControl: () => import('./info/SidebarControlCard.svelte'),
+		colorFilter: () => import('./info/ColorFilterCard.svelte'),
 		// Properties
 		emmTags: () => import('./properties/EmmTagsCard.svelte'),
 		aiTags: () => import('./properties/AiTagsCard.svelte'),

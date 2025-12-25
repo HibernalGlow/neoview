@@ -2,20 +2,22 @@
 /**
  * 页面列表卡片
  * 显示当前书籍的所有页面并支持跳转
+ * 
+ * 【翻页性能优化】显示预解码/预加载状态
  */
 import { onMount, onDestroy } from 'svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Slider } from '$lib/components/ui/slider';
-import { Search, Grid3x3, List, Image as ImageIcon } from '@lucide/svelte';
+import { Search, Grid3x3, List, Image as ImageIcon, Zap, Download } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { preDecodeCache } from '$lib/stackview/stores/preDecodeCache';
 import type { Page } from '$lib/types';
 import PageContextMenu from './PageContextMenu.svelte';
-import PageIndexBadge from './PageIndexBadge.svelte';
 
 type ViewMode = 'list' | 'grid' | 'thumb';
 
@@ -32,7 +34,8 @@ let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
 let scrollContainer: HTMLDivElement | undefined;
 
-
+// 预解码状态更新触发器（通过事件驱动，不使用定时器）
+let preDecodeVersion = $state(0);
 
 // 右键菜单状态
 let contextMenu = $state<{
@@ -71,18 +74,96 @@ const filteredItems = $derived(
 );
 
 const currentPageIndex = $derived(bookStore.currentPageIndex);
+
+// 获取超分状态
+// 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
+// 依赖 imagePool.version 和 upscaleStore.version 触发响应式更新
 const upscaleEnabled = $derived(upscaleStore.enabled);
 const imagePoolVersion = $derived(imagePool.version);
+const upscaleStoreVersion = $derived(upscaleStore.version);
 
 function isPageUpscaled(pageIndex: number): boolean {
+	// 依赖 version 触发更新
 	void imagePoolVersion;
 	return imagePool.hasUpscaled(pageIndex);
 }
+
+// 获取页面超分状态类型
+type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
+
+function getPageUpscaleStatus(pageIndex: number): UpscaleStatusType {
+	// 依赖两个版本号触发更新
+	void imagePoolVersion;
+	void upscaleStoreVersion;
+	if (!upscaleEnabled) return 'none';
+	
+	// 先检查是否已完成（imagePool 中有超分图）
+	if (imagePool.hasUpscaled(pageIndex)) return 'completed';
+	
+	// 获取 upscaleStore 中的状态
+	const status = upscaleStore.getPageStatus(pageIndex);
+	if (status === 'pending' || status === 'checking') return 'pending';
+	if (status === 'processing') return 'processing';
+	if (status === 'skipped') return 'skipped';
+	if (status === 'failed') return 'failed';
+	
+	return 'none';
+}
+
+// 获取页面匹配的条件名称
+function getPageConditionName(pageIndex: number): string | null {
+	void upscaleStoreVersion;
+	if (!upscaleEnabled) return null;
+	return upscaleStore.getPageConditionName(pageIndex);
+}
+
+// 状态标签配置
+const statusConfig: Record<UpscaleStatusType, { label: string; class: string } | null> = {
+	'none': null,
+	'pending': { label: '队列中', class: 'bg-amber-500/80 text-white' },
+	'processing': { label: '处理中', class: 'bg-blue-500/80 text-white animate-pulse' },
+	'completed': { label: '已超分', class: 'bg-green-500/80 text-white' },
+	'skipped': { label: '已跳过', class: 'bg-gray-500/80 text-white' },
+	'failed': { label: '失败', class: 'bg-red-500/80 text-white' },
+};
+
+// 预解码/预加载状态类型
+type PreloadStatusType = 'decoded' | 'loaded' | 'none';
+
+/**
+ * 获取页面的预加载状态
+ * @returns 'decoded' | 'loaded' | 'none'
+ */
+function getPreloadStatus(pageIndex: number): PreloadStatusType {
+	// 依赖 preDecodeVersion 和 imagePoolVersion 触发响应式更新
+	void preDecodeVersion;
+	void imagePoolVersion;
+	
+	// 优先检查预解码状态（翻页即时）
+	if (preDecodeCache.has(pageIndex)) {
+		return 'decoded';
+	}
+	
+	// 检查预加载状态（Blob 缓存，需解码）
+	if (imagePool.has(pageIndex)) {
+		return 'loaded';
+	}
+	
+	return 'none';
+}
+
+// 预加载状态配置
+const preloadStatusConfig: Record<PreloadStatusType, { icon: 'zap' | 'download'; class: string; tooltip: string } | null> = {
+	'decoded': { icon: 'zap', class: 'text-green-500', tooltip: '已预解码（翻页即时）' },
+	'loaded': { icon: 'download', class: 'text-blue-500', tooltip: '已预加载（需解码）' },
+	'none': null,
+};
 
 // 自动滚动到当前页
 $effect(() => {
 	const idx = currentPageIndex;
 	if (idx < 0 || !scrollContainer) return;
+	// 延迟执行确保DOM已更新
 	requestAnimationFrame(() => {
 		const el = scrollContainer?.querySelector(`[data-page-index="${idx}"]`) as HTMLElement | null;
 		if (el) {
@@ -106,19 +187,31 @@ $effect(() => {
 	}
 });
 
+// 强制更新触发器
 let updateTrigger = $state(0);
 
+// 预解码状态变化事件处理
+function handlePreDecodeChange() {
+	preDecodeVersion++;
+}
+
 onMount(() => {
+	// 订阅缩略图缓存变化
 	unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
 		updateTrigger++;
 	});
+	
+	// 监听预解码状态变化事件（由 preDecodeCache 触发）
+	window.addEventListener('predecode-change', handlePreDecodeChange);
 });
 
 onDestroy(() => {
 	unsubscribeThumbnailCache?.();
+	window.removeEventListener('predecode-change', handlePreDecodeChange);
 });
 
 function getThumbnail(pageIndex: number): ThumbnailEntry | null {
+	// 依赖 updateTrigger 触发响应式更新
 	void updateTrigger;
 	return thumbnailCacheStore.getThumbnail(pageIndex);
 }
@@ -197,7 +290,6 @@ async function requestThumbnail(pageIndex: number) {
 
 	<!-- 页面列表 -->
 	<div class="flex-1 min-h-0 overflow-y-auto" bind:this={scrollContainer}>
-		{#key viewMode}
 		{#if filteredItems.length === 0}
 			<p class="text-center text-xs text-muted-foreground py-4">
 				{items.length === 0 ? '未加载书籍' : '未找到匹配的页面'}
@@ -208,18 +300,38 @@ async function requestThumbnail(pageIndex: number) {
 				{#each filteredItems as item (item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
+					{@const preloadStatus = getPreloadStatus(item.index)}
+					{@const preloadCfg = preloadStatusConfig[preloadStatus]}
 					<button
 						data-page-index={item.index}
-						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
+						class="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
 						onclick={() => goToPage(item.index)}
 						oncontextmenu={(e) => handleContextMenu(e, item)}
 					>
-						<PageIndexBadge
-							pageIndex={item.index}
-							showName={true}
-							name={item.name}
-							isCurrent={currentPageIndex === item.index}
-						/>
+						<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+						<!-- 预解码/预加载状态图标 -->
+						{#if preloadCfg}
+							<span class="{preloadCfg.class}" title={preloadCfg.tooltip}>
+								{#if preloadCfg.icon === 'zap'}
+									<Zap class="h-3 w-3 fill-current" />
+								{:else}
+									<Download class="h-3 w-3" />
+								{/if}
+							</span>
+						{/if}
+						<span class="truncate flex-1">{item.name}</span>
+						{#if conditionName}
+							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>
+						{/if}
+						{#if statusCfg}
+							<span class="px-1 py-0.5 text-[10px] font-medium rounded shrink-0 {statusCfg.class}">{statusCfg.label}</span>
+						{/if}
+						{#if currentPageIndex === item.index}
+							<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded shrink-0">当前</span>
+						{/if}
 					</button>
 				{/each}
 			</div>
@@ -230,6 +342,9 @@ async function requestThumbnail(pageIndex: number) {
 					{@const thumb = getThumbnail(item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
 					<button
 						data-page-index={item.index}
 						class="w-full text-left p-1.5 rounded hover:bg-muted transition-colors flex items-center gap-2 {currentPageIndex === item.index ? 'bg-primary/10' : ''} {isCurrentAndUpscaled ? 'upscaled-glow' : ''}"
@@ -247,10 +362,18 @@ async function requestThumbnail(pageIndex: number) {
 							{/if}
 						</div>
 						<div class="flex-1 min-w-0">
-							<PageIndexBadge
-								pageIndex={item.index}
-								isCurrent={currentPageIndex === item.index}
-							/>
+							<div class="flex items-center gap-1 flex-wrap">
+								<span class="text-xs font-mono font-semibold text-primary">#{item.index + 1}</span>
+								{#if conditionName}
+									<span class="px-1 py-0.5 text-[10px] font-medium rounded bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>
+								{/if}
+								{#if statusCfg}
+									<span class="px-1 py-0.5 text-[10px] font-medium rounded {statusCfg.class}">{statusCfg.label}</span>
+								{/if}
+								{#if currentPageIndex === item.index}
+									<span class="px-1 py-0.5 text-[10px] font-semibold bg-primary text-primary-foreground rounded">当前</span>
+								{/if}
+							</div>
 							<div class="text-xs truncate">{item.name}</div>
 						</div>
 					</button>
@@ -263,6 +386,9 @@ async function requestThumbnail(pageIndex: number) {
 					{@const thumb = getThumbnail(item.index)}
 					{@const isUpscaled = upscaleEnabled && isPageUpscaled(item.index)}
 					{@const isCurrentAndUpscaled = currentPageIndex === item.index && isUpscaled}
+					{@const upscaleStatus = getPageUpscaleStatus(item.index)}
+					{@const statusCfg = statusConfig[upscaleStatus]}
+					{@const conditionName = getPageConditionName(item.index)}
 					<button
 						data-page-index={item.index}
 						class="flex flex-col gap-1 p-1 rounded hover:bg-muted transition-colors {currentPageIndex === item.index ? 'ring-2 ring-primary' : ''} {isCurrentAndUpscaled ? 'upscaled-glow-grid' : ''}"
@@ -278,17 +404,29 @@ async function requestThumbnail(pageIndex: number) {
 							{:else}
 								<ImageIcon class="h-6 w-6 text-muted-foreground" />
 							{/if}
+							<!-- 超分状态角标 -->
+							{#if statusCfg}
+								<div class="absolute top-0.5 right-0.5 px-1 py-0.5 text-[8px] font-medium rounded {statusCfg.class}" title={conditionName ? `条件: ${conditionName}` : ''}>
+									{statusCfg.label}
+								</div>
+							{/if}
+							<!-- 条件名称角标（仅当有条件且未完成时显示） -->
+							{#if conditionName && upscaleStatus !== 'completed'}
+								<div class="absolute bottom-0.5 left-0.5 px-1 py-0.5 text-[8px] font-medium rounded bg-purple-500/80 text-white truncate max-w-[90%]" title="条件: {conditionName}">
+									{conditionName}
+								</div>
+							{/if}
 						</div>
-						<PageIndexBadge
-							pageIndex={item.index}
-							isCurrent={currentPageIndex === item.index}
-							size="sm"
-						/>
+						<div class="flex items-center gap-1">
+							<span class="text-[10px] font-mono font-semibold text-primary">#{item.index + 1}</span>
+							{#if currentPageIndex === item.index}
+								<span class="px-1 text-[8px] font-semibold bg-primary text-primary-foreground rounded">当前</span>
+							{/if}
+						</div>
 					</button>
 				{/each}
 			</div>
 		{/if}
-		{/key}
 	</div>
 
 	<!-- 底部固定 Slider -->
@@ -324,6 +462,7 @@ async function requestThumbnail(pageIndex: number) {
 />
 
 <style>
+	/* 已超分的当前页 - 主色描边荧光效果 */
 	:global(.upscaled-glow) {
 		box-shadow: 0 0 0 1.5px hsl(var(--primary)), 0 0 8px hsl(var(--primary) / 0.5), 0 0 16px hsl(var(--primary) / 0.3);
 		animation: upscaled-pulse 2s ease-in-out infinite;

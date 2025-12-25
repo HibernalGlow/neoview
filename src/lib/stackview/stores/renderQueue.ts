@@ -15,7 +15,7 @@
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { preDecodeCache } from './preDecodeCache.svelte';
+import { preDecodeCache } from './preDecodeCache';
 import { imagePool } from './imagePool.svelte';
 
 // ============================================================================

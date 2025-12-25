@@ -1,12 +1,19 @@
 /**
  * StackView 专用图片加载器
  * 共享 ImageLoaderCore 实例，复用主加载器的缓存
+ * 
+ * 【翻页性能优化】
+ * - 集成 PreDecodeCache 预解码缓存
+ * - 集成 RenderQueue 分层渲染队列
+ * - 参考 OpenComic 的 img.decode() 预解码机制
  */
 
 import { getImageLoaderCore, type ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
 import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
 import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
+import { preDecodeCache } from '../stores/preDecodeCache';
+import { renderQueue } from '../stores/renderQueue';
 
 // ============================================================================
 // 类型定义
@@ -78,6 +85,8 @@ export class StackImageLoader {
       this.currentBookPath = bookPath;
       // 切书后需要重新注册回调（因为 core 实例可能已切换）
       this.dimensionsCallbackRegistered = false;
+      // 【翻页优化】清空预解码缓存
+      preDecodeCache.setCurrentBook(bookPath);
     }
   }
 
@@ -350,6 +359,70 @@ export class StackImageLoader {
     });
   }
 
+  // ========================================================================
+  // 【翻页性能优化】预解码相关方法
+  // ========================================================================
+
+  /**
+   * 预加载并预解码页面
+   * 在后台完成 Blob 加载 + img.decode() 解码
+   * 
+   * @param pageIndex 页面索引
+   * @returns Promise<void>
+   */
+  async preloadWithDecode(pageIndex: number): Promise<void> {
+    // 1. 先加载 Blob
+    const result = await this.loadPage(pageIndex, 5);
+    
+    // 2. 预解码
+    await preDecodeCache.preDecodeAndCache(pageIndex, result.url);
+  }
+
+  /**
+   * 获取预解码的图片 URL
+   * 如果已预解码，返回 URL（浏览器会使用解码缓存）
+   * 
+   * @param pageIndex 页面索引
+   * @returns Blob URL 或 undefined
+   */
+  getPreDecodedUrl(pageIndex: number): string | undefined {
+    return preDecodeCache.getUrl(pageIndex);
+  }
+
+  /**
+   * 检查页面是否已预解码
+   * 
+   * @param pageIndex 页面索引
+   * @returns boolean
+   */
+  isPreDecoded(pageIndex: number): boolean {
+    return preDecodeCache.has(pageIndex);
+  }
+
+  /**
+   * 触发分层预加载（使用 RenderQueue）
+   * 当前页立即加载，周围页延迟加载
+   * 
+   * @param pageIndex 当前页面索引
+   */
+  triggerLayeredPreload(pageIndex: number): void {
+    renderQueue.setCurrentPage(pageIndex);
+  }
+
+  /**
+   * 获取预解码缓存统计
+   */
+  getPreDecodeStats() {
+    return preDecodeCache.getStats();
+  }
+
+  /**
+   * 获取渲染队列状态
+   */
+  getRenderQueueStatus() {
+    return renderQueue.getStatus();
+  }
+
   /**
    * 清理
    */
@@ -358,6 +431,9 @@ export class StackImageLoader {
     this.dimensionsCache.clear();
     this.backgroundColorCache.clear();
     this.precomputedScaleCache.clear();
+    // 【翻页优化】清空预解码缓存
+    preDecodeCache.clear();
+    renderQueue.cancelAll();
   }
 }
 

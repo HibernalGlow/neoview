@@ -10,6 +10,7 @@
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+  import { stackImageLoader } from '../utils/stackImageLoader';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -34,16 +35,26 @@
     onload,
   }: Props = $props();
   
-  // 获取显示 URL（优先超分图，响应式）
+  // 获取显示 URL（优先级：超分图 > 预解码 > 原始 URL）
+  // 【翻页性能优化】优先使用预解码的 URL
   let displayUrl = $derived.by(() => {
     // 依赖版本号以建立响应式关系
     const version = imagePool.version;
-    // 使用 hasUpscaled 正确判断是否有超分图
+    
+    // 1. 检查超分图
     const hasUpscaled = imagePool.hasUpscaled(pageIndex);
-    const result = hasUpscaled 
-      ? imagePool.getUpscaledUrl(pageIndex) ?? url 
-      : url;
-    return result;
+    if (hasUpscaled) {
+      return imagePool.getUpscaledUrl(pageIndex) ?? url;
+    }
+    
+    // 2. 检查预解码缓存（关键优化点）
+    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(pageIndex);
+    if (preDecodedUrl) {
+      return preDecodedUrl;
+    }
+    
+    // 3. 使用原始 URL
+    return url;
   });
   
   // 是否使用 Canvas 渲染

@@ -133,6 +133,7 @@ export function createImageStore() {
   
   /**
    * 加载当前页面
+   * 【翻页性能优化】优先使用预解码缓存
    */
   async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
     const currentIndex = bookStore.currentPageIndex;
@@ -176,7 +177,33 @@ export function createImageStore() {
     
     lastLoadedIndex = currentIndex;
     
-    // 优先使用缓存
+    // 记录翻页开始时间
+    const flipStartTime = performance.now();
+    
+    // 【翻页优化】优先检查预解码缓存
+    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(currentIndex);
+    if (preDecodedUrl) {
+      const flipLatency = performance.now() - flipStartTime;
+      console.log(`⚡ 使用预解码缓存: 页码 ${currentIndex + 1}, 延迟 ${flipLatency.toFixed(1)}ms`);
+      state.currentUrl = preDecodedUrl;
+      state.dimensions = stackImageLoader.getCachedDimensions(currentIndex) ?? null;
+      state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
+      state.loading = false;
+      // 更新延迟追踪（预解码命中）
+      const cached = imagePool.getSync(currentIndex);
+      if (cached?.blob) {
+        updateCacheHitLatencyTrace(cached.blob, currentIndex);
+      }
+      // 【关键】通知缩略图服务主图已就绪
+      thumbnailService.notifyMainImageReady();
+      // 【翻页优化】触发分层预加载
+      stackImageLoader.triggerLayeredPreload(currentIndex);
+      // 处理双页模式
+      await loadSecondPageIfNeeded(pageMode, currentIndex, book);
+      return;
+    }
+    
+    // 优先使用 Blob 缓存
     const cached = imagePool.getSync(currentIndex);
     if (cached) {
       console.log(`🖼️ ImageStore: 使用缓存 page=${currentIndex} url=${cached.url?.substring(0, 60)}...`);
@@ -191,6 +218,8 @@ export function createImageStore() {
       updateCacheHitLatencyTrace(cached.blob, currentIndex);
       // 【关键】通知缩略图服务主图已就绪
       thumbnailService.notifyMainImageReady();
+      // 【翻页优化】触发分层预加载
+      stackImageLoader.triggerLayeredPreload(currentIndex);
     } else {
       state.loading = true;
     }
@@ -221,7 +250,14 @@ export function createImageStore() {
     if (!cached) {
       try {
         const image = await imagePool.get(currentIndex);
-        console.log(`🖼️ ImageStore: 异步加载完成 page=${currentIndex} url=${image?.url?.substring(0, 60)}...`);
+        const flipLatency = performance.now() - flipStartTime;
+        console.log(`🖼️ ImageStore: 异步加载完成 page=${currentIndex} url=${image?.url?.substring(0, 60)}... 延迟=${flipLatency.toFixed(1)}ms`);
+        
+        // 【性能监控】延迟超过 100ms 打印警告
+        if (flipLatency > 100) {
+          console.warn(`⚠️ 翻页延迟过高: ${flipLatency.toFixed(1)}ms (目标 <50ms)`);
+        }
+        
         if (image && lastLoadedIndex === currentIndex) {
           state.currentUrl = image.url;
           state.dimensions = image.width && image.height 
@@ -231,6 +267,8 @@ export function createImageStore() {
           state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
           // 【关键】主图加载完成，通知缩略图服务开始加载
           thumbnailService.notifyMainImageReady();
+          // 【翻页优化】触发分层预加载
+          stackImageLoader.triggerLayeredPreload(currentIndex);
         }
       } catch (err) {
         state.error = String(err);
@@ -259,8 +297,57 @@ export function createImageStore() {
       }
     }
     
-    // 后台预加载
+    // 后台预加载（旧逻辑，保留兼容）
     imagePool.preloadRange(currentIndex, 4);
+  }
+  
+  /**
+   * 加载双页模式的第二张图片（辅助函数）
+   */
+  async function loadSecondPageIfNeeded(
+    pageMode: 'single' | 'double',
+    currentIndex: number,
+    book: NonNullable<typeof bookStore.currentBook>
+  ) {
+    const secondIndex = currentIndex + 1;
+    const shouldLoadSecond = pageMode === 'double' && shouldLoadSecondPage(currentIndex, secondIndex);
+    
+    if (!shouldLoadSecond || secondIndex >= book.pages.length) {
+      state.secondUrl = null;
+      state.secondDimensions = null;
+      return;
+    }
+    
+    // 优先使用预解码缓存
+    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(secondIndex);
+    if (preDecodedUrl) {
+      state.secondUrl = preDecodedUrl;
+      state.secondDimensions = stackImageLoader.getCachedDimensions(secondIndex) ?? null;
+      return;
+    }
+    
+    // 使用 Blob 缓存
+    const secondCached = imagePool.getSync(secondIndex);
+    if (secondCached) {
+      state.secondUrl = secondCached.url;
+      state.secondDimensions = secondCached.width && secondCached.height 
+        ? { width: secondCached.width, height: secondCached.height } 
+        : null;
+      return;
+    }
+    
+    // 异步加载
+    try {
+      const secondImage = await imagePool.get(secondIndex);
+      if (lastLoadedIndex === currentIndex) {
+        state.secondUrl = secondImage?.url ?? null;
+        state.secondDimensions = secondImage?.width && secondImage?.height 
+          ? { width: secondImage.width, height: secondImage.height } 
+          : null;
+      }
+    } catch (err) {
+      console.warn('Failed to load second page:', err);
+    }
   }
   
   /**

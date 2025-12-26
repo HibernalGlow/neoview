@@ -157,24 +157,24 @@
     - 搜索并更新所有导入语句
     - _需求: 1.6_
 
-- [x] 9. 检查点 - 验证所有状态管理层重构
+- [ ] 9. 检查点 - 验证所有状态管理层重构
   - 运行 `yarn check` 确保类型正确
   - 运行 `yarn lint` 确保代码风格
   - 确保所有测试通过，如有问题请询问用户
 
-- [ ] 10. 重构 TopToolbar.svelte（优先级：中）
-  - [ ] 10.1 创建 `TopToolbar/` 目录结构
+- [-] 10. 重构 TopToolbar.svelte（优先级：中）
+  - [x] 10.1 创建 `TopToolbar/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.2_
-  - [ ] 10.2 提取 ZoomPanel.svelte 子组件
+  - [x] 10.2 提取 ZoomPanel.svelte 子组件
     - 缩放控制面板
     - 缩放模式选择
     - _需求: 2.2_
-  - [ ] 10.3 提取 RotatePanel.svelte 子组件
+  - [x] 10.3 提取 RotatePanel.svelte 子组件
     - 旋转控制面板
     - 旋转角度选择
     - _需求: 2.2_
-  - [ ] 10.4 提取 SortPanel.svelte 子组件
+  - [x] 10.4 提取 SortPanel.svelte 子组件
     - 排序控制面板
     - 排序字段选择
     - _需求: 2.2_

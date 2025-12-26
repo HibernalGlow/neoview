@@ -45,7 +45,7 @@
 		type TabBarLayout,
 		type BreadcrumbPosition,
 		type ToolbarPosition
-	} from '../stores/folderTabStore.svelte';
+	} from '../stores/folderTabStore';
 
 	// 根据路径获取图标类型
 	function getTabIconType(path: string): 'bookmark' | 'history' | 'folder' {

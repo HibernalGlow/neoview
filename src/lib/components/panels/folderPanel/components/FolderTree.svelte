@@ -15,7 +15,7 @@
 	} from '@lucide/svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import type { FsItem } from '$lib/types';
-	import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore.svelte';
+	import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore';
 	import * as TreeView from '$lib/components/ui/tree-view';
 	import { cn } from '$lib/utils';
 	import * as TreeCache from '$lib/stores/folderTreeCache';

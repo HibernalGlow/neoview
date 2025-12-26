@@ -94,7 +94,7 @@ import {
 	tabFolderTreeConfig,
 	type SharedSortSettings,
 	type SortInheritStrategy
-} from '../stores/folderTabStore.svelte';
+} from '../stores/folderTabStore';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
 

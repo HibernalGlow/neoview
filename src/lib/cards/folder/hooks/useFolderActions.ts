@@ -7,7 +7,7 @@ import type { FsItem } from '$lib/types';
 import type { FolderState } from './useFolderState.svelte';
 import type { ConfirmDialogConfig } from '../types';
 import { get } from 'svelte/store';
-import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { FileSystemAPI } from '$lib/api';

@@ -25,7 +25,7 @@ import {
 	activeTabId,
 	allTabs,
 	isVirtualPath
-} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 
 /**
  * 创建文件夹面板状态

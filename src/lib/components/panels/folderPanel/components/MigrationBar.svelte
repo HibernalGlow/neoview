@@ -8,7 +8,7 @@ import { Folder, Trash2, Settings } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { FileSystemAPI } from '$lib/api';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-import { tabSelectedItems, folderTabActions } from '../stores/folderTabStore.svelte';
+import { tabSelectedItems, folderTabActions } from '../stores/folderTabStore';
 
 // 别名映射
 const selectedItems = tabSelectedItems;

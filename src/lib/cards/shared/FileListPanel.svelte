@@ -25,7 +25,7 @@
 		isVirtualPath,
 		getPanelLayoutStores,
 		type PanelMode as StorePanelMode
-	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
 	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
 	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';

@@ -28,7 +28,7 @@
 		getPaginationRowModel,
 		getSortedRowModel
 	} from '@tanstack/table-core';
-	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
+	import { settingsManager, type FullExportPayload } from '$lib/stores/settingsManager';
 	import { getPerformanceSettings } from '$lib/api/performance';
 	import StartupConfigPanel from './StartupConfigPanel.svelte';
 	import GistSyncPanel from './GistSyncPanel.svelte';

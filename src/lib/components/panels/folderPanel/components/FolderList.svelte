@@ -18,7 +18,7 @@ import {
 	tabCurrentPath,
 	tabItems,
 	tabSortConfig
-} from '../stores/folderTabStore.svelte';
+} from '../stores/folderTabStore';
 import { derived } from 'svelte/store';
 import type { FolderSortField, FolderSortOrder } from '../stores/folderPanelStore.svelte';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';

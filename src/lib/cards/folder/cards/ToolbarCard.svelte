@@ -15,7 +15,7 @@
 	import FavoriteTagPanel from '$lib/components/panels/folderPanel/components/FavoriteTagPanel.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, isVirtualPath, tabShowPenetrateSettingsBar } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderTabActions, isVirtualPath, tabShowPenetrateSettingsBar } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';

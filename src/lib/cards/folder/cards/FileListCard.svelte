@@ -13,7 +13,7 @@
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, tabSearchResults } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderTabActions, tabSearchResults } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';

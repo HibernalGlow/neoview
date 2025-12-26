@@ -31,7 +31,7 @@
 		tabPendingFocusPath,
 		isVirtualPath,
 		getVirtualPathType
-	} from '../stores/folderTabStore.svelte';
+	} from '../stores/folderTabStore';
 	import {
 		loadVirtualPathData,
 		subscribeVirtualPathData,

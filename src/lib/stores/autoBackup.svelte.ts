@@ -5,7 +5,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { getStartupConfig } from '$lib/config/startupConfig';
-import { settingsManager } from './settingsManager.svelte';
+import { settingsManager } from './settingsManager';
 import { settingsManager as coreSettingsManager } from '$lib/settings/settingsManager';
 
 // ==================== 类型定义 ====================

@@ -5,7 +5,7 @@
  */
 import type { FsItem } from '$lib/types';
 import type { Readable } from 'svelte/store';
-import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig, tabThumbnailWidthPercent } from '../stores/folderTabStore.svelte';
+import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig, tabThumbnailWidthPercent } from '../stores/folderTabStore';
 import { Loader2, Search, FolderOpen, ArrowUpDown } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
 import ListSlider from '$lib/components/panels/file/components/ListSlider.svelte';

@@ -13,7 +13,7 @@ import {
 	tabMultiSelectMode,
 	tabDeleteMode,
 	tabSelectedItems
-} from '../stores/folderTabStore.svelte';
+} from '../stores/folderTabStore';
 import type { FolderViewStyle } from '../stores/folderPanelStore.svelte';
 
 // 别名映射

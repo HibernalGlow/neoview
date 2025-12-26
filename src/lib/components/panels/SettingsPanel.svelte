@@ -9,7 +9,7 @@
 	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
 	import { Switch } from '$lib/components/ui/switch';
 	import * as Select from '$lib/components/ui/select';
-	import { settingsManager } from '$lib/stores/settingsManager.svelte';
+	import { settingsManager } from '$lib/stores/settingsManager';
 	import { Upload, Download, RotateCcw } from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import { showSuccessToast, showErrorToast, showInfoToast } from '$lib/utils/toast';

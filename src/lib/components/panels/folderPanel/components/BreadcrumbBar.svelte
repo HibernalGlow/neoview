@@ -9,7 +9,7 @@ import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tooltip from '$lib/components/ui/tooltip';
-import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore.svelte';
+import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore';
 
 interface Props {
 	onNavigate?: (path: string) => void;

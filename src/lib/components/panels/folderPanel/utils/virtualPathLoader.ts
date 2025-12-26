@@ -7,7 +7,7 @@ import type { FsItem } from '$lib/types';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
 import { get } from 'svelte/store';
-import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore.svelte';
+import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore';
 
 // 清理状态追踪，避免重复清理
 let bookmarkCleanedUp = false;

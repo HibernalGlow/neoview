@@ -22,7 +22,7 @@
 	import FileItemGridView from './FileItemGridView.svelte';
 	import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
 	import { translateText, needsTranslation } from '$lib/services/translationService';
-	import { tabPenetrateMode } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { tabPenetrateMode } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { FileSystemAPI } from '$lib/api';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 

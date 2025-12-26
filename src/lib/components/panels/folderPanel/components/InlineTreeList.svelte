@@ -4,7 +4,7 @@
  * 在文件列表中显示可展开的树结构，复用 FileItemCard 保持原有样式
  */
 import type { FsItem } from '$lib/types';
-import { folderTabActions, tabExpandedFolders, tabCurrentPath, tabViewStyle } from '../stores/folderTabStore.svelte';
+import { folderTabActions, tabExpandedFolders, tabCurrentPath, tabViewStyle } from '../stores/folderTabStore';
 
 // 别名映射
 const expandedFolders = tabExpandedFolders;

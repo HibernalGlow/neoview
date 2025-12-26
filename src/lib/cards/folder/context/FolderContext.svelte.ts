@@ -24,7 +24,7 @@ import {
 	activeTabId,
 	allTabs,
 	isVirtualPath
-} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 
 const FOLDER_CONTEXT_KEY = Symbol('folder-context');

@@ -72,7 +72,7 @@
 	// CLI 路径处理工具 (Requirements: 4.1, 4.2, 4.3, 4.4)
 	import { normalizePath, validatePath, getPathType } from '$lib/utils/pathUtils';
 	// Folder Panel 标签页管理
-	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
 
 	let loading = $state(false);

@@ -11,7 +11,7 @@ import {
 	tabItems,
 	folderTabActions,
 	activeTabId
-} from '../stores/folderTabStore.svelte';
+} from '../stores/folderTabStore';
 import { chainSelectModeByTab, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
 import { fileBrowserStore, type CheckModeClickBehavior } from '$lib/stores/fileBrowser.svelte';
 

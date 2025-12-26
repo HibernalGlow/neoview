@@ -12,7 +12,7 @@ import {
 	tabSearchSettings,
 	tabCurrentPath,
 	VIRTUAL_PATHS
-} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
 import { mixedGenderStore, hasTagSearch, parseSearchTags, removeTagsFromSearch } from '$lib/stores/emm/favoriteTagStore.svelte';
 import { searchByManualTag } from '$lib/stores/emm/manualTagStore.svelte';

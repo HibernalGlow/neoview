@@ -8,7 +8,7 @@ import { Input } from '$lib/components/ui/input';
 import { Label } from '$lib/components/ui/label';
 import Switch from '$lib/components/ui/switch/switch.svelte';
 import { gistSyncStore, type GistResponse } from '$lib/stores/gistSync.svelte';
-import { settingsManager as exportManager, type FullExportPayload } from '$lib/stores/settingsManager.svelte';
+import { settingsManager as exportManager, type FullExportPayload } from '$lib/stores/settingsManager';
 import {
 	Github,
 	LogIn,

@@ -34,7 +34,7 @@
 		type BreadcrumbPosition,
 		type ToolbarPosition,
 		type PanelMode
-	} from '$lib/components/panels/folderPanel/stores/folderTabStore.svelte';
+	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 
 	let activeTab = $state('layout');
 

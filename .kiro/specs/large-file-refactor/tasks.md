@@ -7,73 +7,73 @@
 ## Tasks
 
 - [x] 1. 重构 fs_commands.rs (2096 行)
-  - [ ] 1.1 创建 fs_commands 目录结构
+  - [x] 1.1 创建 fs_commands 目录结构
     - 创建 `src-tauri/src/commands/fs_commands/` 目录
     - 创建 `mod.rs` 文件，包含状态结构体和模块声明
     - _Requirements: 2.1, 2.2, 4.1_
-  - [ ] 1.2 提取 types.rs
+  - [x] 1.2 提取 types.rs
     - 提取 FileInfo, SubfolderItem, DirectorySnapshotResponse, BatchDirectorySnapshotResult, StreamBatchResult 等类型
     - _Requirements: 4.2_
-  - [ ] 1.3 提取 read_ops.rs
+  - [x] 1.3 提取 read_ops.rs
     - 提取 read_directory, get_file_info, path_exists, read_text_file, browse_directory, list_subfolders, get_images_in_directory, get_file_metadata 命令
     - _Requirements: 4.2_
-  - [ ] 1.4 提取 write_ops.rs
+  - [x] 1.4 提取 write_ops.rs
     - 提取 create_directory, delete_path, rename_path, move_to_trash, move_to_trash_async, copy_path, move_path, write_text_file, open_with_system, show_in_file_manager 命令
     - _Requirements: 4.2_
-  - [ ] 1.5 提取 cache_ops.rs
+  - [x] 1.5 提取 cache_ops.rs
     - 提取 load_directory_snapshot, batch_load_directory_snapshots, browse_directory_page, start_directory_stream, get_next_stream_batch, cancel_directory_stream, cache_index_stats, cache_index_gc, enqueue_cache_maintenance 命令
     - _Requirements: 4.2_
-  - [ ] 1.6 提取 archive_ops.rs
+  - [x] 1.6 提取 archive_ops.rs
     - 提取 list_archive_contents, delete_archive_entry, load_image_from_archive_*, extract_image_to_temp, extract_for_clipboard, get_images_from_archive, batch_extract_archive, is_supported_archive, batch_scan_archives, preload_archive_pages 命令
     - _Requirements: 4.2_
-  - [ ] 1.7 提取 index_ops.rs
+  - [x] 1.7 提取 index_ops.rs
     - 提取 search_files, initialize_file_index, build_file_index, get_index_stats, clear_file_index, search_in_index, get_indexed_paths, is_path_indexed, get_index_progress, get_unindexed_files 命令
     - _Requirements: 4.2_
-  - [ ] 1.8 更新 mod.rs 重导出并删除原文件
+  - [x] 1.8 更新 mod.rs 重导出并删除原文件
     - 添加 pub use 语句重导出所有公共 API
     - 删除原 fs_commands.rs 文件
     - 更新 commands/mod.rs 中的模块声明
     - _Requirements: 3.3, 4.3_
-  - [ ] 1.9 验证 fs_commands 重构
+  - [x] 1.9 验证 fs_commands 重构
     - 运行 cargo check 确保编译通过
     - 检查所有新模块文件行数 ≤ 800
     - _Requirements: 1.1, 12.1_
 
-- [ ] 2. 重构 thumbnail_db.rs (1976 行)
-  - [ ] 2.1 创建 thumbnail_db 目录结构
+- [x] 2. 重构 thumbnail_db.rs (1976 行)
+  - [x] 2.1 创建 thumbnail_db 目录结构
     - 创建 `src-tauri/src/core/thumbnail_db/` 目录
     - 创建 `mod.rs` 文件，包含 ThumbnailDb 主结构
     - _Requirements: 2.1, 2.2, 5.1_
-  - [ ] 2.2 提取 types.rs
+  - [x] 2.2 提取 types.rs
     - 提取 CompressionStats, ThumbnailDbStats, ThumbnailDbRecord 类型
     - _Requirements: 5.2_
-  - [ ] 2.3 提取 compression.rs
+  - [x] 2.3 提取 compression.rs
     - 提取 compress_blob, decompress_blob, is_compressed 函数和 LZ4_MAGIC 常量
     - _Requirements: 5.2_
-  - [ ] 2.4 提取 schema.rs
+  - [x] 2.4 提取 schema.rs
     - 提取 initialize_db, auto_migrate, get_db_version, set_db_version, get_table_columns, migrate_rating_from_emm_json 函数
     - _Requirements: 5.2_
-  - [ ] 2.5 提取 crud.rs
+  - [x] 2.5 提取 crud.rs
     - 提取 save_thumbnail, save_thumbnail_with_category, load_thumbnail, load_thumbnail_by_key_and_category, load_thumbnail_with_category, has_thumbnail, has_thumbnail_by_key_and_category, has_thumbnail_with_category, update_access_time 函数
     - _Requirements: 5.2_
-  - [ ] 2.6 提取 batch_ops.rs
+  - [x] 2.6 提取 batch_ops.rs
     - 提取 save_thumbnails_batch, batch_load_thumbnails, batch_check_failed 函数
     - _Requirements: 5.2_
-  - [ ] 2.7 提取 emm_ops.rs
+  - [x] 2.7 提取 emm_ops.rs
     - 提取 save_emm_json, batch_save_emm_json, get_emm_json, batch_get_emm_json, upsert_with_emm_json, load_thumbnail_with_emm_json, get_all_thumbnail_keys, get_folder_keys, get_keys_without_emm_json, get_thumbnail_keys_by_prefix 函数
     - _Requirements: 5.2_
-  - [ ] 2.8 提取 rating_ops.rs
+  - [x] 2.8 提取 rating_ops.rs
     - 提取 update_rating_data, get_rating_data, batch_get_rating_data, get_rating_data_by_prefix, save_emm_with_rating_data, batch_save_emm_with_rating_data 函数
     - _Requirements: 5.2_
-  - [ ] 2.9 提取 maintenance.rs
+  - [x] 2.9 提取 maintenance.rs
     - 提取 delete_old_thumbnails, vacuum, get_database_size, save_failed_thumbnail, get_failed_thumbnail, remove_failed_thumbnail, cleanup_old_failures, normalize_all_keys, update_manual_tags, get_manual_tags, batch_get_manual_tags 函数
     - _Requirements: 5.2_
-  - [ ] 2.10 更新 mod.rs 重导出并删除原文件
+  - [x] 2.10 更新 mod.rs 重导出并删除原文件
     - 添加 pub use 语句重导出所有公共 API
     - 删除原 thumbnail_db.rs 文件
     - 更新 core/mod.rs 中的模块声明
     - _Requirements: 3.3, 5.3_
-  - [ ] 2.11 验证 thumbnail_db 重构
+  - [x] 2.11 验证 thumbnail_db 重构
     - 运行 cargo check 确保编译通过
     - 检查所有新模块文件行数 ≤ 800
     - _Requirements: 1.1, 12.1_

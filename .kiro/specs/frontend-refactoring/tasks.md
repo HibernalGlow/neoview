@@ -186,7 +186,7 @@
     - 搜索并更新所有导入语句
     - _需求: 2.2_
 
-- [ ] 11. 重构 FolderToolbar.svelte（优先级：中）
+- [x] 11. 重构 FolderToolbar.svelte（优先级：中）
   - [ ] 11.1 创建 `FolderToolbar/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.3_

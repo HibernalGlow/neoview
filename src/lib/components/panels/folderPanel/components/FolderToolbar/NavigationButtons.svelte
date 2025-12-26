@@ -1,7 +1,7 @@
 <script lang="ts">
 /**
- * NavigationButtons - 导航按钮组子组件
- * 包含：主页、后退、前进、向上、刷新按钮
+ * NavigationButtons - 导航按钮组
+ * 包含主页、后退、前进、向上、刷新按钮
  */
 import {
 	Home,
@@ -15,60 +15,80 @@ import {
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
+import type { VirtualMode } from './types';
 
 interface Props {
-	/** 是否显示工具栏提示 */
-	showToolbarTooltip?: boolean;
 	/** 虚拟模式类型 */
-	virtualMode?: 'bookmark' | 'history' | null;
+	virtualMode?: VirtualMode;
 	/** 是否垂直布局 */
 	vertical?: boolean;
-	/** 是否可以后退 */
+	/** 是否显示工具栏提示 */
+	showToolbarTooltip?: boolean;
+	/** 是否可后退 */
 	canGoBack?: boolean;
-	/** 是否可以前进 */
+	/** 是否可前进 */
 	canGoForward?: boolean;
-	/** 是否可以向上 */
+	/** 是否可向上 */
 	canGoUp?: boolean;
-	/** 是否正在清理失效条目 */
-	isCleaningInvalid?: boolean;
-	/** 清理结果 */
-	cleanupResult?: { removed: number } | null;
-	/** 返回主页回调 */
+	/** 回调函数 */
 	onGoHome?: () => void;
-	/** 设置主页回调（右键） */
 	onSetHome?: (e: MouseEvent) => void;
-	/** 后退回调 */
 	onGoBack?: () => void;
-	/** 前进回调 */
 	onGoForward?: () => void;
-	/** 向上回调 */
 	onGoUp?: () => void;
-	/** 刷新回调 */
 	onRefresh?: () => void;
-	/** 清理失效条目回调 */
-	onCleanupInvalid?: () => void;
 }
 
 let {
-	showToolbarTooltip = false,
 	virtualMode = null,
 	vertical = false,
+	showToolbarTooltip = false,
 	canGoBack = false,
 	canGoForward = false,
 	canGoUp = false,
-	isCleaningInvalid = false,
-	cleanupResult = null,
 	onGoHome,
 	onSetHome,
 	onGoBack,
 	onGoForward,
 	onGoUp,
-	onRefresh,
-	onCleanupInvalid
+	onRefresh
 }: Props = $props();
+
+// 清理失效条目状态
+let isCleaningInvalid = $state(false);
+let cleanupResult = $state<{ removed: number } | null>(null);
+
+async function handleCleanupInvalid() {
+	if (isCleaningInvalid) return;
+	isCleaningInvalid = true;
+	cleanupResult = null;
+	
+	try {
+		let removed = 0;
+		if (virtualMode === 'history') {
+			removed = await unifiedHistoryStore.cleanupInvalid();
+		} else if (virtualMode === 'bookmark') {
+			removed = await bookmarkStore.cleanupInvalid();
+		}
+		cleanupResult = { removed };
+		
+		setTimeout(() => {
+			cleanupResult = null;
+		}, 3000);
+		
+		if (removed > 0) {
+			onRefresh?.();
+		}
+	} catch (e) {
+		console.error('清理失效条目失败:', e);
+	} finally {
+		isCleaningInvalid = false;
+	}
+}
 </script>
 
-<!-- 导航按钮组 -->
 <div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
 	{#if !virtualMode}
 		<!-- 普通文件夹模式：显示所有导航按钮 -->
@@ -78,8 +98,8 @@ let {
 					variant="ghost"
 					size="icon"
 					class="h-7 w-7"
-					onclick={onGoHome}
-					oncontextmenu={onSetHome}
+					onclick={() => onGoHome?.()}
+					oncontextmenu={(e: MouseEvent) => onSetHome?.(e)}
 				>
 					<Home class="h-4 w-4" />
 				</Button>
@@ -96,7 +116,7 @@ let {
 					size="icon"
 					class="h-7 w-7"
 					disabled={!canGoBack && !canGoUp}
-					onclick={onGoBack}
+					onclick={() => onGoBack?.()}
 				>
 					<ChevronLeft class="h-4 w-4" />
 				</Button>
@@ -113,7 +133,7 @@ let {
 					size="icon"
 					class="h-7 w-7"
 					disabled={!canGoForward}
-					onclick={onGoForward}
+					onclick={() => onGoForward?.()}
 				>
 					<ChevronRight class="h-4 w-4" />
 				</Button>
@@ -130,7 +150,7 @@ let {
 					size="icon"
 					class="h-7 w-7"
 					disabled={!canGoUp}
-					onclick={onGoUp}
+					onclick={() => onGoUp?.()}
 				>
 					<ChevronUp class="h-4 w-4" />
 				</Button>
@@ -143,7 +163,7 @@ let {
 
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
-			<Button variant="ghost" size="icon" class="h-7 w-7" onclick={onRefresh}>
+			<Button variant="ghost" size="icon" class="h-7 w-7" onclick={() => onRefresh?.()}>
 				<RefreshCw class="h-4 w-4" />
 			</Button>
 		</Tooltip.Trigger>
@@ -190,7 +210,7 @@ let {
 				variant="ghost"
 				size="icon"
 				class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
-				onclick={onCleanupInvalid}
+				onclick={handleCleanupInvalid}
 				disabled={isCleaningInvalid}
 			>
 				<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />

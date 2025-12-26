@@ -162,7 +162,7 @@
   - 运行 `yarn lint` 确保代码风格
   - 确保所有测试通过，如有问题请询问用户
 
-- [-] 10. 重构 TopToolbar.svelte（优先级：中）
+- [x] 10. 重构 TopToolbar.svelte（优先级：中）
   - [x] 10.1 创建 `TopToolbar/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.2_
@@ -178,11 +178,11 @@
     - 排序控制面板
     - 排序字段选择
     - _需求: 2.2_
-  - [ ] 10.5 重构主 TopToolbar.svelte 组件
+  - [x] 10.5 重构主 TopToolbar.svelte 组件
     - 使用 ToolbarBase 基础组件
     - 组合子组件
     - _需求: 2.2_
-  - [ ] 10.6 更新所有引用 TopToolbar 的导入路径
+  - [x] 10.6 更新所有引用 TopToolbar 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.2_
 

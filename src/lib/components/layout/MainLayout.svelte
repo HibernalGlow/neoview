@@ -19,7 +19,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import LeftSidebar from './LeftSidebar.svelte';
 	import RightSidebar from './RightSidebar.svelte';
-	import TopToolbar from './TopToolbar.svelte';
+	import { TopToolbar } from './TopToolbar/index';
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
 	import { StackView } from '$lib/stackview';
 	import AreaOverlay from '../ui/AreaOverlay.svelte';

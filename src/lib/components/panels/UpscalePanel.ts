@@ -21,6 +21,9 @@ export interface UpscaleCondition {
 		minHeight?: number;
 		maxWidth?: number;
 		maxHeight?: number;
+		// 总像素量限制（单位：百万像素 MPx，支持小数，0 表示不限制）
+		minPixels?: number;        // 最小像素量（MPx）
+		maxPixels?: number;        // 最大像素量（MPx）
 		dimensionMode?: 'and' | 'or';
 		createdBetween?: [number, number]; // epoch
 		modifiedBetween?: [number, number];

@@ -336,13 +336,20 @@ fn match_model_from_conditions(
     Ok(None)
 }
 
-/// 检查尺寸条件
+/// 检查尺寸条件（包括宽高和总像素量）
 fn check_size_condition(cond: &FrontendCondition, width: u32, height: u32) -> bool {
+    // 宽高检查
     let match_width = cond.min_width == 0 || width >= cond.min_width;
     let match_height = cond.min_height == 0 || height >= cond.min_height;
     let match_max_width = cond.max_width == 0 || width <= cond.max_width;
     let match_max_height = cond.max_height == 0 || height <= cond.max_height;
-    match_width && match_height && match_max_width && match_max_height
+    
+    // 总像素量检查（单位：百万像素 MPx）
+    let total_pixels_mpx = (width as f64 * height as f64) / 1_000_000.0;
+    let match_min_pixels = cond.min_pixels <= 0.0 || total_pixels_mpx >= cond.min_pixels;
+    let match_max_pixels = cond.max_pixels <= 0.0 || total_pixels_mpx <= cond.max_pixels;
+    
+    match_width && match_height && match_max_width && match_max_height && match_min_pixels && match_max_pixels
 }
 
 /// 检查路径正则匹配

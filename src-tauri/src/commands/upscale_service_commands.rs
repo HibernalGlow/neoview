@@ -88,6 +88,12 @@ pub struct FrontendCondition {
     pub min_height: u32,
     pub max_width: u32,
     pub max_height: u32,
+    /// 最小像素量（百万像素 MPx，0 表示不限制）
+    #[serde(default)]
+    pub min_pixels: f64,
+    /// 最大像素量（百万像素 MPx，0 表示不限制）
+    #[serde(default)]
+    pub max_pixels: f64,
     /// 书籍路径正则表达式
     #[serde(default)]
     pub regex_book_path: Option<String>,

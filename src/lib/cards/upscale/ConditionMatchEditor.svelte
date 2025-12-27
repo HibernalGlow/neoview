@@ -110,6 +110,32 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 		</div>
 	</div>
 
+	<!-- 总像素量限制 -->
+	<div class="grid grid-cols-2 gap-2">
+		<div class="space-y-1">
+			<Label class="text-[10px]">最小像素量 (MPx)</Label>
+			<Input
+				type="number"
+				step="0.1"
+				class="h-7 text-xs"
+				value={condition.match.minPixels || ''}
+				onchange={(e) => updateMatch({ minPixels: parseNumericInput(e.currentTarget.value) })}
+				placeholder="不限 (百万像素)"
+			/>
+		</div>
+		<div class="space-y-1">
+			<Label class="text-[10px]">最大像素量 (MPx)</Label>
+			<Input
+				type="number"
+				step="0.1"
+				class="h-7 text-xs"
+				value={condition.match.maxPixels || ''}
+				onchange={(e) => updateMatch({ maxPixels: parseNumericInput(e.currentTarget.value) })}
+				placeholder="不限 (百万像素)"
+			/>
+		</div>
+	</div>
+
 	<!-- 判定逻辑 -->
 	<div class="flex items-center gap-2">
 		<span class="text-[10px] text-muted-foreground">判定:</span>

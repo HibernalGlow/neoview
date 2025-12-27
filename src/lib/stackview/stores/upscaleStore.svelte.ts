@@ -243,6 +243,8 @@ class UpscaleStore {
         minHeight?: number;
         maxWidth?: number;
         maxHeight?: number;
+        minPixels?: number;  // 最小像素量（MPx）
+        maxPixels?: number;  // 最大像素量（MPx）
         regexBookPath?: string;
         regexImagePath?: string;
         matchInnerPath?: boolean; // 是否匹配内部路径，默认false只匹配book路径
@@ -275,6 +277,8 @@ class UpscaleStore {
           minHeight: c.match.minHeight ?? 0,
           maxWidth: c.match.maxWidth ?? 0,
           maxHeight: c.match.maxHeight ?? 0,
+          minPixels: c.match.minPixels ?? 0,  // 最小像素量（MPx）
+          maxPixels: c.match.maxPixels ?? 0,  // 最大像素量（MPx）
           regexBookPath: c.match.regexBookPath ?? null,
           regexImagePath: c.match.regexImagePath ?? null,
           matchInnerPath: c.match.matchInnerPath ?? false, // 默认只匹配book路径

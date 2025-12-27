@@ -57,49 +57,10 @@
 		setChainAnchor
 	} from '../stores/chainSelectStore.svelte';
 	import { directoryTreeCache } from '../utils/directoryTreeCache';
-	import { folderRatingStore } from '$lib/stores/emm/folderRating';
-	import { getDefaultRating } from '$lib/stores/emm/storage';
 	import { invoke } from '@tauri-apps/api/core';
 	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
-
-	// ============ 随机排序种子缓存 ============
-	// 为每个目录路径缓存随机种子，确保返回上级后随机顺序不变
-	const randomSeedCache = new Map<string, number>();
-	const MAX_SEED_CACHE_SIZE = 100;
-
-	function getRandomSeedForPath(path: string): number {
-		const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-		if (randomSeedCache.has(normalizedPath)) {
-			return randomSeedCache.get(normalizedPath)!;
-		}
-		const seed = Math.random() * 2147483647 | 0;
-		if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
-			const firstKey = randomSeedCache.keys().next().value;
-			if (firstKey) randomSeedCache.delete(firstKey);
-		}
-		randomSeedCache.set(normalizedPath, seed);
-		return seed;
-	}
-
-	function seededRandom(seed: number): () => number {
-		return function() {
-			let t = seed += 0x6D2B79F5;
-			t = Math.imul(t ^ t >>> 15, t | 1);
-			t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-			return ((t ^ t >>> 14) >>> 0) / 4294967296;
-		};
-	}
-
-	function seededShuffle<T>(items: T[], seed: number): T[] {
-		const shuffled = [...items];
-		const random = seededRandom(seed);
-		for (let i = shuffled.length - 1; i > 0; i--) {
-			const j = Math.floor(random() * (i + 1));
-			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-		}
-		return shuffled;
-	}
+	import { sortItems, filterItems } from './FolderStack/sortingUtils';
 
 	export interface NavigationCommand {
 		type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -240,114 +201,6 @@
 	});
 	*/
 	});
-
-	// 排序函数 - skipFolderFirst 用于虚拟路径，让文件夹和文件平等排序
-	// path 参数用于随机排序种子记忆
-	function sortItems(items: FsItem[], field: string, order: string, skipFolderFirst = false, path?: string): FsItem[] {
-		// 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
-		if (field === 'random') {
-			const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
-			if (skipFolderFirst) {
-				// 虚拟路径：文件夹和文件一起随机
-				return seededShuffle(items, seed);
-			}
-			// 普通路径：文件夹和文件分开随机，保持文件夹在前
-			const folders = items.filter(item => item.isDir);
-			const files = items.filter(item => !item.isDir);
-			const shuffledFolders = seededShuffle(folders, seed);
-			const shuffledFiles = seededShuffle(files, seed + 1);
-			const result = [...shuffledFolders, ...shuffledFiles];
-			return order === 'asc' ? result : result.reverse();
-		}
-
-		// rating 排序特殊处理
-		// 规则：文件夹在前（除非 skipFolderFirst），无 rating 使用默认评分，用户自定义 rating 优先
-		if (field === 'rating') {
-			const defaultRating = getDefaultRating();
-			const sorted = [...items].sort((a, b) => {
-				// 文件夹优先（虚拟路径下跳过）
-				if (!skipFolderFirst && a.isDir !== b.isDir) {
-					return a.isDir ? -1 : 1;
-				}
-
-				// 获取有效评分（用户自定义优先，否则使用平均评分，无评分使用默认值）
-				const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
-				const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
-
-				// 评分相同则按名称排序
-				if (ratingA === ratingB) {
-					return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-				}
-
-				const comparison = ratingA - ratingB;
-				return order === 'asc' ? comparison : -comparison;
-			});
-			return sorted;
-		}
-
-		// collectTagCount 排序特殊处理
-		// 类似 rating 排序，从缓存中同步获取数据
-		if (field === 'collectTagCount') {
-			const sorted = [...items].sort((a, b) => {
-				// 文件夹优先（虚拟路径下跳过）
-				if (!skipFolderFirst && a.isDir !== b.isDir) {
-					return a.isDir ? -1 : 1;
-				}
-
-				// 从缓存获取收藏标签匹配数
-				const countA = collectTagCountStore.getCount(a.path);
-				const countB = collectTagCountStore.getCount(b.path);
-
-				// 计数相同则按名称排序
-				if (countA === countB) {
-					return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-				}
-
-				const comparison = countA - countB;
-				return order === 'asc' ? comparison : -comparison;
-			});
-			return sorted;
-		}
-
-		const sorted = [...items].sort((a, b) => {
-			// 文件夹始终在前（虚拟路径下跳过）
-			if (!skipFolderFirst && a.isDir !== b.isDir) {
-				return a.isDir ? -1 : 1;
-			}
-
-			let comparison = 0;
-			switch (field) {
-				case 'name':
-					comparison = a.name.localeCompare(b.name, undefined, {
-						numeric: true,
-						sensitivity: 'base'
-					});
-					break;
-				case 'date':
-					comparison = (a.modified || 0) - (b.modified || 0);
-					break;
-				case 'size':
-					comparison = (a.size || 0) - (b.size || 0);
-					break;
-				case 'type': {
-					const extA = a.name.split('.').pop()?.toLowerCase() || '';
-					const extB = b.name.split('.').pop()?.toLowerCase() || '';
-					comparison = extA.localeCompare(extB);
-					break;
-				}
-			}
-
-			return order === 'desc' ? -comparison : comparison;
-		});
-		return sorted;
-	}
-
-	// 过滤函数
-	function filterItems(items: FsItem[], keyword: string): FsItem[] {
-		if (!keyword.trim()) return items;
-		const lowerKeyword = keyword.toLowerCase();
-		return items.filter((item) => item.name.toLowerCase().includes(lowerKeyword));
-	}
 
 	// 获取层的显示项（应用排序）
 	// 注意：collectTagVersion 用于触发 collectTagCount 排序时的重新计算

@@ -16,7 +16,18 @@ export interface ThumbnailBarConfig {
   progressBarGlow: boolean;
 }
 
-// 常量导出
-export const LOCAL_MIN_THUMBNAILS = 6;
-export const ARCHIVE_MIN_THUMBNAILS = 3;
-export const THUMBNAIL_DEBOUNCE_MS = 100;
+// 工具函数导出
+export {
+  LOCAL_MIN_THUMBNAILS,
+  ARCHIVE_MIN_THUMBNAILS,
+  PRELOAD_RANGE,
+  THUMBNAIL_DEBOUNCE_MS,
+  getMinVisibleThumbnails,
+  ensureMinimumSpan,
+  getWindowBadgeLabel,
+  getWindowBadgeClass,
+  calculateThumbnailDimensions,
+  calculateReadingProgress,
+  type PageWindow,
+  type ThumbnailDimensions
+} from './thumbnailUtils';

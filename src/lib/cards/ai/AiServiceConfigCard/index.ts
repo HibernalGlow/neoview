@@ -23,10 +23,14 @@ export interface OllamaModel {
   size_vram?: number;
 }
 
-// 工具函数
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
+// 服务工具函数导出
+export {
+  checkOllamaStatus,
+  startOllamaService,
+  checkLibreTranslateStatus,
+  applyCleanupRules,
+  exportConfigToFile,
+  parseImportedConfig,
+  formatBytes,
+  type AiConfigExport
+} from './serviceUtils';

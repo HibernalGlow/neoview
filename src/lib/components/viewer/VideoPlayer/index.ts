@@ -10,6 +10,18 @@ export { default as PlaybackRatePanel } from './PlaybackRatePanel.svelte';
 export { default as MoreMenu } from './MoreMenu.svelte';
 export { default as SubtitlePanel } from './SubtitlePanel.svelte';
 
+// 工具函数导出
+export {
+	formatTime,
+	getCacheKey,
+	getCachedFrame,
+	cacheFrame,
+	clearFrameCache,
+	getTempVideoElement,
+	clampPlaybackRate,
+	buildFilterStyle
+} from './videoUtils';
+
 // 类型导出
 export type LoopMode = 'none' | 'list' | 'single';
 

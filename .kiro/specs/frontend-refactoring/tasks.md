@@ -214,27 +214,27 @@
   - 运行 `yarn check` 确保类型正确
   - 确保所有测试通过，如有问题请询问用户
 
-- [ ] 13. 重构 EmmPanelSection.svelte（优先级：中）
-  - [ ] 13.1 创建 `EmmPanelSection/` 目录结构
+- [x] 13. 重构 EmmPanelSection.svelte（优先级：中）
+  - [x] 13.1 创建 `EmmPanelSection/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.1_
-  - [ ] 13.2 提取 TagsPanel.svelte 子组件
+  - [x] 13.2 提取 TagsPanel.svelte 子组件
     - 标签管理面板
     - 标签编辑功能
     - _需求: 2.1_
-  - [ ] 13.3 提取 FavoriteTagsPanel.svelte 子组件
+  - [x] 13.3 提取 FavoriteTagsPanel.svelte 子组件
     - 收藏标签面板
     - 收藏管理
     - _需求: 2.1_
-  - [ ] 13.4 提取 RatingsPanel.svelte 子组件
+  - [x] 13.4 提取 RatingsPanel.svelte 子组件
     - 评分面板
     - 评分编辑
     - _需求: 2.1_
-  - [ ] 13.5 重构主 EmmPanelSection.svelte 组件
+  - [x] 13.5 重构主 EmmPanelSection.svelte 组件
     - 使用 PanelBase 基础组件
     - 组合子组件
     - _需求: 2.1_
-  - [ ] 13.6 更新所有引用 EmmPanelSection 的导入路径
+  - [x] 13.6 更新所有引用 EmmPanelSection 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.1_
 

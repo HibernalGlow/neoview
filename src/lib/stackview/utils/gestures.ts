@@ -4,7 +4,7 @@
  */
 
 import { zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
-import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+import { keyBindingsStore } from '$lib/stores/keybindings';
 import { settingsManager } from '$lib/settings/settingsManager';
 
 // ============================================================================

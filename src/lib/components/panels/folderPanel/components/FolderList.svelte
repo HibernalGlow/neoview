@@ -20,7 +20,7 @@ import {
 	tabSortConfig
 } from '../stores/folderTabStore';
 import { derived } from 'svelte/store';
-import type { FolderSortField, FolderSortOrder } from '../stores/folderPanelStore.svelte';
+import type { FolderSortField, FolderSortOrder } from '../stores/folderPanelStore';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { getDefaultRating } from '$lib/stores/emm/storage';
 

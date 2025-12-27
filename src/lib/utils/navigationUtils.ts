@@ -8,7 +8,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { FileSystemAPI } from '$lib/api';
 import { setActivePanelTab } from '$lib/stores';
 import { isVideoFile } from '$lib/utils/videoUtils';
-import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
+import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
 /**
  * 支持的图片扩展名

@@ -30,7 +30,7 @@ import {
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
-import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
 import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
 
 interface Props {

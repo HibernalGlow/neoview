@@ -3,7 +3,7 @@
  * 处理所有设置的导入功能
  */
 
-import { keyBindingsStore } from '../keybindings.svelte';
+import { keyBindingsStore } from '../keybindings';
 import { emmMetadataStore } from '../emmMetadata.svelte';
 import { fileBrowserStore } from '../fileBrowser.svelte';
 import { bookmarkStore } from '../bookmark.svelte';

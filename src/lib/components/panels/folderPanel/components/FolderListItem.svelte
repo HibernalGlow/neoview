@@ -14,7 +14,7 @@ import {
 	tabDeleteMode,
 	tabSelectedItems
 } from '../stores/folderTabStore';
-import type { FolderViewStyle } from '../stores/folderPanelStore.svelte';
+import type { FolderViewStyle } from '../stores/folderPanelStore';
 
 // 别名映射
 const viewStyle = tabViewStyle;

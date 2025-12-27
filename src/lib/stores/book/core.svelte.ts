@@ -363,7 +363,7 @@ class BookStore {
 
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
-    const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore.svelte');
+    const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
     let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction);
     
     if (!targetPath) {

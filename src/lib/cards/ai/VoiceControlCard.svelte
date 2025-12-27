@@ -10,7 +10,7 @@ import { Label } from '$lib/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
 import { voiceStore } from '$lib/stores/voice/voiceStore.svelte';
 import { DEFAULT_VOICE_COMMANDS, getActiveCommands } from '$lib/services/voice/commandDict';
-import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+import { keyBindingsStore } from '$lib/stores/keybindings';
 import { Mic, MicOff, Volume2, AlertCircle, CheckCircle, Settings, History, Info, Edit2, Save, RotateCcw } from '@lucide/svelte';
 import * as Tooltip from '$lib/components/ui/tooltip';
 import { toast } from 'svelte-sonner';

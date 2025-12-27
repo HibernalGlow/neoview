@@ -9,7 +9,7 @@
 	import { videoStore } from '$lib/stores/video.svelte';
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { bookStore } from '$lib/stores';
-	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore } from '$lib/stores/keybindings';
 	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
 	import {
 		getPossibleSubtitleNames,

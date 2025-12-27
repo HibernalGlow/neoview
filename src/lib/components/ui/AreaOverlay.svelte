@@ -3,7 +3,7 @@
 	 * 区域点击覆盖层
 	 * 在主视图上显示6个区域，方便测试区域点击功能
 	 */
-	import { keyBindingsStore, type ViewArea } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore, type ViewArea } from '$lib/stores/keybindings';
 	import { createEventDispatcher } from 'svelte';
 
 	let { show = $bindable(false), sidebarOpen = false, rightSidebarOpen = false } = $props();

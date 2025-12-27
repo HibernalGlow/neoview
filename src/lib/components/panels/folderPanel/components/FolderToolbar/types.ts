@@ -1,7 +1,7 @@
 /**
  * FolderToolbar 共享类型定义
  */
-import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
 import type { TreePosition } from '$lib/stores/virtualPanelSettings.svelte';
 
 /** 排序配置 */

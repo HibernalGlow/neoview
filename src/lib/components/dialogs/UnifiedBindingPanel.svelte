@@ -7,7 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture, type AreaClick, type BindingContext } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore, type InputBinding, type KeyBinding, type MouseGesture, type TouchGesture, type AreaClick, type BindingContext } from '$lib/stores/keybindings';
 	import { Keyboard, Mouse, Hand, Trash2, Search, RotateCcw, Target, Layers, X, CheckCircle, AlertTriangle } from '@lucide/svelte';
 	import GestureVisualizer from './GestureVisualizer.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';

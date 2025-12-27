@@ -5,7 +5,7 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
-	import { keyBindingsStore, type ViewArea } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore, type ViewArea } from '$lib/stores/keybindings';
 	import { Target, X } from '@lucide/svelte';
 
 	let { onComplete, onCancel } = $props();

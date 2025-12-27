@@ -12,7 +12,7 @@ import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore';
-import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
+import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 import type { FolderContextValue } from '../folder/context/FolderContext.svelte';
 // ClipboardState is used in ctx.clipboardItem assignments

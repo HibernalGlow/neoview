@@ -7,7 +7,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { LayerZIndex } from '../types/layer';
 	import type { TapZones, GestureCallbacks, Point } from '../types/gesture';
-	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore } from '$lib/stores/keybindings';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';

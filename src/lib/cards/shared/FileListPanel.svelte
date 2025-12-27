@@ -28,7 +28,7 @@
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
 	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
-	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
+	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
 

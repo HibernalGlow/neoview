@@ -6,7 +6,7 @@
 import { List, Grid3x3, LayoutGrid, Image } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
-import type { FolderViewStyle } from '../../stores/folderPanelStore.svelte';
+import type { FolderViewStyle } from '../../stores/folderPanelStore';
 import type { ViewStyleDef } from './types';
 
 interface Props {

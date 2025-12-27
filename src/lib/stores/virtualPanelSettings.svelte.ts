@@ -3,7 +3,7 @@
  * 为历史面板和书签面板提供独立的工具栏状态
  */
 
-import type { FolderViewStyle, FolderSortField, FolderSortOrder } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField, FolderSortOrder } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
 export type TreePosition = 'left' | 'right' | 'top' | 'bottom';
 

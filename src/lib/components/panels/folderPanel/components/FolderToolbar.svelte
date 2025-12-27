@@ -96,7 +96,7 @@ import {
 	type SortInheritStrategy
 } from '../stores/folderTabStore';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField } from '../stores/folderPanelStore';
 
 // 全局 store 别名（非虚拟模式使用）
 const currentPathStore = tabCurrentPath;

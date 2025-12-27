@@ -36,7 +36,7 @@
 		initFullscreenState,
 		setActivePanelTab
 	} from '$lib/stores';
-	import { keyBindingsStore } from '$lib/stores/keybindings.svelte';
+	import { keyBindingsStore } from '$lib/stores/keybindings';
 	import { FolderOpen, Eye, EyeOff, ImageUp, X, Video, Settings2 } from '@lucide/svelte';
 	import ProjectCard from '$lib/components/ui/ProjectCard.svelte';
 	import BackgroundVideo from '$lib/components/viewer/BackgroundVideo.svelte';
@@ -73,7 +73,7 @@
 	import { normalizePath, validatePath, getPathType } from '$lib/utils/pathUtils';
 	// Folder Panel 标签页管理
 	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
-	import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore.svelte';
+	import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
 	let loading = $state(false);
 

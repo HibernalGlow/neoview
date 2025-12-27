@@ -9,4 +9,4 @@ export { default as FolderList } from './components/FolderList.svelte';
 export { default as FolderListItem } from './components/FolderListItem.svelte';
 export { default as FolderTree } from './components/FolderTree.svelte';
 
-export * from './stores/folderPanelStore.svelte';
+export * from './stores/folderPanelStore';

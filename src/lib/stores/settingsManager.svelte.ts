@@ -3,7 +3,7 @@
  * 统一管理所有应用设置的导入、导出和重置
  */
 
-import { keyBindingsStore } from './keybindings.svelte';
+import { keyBindingsStore } from './keybindings';
 import { emmMetadataStore } from './emmMetadata.svelte';
 import { fileBrowserStore } from './fileBrowser.svelte';
 import { bookmarkStore } from './bookmark.svelte';

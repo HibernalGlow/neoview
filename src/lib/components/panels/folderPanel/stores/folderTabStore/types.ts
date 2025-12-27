@@ -5,7 +5,7 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import type { FsItem } from '$lib/types';
-import type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore';
 
 // ============ 历史记录类型 ============
 
@@ -175,4 +175,4 @@ toolbarPosition: 'top'
 // ============ 重新导出依赖类型 ============
 
 export type { FsItem } from '$lib/types';
-export type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore.svelte';
+export type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore';

@@ -29,7 +29,7 @@ import {
 	tabFolderTreeConfig,
 	type SortInheritStrategy
 } from '../../stores/folderTabStore';
-import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore.svelte';
+import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
 import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
 
 // 子组件导入

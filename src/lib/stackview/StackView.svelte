@@ -693,12 +693,14 @@
 
 			// 如果是新书本，重置状态（imagePool 会自动处理缓存）
 			if (bookContext?.path !== currentPath) {
+				console.log('📚 [StackView] 书籍切换:', { oldPath: bookContext?.path, newPath: currentPath });
 				imageStore.reset();
 				panoramaStore.reset();
 				zoomModeManager.reset();
 				resetScrollPosition();
 
 				// 通知 upscaleStore 书籍切换
+				console.log('📚 [StackView] 调用 upscaleStore.setCurrentBook:', currentPath);
 				upscaleStore.setCurrentBook(currentPath);
 			}
 

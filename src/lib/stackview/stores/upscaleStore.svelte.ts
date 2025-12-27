@@ -203,12 +203,19 @@ class UpscaleStore {
     try {
       const { loadUpscalePanelSettings } = await import('$lib/components/panels/UpscalePanel');
       const panelSettings = loadUpscalePanelSettings();
+      console.log('📋 [upscaleStore] 加载面板设置:', {
+        autoUpscaleEnabled: panelSettings.autoUpscaleEnabled,
+        conditionalUpscaleEnabled: panelSettings.conditionalUpscaleEnabled,
+        conditionsCount: panelSettings.conditionsList?.length ?? 0,
+      });
       
       // 1. 同步超分开关
       if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
         this.state.enabled = panelSettings.autoUpscaleEnabled;
         await invoke('upscale_service_set_enabled', { enabled: panelSettings.autoUpscaleEnabled });
         console.log('✅ 同步超分开关:', panelSettings.autoUpscaleEnabled);
+      } else {
+        console.log('⚠️ autoUpscaleEnabled 未定义，使用默认值 false');
       }
       
       // 2. 同步条件超分设置（包括条件列表）
@@ -380,6 +387,7 @@ class UpscaleStore {
     console.log(`📸 触发超分: 当前页 ${pageIndex}, 预加载范围 ${imageInfos.length} 页`);
 
     // 请求预加载范围的超分
+    console.log(`📸 调用 requestPreloadRange: bookPath=${this.state.currentBookPath}, enabled=${this.state.enabled}`);
     await this.requestPreloadRange(
       this.state.currentBookPath,
       pageIndex,
@@ -478,7 +486,16 @@ class UpscaleStore {
 
   /** 设置当前书籍 */
   async setCurrentBook(bookPath: string | null) {
-    if (this.state.currentBookPath === bookPath) return;
+    console.log('📚 [upscaleStore] setCurrentBook 调用:', { 
+      newPath: bookPath, 
+      oldPath: this.state.currentBookPath,
+      enabled: this.state.enabled 
+    });
+    
+    if (this.state.currentBookPath === bookPath) {
+      console.log('📚 [upscaleStore] 书籍路径未变化，跳过');
+      return;
+    }
 
     // 清理旧书籍的超分图
     if (this.state.currentBookPath) {
@@ -486,9 +503,11 @@ class UpscaleStore {
     }
 
     this.state.currentBookPath = bookPath;
+    console.log('📚 [upscaleStore] 已更新 currentBookPath:', bookPath);
 
     try {
       await invoke('upscale_service_set_current_book', { bookPath });
+      console.log('📚 [upscaleStore] 后端 set_current_book 成功');
     } catch (err) {
       console.error('设置当前书籍失败:', err);
     }
@@ -552,7 +571,11 @@ class UpscaleStore {
     totalPages: number,
     imageInfos: Array<{ pageIndex: number; imagePath: string; hash: string }>,
   ) {
-    if (!this.state.enabled) return;
+    console.log(`📸 requestPreloadRange: enabled=${this.state.enabled}, bookPath=${bookPath}, imageInfos.length=${imageInfos.length}`);
+    if (!this.state.enabled) {
+      console.log('📸 requestPreloadRange: 跳过，超分未启用');
+      return;
+    }
 
     try {
       // 后端期望 request 对象，字段使用 camelCase

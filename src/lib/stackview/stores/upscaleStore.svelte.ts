@@ -319,6 +319,11 @@ class UpscaleStore {
     try {
       await invoke('upscale_service_set_enabled', { enabled });
 
+      // 同步到 upscalePanelStore 并持久化到 localStorage
+      const { autoUpscaleEnabled, saveSettings } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
+      autoUpscaleEnabled.value = enabled;
+      saveSettings();
+
       if (!enabled) {
         // 禁用时清除所有超分图，回退到原图
         this.clearAll();
@@ -329,7 +334,7 @@ class UpscaleStore {
         await this.triggerCurrentPageUpscale();
       }
 
-      console.log(`🔄 超分${enabled ? '已启用' : '已禁用'}`);
+      console.log(`🔄 超分${enabled ? '已启用' : '已禁用'}（已持久化）`);
     } catch (err) {
       console.error('设置超分状态失败:', err);
     }

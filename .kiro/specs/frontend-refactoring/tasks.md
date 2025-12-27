@@ -157,7 +157,7 @@
     - 搜索并更新所有导入语句
     - _需求: 1.6_
 
-- [ ] 9. 检查点 - 验证所有状态管理层重构
+- [x] 9. 检查点 - 验证所有状态管理层重构
   - 运行 `yarn check` 确保类型正确
   - 运行 `yarn lint` 确保代码风格
   - 确保所有测试通过，如有问题请询问用户
@@ -187,26 +187,26 @@
     - _需求: 2.2_
 
 - [x] 11. 重构 FolderToolbar.svelte（优先级：中）
-  - [ ] 11.1 创建 `FolderToolbar/` 目录结构
+  - [x] 11.1 创建 `FolderToolbar/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.3_
-  - [ ] 11.2 提取 NavigationButtons.svelte 子组件
+  - [x] 11.2 提取 NavigationButtons.svelte 子组件
     - 导航按钮组
     - 前进/后退按钮
     - _需求: 2.3_
-  - [ ] 11.3 提取 ViewModeButtons.svelte 子组件
+  - [x] 11.3 提取 ViewModeButtons.svelte 子组件
     - 视图模式按钮组
     - 列表/网格切换
     - _需求: 2.3_
-  - [ ] 11.4 提取 FolderSortPanel.svelte 子组件
+  - [x] 11.4 提取 FolderSortPanel.svelte 子组件
     - 文件夹排序面板
     - 排序选项
     - _需求: 2.3_
-  - [ ] 11.5 重构主 FolderToolbar.svelte 组件
+  - [x] 11.5 重构主 FolderToolbar.svelte 组件
     - 使用 ToolbarBase 基础组件
     - 组合子组件
     - _需求: 2.3_
-  - [ ] 11.6 更新所有引用 FolderToolbar 的导入路径
+  - [x] 11.6 更新所有引用 FolderToolbar 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.3_
 

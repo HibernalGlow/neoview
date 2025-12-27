@@ -17,7 +17,7 @@ export interface FsItem {
   // EMM 元数据（可选）
   emmMetadata?: {
     translatedTitle?: string;
-    tags?: Record\u003cstring, string[]\u003e;
+    tags?: Record<string, string[]>;
   };
 // 评分数据（可选，用于排序）
 rating ?: number;

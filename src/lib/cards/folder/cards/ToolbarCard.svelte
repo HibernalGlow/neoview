@@ -6,7 +6,7 @@
 	import { get } from 'svelte/store';
 	import { Star, RefreshCw } from '@lucide/svelte';
 	import TagChip from '$lib/components/ui/TagChip.svelte';
-	import FolderToolbar from '$lib/components/panels/folderPanel/components/FolderToolbar.svelte';
+	import FolderToolbar from '$lib/components/panels/folderPanel/components/FolderToolbar';
 	import MigrationBar from '$lib/components/panels/folderPanel/components/MigrationBar.svelte';
 	import PenetrateSettingsBar from '$lib/components/panels/folderPanel/components/PenetrateSettingsBar.svelte';
 	import SelectionBar from '$lib/components/panels/folderPanel/components/SelectionBar.svelte';

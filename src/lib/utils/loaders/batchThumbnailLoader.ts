@@ -74,7 +74,7 @@ export class BatchThumbnailLoader {
     }
 
     const allResults = new Map<string, string>();
-    const miniB atchSize = this.INCREMENTAL_BATCH_SIZE;
+    const miniBatchSize = this.INCREMENTAL_BATCH_SIZE;
 
     for (let i = 0; i < paths.length; i += miniBatchSize) {
       const batch = paths.slice(i, i + miniBatchSize);

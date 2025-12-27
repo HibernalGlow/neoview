@@ -2,41 +2,13 @@
 /**
  * MoreSettingsTabs - 更多设置栏
  * 包含快捷操作、显示设置、其他设置三个标签页
+ * 已拆分为子组件以保持代码简洁
  */
-import {
-	Flame,
-	RefreshCw,
-	Trash2,
-	Eye,
-	Package,
-	Image,
-	Grid3x3,
-	Settings2,
-	FolderSync,
-	Star,
-	MousePointerClick,
-	ChevronUp
-} from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
 import * as Tabs from '$lib/components/ui/tabs';
-import * as Progress from '$lib/components/ui/progress';
-import { get } from 'svelte/store';
-import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
-import { historySettingsStore } from '$lib/stores/historySettings.svelte';
-import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
-import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
-import { addExcludedPath, isPathExcluded, removeExcludedPath } from '$lib/stores/excludedPaths.svelte';
-import { directoryTreeCache } from '../../utils/directoryTreeCache';
-import { reloadThumbnail } from '$lib/stores/thumbnailStoreV3.svelte';
-import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
-import {
-	folderTabActions,
-	tabSelectedItems,
-	tabItems,
-	tabCurrentPath
-} from '../../stores/folderTabStore';
 import type { VirtualMode } from './types';
+
+// 子组件导入
+import { ActionTab, DisplayTab, OtherTab } from './tabs';
 
 interface Props {
 	/** 虚拟模式 */
@@ -60,4 +32,52 @@ interface Props {
 
 let {
 	virtualMode = null,
-	showToolbarTooltip = fa
+	showToolbarTooltip = false,
+	multiSelectMode,
+	thumbnailWidthPercent,
+	bannerWidthPercent,
+	itemCount,
+	onSetThumbnailWidthPercent,
+	onSetBannerWidthPercent,
+	onToggleShowToolbarTooltip,
+	onRefresh
+}: Props = $props();
+
+// 当前标签页
+let settingsTab = $state<'action' | 'display' | 'other'>('action');
+</script>
+
+<div class="border-t bg-muted/20">
+	<Tabs.Root value={settingsTab} onValueChange={(v) => settingsTab = v as typeof settingsTab} class="w-full">
+		<div class="flex items-center px-2">
+			<Tabs.List class="h-8 bg-transparent">
+				<Tabs.Trigger value="action" class="text-xs px-3 py-1 h-7">快捷操作</Tabs.Trigger>
+				<Tabs.Trigger value="display" class="text-xs px-3 py-1 h-7">显示设置</Tabs.Trigger>
+				<Tabs.Trigger value="other" class="text-xs px-3 py-1 h-7">其他</Tabs.Trigger>
+			</Tabs.List>
+			<div class="flex-1"></div>
+			<span class="text-[10px] text-muted-foreground">文件数: {itemCount}</span>
+		</div>
+
+		<Tabs.Content value="action" class="px-2 py-2 mt-0">
+			<ActionTab {multiSelectMode} {onRefresh} />
+		</Tabs.Content>
+
+		<Tabs.Content value="display" class="px-2 py-2 mt-0">
+			<DisplayTab
+				{thumbnailWidthPercent}
+				{bannerWidthPercent}
+				{onSetThumbnailWidthPercent}
+				{onSetBannerWidthPercent}
+			/>
+		</Tabs.Content>
+
+		<Tabs.Content value="other" class="px-2 py-2 mt-0">
+			<OtherTab
+				{virtualMode}
+				{showToolbarTooltip}
+				{onToggleShowToolbarTooltip}
+			/>
+		</Tabs.Content>
+	</Tabs.Root>
+</div>

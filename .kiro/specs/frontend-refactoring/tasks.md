@@ -210,7 +210,7 @@
     - 搜索并更新所有导入语句
     - _需求: 2.3_
 
-- [ ] 12. 检查点 - 验证工具栏重构
+- [x] 12. 检查点 - 验证工具栏重构
   - 运行 `yarn check` 确保类型正确
   - 确保所有测试通过，如有问题请询问用户
 
@@ -238,144 +238,144 @@
     - 搜索并更新所有导入语句
     - _需求: 2.1_
 
-- [ ] 14. 重构 filesystem.ts（优先级：中）
-  - [ ] 14.1 创建 `filesystem/` 目录结构
+- [x] 14. 重构 filesystem.ts（优先级：中）
+  - [x] 14.1 创建 `filesystem/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 3.1, 3.2_
-  - [ ] 14.2 提取 fileOperations.ts 模块
+  - [x] 14.2 提取 fileOperations.ts 模块
     - 文件读写操作
     - 文件信息获取
     - _需求: 3.1_
-  - [ ] 14.3 提取 archiveOperations.ts 模块
+  - [x] 14.3 提取 archiveOperations.ts 模块
     - 压缩包操作
     - 解压功能
     - _需求: 3.1_
-  - [ ] 14.4 提取 streamOperations.ts 模块
+  - [x] 14.4 提取 streamOperations.ts 模块
     - 流式操作
     - 大文件处理
     - _需求: 3.1_
-  - [ ] 14.5 创建 core.ts 核心模块
+  - [x] 14.5 创建 core.ts 核心模块
     - 整合所有子模块
     - 保持原有 API 兼容
     - _需求: 3.1, 3.3_
-  - [ ] 14.6 更新所有引用 filesystem 的导入路径
+  - [x] 14.6 更新所有引用 filesystem 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 3.3_
-  - [ ] 14.7 编写属性测试验证模块数量
+  - [x] 14.7 编写属性测试验证模块数量
     - **Property 3: 模块数量限制**
     - **验证: 需求 3.1**
 
-- [ ] 15. 检查点 - 验证 API 层重构
+- [x] 15. 检查点 - 验证 API 层重构
   - 运行 `yarn check` 确保类型正确
   - 确保所有测试通过，如有问题请询问用户
 
-- [ ] 16. 重构 VideoPlayer.svelte（优先级：低）
-  - [ ] 16.1 创建 `VideoPlayer/` 目录结构
+- [x] 16. 重构 VideoPlayer.svelte（优先级：低）
+  - [x] 16.1 创建 `VideoPlayer/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.5_
-  - [ ] 16.2 提取 VideoControls.svelte 子组件
+  - [x] 16.2 提取 VideoControls.svelte 子组件
     - 播放控制按钮
     - 音量控制
     - _需求: 2.5_
-  - [ ] 16.3 提取 VideoProgressBar.svelte 子组件
+  - [x] 16.3 提取 VideoProgressBar.svelte 子组件
     - 进度条组件
     - 时间显示
     - _需求: 2.5_
-  - [ ] 16.4 重构主 VideoPlayer.svelte 组件
+  - [x] 16.4 重构主 VideoPlayer.svelte 组件
     - 组合子组件
     - 保持功能完整
     - _需求: 2.5_
-  - [ ] 16.5 更新所有引用 VideoPlayer 的导入路径
+  - [x] 16.5 更新所有引用 VideoPlayer 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.5_
 
-- [ ] 17. 重构 FolderStack.svelte（优先级：低）
-  - [ ] 17.1 创建 `FolderStack/` 目录结构
+- [x] 17. 重构 FolderStack.svelte（优先级：低）
+  - [x] 17.1 创建 `FolderStack/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.4_
-  - [ ] 17.2 提取 StackItem.svelte 子组件
+  - [x] 17.2 提取 StackItem.svelte 子组件
     - 堆栈项组件
     - 项目渲染
     - _需求: 2.4_
-  - [ ] 17.3 提取 StackNavigation.svelte 子组件
+  - [x] 17.3 提取 StackNavigation.svelte 子组件
     - 堆栈导航逻辑
     - 层级切换
     - _需求: 2.4_
-  - [ ] 17.4 重构主 FolderStack.svelte 组件
+  - [x] 17.4 重构主 FolderStack.svelte 组件
     - 组合子组件
     - 保持功能完整
     - _需求: 2.4_
-  - [ ] 17.5 更新所有引用 FolderStack 的导入路径
+  - [x] 17.5 更新所有引用 FolderStack 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.4_
 
-- [ ] 18. 重构 BottomThumbnailBar.svelte（优先级：低）
-  - [ ] 18.1 创建 `BottomThumbnailBar/` 目录结构
+- [x] 18. 重构 BottomThumbnailBar.svelte（优先级：低）
+  - [x] 18.1 创建 `BottomThumbnailBar/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.6_
-  - [ ] 18.2 提取 ThumbnailItem.svelte 子组件
+  - [x] 18.2 提取 ThumbnailItem.svelte 子组件
     - 缩略图项组件
     - 项目渲染
     - _需求: 2.6_
-  - [ ] 18.3 重构主 BottomThumbnailBar.svelte 组件
+  - [x] 18.3 重构主 BottomThumbnailBar.svelte 组件
     - 使用 ToolbarBase 基础组件
     - 组合子组件
     - _需求: 2.6_
-  - [ ] 18.4 更新所有引用 BottomThumbnailBar 的导入路径
+  - [x] 18.4 更新所有引用 BottomThumbnailBar 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.6_
 
-- [ ] 19. 重构 StackView.svelte（优先级：低）
-  - [ ] 19.1 创建 `StackView/` 目录结构
+- [x] 19. 重构 StackView.svelte（优先级：低）
+  - [x] 19.1 创建 `StackView/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.7_
-  - [ ] 19.2 提取 StackViewItem.svelte 子组件
+  - [x] 19.2 提取 StackViewItem.svelte 子组件
     - 视图项组件
     - 项目渲染
     - _需求: 2.7_
-  - [ ] 19.3 重构主 StackView.svelte 组件
+  - [x] 19.3 重构主 StackView.svelte 组件
     - 组合子组件
     - 保持功能完整
     - _需求: 2.7_
-  - [ ] 19.4 更新所有引用 StackView 的导入路径
+  - [x] 19.4 更新所有引用 StackView 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.7_
 
-- [ ] 20. 重构 App.svelte（优先级：低）
-  - [ ] 20.1 提取 AppLayout.svelte 子组件
+- [x] 20. 重构 App.svelte（优先级：低）
+  - [x] 20.1 提取 AppLayout.svelte 子组件
     - 应用布局组件
     - 面板布局管理
     - _需求: 2.8_
-  - [ ] 20.2 提取 AppInitializer.svelte 子组件
+  - [x] 20.2 提取 AppInitializer.svelte 子组件
     - 应用初始化逻辑
     - 状态初始化
     - _需求: 2.8_
-  - [ ] 20.3 重构主 App.svelte 组件
+  - [x] 20.3 重构主 App.svelte 组件
     - 组合子组件
     - 保持功能完整
     - _需求: 2.8_
 
-- [ ] 21. 重构 AiServiceConfigCard.svelte（优先级：低）
-  - [ ] 21.1 创建 `AiServiceConfigCard/` 目录结构
+- [x] 21. 重构 AiServiceConfigCard.svelte（优先级：低）
+  - [x] 21.1 创建 `AiServiceConfigCard/` 目录结构
     - 创建目录和 index.ts 文件
     - _需求: 2.9_
-  - [ ] 21.2 提取 LibreTranslateConfig.svelte 子组件
+  - [x] 21.2 提取 LibreTranslateConfig.svelte 子组件
     - LibreTranslate 配置面板
     - 服务器配置
     - _需求: 2.9_
-  - [ ] 21.3 提取 OllamaConfig.svelte 子组件
+  - [x] 21.3 提取 OllamaConfig.svelte 子组件
     - Ollama 配置面板
     - 模型选择
     - _需求: 2.9_
-  - [ ] 21.4 重构主 AiServiceConfigCard.svelte 组件
+  - [x] 21.4 重构主 AiServiceConfigCard.svelte 组件
     - 使用 PanelBase 基础组件
     - 组合子组件
     - _需求: 2.9_
-  - [ ] 21.5 更新所有引用 AiServiceConfigCard 的导入路径
+  - [x] 21.5 更新所有引用 AiServiceConfigCard 的导入路径
     - 搜索并更新所有导入语句
     - _需求: 2.9_
 
-- [ ] 22. 最终检查点 - 验证所有重构
+- [x] 22. 最终检查点 - 验证所有重构
   - 运行 `yarn check` 确保类型正确
   - 运行 `yarn lint` 确保代码风格
   - 运行 `yarn build` 确保构建成功

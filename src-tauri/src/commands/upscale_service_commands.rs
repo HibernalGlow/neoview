@@ -278,7 +278,7 @@ pub async fn upscale_service_request(
 
     let model = UpscaleModel {
         model_id: 0, // 会在执行时解析
-        model_name: request.model_name.unwrap_or_else(|| "cunet".to_string()),
+        model_name: request.model_name.unwrap_or_default(), // 空字符串表示由条件匹配决定
         scale: request.scale.unwrap_or(2),
         tile_size: request.tile_size.unwrap_or(0),
         noise_level: request.noise_level.unwrap_or(0),

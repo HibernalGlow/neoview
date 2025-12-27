@@ -245,28 +245,16 @@ impl SrVulkanManager {
             let add_func = sr_module.getattr("add")?;
             let data_obj = PyBytes::new_bound(py, image_data);
 
-            let args = if width > 0 && height > 0 {
-                PyTuple::new_bound(
-                    py,
-                    &[
-                        data_obj.into_py(py),
-                        model.into_py(py),
-                        task_id.into_py(py),
-                        width.into_py(py),
-                        height.into_py(py),
-                    ],
-                )
-            } else {
-                PyTuple::new_bound(
-                    py,
-                    &[
-                        data_obj.into_py(py),
-                        model.into_py(py),
-                        task_id.into_py(py),
-                        (scale as f64).into_py(py),
-                    ],
-                )
-            };
+            // sr.add(data, model, task_id, scale, ...) - 始终传递 scale
+            let args = PyTuple::new_bound(
+                py,
+                &[
+                    data_obj.into_py(py),
+                    model.into_py(py),
+                    task_id.into_py(py),
+                    (scale as f64).into_py(py),
+                ],
+            );
 
             let kwargs = PyDict::new_bound(py);
             // 强制使用 WebP 作为输出格式

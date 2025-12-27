@@ -25,6 +25,14 @@
 	import { tabPenetrateMode } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { FileSystemAPI } from '$lib/api';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	import {
+		isMediaFile,
+		isArchiveFile,
+		formatRelativeTime,
+		formatFileSize,
+		genderCategories,
+		normalizeTagKey
+	} from './fileItemUtils';
 
 	let {
 		item,
@@ -179,23 +187,6 @@
 		});
 		return unsubscribe;
 	});
-
-	// 辅助函数：判断是否为媒体文件（图片/视频/文本）
-	function isMediaFile(name: string): boolean {
-		const ext = name.split('.').pop()?.toLowerCase() || '';
-		// 图片格式
-		const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'jxl', 'bmp', 'tiff', 'svg', 'ico'];
-		// 视频格式
-		const videoExts = ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'];
-		// 文本格式
-		const textExts = ['txt', 'md', 'json', 'xml', 'html', 'css', 'js', 'ts', 'log'];
-		return imageExts.includes(ext) || videoExts.includes(ext) || textExts.includes(ext);
-	}
-
-	// 辅助函数：判断是否为压缩包
-	function isArchiveFile(name: string): boolean {
-		return /\.(zip|cbz|rar|cbr|7z|cb7)$/i.test(name);
-	}
 
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
@@ -454,15 +445,11 @@
 		});
 	});
 
-	// 性别类别（用于混合匹配）
-	const genderCategories = ['female', 'male', 'mixed'];
-
 	// 获取显示的标签（高亮收藏的，支持混合匹配，包含手动标签）
 	const displayTags = $derived(() => {
 		if (fileListTagDisplayMode === 'none') return [];
 
 		const map = $collectTagMap; // Use the shared map
-		const normalize = (s: string) => s.trim().toLowerCase();
 		const isMixedEnabled = mixedGenderStore.enabled;
 
 		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display: string; isMixedVariant?: boolean; isManual?: boolean }> = [];
@@ -472,7 +459,7 @@
 		if (emmMetadata?.tags) {
 			for (const [category, tags] of Object.entries(emmMetadata.tags)) {
 				for (const tag of tags) {
-					const fullTagKey = normalize(`${category}:${tag}`);
+					const fullTagKey = normalizeTagKey(`${category}:${tag}`);
 					
 					// 避免重复添加
 					if (addedTagKeys.has(fullTagKey)) continue;
@@ -481,7 +468,7 @@
 					// 尝试多种组合查找
 					let collectTag = map.get(fullTagKey);
 					if (!collectTag) {
-						collectTag = map.get(normalize(tag));
+						collectTag = map.get(normalizeTagKey(tag));
 					}
 
 					// 混合匹配：如果是性别类别，检查其他性别类别的收藏
@@ -490,7 +477,7 @@
 					if (!collectTag && isMixedEnabled && genderCategories.includes(category)) {
 						for (const altCat of genderCategories) {
 							if (altCat === category) continue;
-							const altKey = normalize(`${altCat}:${tag}`);
+							const altKey = normalizeTagKey(`${altCat}:${tag}`);
 							const altCollect = map.get(altKey);
 							if (altCollect) {
 								mixedCollectTag = altCollect;
@@ -529,7 +516,7 @@
 
 		// 添加手动标签（虚线边框样式）
 		for (const mt of manualTags) {
-			const fullTagKey = normalize(`${mt.namespace}:${mt.tag}`);
+			const fullTagKey = normalizeTagKey(`${mt.namespace}:${mt.tag}`);
 			
 			// 避免与 EMM 标签重复
 			if (addedTagKeys.has(fullTagKey)) continue;
@@ -626,33 +613,6 @@
 				folderSizeLoading = false;
 			});
 	});
-
-	// 格式化时间
-	function formatTime(ts?: number): string {
-		if (!ts) return '';
-		const now = Date.now();
-		const diff = now - ts;
-		const minutes = Math.floor(diff / 60000);
-		const hours = Math.floor(diff / 3600000);
-		const days = Math.floor(diff / 86400000);
-
-		if (minutes < 1) return '刚刚';
-		if (minutes < 60) return `${minutes}分钟前`;
-		if (hours < 24) return `${hours}小时前`;
-		if (days < 7) return `${days}天前`;
-		return new Date(ts).toLocaleDateString();
-	}
-
-	// 格式化文件大小
-	function formatSize(bytes: number, isDir: boolean): string {
-		if (isDir) {
-			return bytes === 0 ? '空文件夹' : `${bytes} 项`;
-		}
-		if (bytes < 1024) return bytes + ' B';
-		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-		if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-		return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-	}
 
 	const isReadCompleted = $derived(
 		currentPage !== undefined &&

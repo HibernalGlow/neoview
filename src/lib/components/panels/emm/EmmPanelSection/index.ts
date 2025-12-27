@@ -7,3 +7,4 @@ export { default as EmmPanelSection } from './EmmPanelSection.svelte';
 export { default as TagsPanel } from './TagsPanel.svelte';
 export { default as FavoriteTagsPanel } from './FavoriteTagsPanel.svelte';
 export { default as RatingsPanel } from './RatingsPanel.svelte';
+export * from './emmUtils';

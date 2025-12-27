@@ -7,8 +7,6 @@
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
-	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import {
 		bottomThumbnailBarPinned,
 		bottomBarLockState,
@@ -24,9 +22,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3, Sparkles } from '@lucide/svelte';
 	import { thumbnailService } from '$lib/services/thumbnailService';
-	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 	import MagicCard from '../ui/MagicCard.svelte';
 
@@ -131,6 +127,7 @@
 	let loadThumbnailsDebounce: number | null = null;
 	let lastThumbnailRange: { start: number; end: number } | null = null;
 	const noThumbnailPaths = new Set<string>();
+	const loadingIndices = new Set<number>();
 
 	/**
 	 * 调度缩略图加载（带防抖）
@@ -360,8 +357,8 @@
 	const PRELOAD_RANGE = 20;
 
 	/**
-	 * 触发缩略图加载（使用 thumbnailService + 视频特殊处理）
-	 * thumbnailService 处理图片，视频使用独立的 loadThumbnail
+	 * 触发缩略图加载（使用 thumbnailService）
+	 * 视频缩略图通过 getThumbnailFromCache 自动 fallback 到 thumbnailStoreV3
 	 */
 	function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
@@ -374,254 +371,9 @@
 		}
 
 		const centerIndex = bookStore.currentPageIndex;
-		const totalPages = currentBook.pages.length;
-		
-		// 直接调用 thumbnailService，它内部会处理中央优先和去重（但跳过视频）
+		// 直接调用 thumbnailService，它内部会处理中央优先和去重
+		// 视频缩略图通过渲染时的 getThumbnailFromCache fallback 处理
 		thumbnailService.loadThumbnails(centerIndex);
-		
-		// 额外为视频页面加载缩略图（thumbnailService 会跳过视频）
-		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
-			const indices = offset === 0 
-				? [centerIndex] 
-				: [centerIndex - offset, centerIndex + offset];
-			
-			for (const idx of indices) {
-				if (idx < 0 || idx >= totalPages) continue;
-				
-				const page = currentBook.pages[idx];
-				if (!page) continue;
-				
-				// 只处理视频页面
-				const filename = page.name || page.path || '';
-				if (isVideoFile(filename) && !thumbnailCacheStore.hasThumbnail(idx)) {
-					void loadThumbnail(idx);
-				}
-			}
-		}
-	}
-
-	/**
-	 * 从 data URL 获取图片尺寸（不再重新压缩，后端已返回正确尺寸的 webp）
-	 */
-	function getThumbnailDimensions(
-		dataUrl: string
-	): Promise<{ url: string; width: number; height: number }> {
-		return new Promise((resolve, reject) => {
-			const img = new Image();
-			img.onload = () => {
-				// 直接使用原始数据，不再 canvas 重绘
-				resolve({
-					url: dataUrl,
-					width: img.naturalWidth,
-					height: img.naturalHeight
-				});
-			};
-			img.onerror = () => reject(new Error('Failed to load image'));
-			img.src = dataUrl;
-		});
-	}
-
-	let loadingIndices = new Set<number>();
-	const THUMBNAIL_HEIGHT = 120;
-
-	/**
-	 * 从视频 Blob 创建缩略图 Data URL（使用 video 元素和 canvas）
-	 */
-	async function createThumbnailFromVideoBlob(
-		blob: Blob
-	): Promise<{ url: string; width: number; height: number }> {
-		return new Promise((resolve, reject) => {
-			const objectUrl = URL.createObjectURL(blob);
-			const video = document.createElement('video');
-			video.muted = true;
-			video.preload = 'metadata';
-
-			video.onloadedmetadata = () => {
-				// 跳转到视频开头一点的位置以获取更好的帧
-				video.currentTime = Math.min(1, video.duration * 0.1);
-			};
-
-			video.onseeked = () => {
-				URL.revokeObjectURL(objectUrl);
-
-				// 计算缩放尺寸
-				const scale = THUMBNAIL_HEIGHT / video.videoHeight;
-				const thumbWidth = Math.round(video.videoWidth * scale);
-				const thumbHeight = THUMBNAIL_HEIGHT;
-
-				// 使用 canvas 绘制视频帧
-				const canvas = document.createElement('canvas');
-				canvas.width = thumbWidth;
-				canvas.height = thumbHeight;
-
-				const ctx = canvas.getContext('2d');
-				if (!ctx) {
-					reject(new Error('Failed to get canvas context'));
-					return;
-				}
-
-				ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
-
-				// 转换为 data URL（使用 webp 格式以获得更好的压缩）
-				const dataUrl = canvas.toDataURL('image/webp', 0.8);
-				resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
-			};
-
-			video.onerror = () => {
-				URL.revokeObjectURL(objectUrl);
-				reject(new Error('Failed to load video'));
-			};
-
-			video.src = objectUrl;
-		});
-	}
-
-	/**
-	 * 检查 Blob 是否为视频类型
-	 */
-	function isVideoBlobType(blob: Blob): boolean {
-		return blob.type.startsWith('video/');
-	}
-
-	/**
-	 * 从 Blob 创建缩略图 Data URL（canvas 缩放）
-	 * 自动检测 Blob 类型，对图片使用 img 元素，对视频使用 video 元素
-	 */
-	async function createThumbnailFromBlob(
-		blob: Blob
-	): Promise<{ url: string; width: number; height: number }> {
-		// 如果是视频 Blob，使用视频专用的缩略图生成函数
-		if (isVideoBlobType(blob)) {
-			return createThumbnailFromVideoBlob(blob);
-		}
-
-		return new Promise((resolve, reject) => {
-			const objectUrl = URL.createObjectURL(blob);
-			const img = new Image();
-
-			img.onload = () => {
-				URL.revokeObjectURL(objectUrl);
-
-				// 计算缩放尺寸
-				const scale = THUMBNAIL_HEIGHT / img.naturalHeight;
-				const thumbWidth = Math.round(img.naturalWidth * scale);
-				const thumbHeight = THUMBNAIL_HEIGHT;
-
-				// 使用 canvas 缩放
-				const canvas = document.createElement('canvas');
-				canvas.width = thumbWidth;
-				canvas.height = thumbHeight;
-
-				const ctx = canvas.getContext('2d');
-				if (!ctx) {
-					reject(new Error('Failed to get canvas context'));
-					return;
-				}
-
-				ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
-
-				// 转换为 data URL（使用 webp 格式以获得更好的压缩）
-				const dataUrl = canvas.toDataURL('image/webp', 0.8);
-				resolve({ url: dataUrl, width: thumbWidth, height: thumbHeight });
-			};
-
-			img.onerror = () => {
-				URL.revokeObjectURL(objectUrl);
-				reject(new Error('Failed to load image'));
-			};
-
-			img.src = objectUrl;
-		});
-	}
-
-	async function loadThumbnail(pageIndex: number) {
-		if (loadingIndices.has(pageIndex)) return;
-
-		const currentBook = bookStore.currentBook;
-		// 【关键】验证页面索引有效性，防止切书后加载不存在的页面
-		if (!currentBook || pageIndex < 0 || pageIndex >= currentBook.pages.length) {
-			return;
-		}
-		const page = currentBook.pages[pageIndex];
-		const pathKey = page ? `${currentBook.path}::${page.path}` : null;
-
-		if (pathKey && noThumbnailPaths.has(pathKey)) {
-			return;
-		}
-
-		// 视频页面：优先复用 thumbnailStoreV3 缓存（FileItem 已生成的缩略图）
-		const isVideoPage =
-			!!currentBook && !!page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''));
-
-		if (isVideoPage) {
-			// 尝试复用 thumbnailStoreV3 缓存
-			const existingThumb = getThumbnailUrl(page.path);
-			if (existingThumb) {
-				// 复用已有缩略图
-				thumbnailCacheStore.setThumbnail(pageIndex, existingThumb, 120, 120);
-				return;
-			}
-			// 无缓存则跳过（不额外生成）
-			return;
-		}
-
-		loadingIndices.add(pageIndex);
-		try {
-			// 优先从 imagePool 缓存获取 Blob
-			const cached = imagePool.getSync(pageIndex);
-			if (cached?.blob) {
-				// 缓存命中：直接用 canvas 缩放生成缩略图
-				const thumb = await createThumbnailFromBlob(cached.blob);
-				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
-				if (pathKey) {
-					noThumbnailPaths.delete(pathKey);
-				}
-				return;
-			}
-
-			// 缓存未命中：异步加载
-			const pooled = await imagePool.get(pageIndex);
-			if (pooled?.blob) {
-				const thumb = await createThumbnailFromBlob(pooled.blob);
-				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
-				if (pathKey) {
-					noThumbnailPaths.delete(pathKey);
-				}
-				return;
-			}
-
-			// imagePool 加载失败，使用 fallback
-			throw new Error('imagePool load failed');
-		} catch (err) {
-			console.debug(`imagePool load failed for page ${pageIndex}, using fallback`);
-			if (!currentBook || !page) return;
-
-			try {
-				let imageDataUrl: string;
-
-				if (currentBook.type === 'archive') {
-					imageDataUrl = await loadImageFromArchive(currentBook.path, page.path);
-				} else {
-					imageDataUrl = await loadImage(page.path);
-				}
-
-				const thumbnail = await getThumbnailDimensions(imageDataUrl);
-				thumbnailCacheStore.setThumbnail(
-					pageIndex,
-					thumbnail.url,
-					thumbnail.width,
-					thumbnail.height
-				);
-				noThumbnailPaths.delete(pathKey!);
-			} catch (fallbackErr) {
-				console.error(`Fallback also failed for page ${pageIndex}:`, fallbackErr);
-				if (pathKey) {
-					noThumbnailPaths.add(pathKey);
-				}
-			}
-		} finally {
-			loadingIndices.delete(pageIndex);
-		}
 	}
 
 	// 滚动处理防抖
@@ -650,7 +402,7 @@
 
 	/**
 	 * 滚动时加载可见缩略图
-	 * thumbnailService 处理图片，视频使用独立的 loadThumbnail
+	 * 视频缩略图通过 getThumbnailFromCache 自动 fallback 到 thumbnailStoreV3
 	 */
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
 		const currentBook = bookStore.currentBook;
@@ -669,28 +421,8 @@
 		const totalPages = currentBook.pages.length;
 		const safeCenter = Math.max(0, Math.min(totalPages - 1, centerIdx));
 		
-		// 直接调用 thumbnailService 加载（处理图片）
+		// 直接调用 thumbnailService 加载
 		thumbnailService.loadThumbnails(safeCenter);
-		
-		// 额外为视频页面加载缩略图
-		const visibleRadius = Math.ceil(visibleWidth / thumbnailWidth / 2) + 2;
-		for (let offset = 0; offset <= visibleRadius; offset++) {
-			const indices = offset === 0 
-				? [safeCenter] 
-				: [safeCenter - offset, safeCenter + offset];
-			
-			for (const idx of indices) {
-				if (idx < 0 || idx >= totalPages) continue;
-				
-				const page = currentBook.pages[idx];
-				if (!page) continue;
-				
-				const filename = page.name || page.path || '';
-				if (isVideoFile(filename) && !thumbnailCacheStore.hasThumbnail(idx)) {
-					void loadThumbnail(idx);
-				}
-			}
-		}
 	}
 
 	function scrollCurrentThumbnailIntoCenter() {

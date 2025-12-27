@@ -46,13 +46,6 @@
 		FileArchive,
 		GripHorizontal,
 		MousePointer2,
-		Maximize,
-		Expand,
-		StretchHorizontal,
-		StretchVertical,
-		Frame,
-		AlignLeft,
-		AlignRight,
 		RectangleVertical,
 		Columns2,
 		PanelsTopLeft,
@@ -75,6 +68,7 @@
 	import SortPanel from './SortPanel.svelte';
 	import SlideshowPanel from './SlideshowPanel.svelte';
 	import HoverScrollPanel from './HoverScrollPanel.svelte';
+	import { getZoomModeIcon, getZoomModeLabel, getAutoRotateLabel, SORT_CATEGORIES } from './constants';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -114,65 +108,17 @@
 		settings = newSettings;
 	});
 
-	// 缩放模式图标映射
-	const zoomModeIconMap = {
-		fit: Maximize,
-		fill: Expand,
-		fitWidth: StretchHorizontal,
-		fitHeight: StretchVertical,
-		original: Frame,
-		fitLeftAlign: AlignLeft,
-		fitRightAlign: AlignRight
-	} as const satisfies Record<ZoomMode, typeof Maximize>;
-
-	function getZoomModeIcon(mode: ZoomMode) {
-		return zoomModeIconMap[mode] ?? Frame;
-	}
-
-	function getZoomModeLabel(mode: ZoomMode): string {
-		const labels: Record<ZoomMode, string> = {
-			fit: '适应窗口',
-			fill: '铺满整个窗口',
-			fitWidth: '适应宽度',
-			fitHeight: '适应高度',
-			original: '原始大小',
-			fitLeftAlign: '居左适应窗口',
-			fitRightAlign: '居右适应窗口'
-		};
-		return labels[mode] ?? '原始大小';
-	}
-
-	function getAutoRotateLabel(mode: string): string {
-		const labels: Record<string, string> = {
-			left: '纵向左旋',
-			right: '纵向右旋',
-			horizontalLeft: '横屏左旋',
-			horizontalRight: '横屏右旋',
-			forcedLeft: '始终左旋',
-			forcedRight: '始终右旋'
-		};
-		return labels[mode] ?? '关闭';
-	}
-
 	let CurrentZoomIcon = $derived(getZoomModeIcon(currentZoomDisplayMode));
 
-	// 排序模式标签
-	const sortModeOptions = [
-		{ value: 'fileName', label: '文件名 ↑' },
-		{ value: 'fileNameDescending', label: '文件名 ↓' },
-		{ value: 'fileSize', label: '文件大小 ↑' },
-		{ value: 'fileSizeDescending', label: '文件大小 ↓' },
-		{ value: 'timeStamp', label: '修改时间 ↑' },
-		{ value: 'timeStampDescending', label: '修改时间 ↓' },
-		{ value: 'entry', label: 'Entry 顺序 ↑' },
-		{ value: 'entryDescending', label: 'Entry 顺序 ↓' },
-		{ value: 'random', label: '随机' }
-	];
-
-	let currentSortModeLabel = $derived(
-		sortModeOptions.find((o) => o.value === (bookStore.currentBook?.sortMode ?? 'fileName'))
-			?.label ?? '文件名 ↑'
-	);
+	// 排序模式标签（使用 SORT_CATEGORIES）
+	let currentSortModeLabel = $derived.by(() => {
+		const sortMode = bookStore.currentBook?.sortMode ?? 'fileName';
+		const isDescending = sortMode.endsWith('Descending');
+		const baseMode = isDescending ? sortMode.replace('Descending', '') : sortMode;
+		const category = SORT_CATEGORIES.find((c) => c.value === baseMode);
+		const label = category?.label ?? '文件名';
+		return isDescending ? `${label} ↓` : `${label} ↑`;
+	});
 
 	function handleZoomReset() {
 		dispatchApplyZoomMode();

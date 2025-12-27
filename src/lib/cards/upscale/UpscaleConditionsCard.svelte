@@ -13,13 +13,12 @@ import {
 	autoUpscaleEnabled,
 	conditionsList,
 	availableModels,
-	saveSettings,
 	MODEL_LABELS,
 	GPU_OPTIONS,
 	TILE_SIZE_OPTIONS,
 	NOISE_LEVEL_OPTIONS
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
-import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+import { syncUpscaleConditions } from '$lib/services/upscaleConditionSync';
 
 let expanded = $state(false);
 
@@ -28,15 +27,12 @@ const isAutoUpscaleEnabled = $derived(autoUpscaleEnabled.value);
 
 async function handleEnabledChange(checked: boolean) {
 	conditionalUpscaleEnabled.value = checked;
-	saveSettings();
-	await upscaleStore.syncConditionSettings();
+	await syncUpscaleConditions(conditionalUpscaleEnabled.value, conditionsList.value);
 }
 
 async function handleConditionsChange(event: CustomEvent) {
-	// 条件列表已通过 bindable 更新
-	saveSettings();
-	// 同步条件设置到后端
-	await upscaleStore.syncConditionSettings();
+	// 条件列表已通过 bindable 更新，统一同步
+	await syncUpscaleConditions(conditionalUpscaleEnabled.value, conditionsList.value);
 }
 </script>
 

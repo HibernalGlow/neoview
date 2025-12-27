@@ -92,14 +92,22 @@ export async function updateStartupConfigField(
 export async function syncSettingsToStartupConfig(settings: {
   thumbnailDirectory?: string;
 }): Promise<void> {
-  const config: StartupConfig = {
-    cacheDir: settings.thumbnailDirectory,
-  };
-  
-  // 如果有 cacheDir，自动设置 cacheUpscaleDir
-  if (config.cacheDir) {
-    config.cacheUpscaleDir = `${config.cacheDir}\\pyo3-upscale`;
+  try {
+    // 获取当前完整配置
+    const currentConfig = await getStartupConfig();
+    
+    // 更新缓存目录字段（完整保存）
+    const updatedConfig: StartupConfig = {
+      ...currentConfig,
+      cacheDir: settings.thumbnailDirectory,
+      cacheUpscaleDir: settings.thumbnailDirectory 
+        ? `${settings.thumbnailDirectory}\\pyo3-upscale` 
+        : undefined,
+    };
+    
+    await saveStartupConfig(updatedConfig);
+  } catch (err) {
+    console.error('❌ 同步缓存目录失败:', err);
+    throw err;
   }
-  
-  await saveStartupConfig(config);
 }

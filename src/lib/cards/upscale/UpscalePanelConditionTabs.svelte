@@ -18,7 +18,7 @@ import { createBlankCondition, createPresetCondition, getDefaultConditionPresets
 import ConditionHeader from './ConditionHeader.svelte';
 import ConditionMatchEditor from './ConditionMatchEditor.svelte';
 import ConditionActionEditor from './ConditionActionEditor.svelte';
-import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+import { syncUpscaleConditions } from '$lib/services/upscaleConditionSync';
 import { showErrorToast, showInfoToast } from '$lib/utils/toast';
 
 interface Props {
@@ -154,36 +154,12 @@ function handleRestore() {
 
 async function handleSync() {
 	try {
-		// 同步当前条件到后端
-		await upscaleStore.syncConditionSettings({
-			conditionalUpscaleEnabled,
-			conditionsList: conditions,
-		});
-		
-		// 同时保存到 config.json
-		const { getStartupConfig, saveStartupConfig } = await import('$lib/config/startupConfig');
-		const config = await getStartupConfig();
-		config.upscaleConditionsEnabled = conditionalUpscaleEnabled;
-		config.upscaleConditions = conditions.map(c => ({
-			id: c.id,
-			name: c.name,
-			enabled: c.enabled,
-			priority: c.priority,
-			minWidth: c.match.minWidth ?? 0,
-			minHeight: c.match.minHeight ?? 0,
-			maxWidth: c.match.maxWidth ?? 0,
-			maxHeight: c.match.maxHeight ?? 0,
-			modelName: c.action.model,
-			scale: c.action.scale,
-			tileSize: c.action.tileSize,
-			noiseLevel: c.action.noiseLevel,
-			skip: c.action.skip ?? false,
-		}));
-		await saveStartupConfig(config);
-		
-		console.log('✅ 条件设置已同步到后端和 config.json');
+		// 使用统一的同步服务
+		await syncUpscaleConditions(conditionalUpscaleEnabled, conditions);
+		showInfoToast('条件设置已同步');
 	} catch (err) {
 		console.error('❌ 同步条件设置失败:', err);
+		showErrorToast('同步失败', err instanceof Error ? err.message : String(err));
 	}
 }
 </script>

@@ -34,6 +34,8 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 		minHeight: safeMatch.minHeight,
 		maxWidth: safeMatch.maxWidth,
 		maxHeight: safeMatch.maxHeight,
+		minPixels: safeMatch.minPixels,  // 最小像素量（MPx）
+		maxPixels: safeMatch.maxPixels,  // 最大像素量（MPx）
 		dimensionMode: safeMatch.dimensionMode ?? 'and',
 		createdBetween: safeMatch.createdBetween,
 		modifiedBetween: safeMatch.modifiedBetween,

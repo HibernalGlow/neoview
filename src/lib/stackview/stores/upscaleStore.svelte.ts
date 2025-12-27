@@ -257,7 +257,7 @@ class UpscaleStore {
     console.log('✅ UpscaleStore V2 initialized');
   }
   
-  /** 同步条件设置到后端（初始化时调用一次，条件变动时再调用） */
+  /** 同步条件设置到后端（初始化时调用，或运行时条件变动） */
   async syncConditionSettings(panelSettings?: {
     conditionalUpscaleEnabled?: boolean;
     conditionsList?: Array<{
@@ -270,11 +270,11 @@ class UpscaleStore {
         minHeight?: number;
         maxWidth?: number;
         maxHeight?: number;
-        minPixels?: number;  // 最小像素量（MPx）
-        maxPixels?: number;  // 最大像素量（MPx）
+        minPixels?: number;
+        maxPixels?: number;
         regexBookPath?: string;
         regexImagePath?: string;
-        matchInnerPath?: boolean; // 是否匹配内部路径，默认false只匹配book路径
+        matchInnerPath?: boolean;
       };
       action: {
         model: string;
@@ -292,33 +292,19 @@ class UpscaleStore {
         panelSettings = loadUpscalePanelSettings();
       }
       
-      // 传递给后端
-      await invoke('upscale_service_sync_conditions', {
-        enabled: panelSettings.conditionalUpscaleEnabled ?? false, // 默认禁用条件超分，让全局开关生效
-        conditions: (panelSettings.conditionsList ?? []).map(c => ({
-          id: c.id,
-          name: c.name,
-          enabled: c.enabled,
-          priority: c.priority,
-          minWidth: c.match.minWidth ?? 0,
-          minHeight: c.match.minHeight ?? 0,
-          maxWidth: c.match.maxWidth ?? 0,
-          maxHeight: c.match.maxHeight ?? 0,
-          minPixels: c.match.minPixels ?? 0,  // 最小像素量（MPx）
-          maxPixels: c.match.maxPixels ?? 0,  // 最大像素量（MPx）
-          regexBookPath: c.match.regexBookPath ?? null,
-          regexImagePath: c.match.regexImagePath ?? null,
-          matchInnerPath: c.match.matchInnerPath ?? false, // 默认只匹配book路径
-          modelName: c.action.model,
-          scale: c.action.scale,
-          tileSize: c.action.tileSize,
-          noiseLevel: c.action.noiseLevel,
-          skip: c.action.skip ?? false,
-        })),
-      });
-      console.log('✅ 同步条件设置完成, 条件数:', panelSettings.conditionsList?.length ?? 0);
+      // 使用统一同步服务，仅同步到后端（不重复保存 localStorage/config.json）
+      const { syncConditionsToBackend } = await import('$lib/services/upscaleConditionSync');
+      await syncConditionsToBackend(
+        panelSettings.conditionalUpscaleEnabled ?? false,
+        panelSettings.conditionsList as any ?? []
+      );
     } catch (err) {
-      console.warn('⚠️ 同步条件设置失败:', err);
+      const errMsg = String(err);
+      if (errMsg.includes('未初始化')) {
+        console.log('ℹ️ UpscaleService 未初始化，条件设置将在下次打开书籍时生效');
+      } else {
+        console.warn('⚠️ 同步条件设置失败:', err);
+      }
     }
   }
 

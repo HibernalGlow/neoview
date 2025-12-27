@@ -102,7 +102,9 @@ function updateCondition(id: string, updates: Partial<UpscaleCondition>) {
 }
 
 function updateMatch(id: string, matchUpdates: Partial<UpscaleCondition['match']>) {
+	console.log('📝 UpscalePanelConditionTabs updateMatch:', id, matchUpdates);
 	const next = conditions.map(c => c.id === id ? { ...c, match: { ...c.match, ...matchUpdates } } : c);
+	console.log('📝 更新后的条件:', next.find(c => c.id === id)?.match);
 	persistConditions(next);
 }
 

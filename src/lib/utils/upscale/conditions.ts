@@ -29,7 +29,7 @@ function normalizePathForMatch(path: string): string {
 
 function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleCondition['match'] {
 	const safeMatch = match ?? {};
-	return {
+	const result = {
 		minWidth: safeMatch.minWidth,
 		minHeight: safeMatch.minHeight,
 		maxWidth: safeMatch.maxWidth,
@@ -45,6 +45,11 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 		excludeFromPreload: safeMatch.excludeFromPreload ?? false,
 		metadata: safeMatch.metadata ? { ...safeMatch.metadata } : undefined
 	};
+	// 调试日志
+	if (safeMatch.minPixels !== undefined || safeMatch.maxPixels !== undefined) {
+		console.log('🔧 ensureMatchDefaults pixels:', { input: { minPixels: safeMatch.minPixels, maxPixels: safeMatch.maxPixels }, output: { minPixels: result.minPixels, maxPixels: result.maxPixels } });
+	}
+	return result;
 }
 
 function ensureActionDefaults(action?: Partial<UpscaleCondition['action']>): UpscaleCondition['action'] {

@@ -44,6 +44,7 @@ function parseNumericInput(value: string): number | undefined {
 }
 
 function updateMatch(updates: Partial<UpscaleCondition['match']>) {
+	console.log('📝 ConditionMatchEditor updateMatch:', updates);
 	dispatch('update', { match: updates });
 }
 

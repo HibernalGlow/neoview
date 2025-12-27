@@ -66,6 +66,10 @@ export interface UpscalePanelSettings extends UpscaleSettings {
 	tileSize: number;
 	noiseLevel: number;
 	gpuId: number;
+	// 递进超分配置
+	progressiveUpscaleEnabled?: boolean;
+	progressiveDwellTime?: number;
+	progressiveMaxPages?: number;
 }
 
 export interface UpscalePanelEventDetail {

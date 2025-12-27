@@ -154,6 +154,10 @@ export function applySettings(settings: UpscalePanelSettings) {
 	backgroundConcurrency.value = settings.backgroundConcurrency;
 	showPanelPreview.value = settings.showPanelPreview ?? false;
 	conditionsList.value = settings.conditionsList ?? [];
+	// 递进超分配置
+	progressiveUpscaleEnabled.value = settings.progressiveUpscaleEnabled ?? false;
+	progressiveDwellTime.value = settings.progressiveDwellTime ?? 3;
+	progressiveMaxPages.value = settings.progressiveMaxPages ?? 20;
 }
 
 export function gatherSettings(): UpscalePanelSettings {
@@ -174,6 +178,10 @@ export function gatherSettings(): UpscalePanelSettings {
 		backgroundConcurrency: backgroundConcurrency.value,
 		showPanelPreview: showPanelPreview.value,
 		conditionsList: conditionsList.value,
+		// 递进超分配置
+		progressiveUpscaleEnabled: progressiveUpscaleEnabled.value,
+		progressiveDwellTime: progressiveDwellTime.value,
+		progressiveMaxPages: progressiveMaxPages.value,
 		conditions: {
 			enabled: conditionalUpscaleEnabled.value,
 			minWidth: conditionalMinWidth.value,

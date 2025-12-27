@@ -43,9 +43,9 @@ pub fn sync_conditions(
         s.enabled = enabled;
     }
     
-    // 存储条件列表（按优先级排序）
+    // 存储条件列表（按优先级排序，priority 越小优先级越高）
     let mut sorted_conditions = conditions;
-    sorted_conditions.sort_by(|a, b| b.priority.cmp(&a.priority)); // 高优先级在前
+    sorted_conditions.sort_by(|a, b| a.priority.cmp(&b.priority)); // 小数字优先级高，排在前面
     
     if let Ok(mut list) = conditions_list.write() {
         *list = sorted_conditions;

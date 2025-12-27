@@ -143,10 +143,19 @@ pub async fn upscale_service_init(
         // 启动配置中的目录
         log::info!("📁 使用 config.json 中的缓存目录");
         dir
+    } else if let Some(cache_base) = &startup_config.cache_dir {
+        // 使用 cache_dir/pyo3-upscale
+        if !cache_base.is_empty() {
+            log::info!("📁 使用 cache_dir/pyo3-upscale 目录");
+            std::path::PathBuf::from(cache_base).join("pyo3-upscale")
+        } else {
+            log::info!("📁 使用默认缓存目录");
+            app_data_dir.join("pyo3-upscale")
+        }
     } else {
         // 默认目录
         log::info!("📁 使用默认缓存目录");
-        app_data_dir.join("upscale_cache")
+        app_data_dir.join("pyo3-upscale")
     };
     
     log::info!("📁 超分缓存目录: {}", cache_dir.display());
@@ -169,6 +178,8 @@ pub async fn upscale_service_init(
                 min_height: c.min_height,
                 max_width: c.max_width,
                 max_height: c.max_height,
+                min_pixels: c.min_pixels,
+                max_pixels: c.max_pixels,
                 regex_book_path: c.regex_book_path,
                 regex_image_path: c.regex_image_path,
                 match_inner_path: c.match_inner_path,

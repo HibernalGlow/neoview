@@ -185,6 +185,21 @@ class UpscaleStore {
   async init() {
     if (this.initialized) return;
 
+    // 先同步缓存目录到 startup_config.json（确保后端使用正确的缓存路径）
+    try {
+      const { settingsManager } = await import('$lib/settings/settingsManager');
+      const { syncSettingsToStartupConfig } = await import('$lib/config/startupConfig');
+      const globalSettings = settingsManager.getSettings();
+      const thumbnailDir = globalSettings.system?.thumbnailDirectory;
+      
+      if (thumbnailDir) {
+        await syncSettingsToStartupConfig({ thumbnailDirectory: thumbnailDir });
+        console.log('✅ 已同步缓存目录到 startup_config.json:', thumbnailDir);
+      }
+    } catch (err) {
+      console.warn('⚠️ 同步缓存目录失败:', err);
+    }
+
     // 初始化后端服务（后端从 config.json 读取缓存目录）
     try {
       await invoke('upscale_service_init');

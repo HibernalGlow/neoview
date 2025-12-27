@@ -266,10 +266,6 @@ fn create_skipped_payload(
         scale: None,
     }
 }
-        upscaled_size: None,
-        is_preload: task.score.priority != TaskPriority::Current,
-    }
-}
 
 /// 从条件列表中匹配模型
 fn match_model_from_conditions(

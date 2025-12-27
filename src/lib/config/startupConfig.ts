@@ -14,6 +14,16 @@ export interface UpscaleConditionConfig {
   minHeight: number;
   maxWidth: number;
   maxHeight: number;
+  /** 最小像素量（百万像素 MPx，0 表示不限制） */
+  minPixels?: number;
+  /** 最大像素量（百万像素 MPx，0 表示不限制） */
+  maxPixels?: number;
+  /** 书籍路径正则表达式 */
+  regexBookPath?: string;
+  /** 图片路径正则表达式 */
+  regexImagePath?: string;
+  /** 是否匹配内部路径 */
+  matchInnerPath?: boolean;
   modelName: string;
   scale: number;
   tileSize: number;

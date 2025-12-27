@@ -50,7 +50,7 @@ let {
 }: Props = $props();
 
 // 排序字段定义 - 虚拟模式下 date 显示为"添加时间"
-let sortFields = $derived<SortFieldDef[]>(() => {
+const sortFields = $derived.by((): SortFieldDef[] => {
 	const dateLabel = virtualMode ? '添加时间' : '日期';
 	return [
 		{ value: 'name' as FolderSortField, label: '名称', icon: ALargeSmall },
@@ -62,7 +62,7 @@ let sortFields = $derived<SortFieldDef[]>(() => {
 		{ value: 'rating' as FolderSortField, label: '评分', icon: Star },
 		{ value: 'collectTagCount' as FolderSortField, label: '收藏标签', icon: Heart }
 	];
-})();
+});
 </script>
 
 <div class="flex flex-wrap items-center gap-1 border-t border-border/50 px-2 py-1">

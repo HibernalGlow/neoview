@@ -77,9 +77,23 @@
 	// 缩略图列表滚动进度（用于 HorizontalListSlider）
 	let thumbnailScrollProgress = $state(0);
 
-	// 从全局缓存获取缩略图
+	// 从全局缓存获取缩略图（优先 thumbnailCacheStore，fallback 到 thumbnailStoreV3）
 	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
-		return thumbnailSnapshot.get(pageIndex) ?? null;
+		// 优先从 thumbnailCacheStore 获取
+		const cached = thumbnailSnapshot.get(pageIndex);
+		if (cached) return cached;
+		
+		// Fallback: 检查 thumbnailStoreV3（FileItem 的缩略图系统）
+		const currentBook = bookStore.currentBook;
+		if (currentBook && currentBook.pages[pageIndex]) {
+			const pagePath = currentBook.pages[pageIndex].path;
+			const v3Url = getThumbnailUrl(pagePath);
+			if (v3Url) {
+				// 返回虚拟 ThumbnailEntry
+				return { url: v3Url, width: 120, height: 120 };
+			}
+		}
+		return null;
 	}
 
 	// 响应钉住状态、锁定状态和 open 状态

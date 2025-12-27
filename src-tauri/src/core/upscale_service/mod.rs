@@ -328,6 +328,9 @@ impl UpscaleService {
                     original_size: None,
                     upscaled_size: None,
                     is_preload: task.score.priority != TaskPriority::Current,
+                    // 缓存命中时使用任务中的模型信息
+                    model_name: if task.model.model_name.is_empty() { None } else { Some(task.model.model_name.clone()) },
+                    scale: Some(task.model.scale),
                 };
                 let _ = app.emit("upscale-ready", payload);
             }

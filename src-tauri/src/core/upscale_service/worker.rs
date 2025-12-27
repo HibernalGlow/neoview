@@ -241,6 +241,8 @@ fn handle_task_result(
                 original_size: None,
                 upscaled_size: None,
                 is_preload: task.score.priority != TaskPriority::Current,
+                model_name: None,
+                scale: None,
             };
             let _ = app.emit("upscale-ready", payload);
         }

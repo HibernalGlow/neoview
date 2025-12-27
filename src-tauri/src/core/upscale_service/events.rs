@@ -46,6 +46,10 @@ pub struct UpscaleReadyPayload {
     pub upscaled_size: Option<(u32, u32)>,
     /// 是否来自预加载
     pub is_preload: bool,
+    /// 实际使用的模型名称
+    pub model_name: Option<String>,
+    /// 实际使用的放大倍率
+    pub scale: Option<i32>,
 }
 
 /// 服务统计

@@ -50,6 +50,10 @@ export interface UpscaleReadyPayload {
   conditionId?: string | null;
   /** 匹配的条件名称 */
   conditionName?: string | null;
+  /** 实际使用的模型名称 */
+  modelName?: string | null;
+  /** 实际使用的放大倍率 */
+  scale?: number | null;
 }
 
 /** 页面超分状态（简化版） */
@@ -60,6 +64,14 @@ export interface PageUpscaleStatus {
   conditionId?: string | null;
   /** 匹配的条件名称 */
   conditionName?: string | null;
+  /** 实际使用的模型名称 */
+  modelName?: string | null;
+  /** 实际使用的放大倍率 */
+  scale?: number | null;
+  /** 原始尺寸 */
+  originalSize?: [number, number] | null;
+  /** 超分后尺寸 */
+  upscaledSize?: [number, number] | null;
 }
 
 /** Store 状态（V2：简化，超分图进入 imagePool） */
@@ -680,7 +692,9 @@ class UpscaleStore {
       pageIndex: payload.pageIndex,
       status: payload.status,
       cachePath: payload.cachePath?.slice(-50),
-      error: payload.error,  // 显示错误信息
+      error: payload.error,
+      modelName: payload.modelName,
+      scale: payload.scale,
     });
 
     // 检查是否是当前书籍
@@ -689,15 +703,24 @@ class UpscaleStore {
       return;
     }
 
-    const { pageIndex, status, cachePath, conditionId, conditionName } = payload;
+    const { pageIndex, status, cachePath, conditionId, conditionName, modelName, scale, originalSize, upscaledSize } = payload;
 
     // 如果失败，打印详细错误
     if (status === 'failed' && payload.error) {
       console.error(`❌ 超分失败 page ${pageIndex}:`, payload.error);
     }
 
-    // 更新状态（包含条件信息）
-    this.updatePageStatus(pageIndex, { status, cachePath, conditionId, conditionName });
+    // 更新状态（包含条件信息和模型信息）
+    this.updatePageStatus(pageIndex, { 
+      status, 
+      cachePath, 
+      conditionId, 
+      conditionName,
+      modelName,
+      scale,
+      originalSize,
+      upscaledSize,
+    });
 
     // 如果完成且有缓存路径，将超分图放入 imagePool
     if (status === 'completed' && cachePath) {

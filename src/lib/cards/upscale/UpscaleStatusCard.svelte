@@ -4,7 +4,6 @@
  * 实时显示当前图片的超分状态
  */
 import { Loader2, Check, X, SkipForward, ImageOff } from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
 import { upscaleStore, type UpscaleStatus } from '$lib/stackview/stores/upscaleStore.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svelte';
@@ -12,8 +11,11 @@ import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svel
 // 当前页面索引
 let currentPageIndex = $derived(upscaleStore.currentPageIndex);
 
+// 当前页面完整状态（包含模型信息）
+let pageFullStatus = $derived(upscaleStore.getPageFullStatus(currentPageIndex));
+
 // 当前页面状态
-let pageStatus = $derived(upscaleStore.getPageStatus(currentPageIndex));
+let pageStatus = $derived(pageFullStatus?.status ?? null);
 
 // 是否有超分图
 let hasUpscaled = $derived(upscaleStore.isPageUpscaled(currentPageIndex));
@@ -77,9 +79,6 @@ function stopResize() {
 	window.removeEventListener('mouseup', stopResize);
 }
 
-// 超分版本（触发响应式更新）
-let upscaleVersion = $derived(imagePool.version);
-
 // 原图 URL
 let originalUrl = $derived.by(() => {
 	const img = imagePool.getSync(currentPageIndex);
@@ -97,6 +96,12 @@ let originalDimensions = $derived.by(() => {
 	const img = imagePool.getSync(currentPageIndex);
 	return img ? { width: img.width || 0, height: img.height || 0 } : null;
 });
+
+// 实际使用的模型名称（优先从状态获取，否则用默认值）
+let actualModelName = $derived(pageFullStatus?.modelName ?? selectedModel.value);
+
+// 实际使用的放大倍率（优先从状态获取，否则用默认值）
+let actualScale = $derived(pageFullStatus?.scale ?? scale.value);
 
 // 状态显示信息
 interface StatusInfo {
@@ -127,10 +132,18 @@ function getStatusInfo(status: UpscaleStatus | null): StatusInfo {
 
 let statusInfo = $derived(getStatusInfo(pageStatus));
 
-// 计算超分后尺寸（假设按 scale 放大）
+// 超分后尺寸（优先从状态获取，否则计算）
 let upscaledDimensions = $derived.by(() => {
+	// 优先使用后端返回的实际尺寸
+	if (pageFullStatus?.upscaledSize) {
+		return {
+			width: pageFullStatus.upscaledSize[0],
+			height: pageFullStatus.upscaledSize[1],
+		};
+	}
+	// 否则根据原图尺寸和倍率计算
 	if (!originalDimensions || !hasUpscaled) return null;
-	const s = scale.value || 2;
+	const s = actualScale || 2;
 	return {
 		width: originalDimensions.width * s,
 		height: originalDimensions.height * s,
@@ -166,13 +179,21 @@ let upscaledDimensions = $derived.by(() => {
 	{#if upscaleStore.enabled}
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">模型</span>
-			<span class="font-mono text-[10px] truncate max-w-[120px]" title={selectedModel.value}>
-				{selectedModel.value}
+			<span class="font-mono text-[10px] truncate max-w-[120px]" title={actualModelName}>
+				{actualModelName}
+				{#if pageFullStatus?.modelName}
+					<span class="text-green-500 ml-1">✓</span>
+				{/if}
 			</span>
 		</div>
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">放大倍率</span>
-			<span class="font-mono">{scale.value}x</span>
+			<span class="font-mono">
+				{actualScale}x
+				{#if pageFullStatus?.scale}
+					<span class="text-green-500 ml-1">✓</span>
+				{/if}
+			</span>
 		</div>
 	{/if}
 

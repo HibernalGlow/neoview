@@ -240,6 +240,8 @@ fn save_and_return_result(
         original_size: Some((width, height)),
         upscaled_size: Some((upscaled_width, upscaled_height)),
         is_preload: task.score.priority != TaskPriority::Current,
+        model_name: Some(final_model.model_name.clone()),
+        scale: Some(final_model.scale),
     })
 }
 
@@ -258,6 +260,12 @@ fn create_skipped_payload(
         cache_path: None,
         error: error_msg.or_else(|| Some(format!("无条件匹配 ({}x{})", width, height))),
         original_size: Some((width, height)),
+        upscaled_size: None,
+        is_preload: task.score.priority != TaskPriority::Current,
+        model_name: None,
+        scale: None,
+    }
+}
         upscaled_size: None,
         is_preload: task.score.priority != TaskPriority::Current,
     }

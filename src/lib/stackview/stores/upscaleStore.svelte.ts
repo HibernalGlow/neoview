@@ -671,7 +671,7 @@ class UpscaleStore {
       pageIndex: payload.pageIndex,
       status: payload.status,
       cachePath: payload.cachePath?.slice(-50),
-      error: payload.error,
+      error: payload.error,  // 显示错误信息
     });
 
     // 检查是否是当前书籍
@@ -681,6 +681,11 @@ class UpscaleStore {
     }
 
     const { pageIndex, status, cachePath, conditionId, conditionName } = payload;
+
+    // 如果失败，打印详细错误
+    if (status === 'failed' && payload.error) {
+      console.error(`❌ 超分失败 page ${pageIndex}:`, payload.error);
+    }
 
     // 更新状态（包含条件信息）
     this.updatePageStatus(pageIndex, { status, cachePath, conditionId, conditionName });

@@ -160,6 +160,16 @@ fn worker_loop(
                 set.remove(&(task.book_path.clone(), task.page_index));
             }
 
+            // 打印处理结果
+            match &result {
+                Ok(payload) => {
+                    log_debug!("✅ 任务处理完成: page {} status={:?}", task.page_index, payload.status);
+                }
+                Err(e) => {
+                    log_debug!("❌ 任务处理失败: page {} error={}", task.page_index, e);
+                }
+            }
+
             // 处理结果并发送事件
             handle_task_result(
                 result,
@@ -194,18 +204,21 @@ fn handle_task_result(
             match payload.status {
                 UpscaleStatus::Completed => {
                     completed_count.fetch_add(1, Ordering::SeqCst);
+                    log_debug!("📤 发送完成事件: page {}", task.page_index);
                 }
                 UpscaleStatus::Skipped => {
                     skipped_count.fetch_add(1, Ordering::SeqCst);
                     if let Ok(mut set) = skipped_pages.write() {
                         set.insert((task.book_path.clone(), task.page_index));
                     }
+                    log_debug!("📤 发送跳过事件: page {} reason={:?}", task.page_index, payload.error);
                 }
                 UpscaleStatus::Failed => {
                     failed_count.fetch_add(1, Ordering::SeqCst);
                     if let Ok(mut set) = failed_pages.write() {
                         set.insert((task.book_path.clone(), task.page_index));
                     }
+                    log_debug!("📤 发送失败事件: page {} error={:?}", task.page_index, payload.error);
                 }
                 _ => {}
             }
@@ -217,6 +230,7 @@ fn handle_task_result(
                 set.insert((task.book_path.clone(), task.page_index));
             }
 
+            log_debug!("📤 发送错误事件: page {} error={}", task.page_index, e);
             let payload = UpscaleReadyPayload {
                 book_path: task.book_path.clone(),
                 page_index: task.page_index,

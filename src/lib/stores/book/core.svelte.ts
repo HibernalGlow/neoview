@@ -13,6 +13,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
 
+import { SvelteMap } from 'svelte/reactivity';
 import {
   PAGE_WINDOW_PADDING,
   JUMP_HISTORY_LIMIT,
@@ -21,6 +22,7 @@ import {
   mapEmmToRaw,
   clampInitialPage,
 } from './utils';
+import type { UpscaleStatus } from './types';
 import type {
   BookState,
   OpenBookOptions,
@@ -49,6 +51,9 @@ class BookStore {
   });
 
   private lastEmmMetadataForCurrentBook: EMMMetadata | null = null;
+
+  // 超分状态管理：每页超分状态映射 pageIndex -> status
+  private upscaleStatusByPage = $state<SvelteMap<number, UpscaleStatus>>(new SvelteMap());
 
   // Getters
   get currentBook() { return this.state.currentBook; }
@@ -419,6 +424,36 @@ class BookStore {
   setError(message: string) { this.state.error = message; }
   clearError() { this.state.error = ''; }
   setUpscaledImage(data: string | null) { this.state.upscaledImageData = data; }
+
+  // ==================== 超分状态管理 ====================
+
+  /** 获取指定页面的超分状态 */
+  getPageUpscaleStatus(pageIndex: number): UpscaleStatus {
+    return this.upscaleStatusByPage.get(pageIndex) ?? 'none';
+  }
+
+  /** 设置指定页面的超分状态 */
+  setPageUpscaleStatus(pageIndex: number, status: UpscaleStatus): void {
+    const nextMap = new SvelteMap(this.upscaleStatusByPage);
+    nextMap.set(pageIndex, status);
+    this.upscaleStatusByPage = nextMap;
+  }
+
+  /** 获取预超分覆盖范围（最远已预超分的页面索引） */
+  getFurthestPreUpscaledIndex(): number {
+    let furthestIndex = -1;
+    for (const [pageIndex, status] of this.upscaleStatusByPage.entries()) {
+      if (status === 'preupscaled' || status === 'done') {
+        furthestIndex = Math.max(furthestIndex, pageIndex);
+      }
+    }
+    return furthestIndex;
+  }
+
+  /** 重置所有页面的超分状态 */
+  resetAllUpscaleStatus(): void {
+    this.upscaleStatusByPage = new SvelteMap();
+  }
 
   updatePageDimensions(pageIndex: number, dimensions: { width?: number | null; height?: number | null }) {
     const book = this.state.currentBook;

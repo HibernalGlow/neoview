@@ -275,20 +275,31 @@ fn match_model_from_conditions(
     width: u32,
     height: u32,
 ) -> Result<Option<UpscaleModel>, UpscaleReadyPayload> {
-    // 如果任务模型不为空，直接使用
+    // 如果任务模型不为空，直接使用（前端指定了模型）
     if !task.model.model_name.is_empty() {
+        log_debug!("📋 使用任务指定的模型: {}", task.model.model_name);
         return Ok(Some(task.model.clone()));
     }
     
-    // 检查条件是否启用
+    // 检查条件超分是否启用
     let conditions_enabled = condition_settings
         .read()
         .ok()
         .map(|s| s.enabled)
-        .unwrap_or(true);
+        .unwrap_or(false);
+    
+    log_debug!("📋 条件超分启用状态: {}", conditions_enabled);
     
     if !conditions_enabled {
-        return Ok(None);
+        // 条件超分禁用，但前端也没传模型，使用默认模型
+        log_debug!("📋 条件超分禁用，使用默认模型 cunet 2x");
+        return Ok(Some(UpscaleModel {
+            model_id: 0,
+            model_name: "cunet".to_string(),
+            scale: 2,
+            tile_size: 0,
+            noise_level: 0,
+        }));
     }
     
     let conditions = conditions_list
@@ -296,6 +307,8 @@ fn match_model_from_conditions(
         .ok()
         .map(|list| list.clone())
         .unwrap_or_default();
+    
+    log_debug!("📋 条件列表数量: {}", conditions.len());
     
     // 遍历条件（已按优先级排序）
     for cond in conditions.iter() {
@@ -305,12 +318,14 @@ fn match_model_from_conditions(
         
         // 检查尺寸条件
         if !check_size_condition(cond, width, height) {
+            log_debug!("📋 条件 '{}' 尺寸不匹配 ({}x{})", cond.name, width, height);
             continue;
         }
         
         // 检查路径正则条件
         let (match_book, match_image) = check_path_regex(task, cond);
         if !match_book || !match_image {
+            log_debug!("📋 条件 '{}' 路径不匹配", cond.name);
             continue;
         }
         
@@ -337,6 +352,8 @@ fn match_model_from_conditions(
         }));
     }
     
+    // 条件超分启用但没有匹配的条件，跳过
+    log_debug!("⚠️ 条件超分启用但无匹配条件 ({}x{})", width, height);
     Ok(None)
 }
 

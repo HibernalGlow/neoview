@@ -577,20 +577,24 @@ class UpscaleStore {
   ) {
     if (!this.state.enabled) return;
 
-    // 从 upscalePanelStore 获取当前模型设置
-    const { selectedModel, scale, tileSize, noiseLevel } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
+    // 从 upscalePanelStore 获取当前模型设置和条件超分开关
+    const { selectedModel, scale, tileSize, noiseLevel, conditionalUpscaleEnabled } = await import('$lib/stores/upscale/upscalePanelStore.svelte');
 
     try {
+      // 如果条件超分启用，不传模型参数，让后端条件匹配决定
+      // 否则使用默认模型设置
+      const useConditionMatch = conditionalUpscaleEnabled.value;
+      
       await invoke('upscale_service_request', {
         bookPath,
         pageIndex,
         imagePath,
         imageHash,
         priority,
-        modelName: selectedModel.value,
-        scale: scale.value,
-        tileSize: tileSize.value,
-        noiseLevel: noiseLevel.value,
+        modelName: useConditionMatch ? null : selectedModel.value,
+        scale: useConditionMatch ? null : scale.value,
+        tileSize: useConditionMatch ? null : tileSize.value,
+        noiseLevel: useConditionMatch ? null : noiseLevel.value,
       });
 
       // 更新状态

@@ -8,7 +8,7 @@
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 	import { loadImage } from '$lib/api/fs';
-	import { loadImageFromArchive, generateVideoThumbnail } from '$lib/api/filesystem';
+	import { loadImageFromArchive } from '$lib/api/filesystem';
 	import {
 		bottomThumbnailBarPinned,
 		bottomBarLockState,
@@ -27,6 +27,7 @@
 	import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 	import MagicCard from '../ui/MagicCard.svelte';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
@@ -345,8 +346,8 @@
 	const PRELOAD_RANGE = 20;
 
 	/**
-	 * 触发缩略图加载（使用 thumbnailService）
-	 * 简化：直接调用 thumbnailService，让它处理中央优先策略
+	 * 触发缩略图加载（使用 thumbnailService + 视频特殊处理）
+	 * thumbnailService 处理图片，视频使用独立的 loadThumbnail
 	 */
 	function loadVisibleThumbnails() {
 		const currentBook = bookStore.currentBook;
@@ -359,8 +360,30 @@
 		}
 
 		const centerIndex = bookStore.currentPageIndex;
-		// 直接调用 thumbnailService，它内部会处理中央优先和去重
+		const totalPages = currentBook.pages.length;
+		
+		// 直接调用 thumbnailService，它内部会处理中央优先和去重（但跳过视频）
 		thumbnailService.loadThumbnails(centerIndex);
+		
+		// 额外为视频页面加载缩略图（thumbnailService 会跳过视频）
+		for (let offset = 0; offset <= PRELOAD_RANGE; offset++) {
+			const indices = offset === 0 
+				? [centerIndex] 
+				: [centerIndex - offset, centerIndex + offset];
+			
+			for (const idx of indices) {
+				if (idx < 0 || idx >= totalPages) continue;
+				
+				const page = currentBook.pages[idx];
+				if (!page) continue;
+				
+				// 只处理视频页面
+				const filename = page.name || page.path || '';
+				if (isVideoFile(filename) && !thumbnailCacheStore.hasThumbnail(idx)) {
+					void loadThumbnail(idx);
+				}
+			}
+		}
 	}
 
 	/**
@@ -512,35 +535,19 @@
 			return;
 		}
 
-		// 视频页面：使用视频缩略图 API
+		// 视频页面：优先复用 thumbnailStoreV3 缓存（FileItem 已生成的缩略图）
 		const isVideoPage =
 			!!currentBook && !!page && (isVideoFile(page.name || '') || isVideoFile(page.path || ''));
 
 		if (isVideoPage) {
-			// 压缩包中的视频暂时不生成独立缩略图
-			if (currentBook.type === 'archive') {
-				if (pathKey) {
-					noThumbnailPaths.add(pathKey);
-				}
+			// 尝试复用 thumbnailStoreV3 缓存
+			const existingThumb = getThumbnailUrl(page.path);
+			if (existingThumb) {
+				// 复用已有缩略图
+				thumbnailCacheStore.setThumbnail(pageIndex, existingThumb, 120, 120);
 				return;
 			}
-
-			loadingIndices.add(pageIndex);
-			try {
-				const videoThumbDataUrl = await generateVideoThumbnail(page.path);
-				const thumb = await getThumbnailDimensions(videoThumbDataUrl);
-				thumbnailCacheStore.setThumbnail(pageIndex, thumb.url, thumb.width, thumb.height);
-				if (pathKey) {
-					noThumbnailPaths.delete(pathKey);
-				}
-			} catch (videoErr) {
-				console.error(`Failed to generate video thumbnail for page ${pageIndex}:`, videoErr);
-				if (pathKey) {
-					noThumbnailPaths.add(pathKey);
-				}
-			} finally {
-				loadingIndices.delete(pageIndex);
-			}
+			// 无缓存则跳过（不额外生成）
 			return;
 		}
 
@@ -629,14 +636,13 @@
 
 	/**
 	 * 滚动时加载可见缩略图
-	 * 简化：直接调用 thumbnailService
+	 * thumbnailService 处理图片，视频使用独立的 loadThumbnail
 	 */
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
 		const currentBook = bookStore.currentBook;
 		if (!currentBook) return;
 
 		const containerRect = container.getBoundingClientRect();
-		const buffer = 300; // 缓冲区
 		const thumbnailWidth = 80; // 估算缩略图宽度
 
 		// 根据滚动位置计算可见范围中心
@@ -646,10 +652,31 @@
 		const centerIdx = Math.floor(centerScrollPos / thumbnailWidth);
 		
 		// 限制在有效范围内
-		const safeCenter = Math.max(0, Math.min(currentBook.pages.length - 1, centerIdx));
+		const totalPages = currentBook.pages.length;
+		const safeCenter = Math.max(0, Math.min(totalPages - 1, centerIdx));
 		
-		// 直接调用 thumbnailService 加载
+		// 直接调用 thumbnailService 加载（处理图片）
 		thumbnailService.loadThumbnails(safeCenter);
+		
+		// 额外为视频页面加载缩略图
+		const visibleRadius = Math.ceil(visibleWidth / thumbnailWidth / 2) + 2;
+		for (let offset = 0; offset <= visibleRadius; offset++) {
+			const indices = offset === 0 
+				? [safeCenter] 
+				: [safeCenter - offset, safeCenter + offset];
+			
+			for (const idx of indices) {
+				if (idx < 0 || idx >= totalPages) continue;
+				
+				const page = currentBook.pages[idx];
+				if (!page) continue;
+				
+				const filename = page.name || page.path || '';
+				if (isVideoFile(filename) && !thumbnailCacheStore.hasThumbnail(idx)) {
+					void loadThumbnail(idx);
+				}
+			}
+		}
 	}
 
 	function scrollCurrentThumbnailIntoCenter() {

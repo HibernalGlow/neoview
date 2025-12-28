@@ -1,27 +1,11 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import {
-		Play,
-		Pause,
-		Volume2,
-		VolumeX,
 		Maximize,
-		SkipBack,
-		SkipForward,
-		Gauge,
-		Repeat,
-		Repeat1,
 		FastForward,
 		Pin,
 		PinOff,
-		Captions,
-		CaptionsOff,
-		PictureInPicture2,
-		Camera,
-		RotateCcw,
-		Sun,
-		RefreshCw,
-		MoreVertical
+		PictureInPicture2
 	} from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
@@ -32,6 +16,15 @@
 		captureVideoScreenshot,
 		downloadScreenshot
 	} from './videoPlayerUtils';
+	// 导入子组件
+	import {
+		VideoControls,
+		VideoProgressBar,
+		VolumePanel,
+		PlaybackRatePanel,
+		MoreMenu,
+		SubtitlePanel
+	} from './VideoPlayer';
 
 	type LoopMode = 'none' | 'list' | 'single';
 	type PlayerSettings = {
@@ -97,18 +90,13 @@
 	let videoUrl = $state<string>(src || '');
 
 	// 进度条预览状态
-	let progressBarRef = $state<HTMLDivElement | null>(null);
+	let progressBarComponent = $state<{ getPreviewCanvas: () => HTMLCanvasElement | null; getProgressBarRef: () => HTMLDivElement | null } | null>(null);
 	let previewVisible = $state(false);
 	let previewTime = $state(0);
 	let previewX = $state(0);
-	let previewCanvas = $state<HTMLCanvasElement | null>(null);
-	let previewGenerating = $state(false);
 	
 	// 帧缓存管理器
 	const frameCacheManager = new FrameCacheManager();
-
-	// 截图功能
-	let screenshotCanvas: HTMLCanvasElement | null = null;
 	
 	// AB循环
 	let abLoop = $state<{ a: number | null; b: number | null }>({ a: null, b: null });
@@ -336,14 +324,14 @@
 
 	// 生成预览帧缩略图（使用 FrameCacheManager）
 	function generatePreviewFrame(time: number) {
+		const previewCanvas = progressBarComponent?.getPreviewCanvas();
 		if (!videoElement || !previewCanvas) return;
 		
-		previewGenerating = true;
 		frameCacheManager.generatePreviewFrame(
 			time,
 			videoUrl,
 			previewCanvas,
-			() => { previewGenerating = false; }
+			() => { /* preview generated */ }
 		);
 	}
 	
@@ -663,231 +651,62 @@
 			role="group"
 			aria-label="视频控制栏"
 		>
-			<!-- 进度条 -->
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<div
-				bind:this={progressBarRef}
-				class="progress-bar relative mb-4 h-1 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1.5"
-				onclick={seek}
-				onmousemove={handleProgressHover}
-				onmouseleave={handleProgressLeave}
-				role="presentation"
-			>
-				<div
-					class="progress-fill h-full rounded-full bg-primary"
-					style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
-				></div>
-				
-				<!-- 进度条预览提示 -->
-				{#if previewVisible && duration > 0}
-					<div
-						class="preview-tooltip absolute bottom-full mb-2 -translate-x-1/2 transform"
-						style="left: {Math.max(80, Math.min(previewX, (progressBarRef?.offsetWidth ?? 0) - 80))}px;"
-					>
-						<!-- 预览缩略图 -->
-						<div class="preview-frame mb-1 overflow-hidden rounded border border-white/20 bg-black shadow-lg">
-							<canvas
-								bind:this={previewCanvas}
-								class="preview-canvas"
-								width="160"
-								height="90"
-							></canvas>
-						</div>
-						<!-- 时间显示 -->
-						<div class="preview-time rounded bg-black/80 px-2 py-0.5 text-center text-xs text-white">
-							{formatTime(previewTime)}
-						</div>
-					</div>
-				{/if}
-			</div>
+			<!-- 进度条 - 使用子组件 -->
+			<VideoProgressBar
+				bind:this={progressBarComponent}
+				{currentTime}
+				{duration}
+				onSeek={seek}
+				{previewVisible}
+				{previewTime}
+				{previewX}
+				{formatTime}
+				onProgressHover={handleProgressHover}
+				onProgressLeave={handleProgressLeave}
+			/>
 
 			<!-- 控制按钮（响应式：窄屏时缩小间距） -->
 			<div class="controls-row flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
-				<!-- 播放/暂停 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-					onclick={togglePlay}
-					aria-label={isPlaying ? '暂停' : '播放'}
-				>
-					{#if isPlaying}
-						<Pause class="h-6 w-6 text-primary" />
-					{:else}
-						<Play class="h-6 w-6 text-primary" />
-					{/if}
-				</button>
+				<!-- 基本控制 - 使用子组件 -->
+				<VideoControls
+					{isPlaying}
+					{loopMode}
+					onTogglePlay={togglePlay}
+					onSkipBackward={skipBackward}
+					onSkipForward={skipForward}
+					onCycleLoopMode={cycleLoopMode}
+				/>
 
-				<!-- 快退 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-					onclick={skipBackward}
-					aria-label="后退10秒"
-				>
-					<SkipBack class="h-5 w-5 text-primary" />
-				</button>
-
-				<!-- 快进 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-					onclick={skipForward}
-					aria-label="前进10秒"
-				>
-					<SkipForward class="h-5 w-5 text-primary" />
-				</button>
-
-				<!-- 循环模式 -->
-				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20"
-					onclick={(event) => {
-						event.stopPropagation();
-						cycleLoopMode();
+				<!-- 更多功能菜单 - 使用子组件 -->
+				<MoreMenu
+					{showMoreMenu}
+					{abLoop}
+					{abLoopActive}
+					{showFilterPanel}
+					{brightness}
+					{contrast}
+					{saturate}
+					videoWidth={videoElement?.videoWidth ?? 0}
+					videoHeight={videoElement?.videoHeight ?? 0}
+					{duration}
+					{formatTime}
+					onToggleMenu={(e) => {
+						e.stopPropagation();
+						showMoreMenu = !showMoreMenu;
 					}}
-					aria-label={
-						loopMode === 'none'
-							? '不循环'
-							: loopMode === 'single'
-								? '单个循环'
-								: '列表循环'
-					}
-				>
-					{#if loopMode === 'single'}
-						<Repeat1 class="h-5 w-5 text-primary" />
-					{:else if loopMode === 'list'}
-						<Repeat class="h-5 w-5 text-primary" />
-					{:else}
-						<Repeat class="h-5 w-5 text-primary opacity-40" />
-					{/if}
-				</button>
-
-				<!-- 更多功能菜单 -->
-				<div class="relative">
-					<button
-						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showMoreMenu || abLoopActive ? 'bg-white/20' : ''}"
-						onclick={(event) => {
-							event.stopPropagation();
-							showMoreMenu = !showMoreMenu;
-						}}
-						title="更多功能"
-						aria-label="更多功能"
-					>
-						<MoreVertical class="h-5 w-5 text-primary" />
-					</button>
-
-					{#if showMoreMenu}
-						<div
-							class="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-black/95 p-2 shadow-lg backdrop-blur-sm"
-							onclick={(e) => e.stopPropagation()}
-							onmousedown={(e) => e.stopPropagation()}
-						>
-							<!-- 截图 -->
-							<button
-								class="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-white hover:bg-white/10"
-								onclick={() => {
-									captureScreenshot();
-									showMoreMenu = false;
-								}}
-							>
-								<Camera class="h-4 w-4" />
-								截图
-							</button>
-
-							<!-- AB循环 -->
-							<div class="border-t border-white/10 pt-2 mt-2">
-								<div class="px-3 py-1 text-xs text-white/50">AB循环</div>
-								<div class="flex items-center gap-1 px-3 py-1">
-									<button
-										class="rounded px-3 py-1 text-xs transition-colors {abLoop.a !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
-										onclick={() => setLoopPointA()}
-									>
-										A{abLoop.a !== null ? `: ${formatTime(abLoop.a)}` : ''}
-									</button>
-									<button
-										class="rounded px-3 py-1 text-xs transition-colors {abLoop.b !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
-										onclick={() => setLoopPointB()}
-										disabled={abLoop.a === null}
-									>
-										B{abLoop.b !== null ? `: ${formatTime(abLoop.b)}` : ''}
-									</button>
-									{#if abLoopActive}
-										<button
-											class="rounded bg-white/10 p-1 text-xs text-white hover:bg-white/20"
-											onclick={() => clearAbLoop()}
-											title="清除"
-										>
-											<RotateCcw class="h-3 w-3" />
-										</button>
-									{/if}
-								</div>
-							</div>
-
-							<!-- 滤镜 -->
-							<div class="border-t border-white/10 pt-2 mt-2">
-								<button
-									class="flex w-full items-center justify-between gap-2 rounded px-3 py-2 text-sm text-white hover:bg-white/10"
-									onclick={() => {
-										showFilterPanel = !showFilterPanel;
-									}}
-								>
-									<span class="flex items-center gap-2">
-										<Sun class="h-4 w-4" />
-										视频滤镜
-									</span>
-									{#if brightness !== 100 || contrast !== 100 || saturate !== 100}
-										<span class="text-xs text-primary">已调整</span>
-									{/if}
-								</button>
-								
-								{#if showFilterPanel}
-									<div class="px-3 py-2 space-y-2">
-										<div>
-											<div class="flex justify-between text-xs text-white/70 mb-1">
-												<span>亮度</span><span>{brightness}%</span>
-											</div>
-											<input type="range" min="0" max="200" step="5" bind:value={brightness}
-												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
-										</div>
-										<div>
-											<div class="flex justify-between text-xs text-white/70 mb-1">
-												<span>对比度</span><span>{contrast}%</span>
-											</div>
-											<input type="range" min="0" max="200" step="5" bind:value={contrast}
-												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
-										</div>
-										<div>
-											<div class="flex justify-between text-xs text-white/70 mb-1">
-												<span>饱和度</span><span>{saturate}%</span>
-											</div>
-											<input type="range" min="0" max="200" step="5" bind:value={saturate}
-												class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
-										</div>
-										<button
-											class="w-full rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
-											onclick={resetFilters}
-										>
-											重置滤镜
-										</button>
-									</div>
-								{/if}
-							</div>
-
-							<!-- 视频信息 -->
-							<div class="border-t border-white/10 pt-2 mt-2">
-								<div class="px-3 py-1 text-xs text-white/50">视频信息</div>
-								<div class="px-3 py-1 space-y-1 text-xs text-white/80">
-									{#if videoElement}
-										<div class="flex justify-between">
-											<span>分辨率</span>
-											<span>{videoElement.videoWidth}×{videoElement.videoHeight}</span>
-										</div>
-										<div class="flex justify-between">
-											<span>时长</span>
-											<span>{formatTime(duration)}</span>
-										</div>
-									{/if}
-								</div>
-							</div>
-						</div>
-					{/if}
-				</div>
+					onCaptureScreenshot={() => {
+						captureScreenshot();
+						showMoreMenu = false;
+					}}
+					onSetLoopPointA={setLoopPointA}
+					onSetLoopPointB={setLoopPointB}
+					onClearAbLoop={clearAbLoop}
+					onToggleFilterPanel={() => showFilterPanel = !showFilterPanel}
+					onResetFilters={resetFilters}
+					onBrightnessChange={(v) => brightness = v}
+					onContrastChange={(v) => contrast = v}
+					onSaturateChange={(v) => saturate = v}
+				/>
 
 				<!-- 时间显示 -->
 				<div class="time-display text-sm text-primary">
@@ -896,83 +715,35 @@
 
 				<div class="flex-1"></div>
 
-				<!-- 音量控制（点击展开） -->
-				<div class="relative">
-					<button
-						class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20 {showVolumePanel ? 'bg-white/20' : ''}"
-						onclick={(e) => {
-							e.stopPropagation();
-							showVolumePanel = !showVolumePanel;
-							showRatePanel = false;
-						}}
-						aria-label="音量控制"
-						title="点击展开音量调节"
-					>
-						{#if isMuted || volume === 0}
-							<VolumeX class="h-4 w-4 text-primary" />
-						{:else}
-							<Volume2 class="h-4 w-4 text-primary" />
-						{/if}
-						<span class="text-xs text-primary">{Math.round(volume * 100)}%</span>
-					</button>
-					{#if showVolumePanel}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="absolute bottom-full right-0 mb-2 rounded-lg bg-black/95 p-3 shadow-lg"
-							style="min-width: 140px;"
-							onclick={(e) => e.stopPropagation()}
-							onmousedown={(e) => e.stopPropagation()}>
-							<div class="flex items-center gap-2">
-								<button onclick={toggleMute} class="shrink-0 p-1 hover:bg-white/20 rounded">
-									{#if isMuted || volume === 0}
-										<VolumeX class="h-4 w-4 text-white" />
-									{:else}
-										<Volume2 class="h-4 w-4 text-white" />
-									{/if}
-								</button>
-								<input type="range" min="0" max="1" step="0.05" value={volume}
-									oninput={changeVolume}
-									class="w-20 h-1 bg-white/20 rounded appearance-none cursor-pointer" />
-							</div>
-						</div>
-					{/if}
-				</div>
+				<!-- 音量控制 - 使用子组件 -->
+				<VolumePanel
+					{volume}
+					{isMuted}
+					{showVolumePanel}
+					onToggleMute={toggleMute}
+					onVolumeChange={changeVolume}
+					onTogglePanel={(e) => {
+						e.stopPropagation();
+						showVolumePanel = !showVolumePanel;
+						showRatePanel = false;
+					}}
+				/>
 
-				<!-- 倍速控制（点击展开） -->
-				<div class="relative">
-					<button
-						class="control-btn flex items-center gap-1 rounded-full px-2 py-1.5 transition-colors hover:bg-white/20 {showRatePanel ? 'bg-white/20' : ''}"
-						onclick={(e) => {
-							e.stopPropagation();
-							showRatePanel = !showRatePanel;
-							showVolumePanel = false;
-						}}
-						aria-label="倍速控制"
-						title="点击展开倍速调节"
-					>
-						<Gauge class="h-4 w-4 text-primary" />
-						<span class="text-xs text-primary">{playbackRate.toFixed(2)}x</span>
-					</button>
-					{#if showRatePanel}
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="absolute bottom-full right-0 mb-2 rounded-lg bg-black/95 p-3 shadow-lg"
-							style="min-width: 160px;"
-							onclick={(e) => e.stopPropagation()}
-							onmousedown={(e) => e.stopPropagation()}>
-							<div class="flex items-center gap-2 mb-2">
-								<input type="range" min={getMinPlaybackRate()} max={getMaxPlaybackRate()} step={getPlaybackRateStep()}
-									value={playbackRate} oninput={handlePlaybackSlider}
-									class="w-24 h-1 bg-white/20 rounded appearance-none cursor-pointer" />
-								<span class="text-xs text-white shrink-0">{playbackRate.toFixed(2)}x</span>
-							</div>
-							<div class="flex flex-wrap gap-1">
-								{#each [0.5, 1, 1.5, 2] as rate}
-									<button class="px-2 py-0.5 text-xs rounded {playbackRate === rate ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
-										onclick={() => setPlaybackRate(rate)}>{rate}x</button>
-								{/each}
-							</div>
-						</div>
-					{/if}
-				</div>
+				<!-- 倍速控制 - 使用子组件 -->
+				<PlaybackRatePanel
+					{playbackRate}
+					{showRatePanel}
+					minRate={getMinPlaybackRate()}
+					maxRate={getMaxPlaybackRate()}
+					rateStep={getPlaybackRateStep()}
+					onSetRate={setPlaybackRate}
+					onSliderChange={handlePlaybackSlider}
+					onTogglePanel={(e) => {
+						e.stopPropagation();
+						showRatePanel = !showRatePanel;
+						showVolumePanel = false;
+					}}
+				/>
 
 				<!-- 快进模式 -->
 				<button
@@ -987,151 +758,43 @@
 					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
 				</button>
 
-				<!-- 字幕状态/选择 -->
-				<div class="relative">
-					<button
-						class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle ? 'bg-white/20' : ''}"
-						onclick={(event) => {
-							event.stopPropagation();
-							onSelectSubtitle?.();
-						}}
-						oncontextmenu={(event) => {
-							event.preventDefault();
-							event.stopPropagation();
-							showSubtitleSettings = !showSubtitleSettings;
-						}}
-						title={subtitle ? `字幕: ${subtitle.filename}（左键更换，右键设置）` : '左键选择字幕，右键设置'}
-						aria-label={subtitle ? '更换字幕' : '选择字幕'}
-					>
-						{#if subtitle}
-							<Captions class="h-5 w-5 text-primary" />
-						{:else}
-							<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
-						{/if}
-					</button>
-
-					<!-- 字幕设置面板 -->
-					{#if showSubtitleSettings}
-						<div
-							class="absolute bottom-full right-0 mb-2 w-64 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
-							onclick={(e) => e.stopPropagation()}
-							onmousedown={(e) => e.stopPropagation()}
-						>
-							<div class="mb-3 flex items-center justify-between">
-								<span class="text-sm font-medium text-white">字幕设置</span>
-								<button
-									class="text-white/60 hover:text-white"
-									onclick={() => (showSubtitleSettings = false)}
-								>
-									✕
-								</button>
-							</div>
-
-							<!-- 字体大小 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">字体大小</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0.5"
-										max="3"
-										step="0.1"
-										bind:value={subtitleFontSize}
-										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{subtitleFontSize.toFixed(1)}em</span>
-								</div>
-							</div>
-
-							<!-- 字幕位置 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">底部距离</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0"
-										max="30"
-										step="1"
-										bind:value={subtitleBottom}
-										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{subtitleBottom}%</span>
-								</div>
-							</div>
-
-							<!-- 字幕颜色 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">字幕颜色</span>
-								<div class="flex gap-2">
-									{#each ['#ffffff', '#ffff00', '#00ff00', '#00ffff', '#ff9900'] as color}
-										<button
-											class="h-6 w-6 rounded border-2 transition-transform hover:scale-110 {subtitleColor === color ? 'border-primary' : 'border-transparent'}"
-											style="background-color: {color}"
-											onclick={() => (subtitleColor = color)}
-											title={color}
-										></button>
-									{/each}
-								</div>
-							</div>
-
-							<!-- 背景透明度 -->
-							<div class="mb-3">
-								<span class="mb-1 block text-xs text-white/70">背景透明度</span>
-								<div class="flex items-center gap-2">
-									<input
-										type="range"
-										min="0"
-										max="1"
-										step="0.1"
-										bind:value={subtitleBgOpacity}
-										class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
-									/>
-									<span class="w-10 text-right text-xs text-white">{Math.round(subtitleBgOpacity * 100)}%</span>
-								</div>
-							</div>
-
-							<!-- 预设和保存按钮 -->
-							<div class="flex gap-2">
-								<button
-									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
-									onclick={() => {
-										subtitleFontSize = 1.0;
-										subtitleColor = '#ffffff';
-										subtitleBgOpacity = 0.7;
-										subtitleBottom = 5;
-									}}
-									title="重置为默认值"
-								>
-									重置
-								</button>
-								<button
-									class="flex-1 rounded bg-primary/50 px-2 py-1 text-xs text-white hover:bg-primary/70"
-									onclick={() => {
-										saveSubtitleSettings();
-										showSubtitleSettings = false;
-									}}
-									title="保存设置"
-								>
-									保存
-								</button>
-							</div>
-							<div class="mt-2 flex gap-2">
-								<button
-									class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
-									onclick={() => {
-										subtitleFontSize = 1.5;
-										subtitleColor = '#ffff00';
-										subtitleBgOpacity = 0.8;
-										subtitleBottom = 8;
-									}}
-									title="大号黄色字幕"
-								>
-									大号黄色
-								</button>
-							</div>
-						</div>
-					{/if}
-				</div>
+				<!-- 字幕状态/选择 - 使用子组件 -->
+				<SubtitlePanel
+					{subtitle}
+					{showSubtitleSettings}
+					{subtitleFontSize}
+					{subtitleColor}
+					{subtitleBgOpacity}
+					{subtitleBottom}
+					onSelectSubtitle={() => onSelectSubtitle?.()}
+					onToggleSettings={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						showSubtitleSettings = !showSubtitleSettings;
+					}}
+					onFontSizeChange={(v) => subtitleFontSize = v}
+					onColorChange={(v) => subtitleColor = v}
+					onBgOpacityChange={(v) => subtitleBgOpacity = v}
+					onBottomChange={(v) => subtitleBottom = v}
+					onReset={() => {
+						subtitleFontSize = 1.0;
+						subtitleColor = '#ffffff';
+						subtitleBgOpacity = 0.7;
+						subtitleBottom = 5;
+					}}
+					onSave={() => {
+						saveSubtitleSettings();
+						showSubtitleSettings = false;
+					}}
+					onApplyPreset={(preset) => {
+						if (preset === 'large-yellow') {
+							subtitleFontSize = 1.5;
+							subtitleColor = '#ffff00';
+							subtitleBgOpacity = 0.8;
+							subtitleBottom = 8;
+						}
+					}}
+				/>
 
 				<!-- 固定控件 -->
 				<button

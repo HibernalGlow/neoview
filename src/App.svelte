@@ -80,6 +80,7 @@ import {
 	isSlideshowAction,
 	remapPageActionForVideoSeekMode
 } from '$lib/utils/viewerActionDispatcher';
+import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActionHandlers';
 
 	// 卡片显示/隐藏状态
 	let showProjectCard = $state(true);
@@ -497,185 +498,11 @@ import {
 		}
 
 
-		switch (action) {
-			case 'nextPage': {
-				console.log('执行下一页操作');
-				await pageRight();
-				break;
-			}
-			case 'prevPage': {
-				console.log('执行上一页操作');
-				await pageLeft();
-				break;
-			}
-			case 'firstPage':
-				console.log('执行第一页操作');
-				await bookStore.firstPage();
-				break;
-			case 'lastPage':
-				console.log('执行最后一页操作');
-				await bookStore.lastPage();
-				break;
-			case 'nextBook':
-				console.log('执行下一个书籍操作');
-				await bookStore.openNextBook();
-				break;
-			case 'prevBook':
-				console.log('执行上一个书籍操作');
-				await bookStore.openPreviousBook();
-				break;
-			case 'zoomIn':
-				console.log('执行放大操作');
-				zoomIn();
-				break;
-			case 'zoomOut':
-				console.log('执行缩小操作');
-				zoomOut();
-				break;
-			case 'fitWindow':
-				console.log('执行适应窗口操作');
-				dispatchApplyZoomMode('fit');
-				break;
-			case 'actualSize':
-				console.log('执行实际大小操作');
-				dispatchApplyZoomMode('original');
-				break;
-			case 'fullscreen':
-				console.log('执行全屏操作');
-				toggleFullscreen();
-				break;
-			case 'toggleLeftSidebar':
-				console.log('执行切换左侧边栏操作');
-				toggleLeftSidebar();
-				break;
-			case 'toggleRightSidebar':
-				console.log('执行切换右侧边栏操作');
-				toggleRightSidebar();
-				break;
-			case 'toggleBookMode':
-				console.log('执行切换书籍模式操作');
-				toggleViewMode();
-				break;
-			case 'toggleSinglePanoramaView':
-				console.log('执行全景/单页视图互切操作');
-				toggleSinglePanoramaView();
-				break;
-			case 'toggleTemporaryFitZoom':
-				console.log('执行临时适应窗口缩放操作');
-				toggleTemporaryFitZoom();
-				break;
-			case 'rotate':
-				console.log('执行旋转操作');
-				rotateClockwise();
-				break;
-			case 'toggleTopToolbarPin':
-				console.log('执行顶部工具栏钉住切换');
-				topToolbarPinned.update((p) => !p);
-				break;
-			case 'toggleBottomThumbnailBarPin':
-				console.log('执行底部缩略图栏钉住切换');
-				bottomThumbnailBarPinned.update((p) => !p);
-				break;
-			case 'toggleReadingDirection':
-				console.log('执行阅读方向切换');
-				toggleReadingDirection();
-				break;
-			case 'toggleAutoUpscale':
-				console.log('执行自动超分开关切换');
-				const settings = settingsManager.getSettings();
-				const current = settings.image.enableSuperResolution ?? false;
-				const next = !current;
-				settingsManager.updateNestedSettings('image', {
-					enableSuperResolution: next
-				});
-				updateUpscaleSettings({
-					autoUpscaleEnabled: next,
-					globalUpscaleEnabled: next,
-					currentImageUpscaleEnabled: next
-				});
-				break;
-			case 'openFile':
-				console.log('执行打开文件操作');
-				try {
-					const selected = await open({ multiple: false });
-					if (selected) await bookStore.openBook(selected as string);
-				} catch (err) {
-					console.error('openFile action failed', err);
-				}
-				break;
-			case 'closeFile':
-				console.log('执行关闭文件操作');
-				await bookStore.closeFile();
-				break;
-			case 'deleteFile':
-				console.log('执行删除文件操作');
-				// 删除需要额外确认/实现，这里调用 bookStore.closeBook() 作为占位
-				await bookStore.closeBook();
-				break;
-			case 'deleteCurrentPage':
-				console.log('执行删除当前页操作');
-				await handleDeleteCurrentArchivePage();
-				break;
-			case 'pageLeft': {
-				console.log('执行向左翻页操作');
-				const settings = settingsManager.getSettings();
-				const readingDirection = settings.book.readingDirection;
-				if (readingDirection === 'right-to-left') {
-					// 右开模式下，逻辑上的“向左翻页”对应物理向右翻
-					await pageRight();
-				} else {
-					await pageLeft();
-				}
-				break;
-			}
-			case 'pageRight': {
-				console.log('执行向右翻页操作');
-				const settings = settingsManager.getSettings();
-				const readingDirection = settings.book.readingDirection;
-				if (readingDirection === 'right-to-left') {
-					// 右开模式下，逻辑上的“向右翻页”对应物理向左翻
-					await pageLeft();
-				} else {
-					await pageRight();
-				}
-				break;
-			}
-			case 'toggleLayoutMode':
-				console.log('布局模式切换已禁用');
-				break;
-			// 视频相关操作（已在 isVideoPage 块内处理）
-			case 'videoPlayPause':
-			case 'videoSeekForward':
-			case 'videoSeekBackward':
-			case 'videoToggleMute':
-			case 'videoToggleLoopMode':
-			case 'videoVolumeUp':
-			case 'videoVolumeDown':
-			case 'videoSpeedUp':
-			case 'videoSpeedDown':
-			case 'videoSpeedToggle':
-			case 'videoSeekModeToggle':
-				// 已在 isVideoPage 块内处理，这里只是防止 default 警告
-				break;
-			// 幻灯片相关操作
-			case 'slideshowToggle':
-				console.log('执行幻灯片开关切换');
-				dispatchViewerAction('slideshowToggle');
-				break;
-			case 'slideshowPlayPause':
-				console.log('执行幻灯片播放/暂停');
-				slideshowStore.toggle();
-				break;
-			case 'slideshowStop':
-				console.log('执行幻灯片停止');
-				slideshowStore.stop();
-				break;
-			case 'slideshowSkip':
-				console.log('执行幻灯片跳过');
-				slideshowStore.skip();
-				break;
-			default:
-				console.warn('未实现的快捷操作：', action);
+		// 使用统一的动作处理器执行动作
+		const ctx: ActionHandlerContext = { handleDeleteCurrentArchivePage };
+		const handled = await executeAppAction(action, ctx);
+		if (!handled) {
+			console.warn('未实现的快捷操作：', action);
 		}
 	}
 

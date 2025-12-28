@@ -125,3 +125,18 @@ export function needsThumbnail(name: string, isDir: boolean): boolean {
 		VIDEO_EXTENSIONS.includes(ext)
 	);
 }
+
+import type { FsItem } from '$lib/types';
+
+/**
+ * 层叠数据结构
+ */
+export interface FolderLayer {
+	id: string;
+	path: string;
+	items: FsItem[];
+	loading: boolean;
+	error: string | null;
+	selectedIndex: number;
+	scrollTop: number;
+}

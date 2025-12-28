@@ -1,15 +1,11 @@
 <script lang="ts">
 	/**
-	 * FolderStack - 层叠式文件夹导航
+	 * FolderStack - 层叠式文件夹导航（模块化版本）
 	 * 参考 iOS UINavigationController 的设计
-	 * 每个目录是一个独立的层，进入子目录推入新层，返回弹出当前层
-	 * 上一层的 DOM 和状态保持不变，实现秒切换
 	 */
-	import { tick, onMount } from 'svelte';
+	import { tick, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
 	import type { Writable } from 'svelte/store';
-	import * as FileSystemAPI from '$lib/api/filesystem';
-	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { get } from 'svelte/store';
@@ -20,24 +16,28 @@
 		tabMultiSelectMode,
 		tabDeleteMode,
 		tabSortConfig,
-		tabSearchKeyword,
 		tabPenetrateMode,
 		tabOpenInNewTabMode,
-		tabCurrentPath,
 		activeTabId,
 		tabThumbnailWidthPercent,
 		tabBannerWidthPercent,
-		tabItems,
 		tabPendingFocusPath,
 		isVirtualPath,
 		getVirtualPathType
 	} from '../stores/folderTabStore';
-	import {
-		loadVirtualPathData,
-		subscribeVirtualPathData,
-		removeVirtualPathItem,
-		getVirtualPathConfig
-	} from '../utils/virtualPathLoader';
+	import { removeVirtualPathItem } from '../utils/virtualPathLoader';
+	import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
+	import { setChainAnchor } from '../stores/chainSelectStore.svelte';
+	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
+	import { sortItems } from './FolderStack/sortingUtils';
+
+	// 模块化导入
+	import { FolderStackState, type FolderLayer } from './FolderStack/FolderStackState.svelte';
+	import { FolderDataLoader, createLayerFactory } from './FolderStack/FolderDataLoader';
+	import { handleItemSelection, type SelectionCallbacks, type ItemOpenCallbacks } from './FolderStack/FolderSelectionHandler';
+	import { normalizePathForCompare, isChildPath, getParentPath, getParentPaths, PRELOAD_PARENT_COUNT } from './FolderStack/folderStackUtils';
+	import { analyzeHistoryNavigation, getPathsToPreload } from './FolderStack/folderStackNavigation';
+	import { shouldHandleEmptyClick, type EmptyClickAction } from './FolderStack/folderStackEventHandlers';
 
 	// 别名映射
 	const viewStyle = tabViewStyle;
@@ -45,44 +45,10 @@
 	const multiSelectMode = tabMultiSelectMode;
 	const deleteMode = tabDeleteMode;
 	const sortConfig = tabSortConfig;
-	const searchKeyword = tabSearchKeyword;
 	const penetrateMode = tabPenetrateMode;
 	const openInNewTabMode = tabOpenInNewTabMode;
 	const thumbnailWidthPercent = tabThumbnailWidthPercent;
 	const bannerWidthPercent = tabBannerWidthPercent;
-	import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
-	import {
-		setChainAnchor
-	} from '../stores/chainSelectStore.svelte';
-	import { directoryTreeCache } from '../utils/directoryTreeCache';
-	import { invoke } from '@tauri-apps/api/core';
-	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
-	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
-	import { sortItems, filterItems } from './FolderStack/sortingUtils';
-import {
-	handleChainSelect,
-	tryPenetrateChildren,
-	shouldHandleEmptyClick,
-	type SelectionContext,
-	type EmptyClickAction
-} from './FolderStack/folderStackEventHandlers';
-import {
-	normalizePathForCompare,
-	isChildPath,
-	getParentPath,
-	getParentPaths,
-	PRELOAD_PARENT_COUNT,
-	isArchiveFile,
-	needsThumbnail,
-	type FolderLayer
-} from './FolderStack/folderStackUtils';
-import {
-	findParentLayerIndex,
-	findExactLayerIndex,
-	findChildLayerIndex,
-	getPathsToPreload,
-	analyzeHistoryNavigation
-} from './FolderStack/folderStackNavigation';
 
 	export interface NavigationCommand {
 		type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -99,11 +65,8 @@ import {
 		onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
 		onOpenFolderAsBook?: (item: FsItem) => void;
 		onOpenInNewTab?: (item: FsItem) => void;
-		/** 强制激活模式，用于虚拟路径实例，始终响应导航命令 */
 		forceActive?: boolean;
-		/** 跳过全局 store 更新，用于虚拟路径实例避免污染全局状态 */
 		skipGlobalStore?: boolean;
-		/** 覆盖全局 store 的状态值（用于虚拟实例独立状态）*/
 		overrideMultiSelectMode?: boolean;
 		overrideDeleteMode?: boolean;
 		overrideViewStyle?: 'list' | 'content' | 'banner' | 'thumbnail';
@@ -126,24 +89,15 @@ import {
 		overrideViewStyle,
 		overrideSortConfig
 	}: Props = $props();
-	
-	// 计算实际使用的状态值（支持覆盖）
-	// 使用 $ 前缀订阅 store，确保响应式更新
-	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode !== undefined ? overrideMultiSelectMode : $multiSelectMode);
-	let effectiveDeleteMode = $derived(overrideDeleteMode !== undefined ? overrideDeleteMode : $deleteMode);
-	let effectiveViewStyle = $derived(overrideViewStyle !== undefined ? overrideViewStyle : $viewStyle);
-	let effectiveSortConfig = $derived(overrideSortConfig !== undefined ? overrideSortConfig : $sortConfig);
 
-	// 层叠栈
-	let layers = $state<FolderLayer[]>([]);
+	// 计算实际使用的状态值
+	let effectiveMultiSelectMode = $derived(overrideMultiSelectMode ?? $multiSelectMode);
+	let effectiveDeleteMode = $derived(overrideDeleteMode ?? $deleteMode);
+	let effectiveViewStyle = $derived(overrideViewStyle ?? $viewStyle);
+	let effectiveSortConfig = $derived(overrideSortConfig ?? $sortConfig);
+	let viewMode = $derived(effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
-	// 当前活跃层索引
-	let activeIndex = $state(0);
-	
-	// 排序配置直接使用全局 store（排序不需要隔离，用户可以在任何模式下更改排序）
-	// 虚拟路径初始化时会设置默认排序，之后用户可以通过工具栏更改
-	
-	// 条件执行全局 store 操作（虚拟实例跳过）
+	// 条件执行全局 store 操作
 	const globalStore = {
 		setPath: (path: string, addToHistory = true) => { if (!skipGlobalStore) folderTabActions.setPath(path, addToHistory); },
 		setItems: (items: FsItem[]) => { if (!skipGlobalStore) folderTabActions.setItems(items); },
@@ -153,14 +107,21 @@ import {
 		deselectAll: () => { if (!skipGlobalStore) folderTabActions.deselectAll(); }
 	};
 
-	// 动画状态
-	let isAnimating = $state(false);
+	// 创建数据加载器和状态管理器
+	const dataLoader = new FolderDataLoader();
+	const createLayer = createLayerFactory(dataLoader, (layerId, items) => {
+		stackState.updateLayerItems(layerId, items);
+	});
+	
+	const stackState = new FolderStackState(createLayer, tick, {
+		onPathChange: globalStore.setPath,
+		onItemsChange: globalStore.setItems
+	});
 
-	// 缩略图 Map 和返回按钮状态 - 使用 $state 并通过订阅更新
+	// 缩略图和返回按钮状态
 	let thumbnails = $state<Map<string, string>>(new Map());
 	let showBackButtonValue = $state(false);
 
-	// 订阅 fileBrowserStore（合并缩略图和返回按钮状态订阅）
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
 			thumbnails = state.thumbnails;
@@ -169,19 +130,14 @@ import {
 		return unsubscribe;
 	});
 
-	// 订阅 collectTagCountStore，当缓存更新且当前排序为 collectTagCount 时触发重新渲染
-	// 使用防抖机制避免频繁更新
+	// 排序版本（用于触发重新排序）
 	let collectTagVersion = $state(0);
 	let collectTagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	
 	$effect(() => {
 		const unsubscribe = collectTagCountStore.subscribe((cache) => {
-			// 当缓存更新时，使用防抖触发重新渲染
 			if (cache.lastUpdated > 0 && effectiveSortConfig.field === 'collectTagCount') {
-				// 清除之前的定时器
-				if (collectTagDebounceTimer) {
-					clearTimeout(collectTagDebounceTimer);
-				}
-				// 300ms 防抖
+				if (collectTagDebounceTimer) clearTimeout(collectTagDebounceTimer);
 				collectTagDebounceTimer = setTimeout(() => {
 					collectTagVersion = cache.lastUpdated;
 					collectTagDebounceTimer = null;
@@ -190,682 +146,230 @@ import {
 		});
 		return () => {
 			unsubscribe();
-			if (collectTagDebounceTimer) {
-				clearTimeout(collectTagDebounceTimer);
-			}
+			if (collectTagDebounceTimer) clearTimeout(collectTagDebounceTimer);
 		};
 	});
 
-	// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
-	let viewMode = $derived(effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
-
-	// 获取层的显示项（应用排序）
-	// 注意：collectTagVersion 用于触发 collectTagCount 排序时的重新计算
+	// 获取显示项（应用排序）
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
-		const config = effectiveSortConfig;
-		// 依赖 collectTagVersion，当收藏标签缓存更新时触发重新排序
-		const _version = collectTagVersion;
-		let result = layer.items;
-		// 搜索结果现在也通过 FolderStack 显示，不需要额外过滤
-		// 虚拟路径下文件夹和文件平等排序
+		const _ = collectTagVersion; // 依赖触发
 		const skipFolderFirst = isVirtualPath(layer.path);
-		// 传入 layer.path 以支持随机排序种子记忆
-		result = sortItems(result, config.field, config.order, skipFolderFirst, layer.path);
-		return result;
+		return sortItems(layer.items, effectiveSortConfig.field, effectiveSortConfig.order, skipFolderFirst, layer.path);
 	}
 
-	// 最后导航的路径（用于防止 $effect 重复处理）
-	// 使用 $state 确保响应式更新
-	let lastNavigatedPath = $state('');
-	
-	// 是否正在处理导航命令（用于防止 $effect 和 navigationCommand 同时处理）
-	let isProcessingNavCommand = $state(false);
-	
-	// 更新最后导航的路径
-	function updateLastNavigatedPath(path: string) {
-		lastNavigatedPath = path;
-	}
-
-	// 初始化根层
-	async function initRoot(path: string) {
-		// 更新最后导航路径，防止 $effect 重复处理
-		updateLastNavigatedPath(path);
-		const layer = await createLayer(path);
-		layers = [layer];
-		activeIndex = 0;
-		globalStore.setPath(path);
-		globalStore.setItems(layer.items);
-	}
-
-	// 初始化根层（不添加历史记录，用于历史导航）
-	async function initRootWithoutHistory(path: string) {
-		// 更新最后导航路径，防止 $effect 重复处理
-		updateLastNavigatedPath(path);
-		const layer = await createLayer(path);
-		layers = [layer];
-		activeIndex = 0;
-		// 使用 setPath 的第二个参数禁止添加历史记录
-		globalStore.setPath(path, false);
-		globalStore.setItems(layer.items);
-	}
-
-	// 虚拟路径订阅清理函数
-	let virtualPathUnsubscribe: (() => void) | null = null;
-
-	// 创建新层
-	async function createLayer(path: string): Promise<FolderLayer> {
-		const layerId = crypto.randomUUID();
-		const layer: FolderLayer = {
-			id: layerId,
-			path,
-			items: [],
-			loading: true,
-			error: null,
-			selectedIndex: -1,
-			scrollTop: 0
-		};
-
-		try {
-			// 检查是否为虚拟路径（包括书签、历史、搜索）
-			if (isVirtualPath(path)) {
-				// 注意：不再强制设置排序配置，让用户可以自由排序
-				
-				// 虚拟路径：从书签/历史/搜索 store 加载数据
-				const items = loadVirtualPathData(path);
-				layer.items = items;
-				layer.loading = false;
-
-				// 订阅数据变化
-				if (virtualPathUnsubscribe) {
-					virtualPathUnsubscribe();
-				}
-				virtualPathUnsubscribe = subscribeVirtualPathData(path, (newItems) => {
-					// 更新当前层的数据
-					const currentLayer = layers.find((l) => l.id === layerId);
-					if (currentLayer) {
-						currentLayer.items = newItems;
-						globalStore.setItems(newItems);
-						// 加载缩略图
-						loadThumbnailsForLayer(newItems, path);
-					}
-				});
-
-				// 加载缩略图
-				loadThumbnailsForLayer(items, path);
-			} else {
-				// 正常文件系统路径
-				// 清理虚拟路径订阅
-				if (virtualPathUnsubscribe) {
-					virtualPathUnsubscribe();
-					virtualPathUnsubscribe = null;
-				}
-
-				// 使用全局目录树缓存
-				const items = await directoryTreeCache.getDirectory(path);
-				layer.items = items;
-				layer.loading = false;
-
-				// 加载缩略图
-				loadThumbnailsForLayer(items, path);
-			}
-		} catch (err) {
-			layer.error = err instanceof Error ? err.message : String(err);
-			layer.loading = false;
-		}
-
-		return layer;
-	}
-
-	// 加载缩略图 - 【优化】只预加载前10项，其余由 VirtualizedFileList 可见范围加载
-	async function loadThumbnailsForLayer(items: FsItem[], path: string) {
-		// 虚拟路径不设置当前目录
-		if (!isVirtualPath(path)) {
-			// 设置当前目录（用于优先级判断）
-			thumbnailManager.setCurrentDirectory(path);
-		}
-
-		// 【优化】只预加载前10项，避免大量并发请求，减轻大目录压力
-		const PRELOAD_COUNT = 10;
-		const preloadItems = items.slice(0, PRELOAD_COUNT);
-
-		// 过滤出需要缩略图的项目（使用导入的 needsThumbnail 函数）
-		const itemsNeedingThumbnails = preloadItems.filter((item) =>
-			needsThumbnail(item.name, item.isDir)
-		);
-
-		// 预加载数据库索引（只预加载前30项）
-		const paths = itemsNeedingThumbnails.map((item) => item.path);
-		thumbnailManager.preloadDbIndex(paths).catch((err) => {
-			console.debug('预加载数据库索引失败:', err);
-		});
-
-		// 【优化】使用 normal 优先级而非 immediate，减少并发压力
-		itemsNeedingThumbnails.forEach((item, index) => {
-			// V3: getThumbnail 只需要 path 和 currentPath 参数
-			// 优先级和压缩包判断已由后端自动处理
-			thumbnailManager.getThumbnail(item.path, path);
-
-			// 【优化】预热压缩包文件列表，加速切书
-			if (!item.isDir && isArchiveFile(item.name)) {
-				FileSystemAPI.preheatArchiveList(item.path);
-			}
-		});
-	}
-
-
-
-	// ============ 历史导航辅助函数 ============
-
-	// 使用从 folderStackUtils 导入的 normalizePathForCompare 作为 normalizePath
+	// ============ 导航处理 ============
 	const normalizePath = normalizePathForCompare;
 
-	/**
-	 * 切换到指定层（不重新加载数据）
-	 * @param index 目标层索引
-	 */
-	function switchToLayer(index: number): void {
-		if (index < 0 || index >= layers.length) return;
-		if (index === activeIndex) return; // 已经在目标层
-		
-		isAnimating = true;
-		activeIndex = index;
-		const layer = layers[index];
-		// 更新最后导航路径，防止 $effect 重复处理
-		updateLastNavigatedPath(layer.path);
-		globalStore.setPath(layer.path, false);
-		globalStore.setItems(layer.items);
-		
-		setTimeout(() => {
-			isAnimating = false;
-		}, 300);
-	}
-
-	/**
-	 * 处理历史导航命令
-	 * 智能地保留或重建层叠栈
-	 */
 	async function handleHistoryNavigation(targetPath: string): Promise<void> {
-		updateLastNavigatedPath(targetPath);
-		
-		const action = analyzeHistoryNavigation(layers, targetPath);
+		stackState.updateLastNavigatedPath(targetPath);
+		const action = analyzeHistoryNavigation(stackState.layers, targetPath);
 		
 		switch (action.type) {
 			case 'switchToLayer':
-				switchToLayer(action.layerIndex);
+				stackState.switchToLayer(action.layerIndex);
 				break;
 			case 'appendToParent':
-				layers = layers.slice(0, action.parentIndex + 1);
-				const appendLayer = await createLayer(action.targetPath);
-				layers = [...layers, appendLayer];
-				activeIndex = layers.length - 1;
-				globalStore.setPath(action.targetPath, false);
-				globalStore.setItems(appendLayer.items);
+				await stackState.truncateAndAppend(action.parentIndex, action.targetPath);
 				break;
 			case 'insertBeforeChild':
-				const allPaths = [action.targetPath, ...action.parentPaths];
-				const insertLayers = await Promise.all(allPaths.map(p => createLayer(p)));
-				layers = [...insertLayers.reverse(), ...layers.slice(action.childIndex)];
-				activeIndex = insertLayers.length - 1;
-				globalStore.setPath(action.targetPath, false);
-				globalStore.setItems(insertLayers[0].items);
+				await stackState.insertBeforeChild(action.childIndex, [action.targetPath, ...action.parentPaths]);
 				break;
 			case 'reinitialize':
-				await initRootWithoutHistory(action.targetPath);
+				await stackState.initRoot(action.targetPath, false);
 				break;
 		}
 	}
 
-	// 推入新层（进入子目录）或跳转到新路径
-	async function pushLayer(path: string) {
-		if (isAnimating) return;
-
-		isAnimating = true;
-		
-		// 更新最后导航路径，防止 $effect 重复处理
-		updateLastNavigatedPath(path);
-
-		// 获取当前层的路径
-		const currentLayer = layers[activeIndex];
-		const currentPath = currentLayer?.path || '';
-
-		// 判断目标路径是否是当前路径的子目录
+	async function pushLayer(path: string): Promise<void> {
+		const currentPath = stackState.activeLayer?.path || '';
 		const isChild = currentPath && isChildPath(path, currentPath);
-
-		if (isChild) {
-			// 正常的子目录导航：推入新层
-			const newLayer = await createLayer(path);
-			layers = [...layers.slice(0, activeIndex + 1), newLayer];
-			await tick();
-			activeIndex = layers.length - 1;
-		} else {
-			// 跳转到不相关的路径：重新初始化栈
-			const newLayer = await createLayer(path);
-			layers = [newLayer];
-			activeIndex = 0;
-		}
-
-		// 更新 store 中的路径
-		globalStore.setPath(path);
-		// 同步 items 到 store（用于工具栏显示计数）
-		const activeLayer = layers[activeIndex];
-		if (activeLayer) {
-			globalStore.setItems(activeLayer.items);
-		}
-
-		setTimeout(() => {
-			isAnimating = false;
-		}, 300);
+		await stackState.pushLayer(path, isChild);
 	}
 
-
-
-
-
-	// 弹出当前层（返回上级）
 	async function popLayer(): Promise<boolean> {
-		if (isAnimating) return false;
-
-		// 如果有上一层，直接切换
-		if (activeIndex > 0) {
-			isAnimating = true;
-			activeIndex = activeIndex - 1;
-
-			const prevLayer = layers[activeIndex];
-			if (prevLayer) {
-				// 更新最后导航路径，防止 $effect 重复处理
-				updateLastNavigatedPath(prevLayer.path);
-				globalStore.setPath(prevLayer.path);
-				// 同步 items 到 store（用于工具栏显示计数）
-				globalStore.setItems(prevLayer.items);
-			}
-
-			setTimeout(() => {
-				isAnimating = false;
-			}, 300);
-
-			// 异步预加载更多父目录（不阻塞当前操作）
+		if (stackState.popLayer()) {
 			preloadParentLayers();
-
 			return true;
 		}
 
-		// 如果没有上一层，尝试导航到父目录
-		const currentLayer = layers[activeIndex];
+		// 没有上一层，尝试导航到父目录
+		const currentLayer = stackState.activeLayer;
 		if (currentLayer) {
 			const parentPath = getParentPath(currentLayer.path);
 			if (parentPath) {
-				isAnimating = true;
-				
-				// 更新最后导航路径，防止 $effect 重复处理
-				updateLastNavigatedPath(parentPath);
-
-				// 获取多层父目录路径（包括当前要导航的父目录）
 				const parentPaths = getParentPaths(currentLayer.path, PRELOAD_PARENT_COUNT);
-				
-				// 创建所有父目录层（并行加载）
-				const parentLayers = await Promise.all(
-					parentPaths.map(p => createLayer(p))
-				);
-				
-				// 将所有父目录层插入到栈的开头（从远到近的顺序）
-				layers = [...parentLayers.reverse(), ...layers];
-				// 切换到最近的父目录（即第一个加载的）
-				activeIndex = parentLayers.length - 1;
-
-				globalStore.setPath(parentPath);
-
-				setTimeout(() => {
-					isAnimating = false;
-				}, 300);
-
+				await stackState.insertParentLayers(parentPaths);
 				return true;
 			}
 		}
-
 		return false;
 	}
 
-	/**
-	 * 异步预加载父目录层
-	 * 在向上导航后调用，确保后续向上操作不需要等待加载
-	 */
 	async function preloadParentLayers(): Promise<void> {
-		const topLayer = layers[0];
+		const topLayer = stackState.layers[0];
 		if (!topLayer) return;
 		
-		const pathsToLoad = getPathsToPreload(layers, topLayer.path);
+		const pathsToLoad = getPathsToPreload(stackState.layers, topLayer.path);
 		if (pathsToLoad.length === 0) return;
 		
 		try {
 			const newLayers = await Promise.all(pathsToLoad.map(p => createLayer(p)));
-			layers = [...newLayers.reverse(), ...layers];
-			activeIndex = activeIndex + newLayers.length;
-		} catch (err) {
-			// 预加载失败不影响主流程
-		}
+			stackState.layers = [...newLayers.reverse(), ...stackState.layers];
+			stackState.activeIndex += newLayers.length;
+		} catch {}
 	}
 
-	// 跳转到指定层
-	function goToLayer(index: number) {
-		if (isAnimating || index < 0 || index >= layers.length) return;
-
-		isAnimating = true;
-		activeIndex = index;
-
-		const layer = layers[index];
-		if (layer) {
-			globalStore.setPath(layer.path);
-			// 同步 items 到 store（用于工具栏显示计数）
-			globalStore.setItems(layer.items);
-		}
-
-		setTimeout(() => {
-			isAnimating = false;
-		}, 300);
-	}
-
-	// 处理删除项目（先从层叠栈移除，再调用外部删除处理）
-	function handleDeleteItem(layerIndex: number, item: FsItem) {
-		const currentLayer = layers[layerIndex];
-
-		// 检查是否为虚拟路径
-		if (currentLayer && isVirtualPath(currentLayer.path)) {
-			// 虚拟路径：从 store 中删除
-			removeVirtualPathItem(currentLayer.path, item.path);
-			return;
-		}
-
-		// 立即从层叠栈中移除（乐观更新）
-		layers = layers.map((layer, idx) => {
-			if (idx === layerIndex) {
-				return {
-					...layer,
-					items: layer.items.filter((i) => i.path !== item.path)
-				};
-			}
-			return layer;
-		});
-
-		// 同步到 store
-		if (currentLayer) {
-			globalStore.setItems(currentLayer.items);
-		}
-
-		// 调用外部删除处理
-		onItemDelete?.(item);
-	}
-
-	// 监听导航命令（只有当前活动页签才响应，或强制激活模式）
+	// ============ 导航命令监听 ============
 	$effect(() => {
 		const cmd = $navigationCommand;
 		if (!cmd) return;
 
-		// 强制激活模式始终响应，否则只有活动页签才响应导航命令
 		if (!forceActive) {
 			const currentActiveTabId = get(activeTabId);
 			if (tabId !== currentActiveTabId) return;
 		}
 
-		// 设置标志，防止 initialPath 的 $effect 同时处理
-		isProcessingNavCommand = true;
+		stackState.isProcessingNavCommand = true;
 
-		// 异步处理导航命令
 		(async () => {
 			switch (cmd.type) {
-				case 'init':
-					if (cmd.path) await initRoot(cmd.path);
-					break;
-				case 'push':
-					if (cmd.path) await pushLayer(cmd.path);
-					break;
-				case 'pop':
-					await popLayer();
-					break;
-				case 'goto':
-					if (cmd.index !== undefined) goToLayer(cmd.index);
-					break;
-				case 'history':
-					// 历史导航：使用智能导航函数，尽可能保留层叠栈
-					if (cmd.path) {
-						await handleHistoryNavigation(cmd.path);
-					}
-					break;
+				case 'init': if (cmd.path) await stackState.initRoot(cmd.path); break;
+				case 'push': if (cmd.path) await pushLayer(cmd.path); break;
+				case 'pop': await popLayer(); break;
+				case 'goto': if (cmd.index !== undefined) stackState.switchToLayer(cmd.index); break;
+				case 'history': if (cmd.path) await handleHistoryNavigation(cmd.path); break;
 			}
-			
-			// 导航完成后重置标志
-			isProcessingNavCommand = false;
+			stackState.isProcessingNavCommand = false;
 		})();
 
-		// 清除命令
 		navigationCommand.set(null);
 	});
 
-	// 每个页签有独立的 FolderStack 实例
-	// 初始化时从 initialPath 加载
-	// 注意：导航操作（pushLayer, handleHistoryNavigation 等）会更新 lastNavigatedPath
-	// $effect 只处理首次初始化和标签页切换，不处理同标签页内的历史导航
+	// 初始化监听
 	$effect(() => {
 		const targetPath = initialPath;
+		if (!targetPath || stackState.isProcessingNavCommand) return;
+		if (normalizePath(stackState.lastNavigatedPath) === normalizePath(targetPath)) return;
 		
-		// 如果 initialPath 为空，跳过
-		if (!targetPath) {
+		if (stackState.layers.length === 0) {
+			stackState.lastNavigatedPath = targetPath;
+			stackState.initRoot(targetPath, false);
 			return;
 		}
 		
-		// 如果正在处理导航命令，跳过（让 navigationCommand 的 $effect 处理）
-		if (isProcessingNavCommand) {
-			return;
-		}
-		
-		// 如果路径已经被导航函数处理过，跳过
-		if (normalizePath(lastNavigatedPath) === normalizePath(targetPath)) {
-			return;
-		}
-		
-		// 情况1：首次初始化（layers 为空）
-		if (layers.length === 0) {
-			lastNavigatedPath = targetPath;
-			initRootWithoutHistory(targetPath);
-			return;
-		}
-		
-		// 情况2：检查当前活动层是否已经是目标路径
-		const currentActivePath = layers[activeIndex]?.path;
+		const currentActivePath = stackState.activeLayer?.path;
 		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(targetPath)) {
-			lastNavigatedPath = targetPath;
+			stackState.lastNavigatedPath = targetPath;
 			return;
 		}
 		
-		// 情况3：检查 layers 中是否包含目标路径（用于标签页切换时恢复状态）
-		const targetLayerIndex = layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
+		const targetLayerIndex = stackState.findLayerByPath(targetPath, normalizePath);
 		if (targetLayerIndex !== -1) {
-			lastNavigatedPath = targetPath;
-			switchToLayer(targetLayerIndex);
+			stackState.lastNavigatedPath = targetPath;
+			stackState.switchToLayer(targetLayerIndex);
 			return;
 		}
 		
-		// 情况4：initialPath 变化且不在 layers 中
-		// 这通常发生在标签页切换或外部导航请求时
-		// 同标签页内的历史导航应该通过 navigationCommand 处理，这里只做兜底
-		// 为了避免与 navigationCommand 冲突，延迟执行
 		const pathToHandle = targetPath;
 		setTimeout(() => {
-			// 再次检查是否已被处理
-			if (normalizePath(lastNavigatedPath) === normalizePath(pathToHandle)) {
-				return;
-			}
-			// 检查当前活动层是否已经是目标路径
-			const currentPath = layers[activeIndex]?.path;
+			if (normalizePath(stackState.lastNavigatedPath) === normalizePath(pathToHandle)) return;
+			const currentPath = stackState.activeLayer?.path;
 			if (currentPath && normalizePath(currentPath) === normalizePath(pathToHandle)) {
-				lastNavigatedPath = pathToHandle;
+				stackState.lastNavigatedPath = pathToHandle;
 				return;
 			}
-			lastNavigatedPath = pathToHandle;
+			stackState.lastNavigatedPath = pathToHandle;
 			handleHistoryNavigation(pathToHandle);
 		}, 50);
 	});
 
-	// 滚动到选中项的 token（用于触发 VirtualizedFileList 滚动）
+	// ============ 选择和交互处理 ============
 	let scrollToSelectedToken = $state(0);
 
-	// 监听 pendingFocusPath，找到对应项目后设置 selectedIndex 并滚动
 	$effect(() => {
 		const focusPath = $tabPendingFocusPath;
 		if (!focusPath) return;
+		if (tabId !== get(activeTabId)) return;
 		
-		// 只有当前活动页签才处理
-		const currentActiveTabId = get(activeTabId);
-		if (tabId !== currentActiveTabId) return;
-		
-		// 在当前层的 items 中查找目标路径
-		const currentLayer = layers[activeIndex];
+		const currentLayer = stackState.activeLayer;
 		if (!currentLayer || currentLayer.loading) return;
 		
-		// 获取排序后的显示项目
 		const displayItems = getDisplayItems(currentLayer);
 		const targetIndex = displayItems.findIndex(item => item.path === focusPath);
 		
 		if (targetIndex !== -1) {
-			// 设置 selectedIndex
-			layers[activeIndex].selectedIndex = targetIndex;
-			// 同时添加到选中列表（高亮显示）
+			stackState.updateSelectedIndex(stackState.activeIndex, targetIndex);
 			globalStore.selectItem(focusPath, false, targetIndex);
-			// 延迟触发滚动，确保虚拟列表完全渲染后再滚动居中
-			setTimeout(() => {
-				scrollToSelectedToken++;
-			}, 250);
+			setTimeout(() => scrollToSelectedToken++, 250);
 		}
 		
-		// 清除 pendingFocusPath
 		folderTabActions.clearPendingFocusPath();
 	});
 
-	// 尝试穿透文件夹（只有一个子文件时才穿透）
-	async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
-		try {
-			const children = await FileSystemAPI.browseDirectory(folderPath);
-			const result = tryPenetrateChildren(children);
-			return result.success ? result.targetItem ?? null : null;
-		} catch (error) {
-			// 穿透模式读取目录失败，静默处理
-			return null;
-		}
-	}
-
-	// 处理项选中（单击）
-	async function handleItemSelect(
-		layerIndex: number,
-		payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }
-	) {
-		if (layerIndex !== activeIndex) return;
-
-		// 更新层的选中索引
-		layers[layerIndex].selectedIndex = payload.index;
-
-		// 获取当前层的显示项目列表（用于范围选择）
-		const displayItems = getDisplayItems(layers[layerIndex]);
-
-		// 使用提取的链选处理函数
-		const ctx: SelectionContext = {
-			tabId,
-			multiSelectMode: $multiSelectMode || payload.multiSelect,
-			displayItems,
-			selectedItems: get(tabSelectedItems)
-		};
-		const chainResult = handleChainSelect(ctx, payload.index, payload.item.path);
+	async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }) {
+		if (layerIndex !== stackState.activeIndex) return;
 		
-		if (chainResult.handled) {
-			if (chainResult.newSelection) {
-				// 批量选择
-				globalStore.setSelectedItems(chainResult.newSelection);
-			} else if (chainResult.toggleItem) {
-				// 切换单项选中状态
-				globalStore.selectItem(chainResult.toggleItem, true, payload.index);
-			}
-			if (chainResult.newAnchor !== undefined) {
-				setChainAnchor(tabId, chainResult.newAnchor);
-			}
-			return;
-		}
+		stackState.updateSelectedIndex(layerIndex, payload.index);
+		const displayItems = getDisplayItems(stackState.layers[layerIndex]);
 
-		// 检查是否需要范围选择（勾选模式 + Shift 键）
-		if (($multiSelectMode || payload.multiSelect) && payload.shiftKey) {
-			// Shift + 点击：范围选择
-			globalStore.selectRange(payload.index, displayItems);
-		} else if (payload.multiSelect || $multiSelectMode) {
-			// 多选模式：切换选中状态并更新锚点，不导航
-			globalStore.selectItem(payload.item.path, true, payload.index);
-		} else {
-			if (payload.item.isDir) {
-				// 文件夹：进入目录，不加入选中列表
-				
-				// 虚拟实例（历史/书签面板）：文件夹应该在 folder 面板打开，通过 onItemOpen 回调处理
-				if (skipGlobalStore) {
-					onItemOpen?.(payload.item);
-					return;
-				}
-				
-				// 检查穿透模式
-				if ($penetrateMode) {
-					const penetrated = await tryPenetrateFolder(payload.item.path);
-					if (penetrated) {
-						// 穿透成功，打开子文件
-						onItemOpen?.(penetrated);
-						return;
-					}
-					// 穿透失败，检查是否在新标签页打开
-					if ($openInNewTabMode) {
-						// 穿透失败时在新标签页打开文件夹
-						onOpenInNewTab?.(payload.item);
-						return;
-					}
-				}
-				// 进入目录前清除选中状态
-				globalStore.deselectAll();
-				// 正常进入目录
-				pushLayer(payload.item.path);
-			} else {
-				// 文件：加入选中列表并打开
-				globalStore.selectItem(payload.item.path);
-				onItemOpen?.(payload.item);
-			}
-		}
+		await handleItemSelection(
+			payload,
+			{
+				tabId,
+				multiSelectMode: $multiSelectMode || payload.multiSelect,
+				penetrateMode: $penetrateMode,
+				openInNewTabMode: $openInNewTabMode,
+				skipGlobalStore,
+				displayItems,
+				selectedItems: get(tabSelectedItems)
+			},
+			{
+				selectItem: globalStore.selectItem,
+				setSelectedItems: globalStore.setSelectedItems,
+				selectRange: globalStore.selectRange,
+				deselectAll: globalStore.deselectAll,
+				onItemOpen,
+				onOpenInNewTab,
+				onNavigate: pushLayer
+			},
+			setChainAnchor
+		);
 	}
 
-	// 处理项双击
 	function handleItemDoubleClick(layerIndex: number, payload: { item: FsItem; index: number }) {
-		if (layerIndex !== activeIndex) return;
-
-		// 双击也打开文件（与单击行为一致）
-		if (!payload.item.isDir) {
-			onItemOpen?.(payload.item);
-		}
+		if (layerIndex !== stackState.activeIndex) return;
+		if (!payload.item.isDir) onItemOpen?.(payload.item);
 	}
 
-	// 处理选中索引变化
 	function handleSelectedIndexChange(layerIndex: number, payload: { index: number }) {
-		if (layerIndex !== activeIndex) return;
-		layers[layerIndex].selectedIndex = payload.index;
+		if (layerIndex !== stackState.activeIndex) return;
+		stackState.updateSelectedIndex(layerIndex, payload.index);
 	}
 
-	// 处理右键菜单
 	function handleItemContextMenu(layerIndex: number, payload: { event: MouseEvent; item: FsItem }) {
-		if (layerIndex !== activeIndex) return;
+		if (layerIndex !== stackState.activeIndex) return;
 		onItemContextMenu?.(payload.event, payload.item);
 	}
 
-	// 处理作为书籍打开文件夹
 	function handleOpenFolderAsBook(layerIndex: number, item: FsItem) {
-		if (layerIndex !== activeIndex) return;
-		if (item.isDir) {
-			onOpenFolderAsBook?.(item);
-		}
+		if (layerIndex !== stackState.activeIndex || !item.isDir) return;
+		onOpenFolderAsBook?.(item);
 	}
 
-	// 通用空白区域点击处理
+	function handleDeleteItem(layerIndex: number, item: FsItem) {
+		const currentLayer = stackState.layers[layerIndex];
+		if (currentLayer && isVirtualPath(currentLayer.path)) {
+			removeVirtualPathItem(currentLayer.path, item.path);
+			return;
+		}
+		stackState.removeItemFromLayer(layerIndex, item.path);
+		globalStore.setItems(currentLayer?.items || []);
+		onItemDelete?.(item);
+	}
+
 	async function handleEmptyAreaAction(layerIndex: number, actionType: 'single' | 'double') {
-		if (layerIndex !== activeIndex) return;
-		const currentLayer = layers[layerIndex];
+		if (layerIndex !== stackState.activeIndex) return;
+		const currentLayer = stackState.layers[layerIndex];
 		if (!currentLayer || isVirtualPath(currentLayer.path)) return;
 		
 		const state = get(fileBrowserStore);
@@ -875,41 +379,35 @@ import {
 		}
 	}
 
-	// 处理双击空白处
-	const handleEmptyDoubleClick = (layerIndex: number) => handleEmptyAreaAction(layerIndex, 'double');
-	// 处理单击空白处
-	const handleEmptySingleClick = (layerIndex: number) => handleEmptyAreaAction(layerIndex, 'single');
-
-	// 处理返回按钮点击
 	async function handleBackButtonClick(layerIndex: number) {
-		if (layerIndex !== activeIndex) return;
-		const currentLayer = layers[layerIndex];
+		if (layerIndex !== stackState.activeIndex) return;
+		const currentLayer = stackState.layers[layerIndex];
 		if (currentLayer && isVirtualPath(currentLayer.path)) return;
 		await popLayer();
 	}
 	
-	// 计算当前层是否应该显示返回按钮
 	function shouldShowBackButton(layerPath: string): boolean {
-		// 虚拟路径（书签/历史）模式下不显示
 		if (isVirtualPath(layerPath)) return false;
 		return showBackButtonValue;
 	}
+
+	onDestroy(() => {
+		dataLoader.cleanup();
+	});
 </script>
 
 <div class="folder-stack relative h-full w-full overflow-hidden">
-	{#each layers as layer, index (layer.id)}
+	{#each stackState.layers as layer, index (layer.id)}
 		<div
 			class="folder-layer bg-muted/10 absolute inset-0 transition-transform duration-300 ease-out"
-			class:pointer-events-none={index !== activeIndex}
-			style="transform: translateX({(index - activeIndex) * 100}%); z-index: {index};"
+			class:pointer-events-none={index !== stackState.activeIndex}
+			style="transform: translateX({(index - stackState.activeIndex) * 100}%); z-index: {index};"
 		>
 			{#if layer.loading}
-				<!-- 加载状态 -->
 				<div class="flex h-full items-center justify-center">
 					<Loader2 class="text-muted-foreground h-8 w-8 animate-spin" />
 				</div>
 			{:else if layer.error}
-				<!-- 错误状态 -->
 				<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
 					<AlertCircle class="text-destructive h-8 w-8" />
 					<p class="text-destructive text-sm">{layer.error}</p>
@@ -917,13 +415,11 @@ import {
 			{:else}
 				{@const displayItems = getDisplayItems(layer)}
 				{#if displayItems.length === 0}
-					<!-- 空状态（过滤后无结果） -->
 					<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
 						<FolderOpen class="text-muted-foreground h-12 w-12" />
 						<p class="text-muted-foreground text-sm">文件夹为空</p>
 					</div>
 				{:else}
-					<!-- 虚拟化列表 -->
 					<VirtualizedFileList
 						items={displayItems}
 						currentPath={layer.path}
@@ -940,16 +436,15 @@ import {
 						showBackButton={shouldShowBackButton(layer.path)}
 						onItemSelect={(payload) => handleItemSelect(index, payload)}
 						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
-						onEmptyDoubleClick={() => handleEmptyDoubleClick(index)}
-						onEmptySingleClick={() => handleEmptySingleClick(index)}
+						onEmptyDoubleClick={() => handleEmptyAreaAction(index, 'double')}
+						onEmptySingleClick={() => handleEmptyAreaAction(index, 'single')}
 						onBackButtonClick={() => handleBackButtonClick(index)}
 						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
-						onSelectionChange={(payload) =>
-							globalStore.setSelectedItems(payload.selectedItems)}
+						onSelectionChange={(payload) => globalStore.setSelectedItems(payload.selectedItems)}
 						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
 						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
 						on:openInNewTab={(e) => {
-							if (index === activeIndex && e.detail.item.isDir) {
+							if (index === stackState.activeIndex && e.detail.item.isDir) {
 								onOpenInNewTab?.(e.detail.item);
 							}
 						}}
@@ -964,14 +459,11 @@ import {
 <style>
 	.folder-stack {
 		perspective: 1000px;
-		/* CSS Containment 优化 */
 		contain: layout style;
 	}
-
 	.folder-layer {
 		will-change: transform;
 		backface-visibility: hidden;
-		/* CSS Containment 优化 - 每层独立隔离 */
 		contain: layout style paint;
 	}
 </style>

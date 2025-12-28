@@ -12,6 +12,17 @@ import * as Select from '$lib/components/ui/select';
 import { invoke } from '@tauri-apps/api/core';
 import { Command, type Child } from '@tauri-apps/plugin-shell';
 import { toast } from 'svelte-sonner';
+import {
+	formatBytes,
+	applyCleanupRules,
+	exportConfigToBlob,
+	downloadBlob,
+	generateExportFilename,
+	generateLibreTranslateCommand,
+	SERVICE_TYPE_OPTIONS,
+	SOURCE_LANGUAGE_OPTIONS,
+	TARGET_LANGUAGE_OPTIONS
+} from './aiConfigUtils';
 
 let config = $state(aiTranslationStore.getConfig());
 let isTesting = $state(false);
@@ -58,13 +69,7 @@ async function fetchOllamaStats() {
 	}
 }
 
-// 格式化字节大小
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return bytes + ' B';
-	if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-	if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-	return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
+
 
 // 检查服务状态
 async function checkServiceStatus() {
@@ -274,52 +279,13 @@ let testInputText = $state('');
 let testResultText = $state('');
 
 function testCleanupRules() {
-	if (!testInputText) {
-		testResultText = '';
-		return;
-	}
-	
-	let result = testInputText;
-	const rules = config.cleanupRules || [];
-	
-	for (const rule of rules) {
-		if (!rule.enabled || !rule.pattern) continue;
-		try {
-			const regex = new RegExp(rule.pattern, 'g');
-			result = result.replace(regex, '');
-		} catch (e) {
-			// 忽略无效正则
-		}
-	}
-	
-	// 清理多余空格
-	testResultText = result.replace(/\s+/g, ' ').trim();
+	testResultText = applyCleanupRules(testInputText, config.cleanupRules || []);
 }
 
 // 导出配置
 function exportConfig() {
-	const exportData = {
-		version: 1,
-		exportedAt: new Date().toISOString(),
-		config: {
-			type: config.type,
-			ollamaUrl: config.ollamaUrl,
-			ollamaModel: config.ollamaModel,
-			ollamaPromptTemplate: config.ollamaPromptTemplate,
-			libreTranslateUrl: config.libreTranslateUrl,
-			sourceLanguage: config.sourceLanguage,
-			targetLanguage: config.targetLanguage,
-			cleanupRules: config.cleanupRules,
-		},
-	};
-	const json = JSON.stringify(exportData, null, 2);
-	const blob = new Blob([json], { type: 'application/json' });
-	const url = URL.createObjectURL(blob);
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = `ai-translation-config-${new Date().toISOString().split('T')[0]}.json`;
-	a.click();
-	URL.revokeObjectURL(url);
+	const blob = exportConfigToBlob(config);
+	downloadBlob(blob, generateExportFilename());
 }
 
 // 导入配置
@@ -416,53 +382,21 @@ async function handleTestConnection() {
 	}
 }
 
-const serviceTypeOptions = [
-	{ value: 'disabled', label: '禁用' },
-	{ value: 'libretranslate', label: 'LibreTranslate' },
-	{ value: 'ollama', label: 'Ollama (本地模型)' },
-];
-
-const languageOptions = [
-	{ value: 'auto', label: '自动检测' },
-	{ value: 'ja', label: '日语' },
-	{ value: 'en', label: '英语' },
-	{ value: 'ko', label: '韩语' },
-];
-
-const targetLanguageOptions = [
-	{ value: 'zh', label: '中文' },
-	{ value: 'en', label: '英语' },
-];
+// 常量从 aiConfigUtils 导入
+const serviceTypeOptions = SERVICE_TYPE_OPTIONS;
+const languageOptions = SOURCE_LANGUAGE_OPTIONS;
+const targetLanguageOptions = TARGET_LANGUAGE_OPTIONS;
 
 // 生成 LibreTranslate 启动命令
 let copied = $state(false);
 
 const startCommand = $derived.by(() => {
 	if (config.type !== 'libretranslate') return '';
-	
-	try {
-		const url = new URL(config.libreTranslateUrl || 'http://localhost:5000');
-		const host = url.hostname;
-		const port = url.port || '5000';
-		
-		// 收集需要的语言
-		const langs = new Set<string>();
-		if (config.sourceLanguage && config.sourceLanguage !== 'auto') {
-			langs.add(config.sourceLanguage);
-		} else {
-			// 自动检测时默认加载日语
-			langs.add('ja');
-		}
-		langs.add(config.targetLanguage || 'zh');
-		// 英语作为中转语言
-		langs.add('en');
-		
-		const langList = Array.from(langs).sort().join(',');
-		
-		return `libretranslate --host ${host} --port ${port} --load-only ${langList}`;
-	} catch {
-		return 'libretranslate --host 0.0.0.0 --port 5000 --load-only en,ja,zh';
-	}
+	return generateLibreTranslateCommand(
+		config.libreTranslateUrl || '',
+		config.sourceLanguage || 'auto',
+		config.targetLanguage || 'zh'
+	);
 });
 
 async function copyCommand() {

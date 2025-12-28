@@ -61,6 +61,19 @@
 	import { favoriteTagStore, mixedGenderStore } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import { sortItems, filterItems } from './FolderStack/sortingUtils';
+import {
+	normalizePathForCompare,
+	isChildPath,
+	getParentPath,
+	getParentPaths,
+	toRelativeKey,
+	PRELOAD_PARENT_COUNT,
+	IMAGE_EXTENSIONS,
+	ARCHIVE_EXTENSIONS,
+	VIDEO_EXTENSIONS,
+	isArchiveFile,
+	needsThumbnail
+} from './FolderStack/folderStackUtils';
 
 	export interface NavigationCommand {
 		type: 'init' | 'push' | 'pop' | 'goto' | 'history';
@@ -186,10 +199,7 @@
 	// 视图模式映射 - 支持 list/content/banner/thumbnail 四种模式
 	let viewMode = $derived(effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail');
 
-	// 将路径转换为相对 key（用于缩略图存储）- 与老面板保持一致
-	function toRelativeKey(path: string): string {
-		return path.replace(/\\/g, '/');
-	}
+	// toRelativeKey 已从 folderStackUtils 导入
 
 	// 设置缩略图回调
 	onMount(() => {
@@ -345,48 +355,10 @@
 		const PRELOAD_COUNT = 10;
 		const preloadItems = items.slice(0, PRELOAD_COUNT);
 
-		// 过滤出需要缩略图的项目
-		const itemsNeedingThumbnails = preloadItems.filter((item) => {
-			const name = item.name.toLowerCase();
-			const isDir = item.isDir;
-
-			// 支持的图片扩展名
-			const imageExts = [
-				'.jpg',
-				'.jpeg',
-				'.png',
-				'.gif',
-				'.bmp',
-				'.webp',
-				'.avif',
-				'.jxl',
-				'.tiff',
-				'.tif'
-			];
-			// 支持的压缩包扩展名
-			const archiveExts = ['.zip', '.rar', '.7z', '.cbz', '.cbr', '.cb7'];
-			// 支持的视频扩展名
-			const videoExts = [
-				'.mp4',
-				'.mkv',
-				'.avi',
-				'.mov',
-				'.nov',
-				'.flv',
-				'.webm',
-				'.wmv',
-				'.m4v',
-				'.mpg',
-				'.mpeg'
-			];
-
-			const ext = name.substring(name.lastIndexOf('.'));
-
-			// 文件夹或支持的文件类型
-			return (
-				isDir || imageExts.includes(ext) || archiveExts.includes(ext) || videoExts.includes(ext)
-			);
-		});
+		// 过滤出需要缩略图的项目（使用导入的 needsThumbnail 函数）
+		const itemsNeedingThumbnails = preloadItems.filter((item) =>
+			needsThumbnail(item.name, item.isDir)
+		);
 
 		// 预加载数据库索引（只预加载前30项）
 		const paths = itemsNeedingThumbnails.map((item) => item.path);
@@ -401,45 +373,22 @@
 			thumbnailManager.getThumbnail(item.path, path);
 
 			// 【优化】预热压缩包文件列表，加速切书
-			if (!item.isDir) {
-				const nameLower = item.name.toLowerCase();
-				const isArchive =
-					nameLower.endsWith('.zip') ||
-					nameLower.endsWith('.cbz') ||
-					nameLower.endsWith('.rar') ||
-					nameLower.endsWith('.cbr') ||
-					nameLower.endsWith('.7z') ||
-					nameLower.endsWith('.cb7');
-					
-				if (isArchive) {
-					FileSystemAPI.preheatArchiveList(item.path);
-				}
+			if (!item.isDir && isArchiveFile(item.name)) {
+				FileSystemAPI.preheatArchiveList(item.path);
 			}
 		});
 	}
 
-	// 检查路径是否是另一个路径的子目录
-	function isChildPath(childPath: string, parentPath: string): boolean {
-		const normalizedChild = childPath.replace(/\\/g, '/').toLowerCase();
-		const normalizedParent = parentPath.replace(/\\/g, '/').toLowerCase();
-		return normalizedChild.startsWith(normalizedParent + '/');
-	}
+
 
 	// ============ 历史导航辅助函数 ============
 
-	/**
-	 * 规范化路径（统一分隔符和大小写）
-	 * 用于路径比较
-	 */
-	function normalizePath(path: string): string {
-		return path.replace(/\\/g, '/').toLowerCase();
-	}
+	// 使用从 folderStackUtils 导入的 normalizePathForCompare 作为 normalizePath
+	const normalizePath = normalizePathForCompare;
 
 	/**
 	 * 查找目标路径在 layers 中的父层索引
 	 * 如果目标路径是某个现有层的子目录，返回该层的索引
-	 * @param targetPath 目标路径
-	 * @returns 父层索引，如果没找到返回 -1
 	 */
 	function findParentLayerIndex(targetPath: string): number {
 		const normalizedTarget = normalizePath(targetPath);
@@ -590,41 +539,9 @@
 		}, 300);
 	}
 
-	// 获取父目录路径 - 统一使用 Windows 反斜杠格式
-	function getParentPath(path: string): string | null {
-		const normalized = path.replace(/\//g, '\\');
-		const parts = normalized.split('\\').filter(Boolean);
-		if (parts.length <= 1) return null; // 已经是根目录
-		parts.pop();
-		// Windows 盘符格式
-		let parentPath = parts.join('\\');
-		// 确保盘符后有反斜杠
-		if (/^[a-zA-Z]:$/.test(parentPath)) {
-			parentPath += '\\';
-		}
-		return parentPath;
-	}
 
-	/**
-	 * 获取多层父目录路径
-	 * @param path 起始路径
-	 * @param count 要获取的层数
-	 * @returns 父目录路径数组（从近到远）
-	 */
-	function getParentPaths(path: string, count: number): string[] {
-		const parents: string[] = [];
-		let currentPath = path;
-		for (let i = 0; i < count; i++) {
-			const parent = getParentPath(currentPath);
-			if (!parent) break;
-			parents.push(parent);
-			currentPath = parent;
-		}
-		return parents;
-	}
 
-	// 预加载父目录层数
-	const PRELOAD_PARENT_COUNT = 3;
+
 
 	// 弹出当前层（返回上级）
 	async function popLayer(): Promise<boolean> {

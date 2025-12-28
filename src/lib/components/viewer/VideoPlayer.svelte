@@ -26,6 +26,12 @@
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
+	import {
+		formatTime,
+		FrameCacheManager,
+		captureVideoScreenshot,
+		downloadScreenshot
+	} from './videoPlayerUtils';
 
 	type LoopMode = 'none' | 'list' | 'single';
 	type PlayerSettings = {
@@ -98,13 +104,8 @@
 	let previewCanvas = $state<HTMLCanvasElement | null>(null);
 	let previewGenerating = $state(false);
 	
-	// 帧缓存：key 为时间戳（精确到0.5秒），value 为 dataURL
-	const frameCache = new Map<number, string>();
-	const CACHE_PRECISION = 0.5; // 缓存精度：0.5秒
-	const MAX_CACHE_SIZE = 100; // 最大缓存帧数
-	
-	// 复用的临时 video 元素
-	let tempVideoElement: HTMLVideoElement | null = null;
+	// 帧缓存管理器
+	const frameCacheManager = new FrameCacheManager();
 
 	// 截图功能
 	let screenshotCanvas: HTMLCanvasElement | null = null;
@@ -333,106 +334,22 @@
 		previewVisible = false;
 	}
 
-	// 生成预览帧缩略图（带缓存）
-	let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	
-	function getCacheKey(time: number): number {
-		return Math.round(time / CACHE_PRECISION) * CACHE_PRECISION;
-	}
-	
+	// 生成预览帧缩略图（使用 FrameCacheManager）
 	function generatePreviewFrame(time: number) {
 		if (!videoElement || !previewCanvas) return;
 		
-		const cacheKey = getCacheKey(time);
-		
-		// 检查缓存
-		if (frameCache.has(cacheKey)) {
-			const cachedDataUrl = frameCache.get(cacheKey)!;
-			const img = new Image();
-			img.onload = () => {
-				const ctx = previewCanvas?.getContext('2d');
-				if (ctx && previewCanvas) {
-					previewCanvas.width = img.width;
-					previewCanvas.height = img.height;
-					ctx.drawImage(img, 0, 0);
-				}
-			};
-			img.src = cachedDataUrl;
-			return;
-		}
-		
-		// 防抖，避免频繁生成
-		if (previewDebounceTimer) {
-			clearTimeout(previewDebounceTimer);
-		}
-		
-		previewDebounceTimer = setTimeout(() => {
-			if (!videoElement || !previewCanvas || previewGenerating) return;
-			
-			previewGenerating = true;
-			
-			// 复用或创建临时 video 元素
-			if (!tempVideoElement) {
-				tempVideoElement = document.createElement('video');
-				tempVideoElement.crossOrigin = 'anonymous';
-				tempVideoElement.muted = true;
-				tempVideoElement.preload = 'metadata';
-			}
-			
-			// 如果 src 变了才更新
-			if (tempVideoElement.src !== videoUrl) {
-				tempVideoElement.src = videoUrl;
-			}
-			
-			const handleSeeked = () => {
-				try {
-					const ctx = previewCanvas?.getContext('2d');
-					if (ctx && previewCanvas && tempVideoElement) {
-						// 计算缩略图尺寸，保持宽高比
-						const videoRatio = tempVideoElement.videoWidth / tempVideoElement.videoHeight;
-						const canvasWidth = 160;
-						const canvasHeight = Math.round(canvasWidth / videoRatio);
-						previewCanvas.width = canvasWidth;
-						previewCanvas.height = canvasHeight;
-						ctx.drawImage(tempVideoElement, 0, 0, canvasWidth, canvasHeight);
-						
-						// 存入缓存
-						try {
-							const dataUrl = previewCanvas.toDataURL('image/jpeg', 0.7);
-							// 控制缓存大小
-							if (frameCache.size >= MAX_CACHE_SIZE) {
-								const firstKey = frameCache.keys().next().value;
-								if (firstKey !== undefined) frameCache.delete(firstKey);
-							}
-							frameCache.set(cacheKey, dataUrl);
-						} catch (e) {
-							// 跨域视频可能无法 toDataURL，忽略缓存
-						}
-					}
-				} catch (err) {
-					console.warn('生成预览帧失败:', err);
-				} finally {
-					previewGenerating = false;
-					tempVideoElement?.removeEventListener('seeked', handleSeeked);
-				}
-			};
-			
-			tempVideoElement.addEventListener('seeked', handleSeeked, { once: true });
-			tempVideoElement.addEventListener('error', () => {
-				previewGenerating = false;
-			}, { once: true });
-			
-			tempVideoElement.currentTime = time;
-		}, 30); // 30ms 防抖（更快响应）
+		previewGenerating = true;
+		frameCacheManager.generatePreviewFrame(
+			time,
+			videoUrl,
+			previewCanvas,
+			() => { previewGenerating = false; }
+		);
 	}
 	
 	// 清理帧缓存（视频切换时调用）
 	function clearFrameCache() {
-		frameCache.clear();
-		if (tempVideoElement) {
-			tempVideoElement.src = '';
-			tempVideoElement = null;
-		}
+		frameCacheManager.clear();
 	}
 
 	function changeVolume(e: Event) {
@@ -557,26 +474,11 @@
 	async function captureScreenshot() {
 		if (!videoElement) return;
 		
-		const canvas = document.createElement('canvas');
-		canvas.width = videoElement.videoWidth;
-		canvas.height = videoElement.videoHeight;
-		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
-		
-		ctx.drawImage(videoElement, 0, 0);
-		
 		try {
-			const blob = await new Promise<Blob | null>((resolve) => 
-				canvas.toBlob(resolve, 'image/png')
-			);
-			if (!blob) return;
-			
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = `screenshot_${formatTime(currentTime).replace(':', '-')}.png`;
-			a.click();
-			URL.revokeObjectURL(url);
+			const blob = await captureVideoScreenshot(videoElement, currentTime);
+			if (blob) {
+				downloadScreenshot(blob, currentTime);
+			}
 		} catch (err) {
 			console.warn('截图失败:', err);
 		}
@@ -626,13 +528,6 @@
 		saturate = 100;
 	}
 
-	function formatTime(seconds: number): string {
-		if (!isFinite(seconds)) return '0:00';
-		const mins = Math.floor(seconds / 60);
-		const secs = Math.floor(seconds % 60);
-		return `${mins}:${secs.toString().padStart(2, '0')}`;
-	}
-
 	function handleMouseMove() {
 		// 如果控件已显示且定时器已设置，不重置定时器（避免持续移动时控件不隐藏）
 		if (showControls && hideControlsTimeout) {
@@ -656,10 +551,6 @@
 	onDestroy(() => {
 		if (hideControlsTimeout) {
 			clearTimeout(hideControlsTimeout);
-		}
-		// 【修复内存泄漏】清理预览防抖定时器
-		if (previewDebounceTimer) {
-			clearTimeout(previewDebounceTimer);
 		}
 		// 【修复内存泄漏】清理帧缓存和临时视频元素
 		clearFrameCache();

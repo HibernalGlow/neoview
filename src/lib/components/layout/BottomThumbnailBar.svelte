@@ -25,6 +25,15 @@
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 	import MagicCard from '../ui/MagicCard.svelte';
+	import {
+		THUMBNAIL_DEBOUNCE_MS,
+		ensureMinimumSpan,
+		windowBadgeLabel as getWindowBadgeLabel,
+		windowBadgeClass as getWindowBadgeClass,
+		getMinVisibleThumbnails,
+		getWindowRange as computeWindowRange,
+		calculateScrollProgress
+	} from './thumbnailBarUtils';
 
 	function createAppStateStore<T>(selector: StateSelector<T>) {
 		const initial = selector(appState.getSnapshot());
@@ -122,8 +131,6 @@
 	// 初始化时同步进度条状态
 	// Removed global progressBarStateChange initialization effect
 
-	// 优化：使用更短的防抖时间（100ms）
-	const THUMBNAIL_DEBOUNCE_MS = 100;
 	let loadThumbnailsDebounce: number | null = null;
 	let lastThumbnailRange: { start: number; end: number } | null = null;
 	const noThumbnailPaths = new Set<string>();
@@ -259,98 +266,23 @@
 		}
 	});
 
-	function getMinVisibleThumbnails(): number {
-		const bookType = bookStore.currentBook?.type;
-		return bookType === 'archive' ? ARCHIVE_MIN_THUMBNAILS : LOCAL_MIN_THUMBNAILS;
-	}
-
-	function ensureMinimumSpan(
-		start: number,
-		end: number,
-		totalPages: number,
-		targetLength: number
-	): { start: number; end: number } {
-		let newStart = start;
-		let newEnd = end;
-		const currentSpan = newEnd - newStart + 1;
-		if (currentSpan >= targetLength) {
-			return { start: newStart, end: newEnd };
-		}
-
-		let deficit = targetLength - currentSpan;
-		while (deficit > 0 && (newStart > 0 || newEnd < totalPages - 1)) {
-			if (newStart > 0) {
-				newStart -= 1;
-				deficit -= 1;
-			}
-			if (deficit > 0 && newEnd < totalPages - 1) {
-				newEnd += 1;
-				deficit -= 1;
-			}
-		}
-
-		return { start: newStart, end: newEnd };
-	}
-
 	function getWindowRange(totalPages: number): { start: number; end: number } {
 		const windowState = $viewerState.pageWindow;
-		const minVisible = getMinVisibleThumbnails();
-		const fallbackRadius = Math.max(minVisible, Math.floor(($bottomThumbnailBarHeight - 40) / 60));
-
-		if (!windowState || windowState.stale) {
-			const start = Math.max(0, bookStore.currentPageIndex - fallbackRadius);
-			const end = Math.min(totalPages - 1, bookStore.currentPageIndex + fallbackRadius);
-			return ensureMinimumSpan(start, end, totalPages, minVisible);
-		}
-
-		let minIndex = windowState.center;
-		let maxIndex = windowState.center;
-		if (windowState.backward.length) {
-			minIndex = Math.min(minIndex, ...windowState.backward);
-		}
-		if (windowState.forward.length) {
-			maxIndex = Math.max(maxIndex, ...windowState.forward);
-		}
-		minIndex = Math.max(0, minIndex);
-		maxIndex = Math.min(totalPages - 1, maxIndex);
-
-		const currentSpan = maxIndex - minIndex + 1;
-		if (currentSpan <= minVisible) {
-			return ensureMinimumSpan(minIndex, maxIndex, totalPages, minVisible);
-		}
-
-		const center = windowState.center;
-		const half = Math.floor((minVisible - 1) / 2);
-		let start = Math.max(minIndex, center - half);
-		let end = start + minVisible - 1;
-		if (end > maxIndex) {
-			end = maxIndex;
-			start = Math.max(minIndex, end - minVisible + 1);
-		}
-		if (end >= totalPages) {
-			end = totalPages - 1;
-			start = Math.max(0, end - minVisible + 1);
-		}
-
-		return { start, end };
+		return computeWindowRange(
+			totalPages,
+			windowState,
+			bookStore.currentPageIndex,
+			$bottomThumbnailBarHeight,
+			bookStore.currentBook?.type
+		);
 	}
 
 	function windowBadgeLabel(index: number): string | null {
-		const windowState = $viewerState.pageWindow;
-		if (!windowState || windowState.stale) return null;
-		if (index === windowState.center) return 'C';
-		if (windowState.forward.includes(index)) return '+';
-		if (windowState.backward.includes(index)) return '-';
-		return null;
+		return getWindowBadgeLabel(index, $viewerState.pageWindow);
 	}
 
 	function windowBadgeClass(index: number): string {
-		const windowState = $viewerState.pageWindow;
-		if (!windowState || windowState.stale) return '';
-		if (index === windowState.center) return 'bg-primary/80';
-		if (windowState.forward.includes(index)) return 'bg-accent/80';
-		if (windowState.backward.includes(index)) return 'bg-secondary/80';
-		return '';
+		return getWindowBadgeClass(index, $viewerState.pageWindow);
 	}
 
 	// 预加载范围
@@ -386,10 +318,7 @@
 		const container = e.target as HTMLElement;
 
 		// 更新滚动进度（用于 HorizontalListSlider）
-		const maxScroll = container.scrollWidth - container.clientWidth;
-		const rawProgress = maxScroll > 0 ? container.scrollLeft / maxScroll : 0;
-		// 右开模式下反转进度（因为缩略图列表已经反转，滚动到最右边=第1页=进度0）
-		thumbnailScrollProgress = readingDirection === 'right-to-left' ? 1 - rawProgress : rawProgress;
+		thumbnailScrollProgress = calculateScrollProgress(container, readingDirection);
 
 		// 防抖处理滚动加载
 		if (scrollDebounceTimer) {

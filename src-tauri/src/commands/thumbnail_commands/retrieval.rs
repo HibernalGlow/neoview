@@ -244,7 +244,7 @@ pub async fn get_folder_preview_thumbnails(
         // 先尝试从数据库加载
         let path_key = path.clone();
         
-        match state.db.load_thumbnail_data(&path_key, "file") {
+        match state.db.load_thumbnail_by_key_and_category(&path_key, "file") {
             Ok(Some(data)) => {
                 // 注册到 BlobRegistry
                 let blob_key = state.blob_registry.get_or_register(

@@ -43,6 +43,8 @@ interface FileBrowserState {
   penetrateMaxDepth: number;
   // 纯媒体文件夹点击直接打开
   penetratePureMediaFolderOpen: boolean;
+  // 文件夹预览网格模式（显示前4张图片的2x2预览）
+  folderPreviewGrid: boolean;
   showSearchBar: boolean;
   showMigrationBar: boolean;
   showMigrationManager: boolean;
@@ -223,6 +225,7 @@ const initialState: FileBrowserState = {
   penetrateInnerFileCount: 'single',
   penetrateMaxDepth: 3,
   penetratePureMediaFolderOpen: true,
+  folderPreviewGrid: true,
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
@@ -339,6 +342,7 @@ function createFileBrowserStore() {
     setPenetrateInnerFileCount: (value: 'single' | 'all') => update(state => ({ ...state, penetrateInnerFileCount: value })),
     setPenetrateMaxDepth: (value: number) => update(state => ({ ...state, penetrateMaxDepth: value })),
     setPenetratePureMediaFolderOpen: (value: boolean) => update(state => ({ ...state, penetratePureMediaFolderOpen: value })),
+    setFolderPreviewGrid: (value: boolean) => update(state => ({ ...state, folderPreviewGrid: value })),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),

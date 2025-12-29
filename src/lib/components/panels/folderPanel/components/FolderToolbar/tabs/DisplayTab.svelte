@@ -3,7 +3,7 @@
  * DisplayTab - 显示设置标签页
  * 包含悬停预览、内部文件显示、缩略图大小等设置
  */
-import { Eye, Package, Image, Grid3x3 } from '@lucide/svelte';
+import { Eye, Package, Image, Grid3x3, LayoutGrid } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -87,6 +87,20 @@ let {
 			onclick={() => fileBrowserStore.setPenetratePureMediaFolderOpen(!$fileBrowserStore.penetratePureMediaFolderOpen)}
 		>
 			{$fileBrowserStore.penetratePureMediaFolderOpen ? '点击打开' : '点击进入'}
+		</Button>
+	</div>
+
+	<!-- 文件夹 4 图预览 -->
+	<div class="flex items-center gap-2">
+		<LayoutGrid class="h-3.5 w-3.5 text-muted-foreground" />
+		<span class="text-muted-foreground">文件夹预览:</span>
+		<Button 
+			variant={$fileBrowserStore.folderPreviewGrid ? 'default' : 'outline'} 
+			size="sm" 
+			class="h-6 text-xs px-2"
+			onclick={() => fileBrowserStore.setFolderPreviewGrid(!$fileBrowserStore.folderPreviewGrid)}
+		>
+			{$fileBrowserStore.folderPreviewGrid ? '4图' : '单图'}
 		</Button>
 	</div>
 

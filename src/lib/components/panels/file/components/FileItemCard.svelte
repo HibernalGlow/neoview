@@ -4,6 +4,7 @@
 	 * 负责数据获取和状态管理，根据 viewMode 渲染对应视图组件
 	 * 用于 FileBrowser、HistoryPanel、BookmarkPanel
 	 */
+	import { invoke } from '@tauri-apps/api/core';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import {
@@ -160,6 +161,10 @@
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
 	let penetratePureMediaFolderOpen = $state(true);
+	// 文件夹 4 图预览设置
+	let folderPreviewGridEnabled = $state(true);
+	// 文件夹预览缩略图 URL 数组
+	let folderThumbnails = $state<string[]>([]);
 	// 支持多个内部文件
 	let penetrateChildFiles = $state<Array<{
 		name: string;
@@ -184,8 +189,67 @@
 			penetrateShowInnerFile = state.penetrateShowInnerFile;
 			penetrateInnerFileCount = state.penetrateInnerFileCount;
 			penetratePureMediaFolderOpen = state.penetratePureMediaFolderOpen;
+			folderPreviewGridEnabled = state.folderPreviewGrid;
 		});
 		return unsubscribe;
+	});
+
+	// 文件夹 4 图预览：加载文件夹预览缩略图
+	$effect(() => {
+		// 仅在 banner/thumbnail 视图模式、文件夹项目、开启 4 图预览时加载
+		const isGridView = viewMode === 'banner' || viewMode === 'thumbnail';
+		const isDir = item.isDir;
+		const enabled = folderPreviewGridEnabled;
+		const itemPath = item.path;
+		
+		if (!isGridView || !isDir || !enabled) {
+			folderThumbnails = [];
+			return;
+		}
+		
+		// 延迟加载，避免影响初始渲染
+		const timeoutId = setTimeout(async () => {
+			try {
+				// 调用后端获取文件夹预览缩略图
+				const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
+					folderPath: itemPath,
+					count: 4
+				});
+				
+				if (blobKeys.length === 0) {
+					folderThumbnails = [];
+					return;
+				}
+				
+				// 将 blob keys 转换为 blob URLs
+				const urls: string[] = [];
+				for (const blobKey of blobKeys) {
+					try {
+						const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
+						if (blobData) {
+							const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
+							urls.push(URL.createObjectURL(blob));
+						}
+					} catch {
+						// 忽略单个缩略图加载失败
+					}
+				}
+				folderThumbnails = urls;
+			} catch (e) {
+				console.debug('加载文件夹预览缩略图失败:', e);
+				folderThumbnails = [];
+			}
+		}, 100);
+		
+		return () => {
+			clearTimeout(timeoutId);
+			// 清理 blob URLs
+			folderThumbnails.forEach(url => {
+				if (url.startsWith('blob:')) {
+					URL.revokeObjectURL(url);
+				}
+			});
+		};
 	});
 
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
@@ -721,6 +785,8 @@
 	<FileItemGridView
 		{item}
 		{thumbnail}
+		{folderThumbnails}
+		{folderPreviewGridEnabled}
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

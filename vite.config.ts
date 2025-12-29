@@ -59,10 +59,7 @@ export default defineConfig({
 		port: 1420,
 		strictPort: true,
 		host: host || false,
-		// 确保 HMR 始终启用，Tauri WebView 需要明确的 ws 配置
-		hmr: host 
-			? { protocol: 'ws', host, port: 1421 } 
-			: { protocol: 'ws', host: 'localhost', port: 1421 },
+		hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
 		watch: {
 			ignored: ['**/src-tauri/**']
 		}

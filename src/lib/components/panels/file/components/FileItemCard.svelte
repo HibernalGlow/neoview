@@ -161,10 +161,10 @@
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
 	let penetratePureMediaFolderOpen = $state(true);
-	// 文件夹 4 图预览设置
-	let folderPreviewGridEnabled = $state(true);
 	// 文件夹预览缩略图 URL 数组
 	let folderThumbnails = $state<string[]>([]);
+	// 文件夹 4 图预览：使用响应式 store（必须在 $effect 之前定义）
+	const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
 	// 支持多个内部文件
 	let penetrateChildFiles = $state<Array<{
 		name: string;
@@ -189,7 +189,6 @@
 			penetrateShowInnerFile = state.penetrateShowInnerFile;
 			penetrateInnerFileCount = state.penetrateInnerFileCount;
 			penetratePureMediaFolderOpen = state.penetratePureMediaFolderOpen;
-			folderPreviewGridEnabled = state.folderPreviewGrid;
 		});
 		return unsubscribe;
 	});

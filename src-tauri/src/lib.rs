@@ -447,6 +447,7 @@ pub fn run() {
             commands::thumbnail_commands::retrieval::has_thumbnail_by_key_category,
             commands::thumbnail_commands::retrieval::load_thumbnail_from_db,
             commands::thumbnail_commands::retrieval::get_thumbnail_blob_data,
+            commands::thumbnail_commands::retrieval::get_folder_preview_thumbnails,
             commands::thumbnail_commands::batch_ops::batch_load_thumbnails_from_db,
             commands::thumbnail_commands::batch_ops::preload_thumbnail_index,
             commands::thumbnail_commands::batch_ops::scan_folder_thumbnails,

@@ -247,3 +247,80 @@ fn find_images_recursive_impl(
         }
     }
 }
+
+/// 获取文件夹前 N 张图片路径（用于 4 图预览）
+/// 返回 Vec<String>，最多返回 count 个图片路径
+/// 优先查找封面图片，如果没有则返回前 count 张图片
+pub fn get_folder_preview_images(
+    folder_path: &str,
+    count: usize,
+) -> Result<Vec<String>, String> {
+    // 1. 先检查是否有封面图片（cover.*, folder.*, thumb.*）
+    if let Ok(Some(cover)) = find_cover_image(folder_path) {
+        // 有封面图片时，只返回封面
+        return Ok(vec![cover]);
+    }
+    
+    // 2. 递归查找前 count 张图片（只要图片，不要压缩包和视频）
+    let mut results = Vec::new();
+    find_images_only_recursive(folder_path, 3, count, &mut results);
+    
+    Ok(results)
+}
+
+/// 递归查找图片文件（仅图片，不包含压缩包和视频）
+fn find_images_only_recursive(
+    folder: &str,
+    depth: u32,
+    max_count: usize,
+    results: &mut Vec<String>,
+) {
+    if depth == 0 || results.len() >= max_count {
+        return;
+    }
+    
+    let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
+    
+    let entries = match std::fs::read_dir(folder) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    
+    let mut sorted_entries: Vec<_> = entries.flatten().collect();
+    sorted_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    
+    let mut subdirs = Vec::new();
+    
+    // 先收集当前目录的图片
+    for entry in &sorted_entries {
+        if results.len() >= max_count {
+            break;
+        }
+        
+        let path = entry.path();
+        
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                let ext = ext.to_string_lossy().to_lowercase();
+                if image_exts.contains(&ext.as_str()) {
+                    results.push(path.to_string_lossy().to_string());
+                }
+            }
+        } else if path.is_dir() {
+            subdirs.push(path);
+        }
+    }
+    
+    // 如果还不够，递归子目录
+    for subdir in subdirs {
+        if results.len() >= max_count {
+            break;
+        }
+        find_images_only_recursive(
+            &subdir.to_string_lossy(),
+            depth - 1,
+            max_count,
+            results,
+        );
+    }
+}

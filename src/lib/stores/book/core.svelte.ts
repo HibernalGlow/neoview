@@ -92,6 +92,20 @@ class BookStore {
     return book !== null && book.currentPage > 0;
   }
 
+  /** 将 fileBrowserStore 的排序字段映射到 folderPanel 的排序字段 */
+  private mapFileBrowserSortField(field: string): 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount' {
+    const mapping: Record<string, 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path'> = {
+      'name': 'name',
+      'modified': 'date',
+      'size': 'size',
+      'type': 'type',
+      'path': 'path',
+      'random': 'random',
+      'rating': 'rating'
+    };
+    return mapping[field] ?? 'name';
+  }
+
   setSingleFileMode(enabled: boolean, filePath: string | null = null) {
     this.state.singleFileMode = enabled;
     this.state.originalFilePath = filePath;
@@ -364,7 +378,17 @@ class BookStore {
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
     const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
-    let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction);
+    const { folderTabActions } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
+    
+    // 从 folderTabStore 获取当前活动标签页的排序设置
+    const activeTab = folderTabActions.getActiveTab();
+    const sortOptions = {
+      sortField: (activeTab?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
+      sortOrder: (activeTab?.sortOrder || 'asc') as 'asc' | 'desc'
+    };
+    console.log('[openAdjacentBook] 使用排序设置（来自 folderTabStore）', sortOptions);
+    
+    let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction, sortOptions);
     
     if (!targetPath) {
       targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);

@@ -1,9 +1,10 @@
 <script lang="ts">
 /**
  * DisplayTab - 显示设置标签页
- * 包含悬停预览、内部文件显示、缩略图大小等设置
+ * 包含悬停预览、文件夹预览、缩略图大小等通用显示设置
+ * 注意：穿透相关设置（内部文件、媒体文件夹、穿透层数）在 PenetrateSettingsBar 中
  */
-import { Eye, Package, Image, Grid3x3, LayoutGrid } from '@lucide/svelte';
+import { Eye, Image, Grid3x3, LayoutGrid } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { hoverPreviewSettings, hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -51,43 +52,6 @@ let {
 				<option value="1200">1200ms</option>
 			</select>
 		{/if}
-	</div>
-
-	<!-- 穿透内部显示 -->
-	<div class="flex items-center gap-2">
-		<Package class="h-3.5 w-3.5 text-muted-foreground" />
-		<span class="text-muted-foreground">内部文件:</span>
-		<select 
-			class="h-6 bg-background border rounded text-xs px-1"
-			value={$fileBrowserStore.penetrateShowInnerFile}
-			onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always')}
-		>
-			<option value="none">不显示</option>
-			<option value="penetrate">穿透时</option>
-			<option value="always">始终</option>
-		</select>
-		<select 
-			class="h-6 bg-background border rounded text-xs px-1"
-			value={$fileBrowserStore.penetrateInnerFileCount}
-			onchange={(e) => fileBrowserStore.setPenetrateInnerFileCount((e.target as HTMLSelectElement).value as 'single' | 'all')}
-		>
-			<option value="single">单文件</option>
-			<option value="all">多文件</option>
-		</select>
-	</div>
-
-	<!-- 纯媒体文件夹点击直接打开 -->
-	<div class="flex items-center gap-2">
-		<Image class="h-3.5 w-3.5 text-muted-foreground" />
-		<span class="text-muted-foreground">媒体文件夹:</span>
-		<Button 
-			variant={$fileBrowserStore.penetratePureMediaFolderOpen ? 'default' : 'outline'} 
-			size="sm" 
-			class="h-6 text-xs"
-			onclick={() => fileBrowserStore.setPenetratePureMediaFolderOpen(!$fileBrowserStore.penetratePureMediaFolderOpen)}
-		>
-			{$fileBrowserStore.penetratePureMediaFolderOpen ? '点击打开' : '点击进入'}
-		</Button>
 	</div>
 
 	<!-- 文件夹 4 图预览 -->

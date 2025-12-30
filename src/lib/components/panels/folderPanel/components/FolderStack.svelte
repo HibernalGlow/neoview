@@ -329,6 +329,7 @@
 				selectRange: globalStore.selectRange,
 				deselectAll: globalStore.deselectAll,
 				onItemOpen,
+				onOpenFolderAsBook,
 				onOpenInNewTab,
 				onNavigate: pushLayer
 			},

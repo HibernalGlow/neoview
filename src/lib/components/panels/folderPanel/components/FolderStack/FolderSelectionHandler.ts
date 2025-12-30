@@ -6,11 +6,12 @@
 import type { FsItem } from '$lib/types';
 import {
 	handleChainSelect as chainSelect,
-	tryPenetrateChildren,
 	type SelectionContext,
 	type ChainSelectResult
 } from './folderStackEventHandlers';
 import * as FileSystemAPI from '$lib/api/filesystem';
+import { get } from 'svelte/store';
+import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
 /** 选择操作回调 */
 export interface SelectionCallbacks {
@@ -23,6 +24,7 @@ export interface SelectionCallbacks {
 /** 项目打开回调 */
 export interface ItemOpenCallbacks {
 	onItemOpen?: (item: FsItem) => void;
+	onOpenFolderAsBook?: (item: FsItem) => void;
 	onOpenInNewTab?: (item: FsItem) => void;
 	onNavigate: (path: string) => void;
 }
@@ -139,7 +141,12 @@ async function handleDirectoryClick(
 	if (penetrateMode) {
 		const penetrated = await tryPenetrateFolder(item.path);
 		if (penetrated) {
-			callbacks.onItemOpen?.(penetrated);
+			// 穿透成功：文件用 onItemOpen，文件夹用 onOpenFolderAsBook
+			if (penetrated.isDir) {
+				callbacks.onOpenFolderAsBook?.(penetrated);
+			} else {
+				callbacks.onItemOpen?.(penetrated);
+			}
 			return { handled: true };
 		}
 		if (openInNewTabMode) {
@@ -156,12 +163,56 @@ async function handleDirectoryClick(
 
 /**
  * 尝试穿透文件夹
+ * 递归穿透只有单个子文件夹的目录，直到找到可打开的目标
+ * @param folderPath 起始文件夹路径
+ * @returns 穿透后的目标项（文件或最终文件夹），如果无法穿透则返回 null
  */
 async function tryPenetrateFolder(folderPath: string): Promise<FsItem | null> {
+	const maxDepth = get(fileBrowserStore).penetrateMaxDepth;
+	return await tryPenetrateFolderRecursive(folderPath, 0, maxDepth);
+}
+
+/**
+ * 递归穿透文件夹
+ * @param folderPath 当前文件夹路径
+ * @param currentDepth 当前穿透深度
+ * @param maxDepth 最大穿透深度
+ */
+async function tryPenetrateFolderRecursive(
+	folderPath: string,
+	currentDepth: number,
+	maxDepth: number
+): Promise<FsItem | null> {
+	// 超过最大深度，返回 null 表示无法穿透
+	if (currentDepth >= maxDepth) {
+		return null;
+	}
+	
 	try {
 		const children = await FileSystemAPI.browseDirectory(folderPath);
-		const result = tryPenetrateChildren(children);
-		return result.success ? result.targetItem ?? null : null;
+		
+		// 没有子项，无法穿透
+		if (children.length === 0) {
+			return null;
+		}
+		
+		// 只有一个子项
+		if (children.length === 1) {
+			const child = children[0];
+			
+			// 子项是文件 -> 穿透成功，返回这个文件
+			if (!child.isDir) {
+				return child;
+			}
+			
+			// 子项是文件夹 -> 递归穿透
+			const result = await tryPenetrateFolderRecursive(child.path, currentDepth + 1, maxDepth);
+			// 如果递归穿透成功，返回结果；否则返回这个子文件夹本身
+			return result ?? child;
+		}
+		
+		// 多个子项，无法自动穿透
+		return null;
 	} catch {
 		return null;
 	}

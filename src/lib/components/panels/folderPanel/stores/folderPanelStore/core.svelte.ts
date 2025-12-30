@@ -343,12 +343,33 @@ reset,
 findAdjacentBookPath(currentBookPath: string | null, direction: 'next' | 'previous'): string | null {
 const currentState = get(state);
 let itemsToUse = currentState.items;
-if (itemsToUse.length === 0 && currentState.currentPath) {
-const cached = getCachedDirectory(currentState.currentPath);
+let dirPath = currentState.currentPath;
+
+// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
+// 如果是，需要从缓存中获取父目录内容
+const normalizedCurrentPath = dirPath ? normalizePath(dirPath) : null;
+const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
+	const lastSlash = normalizedCurrentPath.lastIndexOf('/');
+	if (lastSlash > 0) {
+		const parentPath = normalizedCurrentPath.substring(0, lastSlash);
+		const cachedParent = getCachedDirectory(parentPath);
+		if (cachedParent) {
+			itemsToUse = cachedParent;
+			dirPath = parentPath;
+		} else {
+			// 没有缓存的父目录，返回 null 让异步版本处理
+			return null;
+		}
+	}
+}
+
+if (itemsToUse.length === 0 && dirPath) {
+const cached = getCachedDirectory(dirPath);
 if (cached) itemsToUse = cached;
 }
 if (itemsToUse.length === 0) return null;
-const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, currentState.currentPath);
+const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, dirPath);
 const bookItems = sortedItemList.filter(isBookCandidate);
 if (bookItems.length === 0) return null;
 const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
@@ -365,6 +386,27 @@ async findAdjacentBookPathAsync(currentBookPath: string | null, direction: 'next
 const currentState = get(state);
 let itemsToUse = currentState.items;
 let dirPath = currentState.currentPath;
+
+// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
+// 如果是，需要在父目录中查找相邻书籍
+const normalizedCurrentPath = dirPath ? normalizePath(dirPath) : null;
+const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
+	// 当前目录就是 book 本身，需要切换到父目录
+	const lastSlash = normalizedCurrentPath.lastIndexOf('/');
+	if (lastSlash > 0) {
+		dirPath = normalizedCurrentPath.substring(0, lastSlash);
+		// 强制重新加载父目录内容
+		try {
+			itemsToUse = await browseDirectory(dirPath);
+			setCachedDirectory(dirPath, itemsToUse);
+		} catch (e) {
+			console.error('[FolderPanel] Failed to load parent directory:', e);
+			return null;
+		}
+	}
+}
+
 if (itemsToUse.length === 0) {
 			if (!dirPath && currentBookPath) {
 				const normalized = currentBookPath.replace(/\\/g, '/');

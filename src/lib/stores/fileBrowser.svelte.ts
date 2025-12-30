@@ -486,6 +486,16 @@ function createFileBrowserStore() {
       return { ...state, selectedIndex: index };
     }),
     findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
+      // 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
+      // 如果是，fileBrowserStore 无法处理（需要异步加载父目录），返回 null
+      const normalizedCurrentPath = currentState.currentPath ? normalizePath(currentState.currentPath) : null;
+      const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+      if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
+        // 当前目录就是 book 本身，这种情况需要在父目录中查找
+        // fileBrowserStore 没有父目录缓存，返回 null
+        return null;
+      }
+
       const sourceItems = currentState.useVisibleItemsOverride ? currentState.visibleItems : currentState.items;
       // 应用当前排序设置，确保按用户设置的排序顺序查找相邻书籍
       const sortedItems = sortItems(sourceItems, currentState.sortField, currentState.sortOrder, currentState.currentPath);

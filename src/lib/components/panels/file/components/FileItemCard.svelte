@@ -195,13 +195,20 @@
 
 	// 文件夹 4 图预览：加载文件夹预览缩略图
 	$effect(() => {
-		// 仅在 banner/thumbnail 视图模式、文件夹项目、开启 4 图预览时加载
-		const isGridView = viewMode === 'banner' || viewMode === 'thumbnail';
+		// 仅在文件夹项目、开启 4 图预览时加载（对所有视图模式生效）
 		const isDir = item.isDir;
 		const enabled = folderPreviewGridEnabled;
 		const itemPath = item.path;
 		
-		if (!isGridView || !isDir || !enabled) {
+		console.log('📂 [4图预览] effect 触发:', {
+			itemPath,
+			isDir,
+			enabled,
+			viewMode
+		});
+		
+		if (!isDir || !enabled) {
+			console.log('📂 [4图预览] 条件不满足，跳过');
 			folderThumbnails = [];
 			return;
 		}
@@ -209,11 +216,14 @@
 		// 延迟加载，避免影响初始渲染
 		const timeoutId = setTimeout(async () => {
 			try {
+				console.log('📂 [4图预览] 请求:', itemPath, 'enabled:', enabled);
 				// 调用后端获取文件夹预览缩略图
 				const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
 					folderPath: itemPath,
 					count: 4
 				});
+				
+				console.log('📂 [4图预览] 返回 blobKeys:', blobKeys.length, blobKeys);
 				
 				if (blobKeys.length === 0) {
 					folderThumbnails = [];
@@ -233,6 +243,7 @@
 						// 忽略单个缩略图加载失败
 					}
 				}
+				console.log('📂 [4图预览] 最终 URLs:', urls.length, urls);
 				folderThumbnails = urls;
 			} catch (e) {
 				console.debug('加载文件夹预览缩略图失败:', e);

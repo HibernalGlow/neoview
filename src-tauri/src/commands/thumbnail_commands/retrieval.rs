@@ -218,8 +218,8 @@ pub async fn get_thumbnail_blob_data(
 }
 
 /// 获取文件夹预览图（4 图预览）
-/// 返回前 4 张图片的缩略图 blob keys
-/// 如果有封面图片，只返回 1 个；否则返回最多 4 个
+/// 返回前 N 张图片的缩略图 blob keys
+/// count == 1 时优先返回封面；count > 1 时返回多张图片（封面作为第一张）
 #[tauri::command]
 pub async fn get_folder_preview_thumbnails(
     app: tauri::AppHandle,

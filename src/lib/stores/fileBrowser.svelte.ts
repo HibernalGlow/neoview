@@ -175,11 +175,20 @@ function getParentDirectory(path: string): string | null {
 
 // ============ 持久化设置 ============
 const EMPTY_CLICK_SETTINGS_KEY = 'neoview-empty-click-settings';
+const PENETRATE_SETTINGS_KEY = 'neoview-penetrate-settings';
 
 interface EmptyClickSettings {
   doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
   singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
   showEmptyAreaBackButton: boolean;
+}
+
+interface PenetrateSettings {
+  penetrateShowInnerFile: 'none' | 'penetrate' | 'always';
+  penetrateInnerFileCount: 'single' | 'all';
+  penetrateMaxDepth: number;
+  penetratePureMediaFolderOpen: boolean;
+  folderPreviewGrid: boolean;
 }
 
 function loadEmptyClickSettings(): Partial<EmptyClickSettings> {
@@ -204,7 +213,30 @@ function saveEmptyClickSettings(settings: EmptyClickSettings) {
   }
 }
 
+function loadPenetrateSettings(): Partial<PenetrateSettings> {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return {};
+    const saved = localStorage.getItem(PENETRATE_SETTINGS_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('[FileBrowserStore] 加载穿透设置失败:', e);
+  }
+  return {};
+}
+
+function savePenetrateSettings(settings: PenetrateSettings) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    localStorage.setItem(PENETRATE_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.error('[FileBrowserStore] 保存穿透设置失败:', e);
+  }
+}
+
 const savedEmptyClickSettings = loadEmptyClickSettings();
+const savedPenetrateSettings = loadPenetrateSettings();
 
 const initialState: FileBrowserState = {
   currentPath: '',
@@ -222,11 +254,11 @@ const initialState: FileBrowserState = {
   isCheckMode: false,
   isDeleteMode: false,
   isPenetrateMode: false,
-  penetrateShowInnerFile: 'penetrate',
-  penetrateInnerFileCount: 'single',
-  penetrateMaxDepth: 3,
-  penetratePureMediaFolderOpen: true,
-  folderPreviewGrid: true,
+  penetrateShowInnerFile: savedPenetrateSettings.penetrateShowInnerFile ?? 'penetrate',
+  penetrateInnerFileCount: savedPenetrateSettings.penetrateInnerFileCount ?? 'single',
+  penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
+  penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
+  folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
@@ -339,11 +371,61 @@ function createFileBrowserStore() {
     setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
     setDeleteStrategy: (value: DeleteStrategy) => update(state => ({ ...state, deleteStrategy: value })),
     setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
-    setPenetrateShowInnerFile: (value: 'none' | 'penetrate' | 'always') => update(state => ({ ...state, penetrateShowInnerFile: value })),
-    setPenetrateInnerFileCount: (value: 'single' | 'all') => update(state => ({ ...state, penetrateInnerFileCount: value })),
-    setPenetrateMaxDepth: (value: number) => update(state => ({ ...state, penetrateMaxDepth: value })),
-    setPenetratePureMediaFolderOpen: (value: boolean) => update(state => ({ ...state, penetratePureMediaFolderOpen: value })),
-    setFolderPreviewGrid: (value: boolean) => update(state => ({ ...state, folderPreviewGrid: value })),
+    setPenetrateShowInnerFile: (value: 'none' | 'penetrate' | 'always') => update(state => {
+      const newState = { ...state, penetrateShowInnerFile: value };
+      savePenetrateSettings({
+        penetrateShowInnerFile: value,
+        penetrateInnerFileCount: state.penetrateInnerFileCount,
+        penetrateMaxDepth: state.penetrateMaxDepth,
+        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+        folderPreviewGrid: state.folderPreviewGrid
+      });
+      return newState;
+    }),
+    setPenetrateInnerFileCount: (value: 'single' | 'all') => update(state => {
+      const newState = { ...state, penetrateInnerFileCount: value };
+      savePenetrateSettings({
+        penetrateShowInnerFile: state.penetrateShowInnerFile,
+        penetrateInnerFileCount: value,
+        penetrateMaxDepth: state.penetrateMaxDepth,
+        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+        folderPreviewGrid: state.folderPreviewGrid
+      });
+      return newState;
+    }),
+    setPenetrateMaxDepth: (value: number) => update(state => {
+      const newState = { ...state, penetrateMaxDepth: value };
+      savePenetrateSettings({
+        penetrateShowInnerFile: state.penetrateShowInnerFile,
+        penetrateInnerFileCount: state.penetrateInnerFileCount,
+        penetrateMaxDepth: value,
+        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+        folderPreviewGrid: state.folderPreviewGrid
+      });
+      return newState;
+    }),
+    setPenetratePureMediaFolderOpen: (value: boolean) => update(state => {
+      const newState = { ...state, penetratePureMediaFolderOpen: value };
+      savePenetrateSettings({
+        penetrateShowInnerFile: state.penetrateShowInnerFile,
+        penetrateInnerFileCount: state.penetrateInnerFileCount,
+        penetrateMaxDepth: state.penetrateMaxDepth,
+        penetratePureMediaFolderOpen: value,
+        folderPreviewGrid: state.folderPreviewGrid
+      });
+      return newState;
+    }),
+    setFolderPreviewGrid: (value: boolean) => update(state => {
+      const newState = { ...state, folderPreviewGrid: value };
+      savePenetrateSettings({
+        penetrateShowInnerFile: state.penetrateShowInnerFile,
+        penetrateInnerFileCount: state.penetrateInnerFileCount,
+        penetrateMaxDepth: state.penetrateMaxDepth,
+        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+        folderPreviewGrid: value
+      });
+      return newState;
+    }),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),

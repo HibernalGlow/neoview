@@ -84,7 +84,8 @@ function isArchiveFile(path: string): boolean {
 }
 
 function isBookCandidate(item: FsItem): boolean {
-  return isArchiveFile(item.path) || isVideoFile(item.path);
+  // 文件夹、压缩包和视频都可以作为书籍打开
+  return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
 // ============ 随机排序种子缓存 ============

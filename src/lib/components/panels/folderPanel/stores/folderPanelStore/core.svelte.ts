@@ -162,7 +162,8 @@ return videoExtensions.some((ext) => lower.endsWith(ext));
 }
 
 function isBookCandidate(item: FsItem): boolean {
-return isArchiveFile(item.path) || isVideoFile(item.path);
+// 文件夹、压缩包和视频都可以作为书籍打开
+return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
 // ============ Scroll Position ============
@@ -345,28 +346,54 @@ const currentState = get(state);
 let itemsToUse = currentState.items;
 let dirPath = currentState.currentPath;
 
-// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
-// 如果是，需要从缓存中获取父目录内容
+// 从 currentBookPath 推断出应该在哪个目录中查找相邻书籍
+let expectedParentDir: string | null = null;
+if (currentBookPath) {
+	const normalized = currentBookPath.replace(/\\/g, '/');
+	const lastSlash = normalized.lastIndexOf('/');
+	if (lastSlash > 0) {
+		expectedParentDir = normalized.substring(0, lastSlash);
+	}
+}
+
 const normalizedCurrentPath = dirPath ? normalizePath(dirPath) : null;
 const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+const normalizedExpectedParent = expectedParentDir ? normalizePath(expectedParentDir) : null;
+
+// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
 if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
-	const lastSlash = normalizedCurrentPath.lastIndexOf('/');
-	if (lastSlash > 0) {
-		const parentPath = normalizedCurrentPath.substring(0, lastSlash);
-		const cachedParent = getCachedDirectory(parentPath);
-		if (cachedParent) {
+	if (expectedParentDir) {
+		const cachedParent = getCachedDirectory(expectedParentDir);
+		if (cachedParent && cachedParent.length > 0) {
 			itemsToUse = cachedParent;
-			dirPath = parentPath;
+			dirPath = expectedParentDir;
 		} else {
 			// 没有缓存的父目录，返回 null 让异步版本处理
 			return null;
 		}
 	}
 }
+// 检查当前 folderPanel 显示的目录是否是书籍所在的父目录
+else if (normalizedExpectedParent && normalizedCurrentPath !== normalizedExpectedParent) {
+	// folderPanel 当前显示的不是书籍所在目录，尝试从缓存获取
+	if (expectedParentDir) {
+		const cached = getCachedDirectory(expectedParentDir);
+		if (cached && cached.length > 0) {
+			itemsToUse = cached;
+			dirPath = expectedParentDir;
+		} else {
+			// 没有缓存，返回 null 让异步版本处理
+			return null;
+		}
+	}
+}
 
-if (itemsToUse.length === 0 && dirPath) {
-const cached = getCachedDirectory(dirPath);
-if (cached) itemsToUse = cached;
+if (itemsToUse.length === 0 && expectedParentDir) {
+	const cached = getCachedDirectory(expectedParentDir);
+	if (cached && cached.length > 0) {
+		itemsToUse = cached;
+		dirPath = expectedParentDir;
+	}
 }
 if (itemsToUse.length === 0) return null;
 const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, dirPath);
@@ -387,16 +414,25 @@ const currentState = get(state);
 let itemsToUse = currentState.items;
 let dirPath = currentState.currentPath;
 
-// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
-// 如果是，需要在父目录中查找相邻书籍
+// 从 currentBookPath 推断出应该在哪个目录中查找相邻书籍
+let expectedParentDir: string | null = null;
+if (currentBookPath) {
+	const normalized = currentBookPath.replace(/\\/g, '/');
+	const lastSlash = normalized.lastIndexOf('/');
+	if (lastSlash > 0) {
+		expectedParentDir = normalized.substring(0, lastSlash);
+	}
+}
+
 const normalizedCurrentPath = dirPath ? normalizePath(dirPath) : null;
 const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+const normalizedExpectedParent = expectedParentDir ? normalizePath(expectedParentDir) : null;
+
+// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
 if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
 	// 当前目录就是 book 本身，需要切换到父目录
-	const lastSlash = normalizedCurrentPath.lastIndexOf('/');
-	if (lastSlash > 0) {
-		dirPath = normalizedCurrentPath.substring(0, lastSlash);
-		// 强制重新加载父目录内容
+	if (expectedParentDir) {
+		dirPath = expectedParentDir;
 		try {
 			itemsToUse = await browseDirectory(dirPath);
 			setCachedDirectory(dirPath, itemsToUse);
@@ -406,22 +442,39 @@ if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === nor
 		}
 	}
 }
+// 检查当前 folderPanel 显示的目录是否是书籍所在的父目录
+// 如果不是（例如用户导航到了别处），需要加载正确的目录
+else if (normalizedExpectedParent && normalizedCurrentPath !== normalizedExpectedParent) {
+	// folderPanel 当前显示的不是书籍所在目录，需要加载正确的父目录
+	if (expectedParentDir) {
+		dirPath = expectedParentDir;
+		// 先尝试缓存
+		const cached = getCachedDirectory(dirPath);
+		if (cached && cached.length > 0) {
+			itemsToUse = cached;
+		} else {
+			try {
+				itemsToUse = await browseDirectory(dirPath);
+				setCachedDirectory(dirPath, itemsToUse);
+			} catch (e) {
+				console.error('[FolderPanel] Failed to load book parent directory:', e);
+				return null;
+			}
+		}
+	}
+}
 
 if (itemsToUse.length === 0) {
-			if (!dirPath && currentBookPath) {
-				const normalized = currentBookPath.replace(/\\/g, '/');
-				const lastSlash = normalized.lastIndexOf('/');
-				if (lastSlash > 0) dirPath = normalized.substring(0, lastSlash);
-			}
-if (dirPath) {
-try {
-itemsToUse = await browseDirectory(dirPath);
-setCachedDirectory(dirPath, itemsToUse);
-} catch (e) {
-console.error('[FolderPanel] Failed to load directory:', e);
-return null;
-}
-}
+	if (expectedParentDir) {
+		dirPath = expectedParentDir;
+		try {
+			itemsToUse = await browseDirectory(dirPath);
+			setCachedDirectory(dirPath, itemsToUse);
+		} catch (e) {
+			console.error('[FolderPanel] Failed to load directory:', e);
+			return null;
+		}
+	}
 }
 if (itemsToUse.length === 0) return null;
 const sortedItemList = sortItems(itemsToUse, currentState.sortField, currentState.sortOrder, dirPath);

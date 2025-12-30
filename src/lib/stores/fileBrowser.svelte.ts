@@ -487,7 +487,9 @@ function createFileBrowserStore() {
     }),
     findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
       const sourceItems = currentState.useVisibleItemsOverride ? currentState.visibleItems : currentState.items;
-      const bookItems = sourceItems.filter(isBookCandidate);
+      // 应用当前排序设置，确保按用户设置的排序顺序查找相邻书籍
+      const sortedItems = sortItems(sourceItems, currentState.sortField, currentState.sortOrder, currentState.currentPath);
+      const bookItems = sortedItems.filter(isBookCandidate);
       if (bookItems.length === 0) return null;
 
       const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;

@@ -132,7 +132,8 @@ export const defaultSettings: NeoViewSettings = {
     rememberProgress: true,
     doublePageView: false,
     readingDirection: 'left-to-right' as 'left-to-right' | 'right-to-left',
-    tailOverflowBehavior: 'stayOnLastPage'
+    tailOverflowBehavior: 'stayOnLastPage',
+    lockedSortMode: null
   },
   theme: {
     theme: 'system',

@@ -172,6 +172,19 @@ class BookStore {
     const book = await bookApi.openBook(path);
     console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
+    // 应用锁定的排序模式
+    const settings = settingsManager.getSettings();
+    const lockedSortMode = settings.book?.lockedSortMode;
+    if (lockedSortMode && book.sortMode !== lockedSortMode) {
+      try {
+        const updatedBook = await bookApi.setBookSortMode(lockedSortMode as PageSortMode);
+        Object.assign(book, updatedBook);
+        console.log('🔒 已应用锁定的排序模式:', lockedSortMode);
+      } catch (err) {
+        console.warn('⚠️ 应用锁定排序模式失败:', err);
+      }
+    }
+
     const targetPage = clampInitialPage(book.totalPages, options.initialPage);
     book.currentPage = targetPage;
 

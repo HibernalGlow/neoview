@@ -120,6 +120,10 @@
 		return isDescending ? `${label} ↓` : `${label} ↑`;
 	});
 
+	// 锁定的排序模式
+	let lockedSortMode = $derived(settings.book?.lockedSortMode ?? null);
+	let isSortLocked = $derived(lockedSortMode !== null);
+
 	function handleZoomReset() {
 		dispatchApplyZoomMode();
 	}
@@ -367,14 +371,14 @@
 								<Button
 									variant={sortPanelExpanded ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8"
+									class="h-8 w-8 {isSortLocked ? 'ring-2 ring-primary' : ''}"
 									onclick={toggleSortPanel}
 								>
 									<ArrowDownUp class="h-3.5 w-3.5" />
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>页面排序：{currentSortModeLabel}</p>
+								<p>页面排序：{currentSortModeLabel}{isSortLocked ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 

@@ -34,6 +34,14 @@ pub enum PageSortMode {
     Entry,
     /// 按读取顺序反向
     EntryDescending,
+    /// 视频优先（视频在前，图片在后）
+    VideoFirst,
+    /// 视频优先降序
+    VideoFirstDescending,
+    /// 图片优先（图片在前，视频在后）
+    ImageFirst,
+    /// 图片优先降序
+    ImageFirstDescending,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

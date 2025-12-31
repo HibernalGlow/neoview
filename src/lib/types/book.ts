@@ -14,7 +14,11 @@ export type PageSortMode =
   | 'timeStampDescending'
   | 'random'
   | 'entry'
-  | 'entryDescending';
+  | 'entryDescending'
+  | 'videoFirst'
+  | 'videoFirstDescending'
+  | 'imageFirst'
+  | 'imageFirstDescending';
 
 export type ReadOrder = 'leftToRight' | 'rightToLeft';
 

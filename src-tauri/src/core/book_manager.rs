@@ -512,6 +512,10 @@ impl BookManager {
                 }
                 PageSortMode::Entry => book.pages.sort_by(Self::cmp_entry_asc),
                 PageSortMode::EntryDescending => book.pages.sort_by(Self::cmp_entry_desc),
+                PageSortMode::VideoFirst => book.pages.sort_by(Self::cmp_video_first_asc),
+                PageSortMode::VideoFirstDescending => book.pages.sort_by(Self::cmp_video_first_desc),
+                PageSortMode::ImageFirst => book.pages.sort_by(Self::cmp_image_first_asc),
+                PageSortMode::ImageFirstDescending => book.pages.sort_by(Self::cmp_image_first_desc),
             }
         }
 
@@ -569,6 +573,54 @@ impl BookManager {
 
     fn cmp_entry_desc(a: &Page, b: &Page) -> Ordering {
         Self::cmp_entry_asc(b, a)
+    }
+
+    /// 判断页面是否为视频文件
+    fn is_video_page(page: &Page) -> bool {
+        let path = std::path::Path::new(&page.name);
+        video_exts::is_video_path(path)
+    }
+
+    /// 视频优先排序（视频在前，图片在后，同类型按文件名排序）
+    fn cmp_video_first_asc(a: &Page, b: &Page) -> Ordering {
+        let a_is_video = Self::is_video_page(a);
+        let b_is_video = Self::is_video_page(b);
+        match (a_is_video, b_is_video) {
+            (true, false) => Ordering::Less,    // 视频排在前面
+            (false, true) => Ordering::Greater, // 图片排在后面
+            _ => Self::cmp_name_asc(a, b),      // 同类型按文件名排序
+        }
+    }
+
+    fn cmp_video_first_desc(a: &Page, b: &Page) -> Ordering {
+        let a_is_video = Self::is_video_page(a);
+        let b_is_video = Self::is_video_page(b);
+        match (a_is_video, b_is_video) {
+            (true, false) => Ordering::Less,    // 视频仍在前面
+            (false, true) => Ordering::Greater,
+            _ => Self::cmp_name_desc(a, b),     // 同类型按文件名降序
+        }
+    }
+
+    /// 图片优先排序（图片在前，视频在后，同类型按文件名排序）
+    fn cmp_image_first_asc(a: &Page, b: &Page) -> Ordering {
+        let a_is_video = Self::is_video_page(a);
+        let b_is_video = Self::is_video_page(b);
+        match (a_is_video, b_is_video) {
+            (true, false) => Ordering::Greater, // 视频排在后面
+            (false, true) => Ordering::Less,    // 图片排在前面
+            _ => Self::cmp_name_asc(a, b),      // 同类型按文件名排序
+        }
+    }
+
+    fn cmp_image_first_desc(a: &Page, b: &Page) -> Ordering {
+        let a_is_video = Self::is_video_page(a);
+        let b_is_video = Self::is_video_page(b);
+        match (a_is_video, b_is_video) {
+            (true, false) => Ordering::Greater, // 视频仍在后面
+            (false, true) => Ordering::Less,
+            _ => Self::cmp_name_desc(a, b),     // 同类型按文件名降序
+        }
     }
 
     /// 自然排序比较（数字感知）

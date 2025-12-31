@@ -1,13 +1,14 @@
 <script lang="ts">
 	/**
 	 * SortPanel - 排序面板
-	 * 包含页面排序选项和升降序切换
+	 * 包含页面排序选项、升降序切换和锁定功能
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { FileText, HardDrive, Clock, List, Shuffle, ArrowUp, ArrowDown } from '@lucide/svelte';
+	import { FileText, HardDrive, Clock, List, Shuffle, ArrowUp, ArrowDown, Video, Image, Lock } from '@lucide/svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import type { PageSortMode } from '$lib/types/book';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	// Props
 	interface Props {
@@ -21,8 +22,18 @@
 		{ value: 'fileSize', label: '文件大小', icon: HardDrive },
 		{ value: 'timeStamp', label: '修改时间', icon: Clock },
 		{ value: 'entry', label: 'Entry 顺序', icon: List },
+		{ value: 'videoFirst', label: '视频优先', icon: Video },
+		{ value: 'imageFirst', label: '图片优先', icon: Image },
 		{ value: 'random', label: '随机', icon: Shuffle }
 	];
+
+	// 锁定的排序模式
+	let settings = $state(settingsManager.getSettings());
+	let lockedSortMode = $derived(settings.book?.lockedSortMode ?? null);
+
+	settingsManager.addListener((newSettings) => {
+		settings = newSettings;
+	});
 
 	// 处理排序模式变更
 	async function handleSortModeChange(mode: PageSortMode) {
@@ -46,6 +57,23 @@
 		}
 	}
 
+	// 锁定/解锁排序模式
+	function toggleSortLock(categoryValue: string) {
+		const currentMode = bookStore.currentBook?.sortMode;
+		if (!currentMode) return;
+
+		// 如果当前已锁定该模式，则解锁
+		if (lockedSortMode && lockedSortMode.startsWith(categoryValue)) {
+			settingsManager.updateNestedSettings('book', { lockedSortMode: null });
+		} else {
+			// 锁定当前排序模式
+			const modeToLock = currentMode.startsWith(categoryValue) 
+				? currentMode 
+				: (categoryValue as PageSortMode);
+			settingsManager.updateNestedSettings('book', { lockedSortMode: modeToLock });
+		}
+	}
+
 	// 获取当前排序分类
 	function getCurrentSortCategory(): string {
 		const currentMode = bookStore.currentBook?.sortMode;
@@ -56,6 +84,11 @@
 	// 是否为降序
 	function isCurrentSortDescending(): boolean {
 		return bookStore.currentBook?.sortMode?.includes('Descending') ?? false;
+	}
+
+	// 检查某个分类是否被锁定
+	function isCategoryLocked(categoryValue: string): boolean {
+		return lockedSortMode !== null && lockedSortMode.startsWith(categoryValue);
 	}
 </script>
 
@@ -69,8 +102,12 @@
 						<Button
 							variant={getCurrentSortCategory() === category.value ? 'default' : 'ghost'}
 							size="sm"
-							class="h-7 w-7 rounded-full p-0 relative"
+							class="h-7 w-7 rounded-full p-0 relative {isCategoryLocked(category.value) ? 'ring-2 ring-primary' : ''}"
 							onclick={() => toggleSortDirection(category.value)}
+							oncontextmenu={(e: MouseEvent) => {
+								e.preventDefault();
+								toggleSortLock(category.value);
+							}}
 						>
 							<svelte:component this={category.icon} class="h-3 w-3" />
 							{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
@@ -79,6 +116,9 @@
 								{:else}
 									<ArrowUp class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />
 								{/if}
+							{/if}
+							{#if isCategoryLocked(category.value)}
+								<Lock class="h-2 w-2 absolute -top-0.5 -right-0.5 text-primary" />
 							{/if}
 						</Button>
 					</Tooltip.Trigger>
@@ -91,6 +131,9 @@
 						{:else}
 							<p class="text-xs text-muted-foreground">点击切换排序</p>
 						{/if}
+						<p class="text-xs text-muted-foreground">
+							{isCategoryLocked(category.value) ? '右键解锁' : '右键锁定'}
+						</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			{/each}

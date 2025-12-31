@@ -6,7 +6,7 @@ use crate::core::archive_preheat::PreheatSystem;
 use crate::core::load_command_queue::{CommandQueue, LoadMetrics, LoadOptions, LoadResult, PerformanceMonitor};
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
 use crate::core::video_exts;
-use crate::models::{BookInfo, BookType, Page, PageSortMode};
+use crate::models::{BookInfo, BookType, Page, PageSortMode, MediaPriorityMode};
 use log::{debug, info};
 use natural_sort_rs::natural_cmp;
 use rand::seq::SliceRandom;
@@ -413,6 +413,19 @@ impl BookManager {
         }
     }
 
+    /// 设置当前书籍的媒体类型优先模式
+    pub fn set_media_priority_mode(&mut self, mode: MediaPriorityMode) -> Result<BookInfo, String> {
+        if let Some(book) = &mut self.current_book {
+            if book.media_priority_mode != mode {
+                book.media_priority_mode = mode;
+                Self::apply_page_sort(book, false);
+            }
+            Ok(book.clone())
+        } else {
+            Err("No book is currently open".to_string())
+        }
+    }
+
     /// 导航到指定页面
     pub fn navigate_to_page(&mut self, page_index: usize) -> Result<(), String> {
         if let Some(book) = &mut self.current_book {
@@ -512,10 +525,33 @@ impl BookManager {
                 }
                 PageSortMode::Entry => book.pages.sort_by(Self::cmp_entry_asc),
                 PageSortMode::EntryDescending => book.pages.sort_by(Self::cmp_entry_desc),
-                PageSortMode::VideoFirst => book.pages.sort_by(Self::cmp_video_first_asc),
-                PageSortMode::VideoFirstDescending => book.pages.sort_by(Self::cmp_video_first_desc),
-                PageSortMode::ImageFirst => book.pages.sort_by(Self::cmp_image_first_asc),
-                PageSortMode::ImageFirstDescending => book.pages.sort_by(Self::cmp_image_first_desc),
+            }
+
+            // 应用媒体类型优先排序（稳定排序，保持原有顺序）
+            match book.media_priority_mode {
+                MediaPriorityMode::VideoFirst => {
+                    book.pages.sort_by(|a, b| {
+                        let a_is_video = Self::is_video_page(a);
+                        let b_is_video = Self::is_video_page(b);
+                        match (a_is_video, b_is_video) {
+                            (true, false) => Ordering::Less,
+                            (false, true) => Ordering::Greater,
+                            _ => Ordering::Equal,
+                        }
+                    });
+                }
+                MediaPriorityMode::ImageFirst => {
+                    book.pages.sort_by(|a, b| {
+                        let a_is_video = Self::is_video_page(a);
+                        let b_is_video = Self::is_video_page(b);
+                        match (a_is_video, b_is_video) {
+                            (true, false) => Ordering::Greater,
+                            (false, true) => Ordering::Less,
+                            _ => Ordering::Equal,
+                        }
+                    });
+                }
+                MediaPriorityMode::None => {}
             }
         }
 
@@ -579,48 +615,6 @@ impl BookManager {
     fn is_video_page(page: &Page) -> bool {
         let path = std::path::Path::new(&page.name);
         video_exts::is_video_path(path)
-    }
-
-    /// 视频优先排序（视频在前，图片在后，同类型按文件名排序）
-    fn cmp_video_first_asc(a: &Page, b: &Page) -> Ordering {
-        let a_is_video = Self::is_video_page(a);
-        let b_is_video = Self::is_video_page(b);
-        match (a_is_video, b_is_video) {
-            (true, false) => Ordering::Less,    // 视频排在前面
-            (false, true) => Ordering::Greater, // 图片排在后面
-            _ => Self::cmp_name_asc(a, b),      // 同类型按文件名排序
-        }
-    }
-
-    fn cmp_video_first_desc(a: &Page, b: &Page) -> Ordering {
-        let a_is_video = Self::is_video_page(a);
-        let b_is_video = Self::is_video_page(b);
-        match (a_is_video, b_is_video) {
-            (true, false) => Ordering::Less,    // 视频仍在前面
-            (false, true) => Ordering::Greater,
-            _ => Self::cmp_name_desc(a, b),     // 同类型按文件名降序
-        }
-    }
-
-    /// 图片优先排序（图片在前，视频在后，同类型按文件名排序）
-    fn cmp_image_first_asc(a: &Page, b: &Page) -> Ordering {
-        let a_is_video = Self::is_video_page(a);
-        let b_is_video = Self::is_video_page(b);
-        match (a_is_video, b_is_video) {
-            (true, false) => Ordering::Greater, // 视频排在后面
-            (false, true) => Ordering::Less,    // 图片排在前面
-            _ => Self::cmp_name_asc(a, b),      // 同类型按文件名排序
-        }
-    }
-
-    fn cmp_image_first_desc(a: &Page, b: &Page) -> Ordering {
-        let a_is_video = Self::is_video_page(a);
-        let b_is_video = Self::is_video_page(b);
-        match (a_is_video, b_is_video) {
-            (true, false) => Ordering::Greater, // 视频仍在后面
-            (false, true) => Ordering::Less,
-            _ => Self::cmp_name_desc(a, b),     // 同类型按文件名降序
-        }
     }
 
     /// 自然排序比较（数字感知）

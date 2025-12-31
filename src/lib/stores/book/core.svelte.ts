@@ -175,6 +175,8 @@ class BookStore {
     // 应用锁定的排序模式
     const settings = settingsManager.getSettings();
     const lockedSortMode = settings.book?.lockedSortMode;
+    const lockedMediaPriority = settings.book?.lockedMediaPriority;
+    
     if (lockedSortMode && book.sortMode !== lockedSortMode) {
       try {
         const updatedBook = await bookApi.setBookSortMode(lockedSortMode as PageSortMode);
@@ -182,6 +184,18 @@ class BookStore {
         console.log('🔒 已应用锁定的排序模式:', lockedSortMode);
       } catch (err) {
         console.warn('⚠️ 应用锁定排序模式失败:', err);
+      }
+    }
+
+    // 应用锁定的媒体优先模式
+    if (lockedMediaPriority && book.mediaPriorityMode !== lockedMediaPriority) {
+      try {
+        const { setMediaPriorityMode } = await import('$lib/api/book');
+        const updatedBook = await setMediaPriorityMode(lockedMediaPriority as 'none' | 'videoFirst' | 'imageFirst');
+        Object.assign(book, updatedBook);
+        console.log('🔒 已应用锁定的媒体优先模式:', lockedMediaPriority);
+      } catch (err) {
+        console.warn('⚠️ 应用锁定媒体优先模式失败:', err);
       }
     }
 

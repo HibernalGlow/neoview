@@ -120,9 +120,18 @@
 		return isDescending ? `${label} ↓` : `${label} ↑`;
 	});
 
+	// 媒体优先模式标签
+	let mediaPriorityLabel = $derived.by(() => {
+		const mode = bookStore.currentBook?.mediaPriorityMode ?? 'none';
+		if (mode === 'videoFirst') return '视频优先';
+		if (mode === 'imageFirst') return '图片优先';
+		return '';
+	});
+
 	// 锁定的排序模式
 	let lockedSortMode = $derived(settings.book?.lockedSortMode ?? null);
-	let isSortLocked = $derived(lockedSortMode !== null);
+	let lockedMediaPriority = $derived(settings.book?.lockedMediaPriority ?? null);
+	let isSortLocked = $derived(lockedSortMode !== null || lockedMediaPriority !== null);
 
 	function handleZoomReset() {
 		dispatchApplyZoomMode();
@@ -378,7 +387,7 @@
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>页面排序：{currentSortModeLabel}{isSortLocked ? '（已锁定）' : ''}</p>
+								<p>页面排序：{mediaPriorityLabel ? `${mediaPriorityLabel} + ` : ''}{currentSortModeLabel}{isSortLocked ? '（已锁定）' : ''}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 

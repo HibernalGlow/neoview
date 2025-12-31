@@ -257,6 +257,7 @@ pub fn run() {
             commands::previous_page,
             commands::navigate_to_image,
             commands::set_book_sort_mode,
+            commands::set_media_priority_mode,
             // Streaming commands (异步列表扫描)
             commands::open_book_fast,
             commands::cancel_streaming_scan,

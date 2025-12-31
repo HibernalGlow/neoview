@@ -133,7 +133,8 @@ export const defaultSettings: NeoViewSettings = {
     doublePageView: false,
     readingDirection: 'left-to-right' as 'left-to-right' | 'right-to-left',
     tailOverflowBehavior: 'stayOnLastPage',
-    lockedSortMode: null
+    lockedSortMode: null,
+    lockedMediaPriority: null
   },
   theme: {
     theme: 'system',

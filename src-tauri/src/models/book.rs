@@ -34,14 +34,19 @@ pub enum PageSortMode {
     Entry,
     /// 按读取顺序反向
     EntryDescending,
-    /// 视频优先（视频在前，图片在后）
+}
+
+/// 媒体类型优先模式
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum MediaPriorityMode {
+    /// 无优先
+    #[default]
+    None,
+    /// 视频优先
     VideoFirst,
-    /// 视频优先降序
-    VideoFirstDescending,
-    /// 图片优先（图片在前，视频在后）
+    /// 图片优先
     ImageFirst,
-    /// 图片优先降序
-    ImageFirstDescending,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -108,6 +113,9 @@ pub struct BookInfo {
     pub pages: Vec<Page>,
     /// 排序模式
     pub sort_mode: PageSortMode,
+    /// 媒体类型优先模式
+    #[serde(default)]
+    pub media_priority_mode: MediaPriorityMode,
     /// 阅读顺序
     pub read_order: ReadOrder,
     /// 页面模式
@@ -204,6 +212,7 @@ impl BookInfo {
             current_page: 0,
             pages: Vec::new(),
             sort_mode: PageSortMode::FileName,
+            media_priority_mode: MediaPriorityMode::None,
             read_order: ReadOrder::LeftToRight,
             page_mode: PageMode::SinglePage,
             created_at: None,

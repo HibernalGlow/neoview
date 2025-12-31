@@ -14,11 +14,10 @@ export type PageSortMode =
   | 'timeStampDescending'
   | 'random'
   | 'entry'
-  | 'entryDescending'
-  | 'videoFirst'
-  | 'videoFirstDescending'
-  | 'imageFirst'
-  | 'imageFirstDescending';
+  | 'entryDescending';
+
+/** 媒体类型优先模式 */
+export type MediaPriorityMode = 'none' | 'videoFirst' | 'imageFirst';
 
 export type ReadOrder = 'leftToRight' | 'rightToLeft';
 
@@ -68,6 +67,8 @@ export interface BookInfo {
   pages: Page[];
   /** 排序模式 */
   sortMode: PageSortMode;
+  /** 媒体类型优先模式 */
+  mediaPriorityMode?: MediaPriorityMode;
   /** 阅读顺序 */
   readOrder: ReadOrder;
   /** 页面模式 */

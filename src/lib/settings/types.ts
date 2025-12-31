@@ -161,6 +161,8 @@ export interface NeoViewSettings {
     tailOverflowBehavior: TailOverflowBehavior;
     /** 锁定的排序模式（打开新书时自动应用） */
     lockedSortMode?: string | null;
+    /** 锁定的媒体优先模式 */
+    lockedMediaPriority?: string | null;
   };
   theme: {
     theme: 'system' | 'light' | 'dark';

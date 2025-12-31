@@ -4,7 +4,7 @@
 use crate::core::BookManager;
 use crate::core::ImageLoader;
 use crate::core::DimensionScannerState;
-use crate::models::{BookInfo, PageSortMode};
+use crate::models::{BookInfo, PageSortMode, MediaPriorityMode};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
@@ -111,4 +111,14 @@ pub async fn set_book_sort_mode(
 ) -> Result<BookInfo, String> {
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.set_sort_mode(sort_mode)
+}
+
+
+#[tauri::command]
+pub async fn set_media_priority_mode(
+    mode: MediaPriorityMode,
+    state: State<'_, Mutex<BookManager>>,
+) -> Result<BookInfo, String> {
+    let mut manager = state.lock().map_err(|e| e.to_string())?;
+    manager.set_media_priority_mode(mode)
 }

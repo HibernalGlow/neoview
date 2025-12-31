@@ -15,9 +15,7 @@ import {
 	StretchVertical,
 	Frame,
 	AlignLeft,
-	AlignRight,
-	Video,
-	Image
+	AlignRight
 } from '@lucide/svelte';
 import type { ZoomMode } from '$lib/settings/settingsManager';
 import type { SortCategory, ZoomModeOption } from './types';
@@ -30,8 +28,6 @@ export const SORT_CATEGORIES: SortCategory[] = [
 	{ value: 'fileSize', label: '文件大小', icon: HardDrive },
 	{ value: 'timeStamp', label: '修改时间', icon: Clock },
 	{ value: 'entry', label: 'Entry 顺序', icon: List },
-	{ value: 'videoFirst', label: '视频优先', icon: Video },
-	{ value: 'imageFirst', label: '图片优先', icon: Image },
 	{ value: 'random', label: '随机', icon: Shuffle }
 ];
 

@@ -296,14 +296,15 @@
 		const timeoutId = setTimeout(() => {
 			// 加载文件夹内容
 			FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
-			// 检测是否为纯媒体文件夹（只包含媒体文件，不包含压缩包和子文件夹）
+			// 检测是否为纯媒体文件夹
+			// 反向判断：只要没有子文件夹和压缩包，且有文件，就认为是纯媒体文件夹
+			// 这样 .nfo、.ass 等附属文件不会阻止穿透
 			const hasSubDir = children.some(c => c.isDir);
 			const hasArchive = children.some(c => !c.isDir && isArchiveFile(c.name));
-			const mediaFiles = children.filter(c => !c.isDir && isMediaFile(c.name));
-			const allFilesAreMedia = children.filter(c => !c.isDir).every(c => isMediaFile(c.name));
+			const hasFiles = children.some(c => !c.isDir);
 			
-			// 纯媒体文件夹：无子文件夹、无压缩包、所有文件都是媒体文件、且至少有一个媒体文件
-			isPureMediaFolder = !hasSubDir && !hasArchive && allFilesAreMedia && mediaFiles.length > 0;
+			// 纯媒体文件夹：无子文件夹、无压缩包、且至少有一个文件
+			isPureMediaFolder = !hasSubDir && !hasArchive && hasFiles;
 			
 			// 过滤出压缩包文件
 			const archives = children.filter(c => !c.isDir && isArchiveFile(c.name));

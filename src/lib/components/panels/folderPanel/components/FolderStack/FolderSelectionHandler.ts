@@ -13,6 +13,29 @@ import * as FileSystemAPI from '$lib/api/filesystem';
 import { get } from 'svelte/store';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
+/**
+ * 附属文件扩展名（穿透时忽略这些文件）
+ * 包括：字幕、信息文件、日志等
+ */
+const AUXILIARY_EXTENSIONS = [
+	// 字幕文件
+	'srt', 'ass', 'ssa', 'vtt', 'sub', 'idx',
+	// 信息文件
+	'nfo', 'txt', 'log', 'url', 'lnk',
+	// 元数据
+	'xml', 'json',
+	// 封面图（通常是附属的）
+	'jpg', 'jpeg', 'png', 'gif', 'webp'
+];
+
+/**
+ * 判断是否为附属文件（穿透时应忽略）
+ */
+function isAuxiliaryFile(name: string): boolean {
+	const ext = name.split('.').pop()?.toLowerCase() || '';
+	return AUXILIARY_EXTENSIONS.includes(ext);
+}
+
 /** 选择操作回调 */
 export interface SelectionCallbacks {
 	selectItem: (path: string, toggle?: boolean, index?: number) => void;

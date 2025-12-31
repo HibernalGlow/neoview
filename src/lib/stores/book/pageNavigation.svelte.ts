@@ -6,6 +6,7 @@
 import type { BookInfo, Page } from '$lib/types';
 import * as bookApi from '$lib/api/book';
 import type { ContentRef } from './types';
+import { pageFlipMonitor } from '$lib/utils/pageFlipMonitor';
 
 /** 页面导航状态 */
 export interface PageNavigationState {
@@ -83,6 +84,9 @@ export class PageNavigationManager {
     }
 
     try {
+      // 【性能监控】记录翻页开始
+      pageFlipMonitor.startFlip();
+      
       console.log(`📄 Navigating to page ${index + 1}/${book.totalPages}`);
       await bookApi.navigateToPage(index);
       this.callbacks.updateCurrentPage(index);
@@ -94,8 +98,13 @@ export class PageNavigationManager {
         const page = this.getCurrentPage();
         await this.callbacks.onPageChanged(index, page);
       }
+      
+      // 【性能监控】记录翻页结束
+      pageFlipMonitor.endFlip();
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
+      // 即使出错也要结束监控
+      pageFlipMonitor.endFlip();
       throw err;
     }
   }

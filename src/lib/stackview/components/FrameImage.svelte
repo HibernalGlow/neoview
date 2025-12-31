@@ -146,8 +146,7 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
-    /* 【性能优化】GPU 加速 */
-    will-change: transform;
+    /* 【修复内存泄露】移除 will-change，仅保留基本 GPU 加速 */
     transform: translateZ(0);
     backface-visibility: hidden;
     image-rendering: -webkit-optimize-contrast;

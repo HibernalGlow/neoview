@@ -26,6 +26,7 @@
 		pipelineLatency: () => import('./benchmark/PipelineLatencyCard.svelte'),
 		transcodeBenchmark: () => import('./benchmark/TranscodeBenchmarkCard.svelte'),
 		thumbnailLatency: () => import('./benchmark/ThumbnailLatencyCard.svelte'),
+		pageFlipMonitor: () => import('./benchmark/PageFlipMonitorCard.svelte'),
 		systemMonitor: () => import('./monitor/SystemMonitorCard.svelte'),
 		// Info
 		bookInfo: () => import('./info/BookInfoCard.svelte'),

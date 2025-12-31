@@ -138,6 +138,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
+	'pageFlipMonitor': {
+		id: 'pageFlipMonitor',
+		title: '翻页性能监控',
+		icon: Activity,
+		defaultPanel: 'benchmark',
+		canHide: true,
+	},
 	'systemMonitor': {
 		id: 'systemMonitor',
 		title: '系统资源监控',

@@ -12,7 +12,7 @@
   - 通过 pageTransitionStore 控制
 -->
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { LayerZIndex } from '../types/layer';
 	import type { Frame } from '../types/frame';
 	import { getImageTransform, getClipPath } from '../utils/transform';
@@ -62,12 +62,32 @@
 	// 记录上一次的页面索引
 	let lastPageIndex = -1;
 	let isFirstRender = true;
+	
+	// 【修复内存泄露】保存动画清理定时器的引用
+	let animationCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+	
+	// 【修复内存泄露】保存订阅取消函数
+	let unsubscribeTransition: (() => void) | null = null;
 
 	onMount(() => {
-		const unsubscribe = pageTransitionStore.subscribe((s) => {
+		unsubscribeTransition = pageTransitionStore.subscribe((s) => {
 			transitionSettings = s;
 		});
-		return unsubscribe;
+	});
+	
+	// 【修复内存泄露】组件销毁时清理资源
+	onDestroy(() => {
+		// 清理动画定时器
+		if (animationCleanupTimer !== null) {
+			clearTimeout(animationCleanupTimer);
+			animationCleanupTimer = null;
+		}
+		
+		// 取消订阅
+		if (unsubscribeTransition) {
+			unsubscribeTransition();
+			unsubscribeTransition = null;
+		}
 	});
 
 	// 获取当前页面索引
@@ -78,6 +98,12 @@
 	// 触发翻页动画
 	async function triggerAnimation(dir: 'next' | 'prev') {
 		if (!transitionSettings || transitionSettings.type === 'none') return;
+		
+		// 【修复内存泄露】清除上一个动画的清理定时器
+		if (animationCleanupTimer !== null) {
+			clearTimeout(animationCleanupTimer);
+			animationCleanupTimer = null;
+		}
 		
 		const { type, duration, easing } = transitionSettings;
 		const easingCss = easingCssMap[easing];
@@ -96,10 +122,11 @@
 		animationStyle = `transition: transform ${duration}ms ${easingCss}, opacity ${duration}ms ${easingCss}`;
 		animationClass = `page-transition-${type}-enter-${dir} active`;
 		
-		// 动画结束后清理
-		setTimeout(() => {
+		// 【修复内存泄露】保存定时器引用，确保可以被清理
+		animationCleanupTimer = setTimeout(() => {
 			animationClass = '';
 			animationStyle = '';
+			animationCleanupTimer = null;
 		}, duration + 50);
 	}
 
@@ -328,11 +355,10 @@
 		/* 隐藏滚动条 */
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE/Edge */
-		/* GPU 加速 */
-		will-change: scroll-position, transform, opacity;
 		-webkit-overflow-scrolling: touch;
 		/* 翻页动画基础 */
 		backface-visibility: hidden;
+		/* 【修复内存泄露】仅在动画时通过内联样式设置 will-change，避免持续占用 GPU 图层 */
 	}
 
 	/* 隐藏 Webkit 滚动条 */
@@ -347,8 +373,7 @@
 		/* 居中：当内容小于容器时居中 */
 		min-width: 100%;
 		min-height: 100%;
-		/* GPU 加速 */
-		will-change: transform;
+		/* 【修复内存泄露】移除 will-change，保留 translateZ(0) 用于基本 GPU 加速 */
 		transform: translateZ(0);
 	}
 

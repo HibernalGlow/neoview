@@ -64,6 +64,12 @@ export const defaultSettings: NeoViewSettings = {
     showBookSwitchToast: false,
     backgroundColor: '#000000',
     backgroundMode: 'solid',
+    ambient: {
+      speed: 8,
+      blur: 80,
+      opacity: 0.8,
+      style: 'vibrant'
+    },
     mouseCursor: {
       autoHide: true,
       hideDelay: 1.0,

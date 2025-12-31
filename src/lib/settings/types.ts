@@ -67,7 +67,18 @@ export interface NeoViewSettings {
     showInfoBar: boolean;
     showBookSwitchToast: boolean;
     backgroundColor: string;
-    backgroundMode: 'solid' | 'auto';
+    backgroundMode: 'solid' | 'auto' | 'ambient';
+    /** 流光溢彩设置 */
+    ambient?: {
+      /** 动画速度（秒） */
+      speed: number;
+      /** 模糊程度（px） */
+      blur: number;
+      /** 透明度 (0-1) */
+      opacity: number;
+      /** 样式：gentle 柔和 | vibrant 鲜艳 | dynamic 动感 */
+      style: 'gentle' | 'vibrant' | 'dynamic';
+    };
     mouseCursor: {
       autoHide: boolean;
       hideDelay: number; // seconds

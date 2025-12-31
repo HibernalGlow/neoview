@@ -883,6 +883,10 @@
 		mode={settings.view.backgroundMode ?? 'solid'}
 		imageSrc={imageStore.state.currentUrl ?? ''}
 		preloadedColor={imageStore.state.backgroundColor}
+		ambientSpeed={settings.view.ambient?.speed ?? 8}
+		ambientBlur={settings.view.ambient?.blur ?? 80}
+		ambientOpacity={settings.view.ambient?.opacity ?? 0.8}
+		ambientStyle={settings.view.ambient?.style ?? 'vibrant'}
 	/>
 
 	{#if isVideoMode && bookStore.currentPage}

@@ -564,7 +564,7 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-	class="video-player-container relative flex h-full w-full items-center justify-center bg-black"
+	class="video-player-container relative flex h-full w-full items-center justify-center"
 	style="--subtitle-font-size: {subtitleFontSize}em; --subtitle-color: {subtitleColor}; --subtitle-bg: rgba(0, 0, 0, {subtitleBgOpacity}); --subtitle-bottom: {subtitleBottom}%;"
 	onmousemove={handleMouseMove}
 	onmouseleave={() => isPlaying && !controlsPinned && (showControls = false)}

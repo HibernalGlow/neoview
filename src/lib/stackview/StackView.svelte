@@ -34,6 +34,7 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
+	import { convertFileSrc } from '@tauri-apps/api/core';
 
 	// 导入外部 stores
 	import {
@@ -298,6 +299,23 @@
 		if (!filename) return false;
 		return isVideoFile(filename);
 	});
+
+	// 视频 URL（用于背景层提取首帧颜色）
+	// 注意：这里只处理文件系统的视频，压缩包内的视频需要先提取
+	let videoSrcForBackground = $derived.by(() => {
+		if (!isVideoMode) return '';
+		const page = bookStore.currentPage;
+		if (!page) return '';
+		// 只处理文件系统的视频（非压缩包）
+		if (page.innerPath && bookStore.currentBook?.type === 'archive') {
+			// 压缩包内的视频暂不支持背景提取（需要先提取到临时文件）
+			return '';
+		}
+		return convertFileSrc(page.path);
+	});
+
+	// 视频缓存键（用于背景层缓存）
+	let videoCacheKey = $derived(bookStore.currentPage?.path ?? '');
 
 	// 视频容器引用
 	let videoContainerRef: any = null;
@@ -889,6 +907,9 @@
 		ambientStyle={settings.view.ambient?.style ?? 'vibrant'}
 		auroraShowRadialGradient={settings.view.aurora?.showRadialGradient ?? true}
 		spotlightColor={settings.view.spotlight?.color ?? 'white'}
+		{isVideoMode}
+		videoSrc={videoSrcForBackground}
+		{videoCacheKey}
 	/>
 
 	{#if isVideoMode && bookStore.currentPage}

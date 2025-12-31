@@ -8,12 +8,14 @@
   - ambient: 流光溢彩（类似苹果灵动岛，从图片提取多个主色调生成流动渐变）
   - aurora: 极光效果（基于 Aceternity UI）
   - spotlight: 聚光灯效果（基于 Aceternity UI）
+  
+  视频模式：
+  - 支持从视频首帧提取颜色用于流光溢彩效果
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
   import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
-  import { extractPalette } from '$lib/utils/ambientBackground';
-  import { fade } from 'svelte/transition';
+  import { extractPalette, extractPaletteFromVideo } from '$lib/utils/ambientBackground';
   
   let {
     color = 'var(--background)',
@@ -33,6 +35,12 @@
     auroraShowRadialGradient = true,
     /** Spotlight 颜色 */
     spotlightColor = 'white',
+    /** 是否为视频模式 */
+    isVideoMode = false,
+    /** 视频源 URL（用于提取首帧颜色） */
+    videoSrc = '',
+    /** 视频缓存键（通常是视频路径） */
+    videoCacheKey = '',
   }: {
     color?: string;
     mode?: 'solid' | 'auto' | 'ambient' | 'aurora' | 'spotlight';
@@ -47,6 +55,12 @@
     ambientStyle?: 'gentle' | 'vibrant' | 'dynamic';
     auroraShowRadialGradient?: boolean;
     spotlightColor?: string;
+    /** 是否为视频模式 */
+    isVideoMode?: boolean;
+    /** 视频源 URL */
+    videoSrc?: string;
+    /** 视频缓存键 */
+    videoCacheKey?: string;
   } = $props();
   
   // 自适应背景色状态
@@ -89,9 +103,42 @@
     })();
   });
   
-  // 计算流光溢彩调色板
+  // 计算流光溢彩调色板（支持图片和视频）
   $effect(() => {
-    if (mode !== 'ambient' || !imageSrc) {
+    // 非 ambient 模式时清空
+    if (mode !== 'ambient') {
+      palette = [];
+      lastPaletteSrc = null;
+      return;
+    }
+    
+    // 视频模式：从视频首帧提取颜色
+    if (isVideoMode && videoSrc) {
+      const cacheKey = videoCacheKey || videoSrc;
+      
+      // 避免重复计算
+      if (cacheKey === lastPaletteSrc && palette.length > 0) {
+        return;
+      }
+      
+      lastPaletteSrc = cacheKey;
+      
+      // 异步从视频首帧提取调色板
+      void (async () => {
+        const colors = await extractPaletteFromVideo(videoSrc, cacheKey, { 
+          count: ambientStyle === 'dynamic' ? 6 : 4,
+          enhance: true 
+        });
+        // 确保在计算完成时源没有变化
+        if (lastPaletteSrc === cacheKey) {
+          palette = colors;
+        }
+      })();
+      return;
+    }
+    
+    // 图片模式
+    if (!imageSrc) {
       palette = [];
       lastPaletteSrc = null;
       return;

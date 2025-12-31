@@ -399,6 +399,7 @@
 
 <style>
 	.video-container {
-		background-color: black;
+		/* 背景透明，让动态背景效果可见 */
+		background-color: transparent;
 	}
 </style>

@@ -266,3 +266,167 @@ export async function preloadPalettes(
 ): Promise<void> {
   await Promise.all(sources.map(src => extractPalette(src, options)));
 }
+
+// ==================== 视频首帧颜色提取 ====================
+
+// 视频调色板缓存（使用视频路径作为 key）
+const videoPaletteCache = new Map<string, string[]>();
+const videoPendingRequests = new Map<string, Promise<string[]>>();
+
+/**
+ * 从视频首帧提取调色板
+ * @param videoSrc 视频源 URL
+ * @param cacheKey 缓存键（通常是视频路径）
+ * @param options 提取选项
+ */
+export async function extractPaletteFromVideo(
+  videoSrc: string,
+  cacheKey: string,
+  options: PaletteOptions = {}
+): Promise<string[]> {
+  const { count = 6, enhance = true } = options;
+  
+  if (typeof document === 'undefined' || !videoSrc) {
+    return getDefaultPalette(count);
+  }
+  
+  // 检查缓存
+  const fullCacheKey = `video:${cacheKey}:${count}:${enhance}`;
+  if (videoPaletteCache.has(fullCacheKey)) {
+    return videoPaletteCache.get(fullCacheKey) ?? [];
+  }
+  
+  // 检查是否已有相同请求在处理中
+  if (videoPendingRequests.has(fullCacheKey)) {
+    return videoPendingRequests.get(fullCacheKey)!;
+  }
+  
+  // 创建新请求
+  const request = (async () => {
+    try {
+      // 从视频首帧提取图像
+      const frameDataUrl = await captureVideoFrame(videoSrc);
+      if (!frameDataUrl) {
+        return getDefaultPalette(count);
+      }
+      
+      // 使用现有的 extractPalette 从帧图像提取颜色
+      const colors = await extractPalette(frameDataUrl, { count, enhance });
+      
+      // 缓存结果
+      videoPaletteCache.set(fullCacheKey, colors);
+      
+      return colors;
+    } catch (error) {
+      console.warn('[AmbientBackground] Video frame extraction failed:', error);
+      return getDefaultPalette(count);
+    } finally {
+      videoPendingRequests.delete(fullCacheKey);
+    }
+  })();
+  
+  videoPendingRequests.set(fullCacheKey, request);
+  return request;
+}
+
+/**
+ * 捕获视频首帧
+ * @param videoSrc 视频源 URL
+ * @param seekTime 跳转到的时间点（秒），默认 0.1 秒避免黑帧
+ */
+async function captureVideoFrame(videoSrc: string, seekTime = 0.1): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.muted = true;
+    video.preload = 'metadata';
+    
+    // 超时处理
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, 10000); // 10 秒超时
+    
+    const cleanup = () => {
+      clearTimeout(timeout);
+      video.removeEventListener('seeked', handleSeeked);
+      video.removeEventListener('error', handleError);
+      video.removeEventListener('loadedmetadata', handleMetadata);
+      video.src = '';
+      video.load();
+    };
+    
+    const handleError = () => {
+      cleanup();
+      resolve(null);
+    };
+    
+    const handleSeeked = () => {
+      try {
+        // 创建 canvas 并绘制视频帧
+        const canvas = document.createElement('canvas');
+        const maxSize = 200; // 缩小尺寸以提高性能
+        const scale = Math.min(1, maxSize / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        
+        cleanup();
+        resolve(dataUrl);
+      } catch (err) {
+        cleanup();
+        resolve(null);
+      }
+    };
+    
+    const handleMetadata = () => {
+      // 跳转到指定时间点
+      video.currentTime = Math.min(seekTime, video.duration * 0.1);
+    };
+    
+    video.addEventListener('loadedmetadata', handleMetadata);
+    video.addEventListener('seeked', handleSeeked);
+    video.addEventListener('error', handleError);
+    
+    video.src = videoSrc;
+  });
+}
+
+/**
+ * 获取默认调色板
+ */
+function getDefaultPalette(count: number): string[] {
+  const defaultColors = [
+    'rgb(99, 102, 241)',   // indigo
+    'rgb(236, 72, 153)',   // pink
+    'rgb(34, 197, 94)',    // green
+    'rgb(234, 179, 8)',    // yellow
+    'rgb(59, 130, 246)',   // blue
+    'rgb(168, 85, 247)',   // purple
+  ];
+  return defaultColors.slice(0, count);
+}
+
+/**
+ * 清除视频调色板缓存
+ */
+export function clearVideoPaletteCache(): void {
+  videoPaletteCache.clear();
+  videoPendingRequests.clear();
+}
+
+/**
+ * 获取视频调色板缓存大小
+ */
+export function getVideoPaletteCacheSize(): number {
+  return videoPaletteCache.size;
+}

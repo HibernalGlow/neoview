@@ -887,6 +887,8 @@
 		ambientBlur={settings.view.ambient?.blur ?? 80}
 		ambientOpacity={settings.view.ambient?.opacity ?? 0.8}
 		ambientStyle={settings.view.ambient?.style ?? 'vibrant'}
+		auroraShowRadialGradient={settings.view.aurora?.showRadialGradient ?? true}
+		spotlightColor={settings.view.spotlight?.color ?? 'white'}
 	/>
 
 	{#if isVideoMode && bookStore.currentPage}

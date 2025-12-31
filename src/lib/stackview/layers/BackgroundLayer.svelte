@@ -2,10 +2,12 @@
   BackgroundLayer - 背景层
   z-index: 0
   
-  支持三种背景模式：
+  支持多种背景模式：
   - solid: 纯色背景
   - auto: 自适应背景色（从图片边缘提取主色调）
   - ambient: 流光溢彩（类似苹果灵动岛，从图片提取多个主色调生成流动渐变）
+  - aurora: 极光效果（基于 Aceternity UI）
+  - spotlight: 聚光灯效果（基于 Aceternity UI）
 -->
 <script lang="ts">
   import { LayerZIndex } from '../types/layer';
@@ -27,9 +29,13 @@
     ambientOpacity = 0.8,
     /** 流光样式：'gentle' 柔和 | 'vibrant' 鲜艳 | 'dynamic' 动感 */
     ambientStyle = 'vibrant' as 'gentle' | 'vibrant' | 'dynamic',
+    /** Aurora 是否显示径向渐变遮罩 */
+    auroraShowRadialGradient = true,
+    /** Spotlight 颜色 */
+    spotlightColor = 'white',
   }: {
     color?: string;
-    mode?: 'solid' | 'auto' | 'ambient';
+    mode?: 'solid' | 'auto' | 'ambient' | 'aurora' | 'spotlight';
     imageSrc?: string;
     /** 预加载时已计算好的背景色 */
     preloadedColor?: string | null;
@@ -39,6 +45,8 @@
     ambientBlur?: number;
     ambientOpacity?: number;
     ambientStyle?: 'gentle' | 'vibrant' | 'dynamic';
+    auroraShowRadialGradient?: boolean;
+    spotlightColor?: string;
   } = $props();
   
   // 自适应背景色状态
@@ -136,9 +144,11 @@
 <div 
   class="background-layer"
   class:ambient-mode={mode === 'ambient' && palette.length > 0}
+  class:aurora-mode={mode === 'aurora'}
+  class:spotlight-mode={mode === 'spotlight'}
   data-layer="BackgroundLayer"
   data-layer-id="background"
-  style:background-color={mode === 'ambient' ? 'var(--background)' : effectiveColor}
+  style:background-color={['ambient', 'aurora', 'spotlight'].includes(mode) ? 'var(--background)' : effectiveColor}
   style:z-index={LayerZIndex.BACKGROUND}
 >
   {#if mode === 'ambient' && palette.length > 0}
@@ -167,6 +177,55 @@
         <div class="ambient-noise"></div>
       </div>
     {/key}
+  {:else if mode === 'aurora'}
+    <!-- Aurora 极光背景 -->
+    <div class="aurora-container" in:fade={{ duration: 800 }}>
+      <div
+        class="aurora-effect"
+        class:aurora-masked={auroraShowRadialGradient}
+      ></div>
+    </div>
+  {:else if mode === 'spotlight'}
+    <!-- Spotlight 聚光灯背景 -->
+    <svg
+      class="spotlight-svg"
+      in:fade={{ duration: 600 }}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 3787 2842"
+      fill="none"
+    >
+      <g filter="url(#spotlight-filter)">
+        <ellipse
+          cx="1924.71"
+          cy="273.501"
+          rx="1924.71"
+          ry="273.501"
+          transform="matrix(-0.822377 -0.568943 -0.568943 0.822377 3631.88 2291.09)"
+          fill={spotlightColor}
+          fill-opacity="0.21"
+        ></ellipse>
+      </g>
+      <defs>
+        <filter
+          id="spotlight-filter"
+          x="0.860352"
+          y="0.838989"
+          width="3785.16"
+          height="2840.26"
+          filterUnits="userSpaceOnUse"
+          color-interpolation-filters="sRGB"
+        >
+          <feFlood flood-opacity="0" result="BackgroundImageFix"></feFlood>
+          <feBlend
+            mode="normal"
+            in="SourceGraphic"
+            in2="BackgroundImageFix"
+            result="shape"
+          ></feBlend>
+          <feGaussianBlur stdDeviation="151" result="effect1_foregroundBlur"></feGaussianBlur>
+        </filter>
+      </defs>
+    </svg>
   {/if}
 </div>
 
@@ -404,5 +463,86 @@
     opacity: 0.03;
     mix-blend-mode: overlay;
     pointer-events: none;
+  }
+
+  /* ==================== Aurora 极光效果 ==================== */
+  .aurora-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .aurora-effect {
+    --white: #ffffff;
+    --black: #000000;
+    --transparent: transparent;
+    --blue-300: #93c5fd;
+    --blue-400: #60a5fa;
+    --blue-500: #3b82f6;
+    --indigo-300: #a5b4fc;
+    --violet-200: #ddd6fe;
+    
+    position: absolute;
+    inset: -10px;
+    opacity: 0.5;
+    will-change: transform;
+    
+    /* 渐变背景 */
+    background-image:
+      repeating-linear-gradient(100deg, var(--black) 0%, var(--black) 7%, var(--transparent) 10%, var(--transparent) 12%, var(--black) 16%),
+      repeating-linear-gradient(100deg, var(--blue-500) 10%, var(--indigo-300) 15%, var(--blue-300) 20%, var(--violet-200) 25%, var(--blue-400) 30%);
+    background-size: 300% 200%;
+    background-position: 50% 50%;
+    filter: blur(10px);
+    pointer-events: none;
+    animation: aurora 60s linear infinite;
+  }
+
+  .aurora-effect::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(100deg, var(--black) 0%, var(--black) 7%, var(--transparent) 10%, var(--transparent) 12%, var(--black) 16%),
+      repeating-linear-gradient(100deg, var(--blue-500) 10%, var(--indigo-300) 15%, var(--blue-300) 20%, var(--violet-200) 25%, var(--blue-400) 30%);
+    background-size: 200% 100%;
+    animation: aurora 60s linear infinite;
+    mix-blend-mode: difference;
+  }
+
+  .aurora-masked {
+    mask-image: radial-gradient(ellipse at 100% 0%, black 10%, var(--transparent) 70%);
+    -webkit-mask-image: radial-gradient(ellipse at 100% 0%, black 10%, transparent 70%);
+  }
+
+  @keyframes aurora {
+    from {
+      background-position: 50% 50%;
+    }
+    to {
+      background-position: 350% 50%;
+    }
+  }
+
+  /* ==================== Spotlight 聚光灯效果 ==================== */
+  .spotlight-svg {
+    position: absolute;
+    z-index: 1;
+    height: 169%;
+    width: 138%;
+    pointer-events: none;
+    opacity: 0;
+    animation: spotlight 2s ease 0.75s 1 forwards;
+  }
+
+  @keyframes spotlight {
+    0% {
+      opacity: 0;
+      transform: translate(-72%, -62%) scale(0.5);
+    }
+    100% {
+      opacity: 1;
+      transform: translate(-50%, -40%) scale(1);
+    }
   }
 </style>

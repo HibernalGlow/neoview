@@ -67,8 +67,8 @@ export interface NeoViewSettings {
     showInfoBar: boolean;
     showBookSwitchToast: boolean;
     backgroundColor: string;
-    backgroundMode: 'solid' | 'auto' | 'ambient';
-    /** 流光溢彩设置 */
+    backgroundMode: 'solid' | 'auto' | 'ambient' | 'aurora' | 'spotlight';
+    /** 动态背景设置 */
     ambient?: {
       /** 动画速度（秒） */
       speed: number;
@@ -78,6 +78,16 @@ export interface NeoViewSettings {
       opacity: number;
       /** 样式：gentle 柔和 | vibrant 鲜艳 | dynamic 动感 */
       style: 'gentle' | 'vibrant' | 'dynamic';
+    };
+    /** Aurora 极光设置 */
+    aurora?: {
+      /** 是否显示径向渐变遮罩 */
+      showRadialGradient: boolean;
+    };
+    /** Spotlight 聚光灯设置 */
+    spotlight?: {
+      /** 聚光灯颜色 */
+      color: string;
     };
     mouseCursor: {
       autoHide: boolean;

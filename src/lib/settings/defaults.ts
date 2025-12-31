@@ -70,6 +70,12 @@ export const defaultSettings: NeoViewSettings = {
       opacity: 0.8,
       style: 'vibrant'
     },
+    aurora: {
+      showRadialGradient: true
+    },
+    spotlight: {
+      color: 'white'
+    },
     mouseCursor: {
       autoHide: true,
       hideDelay: 1.0,

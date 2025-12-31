@@ -219,7 +219,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 	},
 	'ambientBackground': {
 		id: 'ambientBackground',
-		title: '流光溢彩',
+		title: '动态背景',
 		icon: Sparkles,
 		defaultPanel: 'info',
 		canHide: true,

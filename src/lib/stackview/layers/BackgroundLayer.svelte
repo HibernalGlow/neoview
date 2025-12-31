@@ -152,44 +152,39 @@
   style:z-index={LayerZIndex.BACKGROUND}
 >
   {#if mode === 'ambient' && palette.length > 0}
-    <!-- 流光溢彩背景层 -->
-    {#key imageSrc}
-      <div 
-        class="ambient-container {animationClass}"
-        style="{paletteVars()} --ambient-speed: {ambientSpeed}s; --ambient-blur: {ambientBlur}px; --ambient-opacity: {ambientOpacity};"
-        in:fade={{ duration: 600 }}
-        out:fade={{ duration: 400 }}
-      >
-        <!-- 底层：深色背景 -->
-        <div class="ambient-base"></div>
-        
-        <!-- 流动的色块 -->
-        <div class="ambient-blob blob-1"></div>
-        <div class="ambient-blob blob-2"></div>
-        <div class="ambient-blob blob-3"></div>
-        <div class="ambient-blob blob-4"></div>
-        {#if ambientStyle === 'dynamic' && palette.length >= 5}
-          <div class="ambient-blob blob-5"></div>
-          <div class="ambient-blob blob-6"></div>
-        {/if}
-        
-        <!-- 顶层：柔化噪点 -->
-        <div class="ambient-noise"></div>
-      </div>
-    {/key}
+    <!-- 流光溢彩背景层 - 移除 {#key} 避免翻页闪屏，使用 CSS 过渡平滑切换颜色 -->
+    <div 
+      class="ambient-container {animationClass}"
+      style="{paletteVars()} --ambient-speed: {ambientSpeed}s; --ambient-blur: {ambientBlur}px; --ambient-opacity: {ambientOpacity};"
+    >
+      <!-- 底层：深色背景 -->
+      <div class="ambient-base"></div>
+      
+      <!-- 流动的色块 -->
+      <div class="ambient-blob blob-1"></div>
+      <div class="ambient-blob blob-2"></div>
+      <div class="ambient-blob blob-3"></div>
+      <div class="ambient-blob blob-4"></div>
+      {#if ambientStyle === 'dynamic' && palette.length >= 5}
+        <div class="ambient-blob blob-5"></div>
+        <div class="ambient-blob blob-6"></div>
+      {/if}
+      
+      <!-- 顶层：柔化噪点 -->
+      <div class="ambient-noise"></div>
+    </div>
   {:else if mode === 'aurora'}
-    <!-- Aurora 极光背景 -->
-    <div class="aurora-container" in:fade={{ duration: 800 }}>
+    <!-- Aurora 极光背景 - 移除 in:fade 避免翻页闪屏 -->
+    <div class="aurora-container">
       <div
         class="aurora-effect"
         class:aurora-masked={auroraShowRadialGradient}
       ></div>
     </div>
   {:else if mode === 'spotlight'}
-    <!-- Spotlight 聚光灯背景 -->
+    <!-- Spotlight 聚光灯背景 - 移除 in:fade 避免翻页闪屏 -->
     <svg
       class="spotlight-svg"
-      in:fade={{ duration: 600 }}
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 3787 2842"
       fill="none"
@@ -262,6 +257,8 @@
     border-radius: 50%;
     mix-blend-mode: screen;
     will-change: transform;
+    /* 颜色过渡：翻页时平滑切换调色板颜色，避免闪屏 */
+    transition: background 0.8s ease-out;
   }
   
   /* 色块尺寸和位置 */

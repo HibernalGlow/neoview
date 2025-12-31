@@ -217,6 +217,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'info',
 		canHide: true,
 	},
+	'ambientBackground': {
+		id: 'ambientBackground',
+		title: '流光溢彩',
+		icon: Sparkles,
+		defaultPanel: 'info',
+		canHide: true,
+	},
 
 	// ==================== Properties 面板卡片 ====================
 	'emmTags': {

@@ -38,6 +38,7 @@
 		sidebarControl: () => import('./info/SidebarControlCard.svelte'),
 		colorFilter: () => import('./info/ColorFilterCard.svelte'),
 		pageTransition: () => import('./info/PageTransitionCard.svelte'),
+		ambientBackground: () => import('./info/AmbientBackgroundCard.svelte'),
 		// Properties
 		emmTags: () => import('./properties/EmmTagsCard.svelte'),
 		aiTags: () => import('./properties/AiTagsCard.svelte'),

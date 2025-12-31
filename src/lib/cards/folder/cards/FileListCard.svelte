@@ -13,7 +13,7 @@
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
 	
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, tabSearchResults } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+	import { folderTabActions, tabSearchResults, tabCurrentPath, isVirtualPath, getVirtualPathType } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
@@ -42,6 +42,8 @@
 	let virtualItems = $state<FsItem[]>([]);
 	// 搜索结果（用于树状视图）
 	let searchResultItems = $state<FsItem[]>([]);
+	// 当前标签页路径
+	let currentPath = $state<string>('');
 	
 	// 订阅全局 store
 	$effect(() => {
@@ -53,6 +55,14 @@
 	$effect(() => {
 		const unsub = tabSearchResults.subscribe(results => {
 			searchResultItems = results;
+		});
+		return unsub;
+	});
+	
+	// 订阅当前标签页路径
+	$effect(() => {
+		const unsub = tabCurrentPath.subscribe(path => {
+			currentPath = path;
 		});
 		return unsub;
 	});
@@ -69,8 +79,11 @@
 		return unsub;
 	});
 	
-	// 判断是否应该使用局部树（虚拟路径或有搜索结果时）
-	let shouldUseLocalTree = $derived(ctx.isVirtualInstance || searchResultItems.length > 0);
+	// 判断当前标签页是否是搜索结果标签页
+	let isSearchTab = $derived(getVirtualPathType(currentPath) === 'search');
+	
+	// 判断是否应该使用局部树（虚拟路径实例 或 当前标签页是搜索结果标签页且有搜索结果）
+	let shouldUseLocalTree = $derived(ctx.isVirtualInstance || (isSearchTab && searchResultItems.length > 0));
 	// 局部树的数据源
 	let localTreeItems = $derived(ctx.isVirtualInstance ? virtualItems : searchResultItems);
 	

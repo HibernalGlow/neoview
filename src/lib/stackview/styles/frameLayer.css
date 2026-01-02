@@ -28,8 +28,8 @@
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
-  /* 强制完整解码 */
-  image-rendering: -webkit-optimize-contrast;
+  /* 使用高质量渲染，避免锯齿 */
+  image-rendering: auto;
   content-visibility: visible;
 }
 

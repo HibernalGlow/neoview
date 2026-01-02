@@ -149,7 +149,8 @@
     /* 【修复内存泄露】移除 will-change，仅保留基本 GPU 加速 */
     transform: translateZ(0);
     backface-visibility: hidden;
-    image-rendering: -webkit-optimize-contrast;
+    /* 使用高质量渲染，避免锯齿 */
+    image-rendering: auto;
     content-visibility: visible;
   }
 </style>

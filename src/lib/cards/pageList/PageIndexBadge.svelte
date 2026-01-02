@@ -68,6 +68,12 @@
     return upscaleStore.getPageConditionName(pageIndex);
   });
 
+  let currentProgress = $derived.by(() => {
+    void upscaleStoreVersion;
+    if (upscaleStatus !== 'processing') return 0;
+    return upscaleStore.state.pageStatus.get(pageIndex)?.progress ?? 0;
+  });
+
   // 配置
   const preloadConfig = {
     decoded: { icon: 'zap', class: 'text-green-500', tooltip: '已预解码（翻页即时）' },
@@ -122,7 +128,9 @@
 
   <!-- 超分状态 -->
   {#if upscaleCfg}
-    <span class="{sizeClasses.badge} font-medium rounded shrink-0 {upscaleCfg.class}">{upscaleCfg.label}</span>
+    <span class="{sizeClasses.badge} font-medium rounded shrink-0 {upscaleCfg.class}">
+      {upscaleStatus === 'processing' && currentProgress > 0 ? `超分 ${currentProgress.toFixed(1)}%` : upscaleCfg.label}
+    </span>
   {/if}
 
   <!-- 当前页标记 -->

@@ -1,5 +1,5 @@
 //! 超分服务事件类型模块
-//! 
+//!
 //! 包含 UpscaleStatus, UpscaleReadyPayload, UpscaleServiceStats 等事件相关类型
 
 use serde::{Deserialize, Serialize};
@@ -64,4 +64,16 @@ pub struct UpscaleServiceStats {
     pub skipped_count: usize,
     pub failed_count: usize,
     pub is_enabled: bool,
+}
+
+/// 超分进度事件
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpscaleProgressPayload {
+    /// 书籍路径
+    pub book_path: String,
+    /// 页面索引
+    pub page_index: usize,
+    /// 进度百分比 (0.0 - 100.0)
+    pub progress: f32,
 }

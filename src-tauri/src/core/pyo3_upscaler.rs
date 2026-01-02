@@ -395,4 +395,23 @@ impl PyO3Upscaler {
             Err("Python 模块未初始化".to_string())
         }
     }
+
+    /// 获取当前超分进度
+    pub fn get_progress(&self) -> f32 {
+        if let Ok(module_guard) = self.python_module.lock() {
+            if let Some(module) = module_guard.as_ref() {
+                return module.get_progress();
+            }
+        }
+        0.0
+    }
+
+    /// 重置进度
+    pub fn reset_progress(&self) {
+        if let Ok(module_guard) = self.python_module.lock() {
+            if let Some(module) = module_guard.as_ref() {
+                module.reset_progress();
+            }
+        }
+    }
 }

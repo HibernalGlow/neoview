@@ -19,6 +19,7 @@ import { isVideoFile } from '$lib/utils/videoUtils';
 // 全局标记防止 HMR 导致多次监听
 let globalListenerInitialized = false;
 let globalUnlistenReady: UnlistenFn | null = null;
+let globalUnlistenProgress: UnlistenFn | null = null;
 
 // ============================================================================
 // 类型定义
@@ -56,6 +57,13 @@ export interface UpscaleReadyPayload {
   scale?: number | null;
 }
 
+/** 超分进度事件 */
+export interface UpscaleProgressPayload {
+  bookPath: string;
+  pageIndex: number;
+  progress: number;
+}
+
 /** 页面超分状态（简化版） */
 export interface PageUpscaleStatus {
   status: UpscaleStatus;
@@ -72,6 +80,8 @@ export interface PageUpscaleStatus {
   originalSize?: [number, number] | null;
   /** 超分后尺寸 */
   upscaledSize?: [number, number] | null;
+  /** 超分进度 (0-100) */
+  progress?: number;
 }
 
 /** Store 状态（V2：简化，超分图进入 imagePool） */
@@ -117,10 +127,10 @@ class UpscaleStore {
   });
 
   // 版本计数器，用于触发响应式更新
-  private _version = $state(0);
-
-  private unlistenReady: UnlistenFn | null = null;
   private initialized = false;
+  private unlistenReady: UnlistenFn | null = null;
+  private unlistenProgress: UnlistenFn | null = null;
+  private _version = $state(0);
 
   // === Getters ===
 
@@ -220,11 +230,17 @@ class UpscaleStore {
         // 使用单例的 handleUpscaleReady
         upscaleStore.handleUpscaleReadyPublic(event.payload);
       });
+
+      globalUnlistenProgress = await listen<UpscaleProgressPayload>('upscale-progress', (event) => {
+        upscaleStore.handleUpscaleProgressPublic(event.payload);
+      });
+
       globalListenerInitialized = true;
       console.log('✅ 全局超分事件监听器已注册');
     }
     
     this.unlistenReady = globalUnlistenReady;
+    this.unlistenProgress = globalUnlistenProgress;
 
     // 同步旧系统的设置（开关 + 条件）
     try {
@@ -313,6 +329,10 @@ class UpscaleStore {
     if (this.unlistenReady) {
       this.unlistenReady();
       this.unlistenReady = null;
+    }
+    if (this.unlistenProgress) {
+      this.unlistenProgress();
+      this.unlistenProgress = null;
     }
 
     // 清除 imagePool 中的超分图
@@ -689,8 +709,40 @@ class UpscaleStore {
 
   // === 事件处理 ===
 
-  /** 处理超分结果事件（V2：将超分图放入 imagePool） */
+  /** 公开的超分准备就绪处理器（供全局监听器调用） */
   handleUpscaleReadyPublic(payload: UpscaleReadyPayload) {
+    this.handleUpscaleReady(payload);
+  }
+
+  /** 公开的超分进度处理器（供全局监听器调用） */
+  handleUpscaleProgressPublic(payload: UpscaleProgressPayload) {
+    this.handleUpscaleProgress(payload);
+  }
+
+  /** 处理超分进度事件 */
+  private handleUpscaleProgress(payload: UpscaleProgressPayload) {
+    // 只有当前书籍的才处理
+    if (this.state.currentBookPath && payload.bookPath !== this.state.currentBookPath) return;
+
+    const pageIndex = payload.pageIndex;
+    const current = this.state.pageStatus.get(pageIndex);
+
+    if (current) {
+      current.progress = payload.progress;
+      this.bumpVersion();
+    } else {
+      // 如果还没有状态，初始化为 processing
+      this.state.pageStatus.set(pageIndex, {
+        status: 'processing',
+        cachePath: null,
+        progress: payload.progress
+      });
+      this.bumpVersion();
+    }
+  }
+
+  /** 处理超分结果事件（V2：将超分图放入 imagePool） */
+  private handleUpscaleReady(payload: UpscaleReadyPayload) {
     console.log(`📦 收到超分事件:`, {
       bookPath: payload.bookPath?.slice(-30),
       currentBookPath: this.state.currentBookPath?.slice(-30),
@@ -749,13 +801,17 @@ class UpscaleStore {
     console.log(`📸 超分结果: page ${pageIndex} -> ${status}`);
   }
 
+  /** 增加版本号触发响应式更新 */
+  private bumpVersion() {
+    this._version++;
+  }
+
   /** 更新页面状态 */
   private updatePageStatus(pageIndex: number, status: PageUpscaleStatus) {
     const newStatus = new SvelteMap(this.state.pageStatus);
     newStatus.set(pageIndex, status);
     this.state.pageStatus = newStatus;
-    // 增加版本号触发响应式更新
-    this._version++;
+    this.bumpVersion();
   }
 
   /** 清除所有超分状态和 imagePool 中的超分图 */

@@ -12,6 +12,10 @@ use jxl_oxide::JxlImage;
 
 pub struct SrVulkanManager {
     inner: Mutex<SrVulkanManagerInner>,
+    /// 当前进度 (0.0 - 100.0)
+    current_progress: Arc<Mutex<f32>>,
+    /// 当前正在处理的task_id
+    current_task_id: Arc<Mutex<Option<i32>>>,
 }
 
 struct SrVulkanManagerInner {
@@ -94,6 +98,9 @@ impl SrVulkanManager {
         })
         .map_err(|e| format!("初始化 sr_vulkan 失败: {}", e))?;
 
+        let current_progress = Arc::new(Mutex::new(0.0f32));
+        let current_task_id = Arc::new(Mutex::new(None::<i32>));
+
         let manager = Arc::new(SrVulkanManager {
             inner: Mutex::new(SrVulkanManagerInner {
                 next_task_id: 0,
@@ -101,11 +108,85 @@ impl SrVulkanManager {
                 job_key_map: HashMap::new(),
                 task_key_map: HashMap::new(),
             }),
+            current_progress: Arc::clone(&current_progress),
+            current_task_id: Arc::clone(&current_task_id),
         });
 
         SrVulkanManager::spawn_load_thread(Arc::clone(&manager));
+        SrVulkanManager::spawn_progress_thread(Arc::clone(&current_progress));
 
         Ok(manager)
+    }
+
+    /// 启动进度轮询线程，捕获Python stdout并解析进度
+    fn spawn_progress_thread(current_progress: Arc<Mutex<f32>>) {
+        thread::spawn(move || {
+            // 设置Python stdout重定向
+            let setup_result = Python::with_gil(|py| -> PyResult<()> {
+                // 创建一个自定义的stdout捕获类
+                py.run_bound(
+                    r#"
+import sys
+import io
+import re
+
+class ProgressCapture:
+    def __init__(self):
+        self.progress = 0.0
+        self.original_stdout = sys.stdout
+        self.buffer = io.StringIO()
+        
+    def write(self, text):
+        self.buffer.write(text)
+        self.original_stdout.write(text)
+        # 解析进度: 匹配 "xx.xx%" 格式
+        match = re.search(r'(\d+\.?\d*)%', text)
+        if match:
+            self.progress = float(match.group(1))
+    
+    def flush(self):
+        self.original_stdout.flush()
+        self.buffer.flush()
+    
+    def get_progress(self):
+        return self.progress
+    
+    def reset_progress(self):
+        self.progress = 0.0
+
+_sr_progress_capture = ProgressCapture()
+sys.stdout = _sr_progress_capture
+"#,
+                    None,
+                    None,
+                )?;
+                Ok(())
+            });
+
+            if let Err(e) = setup_result {
+                eprintln!("[SrVulkanManager] 设置进度捕获失败: {}", e);
+                return;
+            }
+
+            println!("[SrVulkanManager] 进度捕获线程已启动");
+
+            // 定期读取进度
+            loop {
+                thread::sleep(Duration::from_millis(100));
+
+                let progress = Python::with_gil(|py| -> PyResult<f32> {
+                    let globals = py.eval_bound("_sr_progress_capture", None, None)?;
+                    let progress: f32 = globals.call_method0("get_progress")?.extract()?;
+                    Ok(progress)
+                });
+
+                if let Ok(progress) = progress {
+                    if let Ok(mut p) = current_progress.lock() {
+                        *p = progress;
+                    }
+                }
+            }
+        });
     }
 
     fn spawn_load_thread(manager: Arc<SrVulkanManager>) {
@@ -348,6 +429,24 @@ impl SrVulkanManager {
 
         Ok(())
     }
+
+    /// 获取当前超分进度 (0.0 - 100.0)
+    pub fn get_progress(&self) -> f32 {
+        self.current_progress.lock().map(|p| *p).unwrap_or(0.0)
+    }
+
+    /// 重置进度
+    pub fn reset_progress(&self) {
+        if let Ok(mut p) = self.current_progress.lock() {
+            *p = 0.0;
+        }
+        // 同时重置Python端的进度
+        let _ = Python::with_gil(|py| -> PyResult<()> {
+            let capture = py.eval_bound("_sr_progress_capture", None, None)?;
+            capture.call_method0("reset_progress")?;
+            Ok(())
+        });
+    }
 }
 
 /// 预处理结果：包含转码后的数据和解码得到的尺寸
@@ -361,8 +460,15 @@ struct PreprocessResult {
 fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String> {
     // 检测是否需要转码的格式
     if is_jxl_image(image_data) || is_avif_image(image_data) {
-        let format_name = if is_jxl_image(image_data) { "JXL" } else { "AVIF" };
-        println!("[SrVulkanManager] Detected {} image, using WIC to transcode to JPEG", format_name);
+        let format_name = if is_jxl_image(image_data) {
+            "JXL"
+        } else {
+            "AVIF"
+        };
+        println!(
+            "[SrVulkanManager] Detected {} image, using WIC to transcode to JPEG",
+            format_name
+        );
         transcode_with_wic_and_size(image_data)
     } else {
         // 其他格式直接透传（PNG/JPEG/WebP 等 sr_vulkan 原生支持的）
@@ -400,26 +506,28 @@ fn is_avif_image(data: &[u8]) -> bool {
 /// 使用 WIC 解码图片，然后编码为 JPEG（Q85），同时返回尺寸
 fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, String> {
     use crate::core::wic_decoder::decode_image_from_memory_with_wic;
-    
+
     // 使用 WIC 解码（支持 AVIF/JXL，需要安装对应编解码器）
     let decode_result = decode_image_from_memory_with_wic(image_data)
         .map_err(|e| format!("WIC 解码失败: {}", e))?;
-    
+
     let width = decode_result.width;
     let height = decode_result.height;
     let bgra_pixels = decode_result.pixels;
-    
+
     println!(
         "[SrVulkanManager] WIC decoded: {}x{}, {} bytes",
-        width, height, bgra_pixels.len()
+        width,
+        height,
+        bgra_pixels.len()
     );
-    
+
     // BGRA -> RGB（JPEG 不支持 alpha 通道）
     let rgb_pixels: Vec<u8> = bgra_pixels
         .chunks_exact(4)
         .flat_map(|c| [c[2], c[1], c[0]]) // BGRA -> RGB
         .collect();
-    
+
     // 使用 image crate 编码为 JPEG（Q85，速度快且保持质量）
     let mut output = Vec::new();
     {
@@ -430,12 +538,12 @@ fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, St
             .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
             .map_err(|e| format!("JPEG 编码失败: {}", e))?;
     }
-    
+
     println!(
         "[SrVulkanManager] Transcoded to JPEG: {} bytes",
         output.len()
     );
-    
+
     Ok(PreprocessResult {
         data: output,
         width: Some(width),

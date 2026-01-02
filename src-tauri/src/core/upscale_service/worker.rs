@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::commands::pyo3_upscale_commands::PyO3UpscalerState;
 use crate::commands::upscale_service_commands::FrontendCondition;
+use crate::core::pyo3_upscaler::{PyO3Upscaler, UpscaleModel};
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
 
 use super::config::UpscaleServiceConfig;
@@ -161,6 +162,45 @@ fn worker_loop(
             let _ = app.emit("upscale-ready", processing_payload);
             log_debug!("📤 发送处理中事件: page {}", task.page_index);
 
+            // 启动进度轮询线程
+            let progress_running = Arc::new(AtomicBool::new(true));
+            let progress_running_clone = Arc::clone(&progress_running);
+            let app_clone = app.clone();
+            let book_path_clone = task.book_path.clone();
+            let page_index = task.page_index;
+            let py_state_clone = Arc::clone(&py_state);
+
+            let progress_handle = thread::spawn(move || {
+                let mut last_progress: f32 = 0.0;
+                while progress_running_clone.load(Ordering::SeqCst) {
+                    thread::sleep(Duration::from_millis(200));
+
+                    // 获取当前进度
+                    if let Ok(guard) = py_state_clone.manager.lock() {
+                        if let Some(manager) = guard.as_ref() {
+                            let progress = manager.get_progress();
+                            // 只在进度变化时发送（避免频繁发送）
+                            if (progress - last_progress).abs() > 0.5 {
+                                last_progress = progress;
+                                let progress_payload = super::events::UpscaleProgressPayload {
+                                    book_path: book_path_clone.clone(),
+                                    page_index,
+                                    progress,
+                                };
+                                let _ = app_clone.emit("upscale-progress", progress_payload);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 重置进度
+            if let Ok(guard) = py_state.manager.lock() {
+                if let Some(manager) = guard.as_ref() {
+                    manager.reset_progress();
+                }
+            }
+
             // 处理任务
             let result = process_task_v2(
                 &py_state,
@@ -171,6 +211,10 @@ fn worker_loop(
                 &task,
                 default_timeout,
             );
+
+            // 停止进度轮询
+            progress_running.store(false, Ordering::SeqCst);
+            let _ = progress_handle.join();
 
             // 移除处理中标记
             if let Ok(mut set) = processing_set.write() {

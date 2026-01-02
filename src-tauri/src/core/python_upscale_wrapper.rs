@@ -251,6 +251,16 @@ impl PythonUpscaleModule {
             .cancel_job(job_key)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
     }
+
+    /// 获取当前超分进度
+    pub fn get_progress(&self) -> f32 {
+        self.sr_manager.get_progress()
+    }
+
+    /// 重置进度
+    pub fn reset_progress(&self) {
+        self.sr_manager.reset_progress();
+    }
 }
 
 /// 任务状态信息

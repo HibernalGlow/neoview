@@ -1,5 +1,5 @@
 //! 超分服务工作线程模块
-//! 
+//!
 //! 包含工作线程启动逻辑、任务处理循环
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -14,11 +14,11 @@ use crate::commands::upscale_service_commands::FrontendCondition;
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
 
 use super::config::UpscaleServiceConfig;
-use super::events::{UpscaleStatus, UpscaleReadyPayload};
-use super::types::{TaskPriority, UpscaleTask, CacheEntry};
+use super::events::{UpscaleReadyPayload, UpscaleStatus};
+use super::log_debug;
 use super::queue::get_highest_priority_task;
 use super::task_processor::process_task_v2;
-use super::log_debug;
+use super::types::{CacheEntry, TaskPriority, UpscaleTask};
 
 /// 启动工作线程
 #[allow(clippy::too_many_arguments)]
@@ -144,6 +144,23 @@ fn worker_loop(
                 set.insert((task.book_path.clone(), task.page_index));
             }
 
+            // 发送 processing 状态事件到前端
+            let processing_payload = UpscaleReadyPayload {
+                book_path: task.book_path.clone(),
+                page_index: task.page_index,
+                image_hash: task.image_hash.clone(),
+                status: UpscaleStatus::Processing,
+                cache_path: None,
+                error: None,
+                original_size: None,
+                upscaled_size: None,
+                is_preload: task.score.priority != TaskPriority::Current,
+                model_name: None,
+                scale: None,
+            };
+            let _ = app.emit("upscale-ready", processing_payload);
+            log_debug!("📤 发送处理中事件: page {}", task.page_index);
+
             // 处理任务
             let result = process_task_v2(
                 &py_state,
@@ -163,7 +180,11 @@ fn worker_loop(
             // 打印处理结果
             match &result {
                 Ok(payload) => {
-                    log_debug!("✅ 任务处理完成: page {} status={:?}", task.page_index, payload.status);
+                    log_debug!(
+                        "✅ 任务处理完成: page {} status={:?}",
+                        task.page_index,
+                        payload.status
+                    );
                 }
                 Err(e) => {
                     log_debug!("❌ 任务处理失败: page {} error={}", task.page_index, e);
@@ -211,14 +232,22 @@ fn handle_task_result(
                     if let Ok(mut set) = skipped_pages.write() {
                         set.insert((task.book_path.clone(), task.page_index));
                     }
-                    log_debug!("📤 发送跳过事件: page {} reason={:?}", task.page_index, payload.error);
+                    log_debug!(
+                        "📤 发送跳过事件: page {} reason={:?}",
+                        task.page_index,
+                        payload.error
+                    );
                 }
                 UpscaleStatus::Failed => {
                     failed_count.fetch_add(1, Ordering::SeqCst);
                     if let Ok(mut set) = failed_pages.write() {
                         set.insert((task.book_path.clone(), task.page_index));
                     }
-                    log_debug!("📤 发送失败事件: page {} error={:?}", task.page_index, payload.error);
+                    log_debug!(
+                        "📤 发送失败事件: page {} error={:?}",
+                        task.page_index,
+                        payload.error
+                    );
                 }
                 _ => {}
             }

@@ -131,22 +131,30 @@ import io
 import re
 
 class ProgressCapture:
-    def __init__(self):
+    def __init__(self, original_stream):
         self.progress = 0.0
-        self.original_stdout = sys.stdout
-        self.buffer = io.StringIO()
+        self.original_stream = original_stream
         
     def write(self, text):
-        self.buffer.write(text)
-        self.original_stdout.write(text)
-        # 解析进度: 匹配 "xx.xx%" 格式
-        match = re.search(r'(\d+\.?\d*)%', text)
+        self.original_stream.write(text)
+        # 解析进度: 匹配 "xx.xx%" 或 "progress: xx.xx" 或 "[xx.xx%]"
+        # 支持各种库的常见输出格式
+        match = re.search(r'(\d+\.?\d*)\s*%', text)
+        if not match:
+            # 兼容一些库可能输出 progress: 0.5 这样的格式
+            match = re.search(r'progress[:\s]+(\d+\.?\d*)', text.lower())
+        
         if match:
-            self.progress = float(match.group(1))
+            try:
+                new_val = float(match.group(1))
+                # 过滤掉一些不合理的超大值
+                if 0 <= new_val <= 100:
+                    self.progress = new_val
+            except:
+                pass
     
     def flush(self):
-        self.original_stdout.flush()
-        self.buffer.flush()
+        self.original_stream.flush()
     
     def get_progress(self):
         return self.progress
@@ -154,8 +162,20 @@ class ProgressCapture:
     def reset_progress(self):
         self.progress = 0.0
 
-_sr_progress_capture = ProgressCapture()
+_sr_progress_capture = ProgressCapture(sys.stdout)
 sys.stdout = _sr_progress_capture
+sys.stderr = ProgressCapture(sys.stderr) # 也捕获 stderr，很多 C 库往这写
+
+def _get_combined_progress():
+    # 从两个流中取最大值（通常只有一个在更新）
+    p1 = _sr_progress_capture.get_progress()
+    p2 = sys.stderr.get_progress() if hasattr(sys.stderr, 'get_progress') else 0.0
+    return max(p1, p2)
+
+def _reset_combined_progress():
+    _sr_progress_capture.reset_progress()
+    if hasattr(sys.stderr, 'reset_progress'):
+        sys.stderr.reset_progress()
 "#,
                     None,
                     None,
@@ -172,15 +192,19 @@ sys.stdout = _sr_progress_capture
 
             // 定期读取进度
             loop {
-                thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(200));
 
                 let progress = Python::with_gil(|py| -> PyResult<f32> {
-                    let globals = py.eval_bound("_sr_progress_capture", None, None)?;
-                    let progress: f32 = globals.call_method0("get_progress")?.extract()?;
+                    let progress: f32 = py
+                        .eval_bound("_get_combined_progress()", None, None)?
+                        .extract()?;
                     Ok(progress)
                 });
 
                 if let Ok(progress) = progress {
+                    if progress > 0.0 {
+                        println!("[SrVulkanManager DBG] Current progress: {}%", progress);
+                    }
                     if let Ok(mut p) = current_progress.lock() {
                         *p = progress;
                     }
@@ -442,8 +466,7 @@ sys.stdout = _sr_progress_capture
         }
         // 同时重置Python端的进度
         let _ = Python::with_gil(|py| -> PyResult<()> {
-            let capture = py.eval_bound("_sr_progress_capture", None, None)?;
-            capture.call_method0("reset_progress")?;
+            py.run_bound("_reset_combined_progress()", None, None)?;
             Ok(())
         });
     }

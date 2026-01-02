@@ -180,7 +180,7 @@ fn worker_loop(
                         if let Some(manager) = guard.as_ref() {
                             let progress = manager.get_progress();
                             // 只在进度变化时发送（避免频繁发送）
-                            if (progress - last_progress).abs() > 0.5 {
+                            if (progress - last_progress).abs() > 0.1 {
                                 last_progress = progress;
                                 let progress_payload = super::events::UpscaleProgressPayload {
                                     book_path: book_path_clone.clone(),

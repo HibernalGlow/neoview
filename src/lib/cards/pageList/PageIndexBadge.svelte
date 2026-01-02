@@ -78,7 +78,7 @@
   const upscaleConfig = {
     none: null,
     pending: { label: '队列中', class: 'bg-amber-500/80 text-white' },
-    processing: { label: '处理中', class: 'bg-blue-500/80 text-white animate-pulse' },
+    processing: { label: '超分中', class: 'upscale-processing-badge' },
     completed: { label: '已超分', class: 'bg-green-500/80 text-white' },
     skipped: { label: '已跳过', class: 'bg-gray-500/80 text-white' },
     failed: { label: '失败', class: 'bg-red-500/80 text-white' },
@@ -130,3 +130,38 @@
     <span class="{sizeClasses.current} font-semibold bg-primary text-primary-foreground rounded shrink-0">当前</span>
   {/if}
 </div>
+
+<style>
+  /* 超分处理中的动态进度条效果 */
+  :global(.upscale-processing-badge) {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, hsl(217 91% 50% / 0.9), hsl(217 91% 60% / 0.9));
+    color: white;
+  }
+
+  :global(.upscale-processing-badge)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      left: -100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+</style>

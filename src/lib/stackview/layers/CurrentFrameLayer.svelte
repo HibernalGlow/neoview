@@ -17,6 +17,7 @@
 	import type { Frame } from '../types/frame';
 	import { getImageTransform, getClipPath } from '../utils/transform';
 	import FrameImage from '../components/FrameImage.svelte';
+	import FrameImageWithOverlay from '../components/FrameImageWithOverlay.svelte';
 	import '../styles/frameLayer.css';
 	import {
 		pageTransitionStore,
@@ -323,13 +324,15 @@
 			style:transform={transformStyle}
 		>
 			{#each frame.images as img, i (img.physicalIndex)}
-				<FrameImage
+				<FrameImageWithOverlay
 					pageIndex={img.physicalIndex}
 					url={img.url}
 					alt="Current {i}"
 					transform={getImageTransform(img)}
 					clipPath={getClipPath(img.splitHalf)}
 					style={getImageDisplayStyle(img, i)}
+					imageWidth={img.width ?? 0}
+					imageHeight={img.height ?? 0}
 					onload={(e) => handleImageLoad(e, i)}
 				/>
 			{/each}

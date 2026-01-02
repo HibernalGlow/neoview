@@ -465,6 +465,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'ai',
 		canHide: true,
 	},
+	'translationOverlay': {
+		id: 'translationOverlay',
+		title: '翻译叠加层',
+		icon: Languages,
+		defaultPanel: 'ai',
+		canHide: true,
+	},
 	'voiceControl': {
 		id: 'voiceControl',
 		title: '语音控制',

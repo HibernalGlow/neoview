@@ -16,3 +16,6 @@ export { default as LayerTreeView } from './LayerTreeView.svelte';
 export { default as ImageInfoLayer } from './ImageInfoLayer.svelte';
 export { default as ProgressBarLayer } from './ProgressBarLayer.svelte';
 export { default as SidebarControlLayer } from './SidebarControlLayer.svelte';
+
+// 翻译叠加层
+export { default as TranslationOverlay } from './TranslationOverlay.svelte';

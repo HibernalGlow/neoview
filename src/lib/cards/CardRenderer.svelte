@@ -78,7 +78,8 @@
 		aiServiceConfig: () => import('./ai/AiServiceConfigCard.svelte'),
 		aiTranslationCache: () => import('./ai/AiTranslationCacheCard.svelte'),
 		aiTranslationTest: () => import('./ai/AiTranslationTestCard.svelte'),
-		voiceControl: () => import('./ai/VoiceControlCard.svelte')
+		voiceControl: () => import('./ai/VoiceControlCard.svelte'),
+		translationOverlay: () => import('./ai/TranslationOverlayCard.svelte')
 	};
 
 	// 组件缓存（避免重复加载）

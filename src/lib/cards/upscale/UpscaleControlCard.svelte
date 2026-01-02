@@ -12,17 +12,20 @@ import {
 	saveSettings
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+import { showInfoToast } from '$lib/utils/toast';
 
 function handleAutoUpscaleChange(checked: boolean) {
 	autoUpscaleEnabled.value = checked;
 	saveSettings();
 	// 同步到后端
 	upscaleStore.setEnabled(checked);
+	showInfoToast(checked ? '自动超分已开启' : '自动超分已关闭');
 }
 
 function handlePreviewChange(checked: boolean) {
 	showPanelPreview.value = checked;
 	saveSettings();
+	showInfoToast(checked ? '侧边预览已开启' : '侧边预览已关闭');
 }
 </script>
 

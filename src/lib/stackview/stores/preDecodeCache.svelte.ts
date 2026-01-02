@@ -187,6 +187,69 @@ class PreDecodeCacheStore {
   }
   
   /**
+   * 用超分图替换预解码缓存（超分完成后调用）
+   * 强制替换已有的原图缓存，确保翻页时使用超分图的预解码结果
+   * 
+   * @param pageIndex 页面索引
+   * @param upscaledUrl 超分图 URL
+   * @returns Promise<PreDecodedEntry | null>
+   */
+  async replaceWithUpscaled(
+    pageIndex: number,
+    upscaledUrl: string
+  ): Promise<PreDecodedEntry | null> {
+    // 避免重复预解码
+    if (this.pending.has(pageIndex)) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      // 如果已经是同一个 URL，直接返回
+      const existing = this.cache.get(pageIndex);
+      if (existing?.url === upscaledUrl) {
+        return existing;
+      }
+    }
+    
+    this.pending.add(pageIndex);
+    
+    try {
+      const img = new Image();
+      img.src = upscaledUrl;
+      
+      const startTime = performance.now();
+      await img.decode();
+      const decodeTime = performance.now() - startTime;
+      
+      // 清理旧的缓存条目
+      const oldEntry = this.cache.get(pageIndex);
+      if (oldEntry) {
+        oldEntry.img.src = '';
+      }
+      
+      const entry: PreDecodedEntry = {
+        img,
+        url: upscaledUrl,
+        timestamp: Date.now(),
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+      
+      // 直接替换，不检查 maxSize（超分图优先级更高）
+      this.cache.set(pageIndex, entry);
+      
+      // 触发响应式更新
+      this.bumpVersion();
+      
+      console.log(`✨ 超分图预解码完成: 页码 ${pageIndex + 1}, 耗时 ${decodeTime.toFixed(1)}ms, 尺寸 ${entry.width}x${entry.height}`);
+      
+      return entry;
+    } catch (error) {
+      console.warn(`⚠️ 超分图预解码失败: 页码 ${pageIndex + 1}`, error);
+      return null;
+    } finally {
+      this.pending.delete(pageIndex);
+    }
+  }
+  
+  /**
    * 淘汰最久未使用的条目（LRU）
    */
   private evictLRU(): void {

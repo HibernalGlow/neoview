@@ -733,6 +733,10 @@ class UpscaleStore {
       const url = convertFileSrc(cachePath);
       imagePool.setUpscaled(pageIndex, url);
       console.log(`✅ 超分图已加入 imagePool: page ${pageIndex} -> ${url}`);
+      
+      // 【关键优化】对超分图进行预解码，替换原图缓存
+      // 后台执行，不阻塞事件处理
+      this.preDecodeUpscaledImage(pageIndex, url);
     } else {
       console.log(`⏭️ 未加入 imagePool: status=${status}, cachePath=${cachePath ? 'yes' : 'no'}`);
     }
@@ -758,6 +762,26 @@ class UpscaleStore {
   private clearAll() {
     this.state.pageStatus = new SvelteMap();
     imagePool.clearAllUpscaled();
+  }
+
+  /** 
+   * 对超分图进行预解码（后台执行）
+   * 替换 preDecodeCache 中的原图缓存为超分图
+   */
+  private async preDecodeUpscaledImage(pageIndex: number, upscaledUrl: string): Promise<void> {
+    try {
+      // 动态导入避免循环依赖
+      const { preDecodeCache } = await import('./preDecodeCache.svelte');
+      
+      // 使用新方法替换原图缓存
+      const entry = await preDecodeCache.replaceWithUpscaled(pageIndex, upscaledUrl);
+      
+      if (entry) {
+        console.log(`✨ 超分图已预解码并替换缓存: page ${pageIndex + 1}, 尺寸 ${entry.width}x${entry.height}`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ 超分图预解码失败: page ${pageIndex + 1}`, error);
+    }
   }
 }
 

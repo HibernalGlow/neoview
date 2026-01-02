@@ -26,7 +26,6 @@ import {
 } from '$lib/stores';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
-import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 import { slideshowStore } from '$lib/stores/slideshow.svelte';
 import { dispatchViewerAction } from '$lib/utils/viewerActionDispatcher';
 import { showInfoToast } from '$lib/utils/toast';
@@ -113,19 +112,12 @@ export const SIMPLE_ACTION_HANDLERS: Record<string, () => void> = {
 /**
  * 自动超分切换处理器
  */
-export function handleToggleAutoUpscale(): void {
+export async function handleToggleAutoUpscale(): Promise<void> {
 	console.log('执行自动超分开关切换');
-	const settings = settingsManager.getSettings();
-	const current = settings.image.enableSuperResolution ?? false;
-	const next = !current;
-	settingsManager.updateNestedSettings('image', {
-		enableSuperResolution: next
-	});
-	updateUpscaleSettings({
-		autoUpscaleEnabled: next,
-		globalUpscaleEnabled: next,
-		currentImageUpscaleEnabled: next
-	});
+	// 动态导入避免循环依赖
+	const { upscaleStore } = await import('$lib/stackview/stores/upscaleStore.svelte');
+	const next = !upscaleStore.enabled;
+	await upscaleStore.setEnabled(next);
 	showInfoToast(next ? '自动超分已开启' : '自动超分已关闭');
 }
 

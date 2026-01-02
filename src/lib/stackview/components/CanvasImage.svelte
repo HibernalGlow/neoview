@@ -132,6 +132,9 @@
       });
       
       if (ctx) {
+        // 【抗锯齿优化】启用高质量图像平滑
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high'; // 'low' | 'medium' | 'high'
         ctx.drawImage(result.bitmap, 0, 0);
       }
       

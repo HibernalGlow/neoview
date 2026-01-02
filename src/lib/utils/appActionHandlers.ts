@@ -29,6 +29,7 @@ import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 import { slideshowStore } from '$lib/stores/slideshow.svelte';
 import { dispatchViewerAction } from '$lib/utils/viewerActionDispatcher';
+import { showInfoToast } from '$lib/utils/toast';
 
 /**
  * 动作处理器上下文
@@ -125,6 +126,7 @@ export function handleToggleAutoUpscale(): void {
 		globalUpscaleEnabled: next,
 		currentImageUpscaleEnabled: next
 	});
+	showInfoToast(next ? '自动超分已开启' : '自动超分已关闭');
 }
 
 /**

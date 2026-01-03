@@ -44,7 +44,7 @@ interface FileBrowserState {
   // 纯媒体文件夹点击直接打开
   penetratePureMediaFolderOpen: boolean;
   // 文件夹预览网格模式（显示前4张图片的2x2预览）
-  folderPreviewGrid: boolean;
+  // [4图预览功能已禁用] folderPreviewGrid: boolean;
   showSearchBar: boolean;
   showMigrationBar: boolean;
   showMigrationManager: boolean;
@@ -188,7 +188,7 @@ interface PenetrateSettings {
   penetrateInnerFileCount: 'single' | 'all';
   penetrateMaxDepth: number;
   penetratePureMediaFolderOpen: boolean;
-  folderPreviewGrid: boolean;
+  // [4图预览功能已禁用] folderPreviewGrid: boolean;
 }
 
 function loadEmptyClickSettings(): Partial<EmptyClickSettings> {
@@ -258,7 +258,7 @@ const initialState: FileBrowserState = {
   penetrateInnerFileCount: savedPenetrateSettings.penetrateInnerFileCount ?? 'single',
   penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
   penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
-  folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
+  // [4图预览功能已禁用] folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
   showSearchBar: false,
   showMigrationBar: false,
   showMigrationManager: false,
@@ -378,7 +378,7 @@ function createFileBrowserStore() {
         penetrateInnerFileCount: state.penetrateInnerFileCount,
         penetrateMaxDepth: state.penetrateMaxDepth,
         penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        folderPreviewGrid: state.folderPreviewGrid
+        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
       });
       return newState;
     }),
@@ -389,7 +389,7 @@ function createFileBrowserStore() {
         penetrateInnerFileCount: value,
         penetrateMaxDepth: state.penetrateMaxDepth,
         penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        folderPreviewGrid: state.folderPreviewGrid
+        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
       });
       return newState;
     }),
@@ -400,7 +400,7 @@ function createFileBrowserStore() {
         penetrateInnerFileCount: state.penetrateInnerFileCount,
         penetrateMaxDepth: value,
         penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        folderPreviewGrid: state.folderPreviewGrid
+        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
       });
       return newState;
     }),
@@ -411,21 +411,22 @@ function createFileBrowserStore() {
         penetrateInnerFileCount: state.penetrateInnerFileCount,
         penetrateMaxDepth: state.penetrateMaxDepth,
         penetratePureMediaFolderOpen: value,
-        folderPreviewGrid: state.folderPreviewGrid
+        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
       });
       return newState;
     }),
-    setFolderPreviewGrid: (value: boolean) => update(state => {
-      const newState = { ...state, folderPreviewGrid: value };
-      savePenetrateSettings({
-        penetrateShowInnerFile: state.penetrateShowInnerFile,
-        penetrateInnerFileCount: state.penetrateInnerFileCount,
-        penetrateMaxDepth: state.penetrateMaxDepth,
-        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        folderPreviewGrid: value
-      });
-      return newState;
-    }),
+    // [4图预览功能已禁用]
+    // setFolderPreviewGrid: (value: boolean) => update(state => {
+    //   const newState = { ...state, folderPreviewGrid: value };
+    //   savePenetrateSettings({
+    //     penetrateShowInnerFile: state.penetrateShowInnerFile,
+    //     penetrateInnerFileCount: state.penetrateInnerFileCount,
+    //     penetrateMaxDepth: state.penetrateMaxDepth,
+    //     penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+    //     folderPreviewGrid: value
+    //   });
+    //   return newState;
+    // }),
     setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
     setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
     setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),

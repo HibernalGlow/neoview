@@ -54,7 +54,7 @@ let {
 		{/if}
 	</div>
 
-	<!-- 文件夹 4 图预览 -->
+	<!-- [4图预览功能已禁用]
 	<div class="flex items-center gap-2">
 		<LayoutGrid class="h-3.5 w-3.5 text-muted-foreground" />
 		<span class="text-muted-foreground">文件夹预览:</span>
@@ -67,6 +67,7 @@ let {
 			{$fileBrowserStore.folderPreviewGrid ? '4图' : '单图'}
 		</Button>
 	</div>
+	-->
 
 	<!-- 缩略图大小 -->
 	<div class="flex items-center gap-2">

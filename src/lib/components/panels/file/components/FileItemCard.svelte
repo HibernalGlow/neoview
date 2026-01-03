@@ -12,7 +12,10 @@
 		collectTagMap,
 		emmTranslationStore
 	} from '$lib/stores/emmMetadata.svelte';
-	import { fileListTagSettings, type FileListTagDisplayMode } from '$lib/stores/fileListTagSettings.svelte';
+	import {
+		fileListTagSettings,
+		type FileListTagDisplayMode
+	} from '$lib/stores/fileListTagSettings.svelte';
 	import { mixedGenderStore, categoryColors } from '$lib/stores/emm/favoriteTagStore.svelte';
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import type { EMMTranslationDict } from '$lib/api/emm';
@@ -108,9 +111,11 @@
 	);
 
 	// EMM 元数据
-	let emmMetadata = $state<{ translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null>(
-		null
-	);
+	let emmMetadata = $state<{
+		translatedTitle?: string;
+		tags?: Record<string, string[]>;
+		rating?: number;
+	} | null>(null);
 	// let collectTags = $state<EMMCollectTag[]>([]); // No longer needed locally
 	let metadataLoading = $state(false);
 	let lastLoadedPath = $state<string | null>(null);
@@ -161,17 +166,21 @@
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
 	let penetratePureMediaFolderOpen = $state(true);
-	// 文件夹预览缩略图 URL 数组
-	let folderThumbnails = $state<string[]>([]);
+	// [4图预览功能已禁用] 文件夹预览缩略图 URL 数组
+	// let folderThumbnails = $state<string[]>([]);
+	let folderThumbnails: string[] = []; // 保持为空数组
 	// 文件夹 4 图预览：使用响应式 store（必须在 $effect 之前定义）
-	const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
+	// [4图预览功能已禁用] const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
+	const folderPreviewGridEnabled = false; // 强制禁用
 	// 支持多个内部文件
-	let penetrateChildFiles = $state<Array<{
-		name: string;
-		path: string;
-		translatedTitle?: string;
-		isAiTranslated?: boolean;
-	}>>([]);
+	let penetrateChildFiles = $state<
+		Array<{
+			name: string;
+			path: string;
+			translatedTitle?: string;
+			isAiTranslated?: boolean;
+		}>
+	>([]);
 	// 穿透模式：纯媒体文件夹（只包含图片/视频/文本，不包含压缩包和子文件夹）
 	let isPureMediaFolder = $state(false);
 
@@ -193,74 +202,74 @@
 		return unsubscribe;
 	});
 
-	// 文件夹 4 图预览：加载文件夹预览缩略图
-	$effect(() => {
-		// 仅在文件夹项目、开启 4 图预览时加载（对所有视图模式生效）
-		const isDir = item.isDir;
-		const enabled = folderPreviewGridEnabled;
-		const itemPath = item.path;
-		
-		console.log('📂 [4图预览] effect 触发:', {
-			itemPath,
-			isDir,
-			enabled,
-			viewMode
-		});
-		
-		if (!isDir || !enabled) {
-			console.log('📂 [4图预览] 条件不满足，跳过');
-			folderThumbnails = [];
-			return;
-		}
-		
-		// 延迟加载，避免影响初始渲染
-		const timeoutId = setTimeout(async () => {
-			try {
-				console.log('📂 [4图预览] 请求:', itemPath, 'enabled:', enabled);
-				// 调用后端获取文件夹预览缩略图
-				const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
-					folderPath: itemPath,
-					count: 4
-				});
-				
-				console.log('📂 [4图预览] 返回 blobKeys:', blobKeys.length, blobKeys);
-				
-				if (blobKeys.length === 0) {
-					folderThumbnails = [];
-					return;
-				}
-				
-				// 将 blob keys 转换为 blob URLs
-				const urls: string[] = [];
-				for (const blobKey of blobKeys) {
-					try {
-						const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
-						if (blobData) {
-							const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
-							urls.push(URL.createObjectURL(blob));
-						}
-					} catch {
-						// 忽略单个缩略图加载失败
-					}
-				}
-				console.log('📂 [4图预览] 最终 URLs:', urls.length, urls);
-				folderThumbnails = urls;
-			} catch (e) {
-				console.debug('加载文件夹预览缩略图失败:', e);
-				folderThumbnails = [];
-			}
-		}, 100);
-		
-		return () => {
-			clearTimeout(timeoutId);
-			// 清理 blob URLs
-			folderThumbnails.forEach(url => {
-				if (url.startsWith('blob:')) {
-					URL.revokeObjectURL(url);
-				}
-			});
-		};
-	});
+	// [4图预览功能已禁用] 不再加载文件夹预览缩略图
+	// $effect(() => {
+	// 	// 仅在文件夹项目、开启 4 图预览时加载（对所有视图模式生效）
+	// 	const isDir = item.isDir;
+	// 	const enabled = folderPreviewGridEnabled;
+	// 	const itemPath = item.path;
+	//
+	// 	console.log('📂 [4图预览] effect 触发:', {
+	// 		itemPath,
+	// 		isDir,
+	// 		enabled,
+	// 		viewMode
+	// 	});
+	//
+	// 	if (!isDir || !enabled) {
+	// 		console.log('📂 [4图预览] 条件不满足，跳过');
+	// 		folderThumbnails = [];
+	// 		return;
+	// 	}
+	//
+	// 	// 延迟加载，避免影响初始渲染
+	// 	const timeoutId = setTimeout(async () => {
+	// 		try {
+	// 			console.log('📂 [4图预览] 请求:', itemPath, 'enabled:', enabled);
+	// 			// 调用后端获取文件夹预览缩略图
+	// 			const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
+	// 				folderPath: itemPath,
+	// 				count: 4
+	// 			});
+	//
+	// 			console.log('📂 [4图预览] 返回 blobKeys:', blobKeys.length, blobKeys);
+	//
+	// 			if (blobKeys.length === 0) {
+	// 				folderThumbnails = [];
+	// 				return;
+	// 			}
+	//
+	// 			// 将 blob keys 转换为 blob URLs
+	// 			const urls: string[] = [];
+	// 			for (const blobKey of blobKeys) {
+	// 				try {
+	// 					const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
+	// 					if (blobData) {
+	// 						const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
+	// 						urls.push(URL.createObjectURL(blob));
+	// 					}
+	// 				} catch {
+	// 					// 忽略单个缩略图加载失败
+	// 				}
+	// 			}
+	// 			console.log('📂 [4图预览] 最终 URLs:', urls.length, urls);
+	// 			folderThumbnails = urls;
+	// 		} catch (e) {
+	// 			console.debug('加载文件夹预览缩略图失败:', e);
+	// 			folderThumbnails = [];
+	// 		}
+	// 	}, 100);
+	//
+	// 	return () => {
+	// 		clearTimeout(timeoutId);
+	// 		// 清理 blob URLs
+	// 		folderThumbnails.forEach(url => {
+	// 			if (url.startsWith('blob:')) {
+	// 				URL.revokeObjectURL(url);
+	// 			}
+	// 		});
+	// 	};
+	// });
 
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
@@ -270,14 +279,14 @@
 		const isPenetrate = penetrateModeEnabled;
 		const itemPath = item.path;
 		const isDir = item.isDir;
-		
+
 		// 不是文件夹则跳过
 		if (!isDir) {
 			penetrateChildFiles = [];
 			isPureMediaFolder = false;
 			return;
 		}
-		
+
 		// 配置为 'none' 时不显示
 		if (showMode === 'none') {
 			penetrateChildFiles = [];
@@ -295,93 +304,101 @@
 		// 延迟加载，避免影响初始列表渲染
 		const timeoutId = setTimeout(() => {
 			// 加载文件夹内容
-			FileSystemAPI.browseDirectory(itemPath).then(async (children) => {
-			// 检测是否为纯媒体文件夹
-			// 反向判断：只要没有子文件夹和压缩包，且有文件，就认为是纯媒体文件夹
-			// 这样 .nfo、.ass 等附属文件不会阻止穿透
-			const hasSubDir = children.some(c => c.isDir);
-			const hasArchive = children.some(c => !c.isDir && isArchiveFile(c.name));
-			const hasFiles = children.some(c => !c.isDir);
-			
-			// 纯媒体文件夹：无子文件夹、无压缩包、且至少有一个文件
-			isPureMediaFolder = !hasSubDir && !hasArchive && hasFiles;
-			
-			// 过滤出压缩包文件
-			const archives = children.filter(c => !c.isDir && isArchiveFile(c.name));
-			
-			// countMode: 'single' 只处理单个压缩包，'all' 处理所有
-			if (countMode === 'single' && archives.length !== 1) {
-				penetrateChildFiles = [];
-				return;
-			}
-			
-			if (archives.length === 0) {
-				penetrateChildFiles = [];
-				return;
-			}
-			
-			// 先立即显示文件列表（无翻译），然后异步加载翻译
-			const initialResults = archives.map(child => ({
-				name: child.name,
-				path: child.path,
-				translatedTitle: undefined as string | undefined,
-				isAiTranslated: false,
-			}));
-			
-			// 立即显示（不等待翻译）
-			penetrateChildFiles = initialResults;
-			
-			// 异步加载翻译（不阻塞显示）
-			Promise.all(archives.map(async (child, idx) => {
-				let translatedTitle: string | undefined;
-				let isAiTranslated = false;
-				
-				// 加载 EMM 元数据
-				if (enableEMM) {
-					try {
-						const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
-						if (metadata?.translated_title) {
-							translatedTitle = metadata.translated_title;
-						}
-					} catch { /* 忽略 */ }
-				}
-				
-				// AI 翻译（如果没有 EMM 翻译）
-				if (!translatedTitle && aiTranslationEnabled && aiAutoTranslate) {
-					const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
-					const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
-					const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
-					if (cached) {
-						translatedTitle = cached;
-						isAiTranslated = true;
-					} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
-						try {
-							const result = await translateText(nameWithoutExt, { fileExtension: childExt });
-							if (result.success && result.translated) {
-								translatedTitle = result.translated;
-								isAiTranslated = true;
+			FileSystemAPI.browseDirectory(itemPath)
+				.then(async (children) => {
+					// 检测是否为纯媒体文件夹
+					// 反向判断：只要没有子文件夹和压缩包，且有文件，就认为是纯媒体文件夹
+					// 这样 .nfo、.ass 等附属文件不会阻止穿透
+					const hasSubDir = children.some((c) => c.isDir);
+					const hasArchive = children.some((c) => !c.isDir && isArchiveFile(c.name));
+					const hasFiles = children.some((c) => !c.isDir);
+
+					// 纯媒体文件夹：无子文件夹、无压缩包、且至少有一个文件
+					isPureMediaFolder = !hasSubDir && !hasArchive && hasFiles;
+
+					// 过滤出压缩包文件
+					const archives = children.filter((c) => !c.isDir && isArchiveFile(c.name));
+
+					// countMode: 'single' 只处理单个压缩包，'all' 处理所有
+					if (countMode === 'single' && archives.length !== 1) {
+						penetrateChildFiles = [];
+						return;
+					}
+
+					if (archives.length === 0) {
+						penetrateChildFiles = [];
+						return;
+					}
+
+					// 先立即显示文件列表（无翻译），然后异步加载翻译
+					const initialResults = archives.map((child) => ({
+						name: child.name,
+						path: child.path,
+						translatedTitle: undefined as string | undefined,
+						isAiTranslated: false
+					}));
+
+					// 立即显示（不等待翻译）
+					penetrateChildFiles = initialResults;
+
+					// 异步加载翻译（不阻塞显示）
+					Promise.all(
+						archives.map(async (child, idx) => {
+							let translatedTitle: string | undefined;
+							let isAiTranslated = false;
+
+							// 加载 EMM 元数据
+							if (enableEMM) {
+								try {
+									const metadata = await emmMetadataStore.loadMetadataByPath(child.path);
+									if (metadata?.translated_title) {
+										translatedTitle = metadata.translated_title;
+									}
+								} catch {
+									/* 忽略 */
+								}
 							}
-						} catch { /* 忽略 */ }
-					}
-				}
-				
-				return { idx, translatedTitle, isAiTranslated };
-			})).then(updates => {
-				// 更新翻译结果
-				const newResults = [...penetrateChildFiles];
-				for (const { idx, translatedTitle, isAiTranslated } of updates) {
-					if (newResults[idx] && translatedTitle) {
-						newResults[idx] = { ...newResults[idx], translatedTitle, isAiTranslated };
-					}
-				}
-				penetrateChildFiles = newResults;
-			});
-		}).catch(() => {
-				penetrateChildFiles = [];
-				isPureMediaFolder = false;
-			});
+
+							// AI 翻译（如果没有 EMM 翻译）
+							if (!translatedTitle && aiTranslationEnabled && aiAutoTranslate) {
+								const nameWithoutExt = child.name.replace(/\.[^.]+$/, '');
+								const childExt = child.name.split('.').pop()?.toLowerCase() || 'archive';
+								const cached = aiTranslationStore.getCachedTranslation(nameWithoutExt);
+								if (cached) {
+									translatedTitle = cached;
+									isAiTranslated = true;
+								} else if (needsTranslation(nameWithoutExt, aiTargetLanguage)) {
+									try {
+										const result = await translateText(nameWithoutExt, { fileExtension: childExt });
+										if (result.success && result.translated) {
+											translatedTitle = result.translated;
+											isAiTranslated = true;
+										}
+									} catch {
+										/* 忽略 */
+									}
+								}
+							}
+
+							return { idx, translatedTitle, isAiTranslated };
+						})
+					).then((updates) => {
+						// 更新翻译结果
+						const newResults = [...penetrateChildFiles];
+						for (const { idx, translatedTitle, isAiTranslated } of updates) {
+							if (newResults[idx] && translatedTitle) {
+								newResults[idx] = { ...newResults[idx], translatedTitle, isAiTranslated };
+							}
+						}
+						penetrateChildFiles = newResults;
+					});
+				})
+				.catch(() => {
+					penetrateChildFiles = [];
+					isPureMediaFolder = false;
+				});
 		}, 50); // 50ms 延迟，让主列表先渲染
-		
+
 		return () => clearTimeout(timeoutId);
 	});
 
@@ -498,7 +515,7 @@
 
 		// 获取文件名（不含扩展名）
 		const nameWithoutExt = item.name.replace(/\.[^.]+$/, '');
-		
+
 		// 检测是否需要翻译（源语言 ≠ 目标语言）
 		if (!needsTranslation(nameWithoutExt, aiTargetLanguage)) return;
 
@@ -510,8 +527,8 @@
 		}
 
 		// 获取扩展名：文件夹用 'folder'，文件用实际扩展名
-		const itemExt = item.isDir ? 'folder' : (item.name.split('.').pop()?.toLowerCase() || '');
-		
+		const itemExt = item.isDir ? 'folder' : item.name.split('.').pop()?.toLowerCase() || '';
+
 		// 异步翻译（不阻塞）
 		translateText(nameWithoutExt, { fileExtension: itemExt }).then((result) => {
 			if (result.success && result.translated && item.path === lastLoadedPath) {
@@ -527,7 +544,14 @@
 		const map = $collectTagMap; // Use the shared map
 		const isMixedEnabled = mixedGenderStore.enabled;
 
-		const allTags: Array<{ tag: string; isCollect: boolean; color?: string; display: string; isMixedVariant?: boolean; isManual?: boolean }> = [];
+		const allTags: Array<{
+			tag: string;
+			isCollect: boolean;
+			color?: string;
+			display: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}> = [];
 		const addedTagKeys = new Set<string>();
 
 		// 先添加 EMM 标签
@@ -535,7 +559,7 @@
 			for (const [category, tags] of Object.entries(emmMetadata.tags)) {
 				for (const tag of tags) {
 					const fullTagKey = normalizeTagKey(`${category}:${tag}`);
-					
+
 					// 避免重复添加
 					if (addedTagKeys.has(fullTagKey)) continue;
 					addedTagKeys.add(fullTagKey);
@@ -575,7 +599,9 @@
 					const displayStr = `${shortCategory}:${translatedTag}`;
 
 					// 使用类别颜色或收藏颜色
-					const tagColor = collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
+					const tagColor =
+						collectTag?.color ||
+						(matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
 
 					allTags.push({
 						tag: `${category}:${tag}`,
@@ -592,7 +618,7 @@
 		// 添加手动标签（虚线边框样式）
 		for (const mt of manualTags) {
 			const fullTagKey = normalizeTagKey(`${mt.namespace}:${mt.tag}`);
-			
+
 			// 避免与 EMM 标签重复
 			if (addedTagKeys.has(fullTagKey)) continue;
 			addedTagKeys.add(fullTagKey);
@@ -624,10 +650,10 @@
 	$effect(() => {
 		// 只对压缩包（book）更新 collectTagCount
 		if (!isArchive || item.isDir) return;
-		
+
 		const tags = displayTags();
-		const collectCount = tags.filter(t => t.isCollect).length;
-		
+		const collectCount = tags.filter((t) => t.isCollect).length;
+
 		// 更新到缓存（直接调用内部更新方法）
 		if (collectCount > 0) {
 			collectTagCountStore.setCount(item.path, collectCount);
@@ -666,7 +692,7 @@
 		if (!showSizeAndModified) return;
 		if (!item.isDir) return;
 		if (folderTotalSize !== null || folderSizeLoading) return;
-		
+
 		// 检查路径是否在黑名单中（系统保护文件夹或用户排除路径）
 		if (isPathBlacklisted(item.path)) {
 			folderTotalSize = 0; // 设置为0避免重复请求
@@ -700,8 +726,8 @@
 	// 支持多个内部文件
 	const penetrateInfoList = $derived.by(() => {
 		if (!item.isDir || penetrateChildFiles.length === 0) return [];
-		
-		return penetrateChildFiles.map(child => {
+
+		return penetrateChildFiles.map((child) => {
 			const childNameWithoutExt = child.name.replace(/\.[^.]+$/, '');
 			return {
 				originalName: childNameWithoutExt,
@@ -715,14 +741,14 @@
 	// 如果有 AI 翻译但没有 EMM 翻译，则使用 AI 翻译并标记为 AI 翻译
 	const mergedEmmMetadata = $derived.by(() => {
 		if (!emmMetadata && !aiTranslatedTitle) return null;
-		
+
 		const base = emmMetadata || { tags: undefined, rating: undefined };
-		
+
 		// 如果已有 EMM 翻译标题，直接使用
 		if (base.translatedTitle) {
 			return base;
 		}
-		
+
 		// 如果有 AI 翻译标题，使用 AI 翻译并添加标记
 		if (aiTranslatedTitle) {
 			return {
@@ -731,7 +757,7 @@
 				isAiTranslated: true
 			};
 		}
-		
+
 		return base;
 	});
 </script>
@@ -759,7 +785,7 @@
 		{isArchive}
 		{isReadCompleted}
 		emmMetadata={mergedEmmMetadata}
-		penetrateInfoList={penetrateInfoList}
+		{penetrateInfoList}
 		{isPureMediaFolder}
 		folderAverageRating={itemRating}
 		folderManualRating={null}
@@ -796,8 +822,10 @@
 	<FileItemGridView
 		{item}
 		{thumbnail}
+		/* [4图预览功能已禁用] 
 		{folderThumbnails}
-		{folderPreviewGridEnabled}
+		{folderPreviewGridEnabled} 
+		*/
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

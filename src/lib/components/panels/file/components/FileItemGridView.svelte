@@ -23,16 +23,14 @@
 	import TagChip from '$lib/components/ui/TagChip.svelte';
 	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
-	import FolderPreviewGrid from './FolderPreviewGrid.svelte';
+	// [4图预览功能已禁用] import FolderPreviewGrid from './FolderPreviewGrid.svelte';
 	import { formatDuration, formatRelativeTime, formatBytes, formatSize, getFolderSizeDisplay } from '$lib/utils/formatters';
 
 	interface Props {
 		item: FsItem;
 		thumbnail?: string;
-		/** 文件夹多图预览 URL 数组（最多 4 个） */
-		folderThumbnails?: string[];
-		/** 是否启用文件夹 4 图预览模式 */
-		folderPreviewGridEnabled?: boolean;
+		// [4图预览功能已禁用] folderThumbnails?: string[];
+		// [4图预览功能已禁用] folderPreviewGridEnabled?: boolean;
 		isSelected?: boolean;
 		showReadMark?: boolean;
 		showSizeAndModified?: boolean;
@@ -65,8 +63,8 @@
 	let {
 		item,
 		thumbnail,
-		folderThumbnails = [],
-		folderPreviewGridEnabled = false,
+		// [4图预览功能已禁用] folderThumbnails = [],
+		// [4图预览功能已禁用] folderPreviewGridEnabled = false,
 		isSelected = false,
 		showReadMark = false,
 		showSizeAndModified = false,
@@ -92,10 +90,11 @@
 		onSetRating
 	}: Props = $props();
 
-	// 判断是否显示文件夹 4 图预览
-	const showFolderPreviewGrid = $derived(
+	// [4图预览功能已禁用]
+	const showFolderPreviewGrid = false;
+	/* const showFolderPreviewGrid = $derived(
 		item.isDir && folderPreviewGridEnabled && folderThumbnails.length > 0
-	);
+	); */
 </script>
 
 <div
@@ -118,9 +117,9 @@
 >
 	<!-- 缩略图区域 - 自动扩展填充可用空间 -->
 	<div class="bg-secondary relative w-full flex-1 min-h-20 overflow-hidden">
-		{#if showFolderPreviewGrid}
+		{#if false /* [4图预览功能已禁用] showFolderPreviewGrid */}
 			<!-- 文件夹 4 图预览模式 -->
-			<FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} />
+			<!-- <FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} /> -->
 		{:else if thumbnail}
 			<img
 				src={thumbnail}

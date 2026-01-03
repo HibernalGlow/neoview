@@ -738,33 +738,9 @@ class BookStore {
 
   // ==================== 同步方法 ====================
 
-  private async syncFileBrowserSelection(path: string) {
+  private syncFileBrowserSelection(path: string) {
     try {
       fileBrowserStore.selectPath(path);
-      
-      // 同步 folder 卡片的高亮状态
-      const { folderTabActions, tabCurrentPath } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
-      const { get } = await import('svelte/store');
-      
-      // 获取书籍所在的父目录
-      const normalized = path.replace(/\\/g, '/');
-      const lastSlash = normalized.lastIndexOf('/');
-      const parentDir = lastSlash > 0 ? normalized.substring(0, lastSlash) : null;
-      
-      if (parentDir) {
-        // 获取当前 folder 面板显示的目录
-        const currentPath = get(tabCurrentPath);
-        const normalizedCurrentPath = currentPath?.replace(/\\/g, '/').toLowerCase() || '';
-        const normalizedParentDir = parentDir.toLowerCase();
-        
-        // 如果当前显示的目录不是书籍所在目录，先导航过去
-        if (normalizedCurrentPath !== normalizedParentDir) {
-          folderTabActions.setPath(parentDir, false);
-        }
-        
-        // 设置待聚焦路径，FolderStack 会自动定位并高亮
-        folderTabActions.focusOnPath(path);
-      }
     } catch (error) {
       console.debug('syncFileBrowserSelection failed:', error);
     }

@@ -370,6 +370,11 @@ impl ArchiveManager {
         cache::clear_cache(&self.cache, &self.archive_cache);
     }
 
+    /// 清除指定压缩包的缓存
+    pub fn evict_cache_for_path(&self, path: &Path) {
+        cache::evict_archive_cache(&self.cache, &self.archive_cache, path);
+    }
+
     /// 限制缓存大小
     pub fn limit_cache_size(&self, max_items: usize) {
         cache::limit_cache_size(&self.cache, &self.archive_cache, max_items);

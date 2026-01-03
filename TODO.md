@@ -1,43 +1,6 @@
 
 
-### 使用 Susie 插件
-opencomic缩略图 文件系统
 
-项目中超过800行的文件
-
-  以下是项目中超过800行的源代码文件（按行数降序排列）：
-
-  Rust 后端文件 (src-tauri)
-   1. src-tauri\src\commands\fs_commands.rs: 2096 lines - 文件系统命令
-   2. src-tauri\src\core\thumbnail_db.rs: 1976 lines - 缩略图数据库
-   3. src-tauri\src\commands\benchmark_commands.rs: 1610 lines - 基准测试命令
-   4. src-tauri\src\core\archive.rs: 1457 lines - 归档文件处理
-   5. src-tauri\src\commands\thumbnail_commands.rs: 1295 lines - 缩略图命令
-   6. src-tauri\src\core\thumbnail_service_v3.rs: 1353 lines - 缩略图服务v3
-   7. src-tauri\src\core\upscale_service.rs: 1249 lines - 图像放大服务
-   8. src-tauri\src\core\page_manager\mod.rs: 859 lines - 页面管理器
-   9. src-tauri\src\core\thumbnail_generator.rs: 886 lines - 缩略图生成器
-   10. src-tauri\src\core\fs_manager.rs: 808 lines - 文件系统管理器
-
-  前端 Svelte/TypeScript 文件 (src)
-   1. src\lib\components\panels\folderPanel\stores\folderTabStore.svelte.ts: 1761 lines - 文件夹标签页状态管理
-   2. src\lib\components\panels\emm\EmmPanelSection.svelte: 1720 lines - EMM面板组件
-   3. src\lib\components\layout\TopToolbar.svelte: 1415 lines - 顶部工具栏
-   4. src\lib\components\panels\folderPanel\components\FolderToolbar.svelte: 1412 lines - 文件夹工具栏
-   5. src\App.svelte: 1121 lines - 主应用组件
-   6. src\lib\stores\keybindings.svelte.ts: 1089 lines - 键盘绑定状态管理
-   7. src\lib\components\panels\folderPanel\components\FolderStack.svelte: 1285 lines - 文件夹堆栈组件
-   8. src\lib\stores\book.svelte.ts: 1279 lines - 书籍状态管理
-   9. src\lib\components\viewer\VideoPlayer.svelte: 1256 lines - 视频播放器组件
-   10. src\lib\api\filesystem.ts: 887 lines - 文件系统API
-   11. src\lib\cards\ai\AiServiceConfigCard.svelte: 951 lines - AI服务配置卡片
-   12. src\lib\components\panels\folderPanel\stores\folderPanelStore.svelte.ts: 1023 lines - 文件夹面板状态管理
-   13. src\lib\components\layout\BottomThumbnailBar.svelte: 930 lines - 底部缩略图栏
-   14. src\lib\stackview\StackView.svelte: 881 lines - 堆栈视图组件
-   15. src\lib\stores\settingsManager.svelte.ts: 811 lines - 设置管理器
-
-✦ 这些文件可能需要考虑重构以提高代码的可维护性。特别是超过2000行的文件（如fs_commands.rs和thumbnail_db.rs）建议拆分成     
-  更小的模块。
 
 持久化更多设置里的内部文件显示数量 单击双击空白处行为 列表底部返回按钮 这些都没有持久化
 超分条件总像素量条件

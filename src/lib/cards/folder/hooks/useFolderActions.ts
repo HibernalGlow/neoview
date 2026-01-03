@@ -142,6 +142,9 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		const strategy = get(state.deleteStrategy);
 		const actionText = strategy === 'trash' ? '删除' : '永久删除';
 
+		// 删除前释放相关资源（解决文件占用问题）
+		await FileSystemAPI.releaseResourcesForPaths(paths);
+
 		let successCount = 0;
 		for (const path of paths) {
 			try {
@@ -179,6 +182,9 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 
 		const strategy = get(state.deleteStrategy);
 		const actionText = strategy === 'trash' ? '删除' : '永久删除';
+
+		// 删除前释放相关资源（解决文件占用问题）
+		await FileSystemAPI.releaseResourcesForPath(item.path);
 
 		folderTabActions.removeItem(item.path);
 

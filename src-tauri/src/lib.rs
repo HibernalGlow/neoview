@@ -3,7 +3,6 @@
 
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 // 抑制开发阶段的未使用代码警告
 #![allow(dead_code)]
 #![allow(unused_imports)]
@@ -15,24 +14,24 @@ mod models;
 mod tray;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
-use commands::thumbnail_commands::ThumbnailState;
-use core::directory_stream::StreamManagerState;
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::page_commands::PageManagerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
+use commands::thumbnail_commands::ThumbnailState;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_service_commands::UpscaleServiceState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
+use core::background_scheduler::BackgroundTaskScheduler;
 use core::blob_registry::BlobRegistry;
+use core::cache_index_db::CacheIndexDb;
+use core::custom_protocol::{handle_protocol_request, ProtocolState, PROTOCOL_NAME};
+use core::directory_stream::StreamManagerState;
 use core::job_engine::{JobEngine, JobEngineConfig};
 use core::page_manager::PageContentManager;
-use core::background_scheduler::BackgroundTaskScheduler;
-use core::cache_index_db::CacheIndexDb;
 use core::thumbnail_db::ThumbnailDb;
 use core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
 use core::upscale_scheduler::{UpscaleScheduler, UpscaleSchedulerState};
-use core::custom_protocol::{handle_protocol_request, ProtocolState, PROTOCOL_NAME};
 use core::{ArchiveManager, BookManager, FsManager, ImageLoader};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -47,7 +46,7 @@ pub fn run() {
     std::panic::set_hook(Box::new(|panic_info| {
         let msg = format!("PANIC: {}", panic_info);
         log::error!("{}", msg);
-        
+
         // 尝试写入日志文件
         if let Ok(app_data) = std::env::var("APPDATA") {
             let log_path = std::path::PathBuf::from(app_data)
@@ -68,7 +67,7 @@ pub fn run() {
                     file.write_all(log_entry.as_bytes())
                 });
         }
-        
+
         // 显示错误对话框
         core::startup_init::show_startup_error_dialog("NeoView 崩溃", &msg);
     }));
@@ -90,7 +89,8 @@ pub fn run() {
         })
         .setup(|app| {
             // 🚀 启动初始化：确保所有必需目录存在
-            let startup_diagnostics = match core::startup_init::ensure_app_directories(app.handle()) {
+            let startup_diagnostics = match core::startup_init::ensure_app_directories(app.handle())
+            {
                 Ok(diag) => {
                     core::startup_init::write_startup_log(&diag.app_data_path, "NeoView 启动中...");
                     diag
@@ -193,10 +193,8 @@ pub fn run() {
                 Arc::clone(&fs_state.archive_manager)
             };
 
-            let page_manager = PageContentManager::new(
-                Arc::clone(&job_engine),
-                archive_manager_for_pm,
-            );
+            let page_manager =
+                PageContentManager::new(Arc::clone(&job_engine), archive_manager_for_pm);
 
             app.manage(PageManagerState {
                 manager: Arc::new(tokio::sync::Mutex::new(page_manager)),
@@ -205,7 +203,10 @@ pub fn run() {
             // 初始化流管理器状态
             app.manage(StreamManagerState::default());
 
-            log::info!("🚀 NeoView 初始化完成 (JobEngine workers: {})", num_cores.clamp(2, 8));
+            log::info!(
+                "🚀 NeoView 初始化完成 (JobEngine workers: {})",
+                num_cores.clamp(2, 8)
+            );
 
             // 初始化系统托盘（使用安全版本，失败不会导致应用崩溃）
             if let Err(e) = tray::init_tray_safe(app.handle()) {
@@ -220,21 +221,22 @@ pub fn run() {
             // 🖼️ 初始化 ThumbnailState（在启动时初始化，避免 state() 调用 panic）
             let thumbnail_db_path = app_data_root.join("thumbnails.db");
             let thumbnail_db = Arc::new(ThumbnailDb::new(thumbnail_db_path));
-            
+
             // 创建生成器配置（根据 CPU 核心数动态调整）
             let thumb_thread_pool_size = (num_cores * 4).clamp(16, 32);
             let thumb_archive_concurrency = (num_cores * 2).clamp(4, 12);
             let thumb_config = ThumbnailGeneratorConfig {
-                max_width: 256,  // 默认尺寸，前端可通过 init_thumbnail_manager 重新配置
+                max_width: 256, // 默认尺寸，前端可通过 init_thumbnail_manager 重新配置
                 max_height: 256,
                 thread_pool_size: thumb_thread_pool_size,
                 archive_concurrency: thumb_archive_concurrency,
             };
-            let thumbnail_generator = Arc::new(Mutex::new(
-                ThumbnailGenerator::new(Arc::clone(&thumbnail_db), thumb_config)
-            ));
+            let thumbnail_generator = Arc::new(Mutex::new(ThumbnailGenerator::new(
+                Arc::clone(&thumbnail_db),
+                thumb_config,
+            )));
             let blob_registry = Arc::new(BlobRegistry::new(1000));
-            
+
             app.manage(ThumbnailState {
                 db: thumbnail_db,
                 generator: thumbnail_generator,
@@ -305,6 +307,7 @@ pub fn run() {
             commands::fs_commands::get_last_deleted_item,
             commands::fs_commands::undo_last_delete,
             commands::fs_commands::restore_from_trash,
+            commands::fs_commands::release_path_resources,
             // Archive commands
             commands::list_archive_contents,
             commands::load_image_from_archive,
@@ -448,7 +451,7 @@ pub fn run() {
             commands::thumbnail_commands::retrieval::has_thumbnail_by_key_category,
             commands::thumbnail_commands::retrieval::load_thumbnail_from_db,
             commands::thumbnail_commands::retrieval::get_thumbnail_blob_data,
-            commands::thumbnail_commands::retrieval::get_folder_preview_thumbnails,
+            // [4图预览功能已禁用] commands::thumbnail_commands::retrieval::get_folder_preview_thumbnails,
             commands::thumbnail_commands::batch_ops::batch_load_thumbnails_from_db,
             commands::thumbnail_commands::batch_ops::preload_thumbnail_index,
             commands::thumbnail_commands::batch_ops::scan_folder_thumbnails,
@@ -578,33 +581,43 @@ pub fn run() {
                 tauri::RunEvent::Ready => {
                     log::info!("🎉 应用就绪");
                     if let Ok(app_data) = app_handle.path().app_data_dir() {
-                        core::startup_init::write_startup_log(&app_data, "步骤17: 应用就绪 (Ready)");
+                        core::startup_init::write_startup_log(
+                            &app_data,
+                            "步骤17: 应用就绪 (Ready)",
+                        );
                     }
                 }
                 tauri::RunEvent::ExitRequested { api, code, .. } => {
                     log::info!("📤 应用退出请求, code: {:?}", code);
                     if let Ok(app_data) = app_handle.path().app_data_dir() {
-                        core::startup_init::write_startup_log(&app_data, &format!("应用退出请求, code: {:?}", code));
+                        core::startup_init::write_startup_log(
+                            &app_data,
+                            &format!("应用退出请求, code: {:?}", code),
+                        );
                     }
                 }
-                tauri::RunEvent::WindowEvent { label, event, .. } => {
-                    match event {
-                        tauri::WindowEvent::CloseRequested { .. } => {
-                            log::info!("🪟 窗口 {} 关闭请求", label);
-                        }
-                        tauri::WindowEvent::Destroyed => {
-                            log::info!("🪟 窗口 {} 已销毁", label);
-                            if let Ok(app_data) = app_handle.path().app_data_dir() {
-                                core::startup_init::write_startup_log(&app_data, &format!("窗口 {} 已销毁", label));
-                            }
-                        }
-                        _ => {}
+                tauri::RunEvent::WindowEvent { label, event, .. } => match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        log::info!("🪟 窗口 {} 关闭请求", label);
                     }
-                }
+                    tauri::WindowEvent::Destroyed => {
+                        log::info!("🪟 窗口 {} 已销毁", label);
+                        if let Ok(app_data) = app_handle.path().app_data_dir() {
+                            core::startup_init::write_startup_log(
+                                &app_data,
+                                &format!("窗口 {} 已销毁", label),
+                            );
+                        }
+                    }
+                    _ => {}
+                },
                 tauri::RunEvent::WebviewEvent { label, event, .. } => {
                     log::info!("🌐 WebView 事件: {} - {:?}", label, event);
                     if let Ok(app_data) = app_handle.path().app_data_dir() {
-                        core::startup_init::write_startup_log(&app_data, &format!("WebView 事件: {} - {:?}", label, event));
+                        core::startup_init::write_startup_log(
+                            &app_data,
+                            &format!("WebView 事件: {} - {:?}", label, event),
+                        );
                     }
                 }
                 _ => {}

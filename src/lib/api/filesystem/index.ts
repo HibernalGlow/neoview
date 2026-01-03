@@ -107,3 +107,10 @@ export {
   setExplorerContextMenuEnabled,
   generateExplorerContextMenuReg
 } from './systemIntegration';
+
+// ===== 资源释放导出 =====
+export {
+  isBookRelatedToPath,
+  releaseResourcesForPath,
+  releaseResourcesForPaths
+} from './resourceRelease';

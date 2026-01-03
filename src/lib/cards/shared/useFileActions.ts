@@ -264,6 +264,9 @@ export function createDeleteActions(
 		let failCount = 0;
 		const successPaths: string[] = [];
 
+		// 删除前释放相关资源（解决文件占用问题）
+		await FileSystemAPI.releaseResourcesForPaths(paths);
+
 		for (const p of paths) {
 			try {
 				if (strategy === 'trash') {
@@ -301,6 +304,10 @@ export function createDeleteActions(
 			return;
 		}
 		const strategy = get(ctx.deleteStrategy);
+
+		// 删除前释放相关资源（解决文件占用问题）
+		await FileSystemAPI.releaseResourcesForPath(item.path);
+
 		folderTabActions.removeItem(item.path);
 		try {
 			if (strategy === 'trash') {

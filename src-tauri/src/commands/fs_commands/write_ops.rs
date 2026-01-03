@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tauri::async_runtime::spawn_blocking;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 /// 创建目录
 #[tauri::command]
@@ -42,6 +42,7 @@ pub async fn rename_path(
 
 /// 移动到回收站
 /// 使用 spawn_blocking 在独立线程执行，避免 Windows COM 线程模型冲突
+/// 包含重试机制以处理文件暂时被占用的情况
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
@@ -50,7 +51,38 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
         if !path_buf.exists() {
             return Err(format!("文件不存在: {}", path_buf.display()));
         }
-        trash::delete(&path_buf).map_err(|e| format!("移动到回收站失败: {}", e))
+
+        // 尝试删除，如果失败则重试
+        let max_retries = 3;
+        let mut last_error = String::new();
+
+        for attempt in 0..max_retries {
+            match trash::delete(&path_buf) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    last_error = e.to_string();
+                    log::warn!(
+                        "移动到回收站失败 (尝试 {}/{}): {} - {}",
+                        attempt + 1,
+                        max_retries,
+                        path_buf.display(),
+                        last_error
+                    );
+
+                    if attempt < max_retries - 1 {
+                        // 等待一段时间后重试（让其他进程释放文件句柄）
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            100 * (attempt as u64 + 1),
+                        ));
+                    }
+                }
+            }
+        }
+
+        Err(format!(
+            "移动到回收站失败 (已重试{}次): {}",
+            max_retries, last_error
+        ))
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {}", e))?
@@ -58,6 +90,7 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
 
 /// 异步移动到回收站（绕开 IPC 协议问题）
 /// 使用事件通知结果，前端不需要等待返回
+/// 包含重试机制以处理文件暂时被占用的情况
 #[tauri::command]
 pub async fn move_to_trash_async(
     path: String,
@@ -69,7 +102,38 @@ pub async fn move_to_trash_async(
 
     tokio::spawn(async move {
         let delete_path = path_buf.clone();
-        let result = spawn_blocking(move || trash::delete(&delete_path)).await;
+        let result = spawn_blocking(move || {
+            // 尝试删除，如果失败则重试
+            let max_retries = 3;
+            let mut last_error = String::new();
+
+            for attempt in 0..max_retries {
+                match trash::delete(&delete_path) {
+                    Ok(()) => return Ok(()),
+                    Err(e) => {
+                        last_error = e.to_string();
+                        log::warn!(
+                            "异步移动到回收站失败 (尝试 {}/{}): {} - {}",
+                            attempt + 1,
+                            max_retries,
+                            delete_path.display(),
+                            last_error
+                        );
+
+                        if attempt < max_retries - 1 {
+                            std::thread::sleep(std::time::Duration::from_millis(
+                                100 * (attempt as u64 + 1),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            Err(trash::Error::Unknown {
+                description: last_error,
+            })
+        })
+        .await;
 
         let (success, error) = match result {
             Ok(Ok(())) => (true, None),
@@ -436,4 +500,57 @@ pub async fn restore_from_trash(original_path: String) -> Result<(), String> {
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {}", e))?
+}
+
+/// 释放指定路径相关的所有资源
+/// 在删除文件/文件夹前调用，确保释放文件句柄
+#[tauri::command]
+pub async fn release_path_resources(
+    path: String, 
+    state: State<'_, FsState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    log::info!("🔓 [ReleaseResources] 释放路径资源: {}", path);
+    
+    let path_buf = PathBuf::from(&path);
+    
+    // 清除 ArchiveManager 中与该路径相关的缓存
+    if let Ok(archive_manager) = state.archive_manager.lock() {
+        // 清除所有缓存（确保释放所有文件句柄）
+        archive_manager.clear_cache();
+        log::info!("🔓 [ReleaseResources] 已清除 ArchiveManager 缓存");
+    }
+    
+    // 清除 ProtocolState 的缓存
+    if let Some(protocol_state) = app_handle.try_state::<crate::core::custom_protocol::ProtocolState>() {
+        protocol_state.clear_cache();
+        protocol_state.mmap_cache.clear();
+        protocol_state.path_registry.clear();
+        log::info!("🔓 [ReleaseResources] 已清除 ProtocolState 缓存");
+    }
+    
+    // 如果是文件夹，遍历清除所有子文件的缓存
+    if path_buf.is_dir() {
+        if let Ok(archive_manager) = state.archive_manager.lock() {
+            // 遍历文件夹中的所有压缩包并清除缓存
+            if let Ok(entries) = std::fs::read_dir(&path_buf) {
+                for entry in entries.flatten() {
+                    let entry_path = entry.path();
+                    if entry_path.is_file() {
+                        archive_manager.evict_cache_for_path(&entry_path);
+                    }
+                }
+            }
+            log::info!("🔓 [ReleaseResources] 已清除文件夹内所有压缩包缓存");
+        }
+    }
+    
+    // 强制触发 Rust 的 drop（通过重新获取锁来确保之前的引用被释放）
+    drop(state.archive_manager.lock());
+    
+    // 等待更长时间确保文件句柄完全释放
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+    
+    log::info!("✅ [ReleaseResources] 资源释放完成: {}", path);
+    Ok(())
 }

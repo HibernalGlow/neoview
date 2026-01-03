@@ -67,7 +67,7 @@
 		showPreview: boolean;
 		previewLoading: boolean;
 		previewItems: FsItem[];
-		previewIconElement?: HTMLElement;
+		previewIconElement?: HTMLElement | null;
 		// 事件
 		onClick?: () => void;
 		onContextMenu?: (e: MouseEvent) => void;

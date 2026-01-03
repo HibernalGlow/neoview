@@ -822,10 +822,7 @@
 	<FileItemGridView
 		{item}
 		{thumbnail}
-		/* [4图预览功能已禁用] 
-		{folderThumbnails}
-		{folderPreviewGridEnabled} 
-		*/
+
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

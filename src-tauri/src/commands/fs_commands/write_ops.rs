@@ -41,48 +41,59 @@ pub async fn rename_path(
 }
 
 /// 移动到回收站
-/// 使用 spawn_blocking 在独立线程执行，避免 Windows COM 线程模型冲突
-/// 包含重试机制以处理文件暂时被占用的情况
+/// 使用 PowerShell 命令执行，绕过文件句柄占用问题
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
-    let path_buf = PathBuf::from(path);
-
+    let path_clone = path.clone();
+    
     spawn_blocking(move || {
+        let path_buf = PathBuf::from(&path_clone);
+        
         if !path_buf.exists() {
-            return Err(format!("文件不存在: {}", path_buf.display()));
+            return Err(format!("文件不存在: {}", path_clone));
         }
 
-        // 尝试删除，如果失败则重试
-        let max_retries = 3;
-        let mut last_error = String::new();
+        // 使用 PowerShell 的 Remove-Item 配合 -Recurse 删除到回收站
+        // Shell.Application 的 MoveHere 方法可以移动到回收站
+        let ps_script = format!(
+            r#"
+            $shell = New-Object -ComObject Shell.Application
+            $recycleBin = $shell.NameSpace(10)
+            $item = $shell.NameSpace(0).ParseName('{}')
+            if ($item) {{
+                $recycleBin.MoveHere($item.Path, 0x0040)
+                Start-Sleep -Milliseconds 500
+            }} else {{
+                exit 1
+            }}
+            "#,
+            path_clone.replace("'", "''")
+        );
 
-        for attempt in 0..max_retries {
-            match trash::delete(&path_buf) {
-                Ok(()) => return Ok(()),
-                Err(e) => {
-                    last_error = e.to_string();
-                    log::warn!(
-                        "移动到回收站失败 (尝试 {}/{}): {} - {}",
-                        attempt + 1,
-                        max_retries,
-                        path_buf.display(),
-                        last_error
-                    );
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+            .output()
+            .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
 
-                    if attempt < max_retries - 1 {
-                        // 等待一段时间后重试（让其他进程释放文件句柄）
-                        std::thread::sleep(std::time::Duration::from_millis(
-                            100 * (attempt as u64 + 1),
-                        ));
-                    }
+        if output.status.success() {
+            // 检查文件是否真的被删除了
+            if !path_buf.exists() {
+                log::info!("✅ 已移动到回收站: {}", path_clone);
+                Ok(())
+            } else {
+                // PowerShell 成功但文件还在，可能是异步操作，等待一下
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if !path_buf.exists() {
+                    log::info!("✅ 已移动到回收站: {}", path_clone);
+                    Ok(())
+                } else {
+                    Err(format!("移动到回收站失败: 文件仍然存在"))
                 }
             }
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("移动到回收站失败: {}", stderr))
         }
-
-        Err(format!(
-            "移动到回收站失败 (已重试{}次): {}",
-            max_retries, last_error
-        ))
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {}", e))?

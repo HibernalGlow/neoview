@@ -217,72 +217,73 @@ pub async fn get_thumbnail_blob_data(
     }
 }
 
-/// 获取文件夹预览图（4 图预览）
-/// 返回前 N 张图片的缩略图 blob keys
-/// count == 1 时优先返回封面；count > 1 时返回多张图片（封面作为第一张）
-#[tauri::command]
-pub async fn get_folder_preview_thumbnails(
-    app: tauri::AppHandle,
-    folder_path: String,
-    count: Option<usize>,
-) -> Result<Vec<String>, String> {
-    use crate::core::thumbnail_service_v3::generators::get_folder_preview_images;
-    
-    let state = app.state::<ThumbnailState>();
-    let max_count = count.unwrap_or(4);
-    
-    // 获取文件夹中的前 N 张图片路径
-    let image_paths = get_folder_preview_images(&folder_path, max_count)?;
-    
-    if image_paths.is_empty() {
-        return Ok(vec![]);
-    }
-    
-    let mut blob_keys = Vec::with_capacity(image_paths.len());
-    
-    for path in image_paths {
-        // 先尝试从数据库加载
-        let path_key = path.clone();
-        
-        match state.db.load_thumbnail_by_key_and_category(&path_key, "file") {
-            Ok(Some(data)) => {
-                // 注册到 BlobRegistry
-                let blob_key = state.blob_registry.get_or_register(
-                    &data,
-                    "image/webp",
-                    Duration::from_secs(3600),
-                    Some(path.clone()),
-                );
-                blob_keys.push(blob_key);
-            }
-            _ => {
-                // 数据库没有缓存，需要生成
-                let gen = state.generator.lock()
-                    .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-                
-                match gen.generate_file_thumbnail(&path) {
-                    Ok(data) => {
-                        if !data.is_empty() {
-                            // 保存到数据库
-                            let _ = state.db.save_thumbnail_with_category(&path_key, 0, 0, &data, Some("file"));
-                            
-                            // 注册到 BlobRegistry
-                            let blob_key = state.blob_registry.get_or_register(
-                                &data,
-                                "image/webp",
-                                Duration::from_secs(3600),
-                                Some(path.clone()),
-                            );
-                            blob_keys.push(blob_key);
-                        }
-                    }
-                    Err(e) => {
-                        println!("⚠️ 生成预览图失败: {} - {}", path, e);
-                    }
-                }
-            }
-        }
-    }
-    
-    Ok(blob_keys)
-}
+// [4图预览功能已禁用]
+// /// 获取文件夹预览图（4 图预览）
+// /// 返回前 N 张图片的缩略图 blob keys
+// /// count == 1 时优先返回封面；count > 1 时返回多张图片（封面作为第一张）
+// #[tauri::command]
+// pub async fn get_folder_preview_thumbnails(
+//     app: tauri::AppHandle,
+//     folder_path: String,
+//     count: Option<usize>,
+// ) -> Result<Vec<String>, String> {
+//     use crate::core::thumbnail_service_v3::generators::get_folder_preview_images;
+//
+//     let state = app.state::<ThumbnailState>();
+//     let max_count = count.unwrap_or(4);
+//
+//     // 获取文件夹中的前 N 张图片路径
+//     let image_paths = get_folder_preview_images(&folder_path, max_count)?;
+//
+//     if image_paths.is_empty() {
+//         return Ok(vec![]);
+//     }
+//
+//     let mut blob_keys = Vec::with_capacity(image_paths.len());
+//
+//     for path in image_paths {
+//         // 先尝试从数据库加载
+//         let path_key = path.clone();
+//
+//         match state.db.load_thumbnail_by_key_and_category(&path_key, "file") {
+//             Ok(Some(data)) => {
+//                 // 注册到 BlobRegistry
+//                 let blob_key = state.blob_registry.get_or_register(
+//                     &data,
+//                     "image/webp",
+//                     Duration::from_secs(3600),
+//                     Some(path.clone()),
+//                 );
+//                 blob_keys.push(blob_key);
+//             }
+//             _ => {
+//                 // 数据库没有缓存，需要生成
+//                 let gen = state.generator.lock()
+//                     .map_err(|e| format!("获取生成器锁失败: {}", e))?;
+//
+//                 match gen.generate_file_thumbnail(&path) {
+//                     Ok(data) => {
+//                         if !data.is_empty() {
+//                             // 保存到数据库
+//                             let _ = state.db.save_thumbnail_with_category(&path_key, 0, 0, &data, Some("file"));
+//
+//                             // 注册到 BlobRegistry
+//                             let blob_key = state.blob_registry.get_or_register(
+//                                 &data,
+//                                 "image/webp",
+//                                 Duration::from_secs(3600),
+//                                 Some(path.clone()),
+//                             );
+//                             blob_keys.push(blob_key);
+//                         }
+//                     }
+//                     Err(e) => {
+//                         println!("⚠️ 生成预览图失败: {} - {}", path, e);
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//
+//     Ok(blob_keys)
+// }

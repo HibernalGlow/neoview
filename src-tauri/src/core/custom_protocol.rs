@@ -1,13 +1,19 @@
 //! Custom Protocol 模块
 //! 实现 neoview:// 协议，绕过 invoke 序列化开销，直接传输二进制数据
+//!
+//! 性能优化（参考 Spacedrive）:
+//! - 使用 mini_moka LRU 缓存避免重复的路径查找
+//! - 缓存压缩包条目列表，减少重复解析
 
 use crate::core::archive::ArchiveManager;
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
 use log::{debug, error, info, warn};
+use mini_moka::sync::Cache;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::http::{Request, Response, StatusCode};
 use tauri::Manager;
 
@@ -83,6 +89,26 @@ impl Default for PathRegistry {
     }
 }
 
+/// 缓存的压缩包条目信息
+#[derive(Clone, Debug)]
+struct CachedArchiveEntry {
+    /// 条目名称
+    name: String,
+    /// 条目内部路径
+    path: String,
+    /// 是否是图片
+    is_image: bool,
+}
+
+/// 缓存的压缩包元数据
+#[derive(Clone, Debug)]
+struct CachedArchiveMetadata {
+    /// 图片条目列表
+    image_entries: Vec<CachedArchiveEntry>,
+    /// 缓存时间
+    cached_at: Instant,
+}
+
 /// Custom Protocol 状态
 pub struct ProtocolState {
     /// 路径注册表
@@ -91,15 +117,83 @@ pub struct ProtocolState {
     pub mmap_cache: MmapCache,
     /// 压缩包管理器
     pub archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
+    /// 压缩包元数据缓存（避免重复列出内容）
+    /// 参考 Spacedrive 的 file_metadata_cache
+    archive_metadata_cache: Cache<String, CachedArchiveMetadata>,
 }
 
 impl ProtocolState {
     pub fn new(archive_manager: Arc<std::sync::Mutex<ArchiveManager>>) -> Self {
+        // 创建 LRU 缓存，最多缓存 100 个压缩包的元数据
+        // 参考 Spacedrive: Cache::new(150)
+        let archive_metadata_cache = Cache::builder()
+            .max_capacity(100)
+            .time_to_live(Duration::from_secs(300)) // 5分钟过期
+            .build();
+
         Self {
             path_registry: PathRegistry::new(),
             mmap_cache: MmapCache::default(),
             archive_manager,
+            archive_metadata_cache,
         }
+    }
+
+    /// 获取或缓存压缩包元数据
+    fn get_or_cache_metadata(
+        &self,
+        book_hash: &str,
+        book_path: &Path,
+    ) -> Result<CachedArchiveMetadata, String> {
+        // 先检查缓存
+        if let Some(cached) = self.archive_metadata_cache.get(&book_hash.to_string()) {
+            debug!("📦 Protocol: 使用缓存的元数据, hash={}", book_hash);
+            return Ok(cached);
+        }
+
+        // 缓存未命中，从压缩包读取
+        let archive_manager = self.archive_manager.lock().unwrap();
+        let entries = archive_manager
+            .list_contents(book_path)
+            .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
+
+        // 过滤并缓存图片条目
+        let image_entries: Vec<CachedArchiveEntry> = entries
+            .iter()
+            .filter(|e| e.is_image)
+            .map(|e| CachedArchiveEntry {
+                name: e.name.clone(),
+                path: e.path.clone(),
+                is_image: true,
+            })
+            .collect();
+
+        let metadata = CachedArchiveMetadata {
+            image_entries,
+            cached_at: Instant::now(),
+        };
+
+        // 存入缓存
+        self.archive_metadata_cache
+            .insert(book_hash.to_string(), metadata.clone());
+        debug!(
+            "📦 Protocol: 缓存元数据, hash={}, entries={}",
+            book_hash,
+            metadata.image_entries.len()
+        );
+
+        Ok(metadata)
+    }
+
+    /// 使指定压缩包的缓存失效
+    pub fn invalidate_cache(&self, book_hash: &str) {
+        self.archive_metadata_cache
+            .invalidate(&book_hash.to_string());
+    }
+
+    /// 清空所有缓存
+    pub fn clear_cache(&self) {
+        self.archive_metadata_cache.invalidate_all();
     }
 }
 
@@ -211,30 +305,27 @@ fn handle_archive_image(
         entry_index
     );
 
-    // 获取压缩包管理器
-    let archive_manager = state.archive_manager.lock().unwrap();
-
-    // 列出内容获取条目信息
-    let entries = match archive_manager.list_contents(&book_path) {
-        Ok(entries) => entries,
+    // 使用缓存的元数据（参考 Spacedrive 的 get_or_init_lru_entry）
+    let metadata = match state.get_or_cache_metadata(book_hash, &book_path) {
+        Ok(m) => m,
         Err(e) => {
-            error!("📦 Protocol: 列出压缩包内容失败: {e}");
+            error!("📦 Protocol: 获取元数据失败: {e}");
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
         }
     };
 
     // 查找指定索引的图片条目
-    let image_entries: Vec<_> = entries.iter().filter(|e| e.is_image).collect();
-    let Some(entry) = image_entries.get(entry_index) else {
+    let Some(entry) = metadata.image_entries.get(entry_index) else {
         warn!(
             "📦 Protocol: 条目索引越界, index={}, total={}",
             entry_index,
-            image_entries.len()
+            metadata.image_entries.len()
         );
         return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
     };
 
     // 提取图片数据
+    let archive_manager = state.archive_manager.lock().unwrap();
     let data = match archive_manager.load_image_from_archive_binary(&book_path, &entry.path) {
         Ok(data) => data,
         Err(e) => {

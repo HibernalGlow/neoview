@@ -101,6 +101,7 @@ mime_guess = "2.0"  # MIME 类型检测
 urlencoding = "2.1"  # URL 编解码
 rkyv = { version = "0.8", features = ["bytecheck"] }  # 零拷贝序列化
 stretto = "0.8"  # TinyLFU 高性能缓存
+mini-moka = "0.10"  # 轻量级 LRU 缓存（参考 Spacedrive）
 mimalloc = { version = "0.1", default-features = false }  # 高性能内存分配器
 bstr = "1.11"  # 高效字节字符串处理
 # PDF: 前端使用 pdf.js 渲染

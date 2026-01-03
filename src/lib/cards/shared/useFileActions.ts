@@ -319,7 +319,6 @@ export function createDeleteActions(
 			showSuccessToast('删除成功', item.name);
 		} catch (err) {
 			showErrorToast('删除失败', err instanceof Error ? err.message : String(err));
-			handleRefresh();
 		}
 	};
 

@@ -198,7 +198,6 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 			showSuccessToast(`${actionText}成功`, item.name);
 		} catch (err) {
 			showErrorToast(`${actionText}失败`, err instanceof Error ? err.message : String(err));
-			handleRefresh();
 		}
 	}
 

@@ -2,12 +2,12 @@
 //! 简化的页面加载 API，后端主导，前端只发请求
 
 use crate::core::page_frame::{
-    PageFrame, PageFrameBuilder, PageFrameContext, PageMode, PagePosition, ReadOrder,
-    Size, StretchMode, AutoRotateType, WidePageStretch,
+    AutoRotateType, PageFrame, PageFrameBuilder, PageFrameContext, PageMode, PagePosition,
+    ReadOrder, Size, StretchMode, WidePageStretch,
 };
 use crate::core::page_manager::{
-    BookInfo, MemoryPoolStats, PageContentManager, PageManagerStats,
-    ThumbnailReadyEvent, ThumbnailItem, PageInfo,
+    BookInfo, MemoryPoolStats, PageContentManager, PageInfo, PageManagerStats, ThumbnailItem,
+    ThumbnailReadyEvent,
 };
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
@@ -53,7 +53,9 @@ pub async fn pm_close_book(state: State<'_, PageManagerState>) -> Result<(), Str
 
 /// 获取当前书籍信息
 #[tauri::command]
-pub async fn pm_get_book_info(state: State<'_, PageManagerState>) -> Result<Option<BookInfo>, String> {
+pub async fn pm_get_book_info(
+    state: State<'_, PageManagerState>,
+) -> Result<Option<BookInfo>, String> {
     let manager = state.manager.lock().await;
     Ok(manager.current_book_info())
 }
@@ -148,7 +150,9 @@ pub async fn pm_get_page_info(
     let manager = state.manager.lock().await;
 
     // 从 PageContentManager 获取页面信息
-    manager.get_page_info(index).ok_or_else(|| format!("页面 {} 不存在", index))
+    manager
+        .get_page_info(index)
+        .ok_or_else(|| format!("页面 {} 不存在", index))
 }
 
 // ===== 状态查询命令 =====
@@ -190,10 +194,27 @@ pub async fn pm_trigger_preload(state: State<'_, PageManagerState>) -> Result<()
     Ok(())
 }
 
+/// 【性能优化】查询页面缓存状态
+///
+/// 返回指定范围内每个页面是否在缓存中（轻量级，不加载数据）
+/// 前端可用于智能预加载决策，避免重复请求已缓存的页面
+#[tauri::command]
+pub async fn pm_get_cache_status(
+    start_page: usize,
+    count: usize,
+    state: State<'_, PageManagerState>,
+) -> Result<Vec<bool>, String> {
+    let manager = state.manager.lock().await;
+    let statuses: Vec<bool> = (start_page..start_page + count)
+        .map(|i| manager.is_page_cached(i))
+        .collect();
+    Ok(statuses)
+}
+
 // ===== 视频命令 =====
 
 /// 获取视频文件路径
-/// 
+///
 /// 对于压缩包内的视频，自动提取到临时文件并返回路径
 /// 前端可以使用 convertFileSrc() 转换为可用的 URL
 #[tauri::command]
@@ -225,14 +246,17 @@ pub async fn pm_get_large_file_threshold(
 }
 
 /// 设置大文件阈值（MB）
-/// 
+///
 /// 超过此阈值的文件会自动使用临时文件而非内存缓存
 #[tauri::command]
 pub async fn pm_set_large_file_threshold(
     threshold_mb: usize,
     state: State<'_, PageManagerState>,
 ) -> Result<(), String> {
-    log::info!("⚙️ [PageCommand] set_large_file_threshold: {} MB", threshold_mb);
+    log::info!(
+        "⚙️ [PageCommand] set_large_file_threshold: {} MB",
+        threshold_mb
+    );
     let manager = state.manager.lock().await;
     manager.set_large_file_threshold_mb(threshold_mb);
     Ok(())
@@ -241,7 +265,7 @@ pub async fn pm_set_large_file_threshold(
 // ===== 缩略图命令 =====
 
 /// 按距离中心的距离排序索引（中央优先策略）
-/// 
+///
 /// 排序规则：
 /// 1. 按与 center 的绝对距离升序
 /// 2. 距离相同时，较大的索引（前向）优先
@@ -249,7 +273,7 @@ fn sort_by_distance_from_center(indices: &mut [usize], center: usize) {
     indices.sort_by(|a, b| {
         let dist_a = (*a as isize - center as isize).unsigned_abs();
         let dist_b = (*b as isize - center as isize).unsigned_abs();
-        
+
         match dist_a.cmp(&dist_b) {
             std::cmp::Ordering::Equal => b.cmp(a), // 距离相同时，大的优先（前向优先）
             other => other,
@@ -258,45 +282,43 @@ fn sort_by_distance_from_center(indices: &mut [usize], center: usize) {
 }
 
 /// 预加载缩略图（异步，通过事件推送结果）
-/// 
+///
 /// 接受需要生成的页面索引列表和当前页面索引
 /// 按照与当前页的距离排序后生成，距离近的优先
 /// 前端负责过滤已缓存的页面，避免重复生成
-/// 
+///
 /// 优化：使用并行处理，同时生成多个缩略图
 #[tauri::command]
 pub async fn pm_preload_thumbnails(
     indices: Vec<usize>,
-    center_index: Option<usize>,  // 当前页面索引，用于优先级排序
+    center_index: Option<usize>, // 当前页面索引，用于优先级排序
     max_size: Option<u32>,
     app: AppHandle,
     state: State<'_, PageManagerState>,
 ) -> Result<Vec<usize>, String> {
     let size = max_size.unwrap_or(256);
-    
+
     // 提前获取所有需要的信息，避免后续锁竞争
     let (book_path, book_type, page_infos) = {
         let manager = state.manager.lock().await;
-        let book = manager.current_book_info()
-            .ok_or("没有打开的书籍")?;
-        
+        let book = manager.current_book_info().ok_or("没有打开的书籍")?;
+
         let book_path = book.path.clone();
         let book_type = book.book_type;
-        
+
         // 收集所有页面信息
-        let page_infos: Vec<_> = indices.iter()
-            .filter_map(|&idx| {
-                manager.get_page_info(idx).map(|info| (idx, info))
-            })
+        let page_infos: Vec<_> = indices
+            .iter()
+            .filter_map(|&idx| manager.get_page_info(idx).map(|info| (idx, info)))
             .collect();
-        
+
         (book_path, book_type, page_infos)
     };
-    
+
     if page_infos.is_empty() {
         return Ok(vec![]);
     }
-    
+
     // 按距离中心排序（中央优先策略）
     let mut pages_to_load: Vec<_> = page_infos;
     if let Some(center) = center_index {
@@ -309,28 +331,31 @@ pub async fn pm_preload_thumbnails(
             }
         });
     }
-    
+
     let result_indices: Vec<usize> = pages_to_load.iter().map(|(idx, _)| *idx).collect();
-    
+
     // 并行度：同时处理的缩略图数量
     let parallelism = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
         .min(8);
-    
-    log::info!("🖼️ [PageCommand] 开始并行生成 {} 个缩略图 (并行度: {})", 
-        pages_to_load.len(), parallelism);
-    
+
+    log::info!(
+        "🖼️ [PageCommand] 开始并行生成 {} 个缩略图 (并行度: {})",
+        pages_to_load.len(),
+        parallelism
+    );
+
     // 获取 ArchiveManager 的克隆（用于并行解压）
     let archive_manager = {
         let manager = state.manager.lock().await;
         manager.get_archive_manager_clone()
     };
-    
+
     // 在后台任务中并行生成缩略图 - 使用 spawn_blocking 运行 rayon
     tokio::spawn(async move {
         use rayon::prelude::*;
-        
+
         // 使用 spawn_blocking 运行 CPU 密集型的 rayon 并行任务
         let results = tokio::task::spawn_blocking(move || {
             pages_to_load
@@ -342,48 +367,49 @@ pub async fn pm_preload_thumbnails(
                             if let Some(ref am) = archive_manager {
                                 am.load_image_from_archive_binary(
                                     std::path::Path::new(&book_path),
-                                    &page_info.inner_path
-                                ).ok()
+                                    &page_info.inner_path,
+                                )
+                                .ok()
                             } else {
                                 None
                             }
                         }
-                        _ => {
-                            std::fs::read(&page_info.inner_path).ok()
-                        }
+                        _ => std::fs::read(&page_info.inner_path).ok(),
                     };
-                    
+
                     let data = data?;
-                    
+
                     // 2. 生成缩略图（使用 WIC 或 image crate）
                     let thumbnail = generate_thumbnail_fast(&data, size)?;
-                    
+
                     Some((*index, thumbnail))
                 })
                 .collect::<Vec<_>>()
-        }).await.unwrap_or_default();
-        
+        })
+        .await
+        .unwrap_or_default();
+
         // 推送结果到前端
         let success_count = results.len();
         for (index, item) in results {
-            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
             let data_base64 = STANDARD.encode(&item.data);
-            
+
             let event = ThumbnailReadyEvent {
                 index,
                 data: format!("data:image/webp;base64,{data_base64}"),
                 width: item.width,
                 height: item.height,
             };
-            
+
             if let Err(e) = app.emit("page-thumbnail-ready", &event) {
                 log::error!("🖼️ 推送缩略图事件失败: {e}");
             }
         }
-        
+
         log::info!("🖼️ [PageCommand] 缩略图生成完成: {} 个", success_count);
     });
-    
+
     Ok(result_indices)
 }
 
@@ -395,11 +421,13 @@ fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> 
     #[cfg(target_os = "windows")]
     {
         use crate::core::wic_decoder::decode_and_scale_with_wic;
-        
+
         // WIC 直接解码并缩放到目标尺寸（一步完成，硬件加速）
         if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
             // 直接从 BGRA 编码 WebP，避免中间转换
-            if let Some(buffer) = encode_webp_from_bgra(&result.pixels, result.width, result.height, 75) {
+            if let Some(buffer) =
+                encode_webp_from_bgra(&result.pixels, result.width, result.height, 75)
+            {
                 return Some(ThumbnailItem {
                     data: buffer,
                     width: result.width,
@@ -408,28 +436,28 @@ fn generate_thumbnail_fast(data: &[u8], max_size: u32) -> Option<ThumbnailItem> 
             }
         }
     }
-    
+
     // 非 Windows 或 WIC 失败：回退到 image crate
     use image::ImageReader;
     use std::io::Cursor;
-    
+
     let img = ImageReader::new(Cursor::new(data))
         .with_guessed_format()
         .ok()?
         .decode()
         .ok()?;
-    
+
     let (orig_width, orig_height) = (img.width(), img.height());
     let scale = (max_size as f32 / orig_width.max(orig_height) as f32).min(1.0);
     let new_width = (orig_width as f32 * scale) as u32;
     let new_height = (orig_height as f32 * scale) as u32;
-    
+
     // 使用 Triangle 滤波器（速度和质量的平衡）
     let thumbnail = img.resize(new_width, new_height, image::imageops::FilterType::Triangle);
-    
+
     // 使用有损 WebP 编码
     let buffer = encode_webp_lossy(&thumbnail, 75)?;
-    
+
     Some(ThumbnailItem {
         data: buffer,
         width: thumbnail.width(),
@@ -443,11 +471,11 @@ fn encode_webp_lossy(img: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> 
     let rgba = img.to_rgba8();
     let width = rgba.width();
     let height = rgba.height();
-    
+
     // 使用 webp crate 进行有损编码
     let encoder = webp::Encoder::from_rgba(&rgba, width, height);
     let webp_data = encoder.encode(quality as f32);
-    
+
     Some(webp_data.to_vec())
 }
 
@@ -459,11 +487,11 @@ fn encode_webp_from_bgra(bgra: &[u8], width: u32, height: u32, quality: u8) -> O
     for chunk in rgba.chunks_exact_mut(4) {
         chunk.swap(0, 2); // B <-> R
     }
-    
+
     // 使用 webp crate 进行有损编码
     let encoder = webp::Encoder::from_rgba(&rgba, width, height);
     let webp_data = encoder.encode(f32::from(quality));
-    
+
     Some(webp_data.to_vec())
 }
 
@@ -542,21 +570,25 @@ pub struct SizeInfo {
 impl From<&PageFrame> for PageFrameInfo {
     fn from(frame: &PageFrame) -> Self {
         Self {
-            elements: frame.elements.iter().map(|e| PageFrameElementInfo {
-                page_index: e.page.index,
-                part: e.page_range.min.part,
-                crop_rect: e.crop_rect.map(|c| CropRectInfo {
-                    x: c.x,
-                    y: c.y,
-                    width: c.width,
-                    height: c.height,
-                }),
-                is_landscape: e.is_landscape(),
-                is_dummy: e.is_dummy,
-                scale: e.scale,
-                width: e.width(),
-                height: e.height(),
-            }).collect(),
+            elements: frame
+                .elements
+                .iter()
+                .map(|e| PageFrameElementInfo {
+                    page_index: e.page.index,
+                    part: e.page_range.min.part,
+                    crop_rect: e.crop_rect.map(|c| CropRectInfo {
+                        x: c.x,
+                        y: c.y,
+                        width: c.width,
+                        height: c.height,
+                    }),
+                    is_landscape: e.is_landscape(),
+                    is_dummy: e.is_dummy,
+                    scale: e.scale,
+                    width: e.width(),
+                    height: e.height(),
+                })
+                .collect(),
             frame_range: PageRangeInfo {
                 min_index: frame.frame_range.min.index,
                 min_part: frame.frame_range.min.part,
@@ -592,49 +624,49 @@ pub async fn pf_update_context(
     state: State<'_, PageFrameState>,
 ) -> Result<(), String> {
     let mut ctx = state.context.lock().await;
-    
+
     if let Some(mode) = page_mode {
         ctx.page_mode = match mode.as_str() {
             "double" => PageMode::Double,
             _ => PageMode::Single,
         };
     }
-    
+
     if let Some(order) = read_order {
         ctx.read_order = match order.as_str() {
             "rtl" => ReadOrder::RightToLeft,
             _ => ReadOrder::LeftToRight,
         };
     }
-    
+
     if let Some(v) = divide_page {
         ctx.is_supported_divide_page = v;
     }
-    
+
     if let Some(v) = wide_page {
         ctx.is_supported_wide_page = v;
     }
-    
+
     if let Some(v) = single_first {
         ctx.is_supported_single_first = v;
     }
-    
+
     if let Some(v) = single_last {
         ctx.is_supported_single_last = v;
     }
-    
+
     if let Some(v) = divide_rate {
         ctx.divide_page_rate = v;
     }
-    
+
     if let Some(w) = canvas_width {
         ctx.canvas_size.width = w;
     }
-    
+
     if let Some(h) = canvas_height {
         ctx.canvas_size.height = h;
     }
-    
+
     if let Some(stretch) = wide_page_stretch {
         ctx.wide_page_stretch = match stretch.as_str() {
             "uniformHeight" => WidePageStretch::UniformHeight,
@@ -642,23 +674,25 @@ pub async fn pf_update_context(
             _ => WidePageStretch::None,
         };
     }
-    
+
     // 更新 builder 的上下文
     if let Some(ref mut builder) = *state.builder.lock().await {
         builder.set_context(ctx.clone());
     }
-    
-    log::debug!("📐 [PageFrame] 更新上下文: mode={:?}, order={:?}, stretch={:?}", 
-        ctx.page_mode, ctx.read_order, ctx.wide_page_stretch);
-    
+
+    log::debug!(
+        "📐 [PageFrame] 更新上下文: mode={:?}, order={:?}, stretch={:?}",
+        ctx.page_mode,
+        ctx.read_order,
+        ctx.wide_page_stretch
+    );
+
     Ok(())
 }
 
 /// 获取当前 PageFrame 上下文
 #[tauri::command]
-pub async fn pf_get_context(
-    state: State<'_, PageFrameState>,
-) -> Result<PageFrameContext, String> {
+pub async fn pf_get_context(state: State<'_, PageFrameState>) -> Result<PageFrameContext, String> {
     let ctx = state.context.lock().await;
     Ok(ctx.clone())
 }
@@ -671,12 +705,12 @@ pub async fn pf_build_frame(
     state: State<'_, PageFrameState>,
 ) -> Result<Option<PageFrameInfo>, String> {
     let builder = state.builder.lock().await;
-    
+
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     let position = PagePosition::new(index, part.unwrap_or(0));
     let frame = builder.build_frame(position);
-    
+
     Ok(frame.as_ref().map(PageFrameInfo::from))
 }
 
@@ -689,10 +723,10 @@ pub async fn pf_next_position(
 ) -> Result<Option<(usize, u8)>, String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     let current = PagePosition::new(index, part.unwrap_or(0));
     let next = builder.next_frame_position(current);
-    
+
     Ok(next.map(|p| (p.index, p.part)))
 }
 
@@ -705,21 +739,19 @@ pub async fn pf_prev_position(
 ) -> Result<Option<(usize, u8)>, String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     let current = PagePosition::new(index, part.unwrap_or(0));
     let prev = builder.prev_frame_position(current);
-    
+
     Ok(prev.map(|p| (p.index, p.part)))
 }
 
 /// 获取总虚拟页数
 #[tauri::command]
-pub async fn pf_total_virtual_pages(
-    state: State<'_, PageFrameState>,
-) -> Result<usize, String> {
+pub async fn pf_total_virtual_pages(state: State<'_, PageFrameState>) -> Result<usize, String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     Ok(builder.total_virtual_pages())
 }
 
@@ -731,7 +763,7 @@ pub async fn pf_is_page_split(
 ) -> Result<bool, String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     Ok(builder.is_page_split(index))
 }
 
@@ -743,7 +775,7 @@ pub async fn pf_position_from_virtual(
 ) -> Result<(usize, u8), String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     let pos = builder.position_from_virtual(virtual_index);
     Ok((pos.index, pos.part))
 }
@@ -756,7 +788,7 @@ pub async fn pf_frame_position_for_index(
 ) -> Result<(usize, u8), String> {
     let builder = state.builder.lock().await;
     let builder = builder.as_ref().ok_or("PageFrameBuilder 未初始化")?;
-    
+
     let pos = builder.frame_position_for_index(page_index);
     Ok((pos.index, pos.part))
 }
@@ -780,6 +812,7 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_get_large_file_threshold",
         "pm_set_large_file_threshold",
         "pm_preload_thumbnails",
+        "pm_get_cache_status", // 【性能优化】前端可查询缓存状态
         // PageFrame 命令
         "pf_update_context",
         "pf_get_context",

@@ -56,7 +56,7 @@ const DEFAULT_CACHE_SIZE_MB: usize = 512;
 fn get_image_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     use image::ImageReader;
     use std::io::Cursor;
-    
+
     ImageReader::new(Cursor::new(data))
         .with_guessed_format()
         .ok()
@@ -188,7 +188,10 @@ impl PageContentManager {
                 log::error!("📚 PageManager: EPUB 扫描失败: {}", e);
                 e
             })?;
-            log::info!("📚 PageManager: EPUB 扫描完成，找到 {} 张图片", images.len());
+            log::info!(
+                "📚 PageManager: EPUB 扫描完成，找到 {} 张图片",
+                images.len()
+            );
             BookContext::from_epub(path, images)
         } else if Self::is_archive_file(path) {
             // 压缩包
@@ -233,7 +236,10 @@ impl PageContentManager {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
-        matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "jxl" | "bmp")
+        matches!(
+            ext.as_str(),
+            "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "jxl" | "bmp"
+        )
     }
 
     /// 检查是否为视频文件
@@ -277,7 +283,9 @@ impl PageContentManager {
         use std::fs;
 
         let image_extensions = ["jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp"];
-        let video_extensions = ["mp4", "mkv", "webm", "avi", "mov", "wmv", "asf", "flv", "m4v", "ts"];
+        let video_extensions = [
+            "mp4", "mkv", "webm", "avi", "mov", "wmv", "asf", "flv", "m4v", "ts",
+        ];
 
         let mut files: Vec<String> = fs::read_dir(path)
             .map_err(|e| format!("读取目录失败: {}", e))?
@@ -285,7 +293,8 @@ impl PageContentManager {
             .filter(|entry| {
                 entry.path().extension().map_or(false, |ext| {
                     let ext = ext.to_string_lossy().to_lowercase();
-                    image_extensions.contains(&ext.as_str()) || video_extensions.contains(&ext.as_str())
+                    image_extensions.contains(&ext.as_str())
+                        || video_extensions.contains(&ext.as_str())
                 })
             })
             .map(|entry| entry.path().to_string_lossy().to_string())
@@ -297,10 +306,7 @@ impl PageContentManager {
 
     /// 跳转到指定页面
     pub async fn goto_page(&mut self, index: usize) -> Result<(Vec<u8>, PageLoadResult), String> {
-        let book = self
-            .current_book
-            .as_mut()
-            .ok_or("没有打开的书籍")?;
+        let book = self.current_book.as_mut().ok_or("没有打开的书籍")?;
 
         if !book.goto(index) {
             return Err(format!("页面索引越界: {} / {}", index, book.total_pages));
@@ -337,7 +343,9 @@ impl PageContentManager {
 
         // 加载页面
         log::debug!("📥 PageManager: 加载 page {}", index);
-        let (data, mime_type) = self.load_page_data(&book_path, book_type, &page_info).await?;
+        let (data, mime_type) = self
+            .load_page_data(&book_path, book_type, &page_info)
+            .await?;
         let size = data.len();
 
         // 存入缓存
@@ -401,7 +409,9 @@ impl PageContentManager {
         }
 
         // 加载页面
-        let (data, mime_type) = self.load_page_data(&book_path, book_type, &page_info).await?;
+        let (data, mime_type) = self
+            .load_page_data(&book_path, book_type, &page_info)
+            .await?;
         let size = data.len();
 
         // 存入缓存
@@ -438,16 +448,10 @@ impl PageContentManager {
         // 检查是否是不支持的文件类型
         match page_info.content_type {
             PageContentType::Unknown => {
-                return Err(format!(
-                    "不支持的文件类型: {}",
-                    page_info.inner_path
-                ));
+                return Err(format!("不支持的文件类型: {}", page_info.inner_path));
             }
             PageContentType::Archive => {
-                return Err(format!(
-                    "嵌套压缩包暂不支持: {}",
-                    page_info.inner_path
-                ));
+                return Err(format!("嵌套压缩包暂不支持: {}", page_info.inner_path));
             }
             _ => {}
         }
@@ -484,7 +488,8 @@ impl PageContentManager {
             BookType::Epub => {
                 // EPUB 电子书 - 从 EPUB 中提取图片
                 use crate::core::ebook::EbookManager;
-                let (data, mime_type) = EbookManager::get_epub_image(book_path, &page_info.inner_path)?;
+                let (data, mime_type) =
+                    EbookManager::get_epub_image(book_path, &page_info.inner_path)?;
                 Ok((data, mime_type))
             }
             BookType::Playlist => {
@@ -573,9 +578,9 @@ impl PageContentManager {
                         // 加载数据
                         let (data, mime_type) = match book_type {
                             BookType::Archive => {
-                                let manager = archive_manager
-                                    .lock()
-                                    .map_err(|e| crate::core::job_engine::JobError::new(format!("锁失败: {}", e)))?;
+                                let manager = archive_manager.lock().map_err(|e| {
+                                    crate::core::job_engine::JobError::new(format!("锁失败: {}", e))
+                                })?;
 
                                 let data = manager
                                     .load_image_from_archive_binary(
@@ -588,8 +593,12 @@ impl PageContentManager {
                                 (data, mime)
                             }
                             BookType::Directory | BookType::SingleImage => {
-                                let data = std::fs::read(&page_info.inner_path)
-                                    .map_err(|e| crate::core::job_engine::JobError::new(format!("读取失败: {}", e)))?;
+                                let data = std::fs::read(&page_info.inner_path).map_err(|e| {
+                                    crate::core::job_engine::JobError::new(format!(
+                                        "读取失败: {}",
+                                        e
+                                    ))
+                                })?;
 
                                 let mime = Self::detect_mime_type(&page_info.inner_path);
                                 (data, mime)
@@ -601,13 +610,16 @@ impl PageContentManager {
                             BookType::Epub => {
                                 // EPUB 图片
                                 use crate::core::ebook::EbookManager;
-                                let (data, mime) = EbookManager::get_epub_image(&book_path, &page_info.inner_path)
-                                    .map_err(|e| crate::core::job_engine::JobError::new(e))?;
+                                let (data, mime) =
+                                    EbookManager::get_epub_image(&book_path, &page_info.inner_path)
+                                        .map_err(|e| crate::core::job_engine::JobError::new(e))?;
                                 (data, mime)
                             }
                             BookType::Playlist => {
                                 // 播放列表暂不支持
-                                return Err(crate::core::job_engine::JobError::new("播放列表不支持"));
+                                return Err(crate::core::job_engine::JobError::new(
+                                    "播放列表不支持",
+                                ));
                             }
                         };
 
@@ -676,7 +688,7 @@ impl PageContentManager {
     }
 
     /// 获取需要临时文件的页面路径（视频/PDF）
-    /// 
+    ///
     /// 对于压缩包内的视频和 PDF，需要先提取到临时文件才能播放/显示
     pub async fn get_file_path(&self, index: usize) -> Result<String, String> {
         let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
@@ -684,10 +696,7 @@ impl PageContentManager {
 
         // 检查是否需要临时文件
         if !page.content_type.needs_temp_file() {
-            return Err(format!(
-                "此文件类型不需要临时文件: {:?}",
-                page.content_type
-            ));
+            return Err(format!("此文件类型不需要临时文件: {:?}", page.content_type));
         }
 
         let book_path = &book.path;
@@ -710,13 +719,16 @@ impl PageContentManager {
 
         // 从压缩包提取
         let data = {
-            let manager = self.archive_manager.lock()
+            let manager = self
+                .archive_manager
+                .lock()
                 .map_err(|e| format!("获取压缩包管理器锁失败: {}", e))?;
             manager.load_image_from_archive_binary(Path::new(book_path), &page.inner_path)?
         };
 
         // 保存到临时文件
-        let temp_path = self.temp_manager
+        let temp_path = self
+            .temp_manager
             .get_or_create(book_path, &page.inner_path, &data)?;
 
         log::info!(
@@ -724,12 +736,12 @@ impl PageContentManager {
             page.inner_path,
             temp_path.display()
         );
-        
+
         Ok(temp_path.to_string_lossy().to_string())
     }
 
     /// 获取视频文件路径（自动提取到临时文件）
-    /// 
+    ///
     /// 兼容旧接口，内部调用 get_file_path
     pub async fn get_video_path(&self, index: usize) -> Result<String, String> {
         let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
@@ -755,7 +767,8 @@ impl PageContentManager {
 
     /// 设置大文件阈值（MB）
     pub fn set_large_file_threshold_mb(&self, threshold_mb: usize) {
-        self.temp_manager.set_large_file_threshold(threshold_mb * 1024 * 1024);
+        self.temp_manager
+            .set_large_file_threshold(threshold_mb * 1024 * 1024);
     }
 
     /// 获取统计信息
@@ -796,17 +809,37 @@ impl PageContentManager {
             .and_then(|book| book.get_page(index).cloned())
     }
 
+    /// 【性能优化】检查页面是否在缓存中
+    ///
+    /// 轻量级方法，只检查不加载数据
+    /// 前端可用于智能预加载决策
+    pub fn is_page_cached(&self, index: usize) -> bool {
+        let Some(ref book) = self.current_book else {
+            return false;
+        };
+        let key = PageKey::new(&book.path, index);
+        // 使用 try_lock 避免阻塞（如果锁被占用返回 false）
+        self.memory_pool
+            .try_lock()
+            .map(|pool| pool.contains(&key))
+            .unwrap_or(false)
+    }
+
     /// 清除所有缓存
     pub async fn clear_cache(&mut self) {
         self.memory_pool.lock().await.clear_all();
     }
 
     /// 生成页面缩略图
-    /// 
+    ///
     /// 从页面数据生成 WebP 格式的缩略图
-    pub async fn generate_page_thumbnail(&self, index: usize, max_size: u32) -> Result<ThumbnailItem, String> {
+    pub async fn generate_page_thumbnail(
+        &self,
+        index: usize,
+        max_size: u32,
+    ) -> Result<ThumbnailItem, String> {
         let total_start = std::time::Instant::now();
-        
+
         let book = self.current_book.as_ref().ok_or("没有打开的书籍")?;
         let page_info = book.get_page(index).ok_or("页面不存在")?;
         let book_path = &book.path;
@@ -821,9 +854,9 @@ impl PageContentManager {
         let gen_start = std::time::Instant::now();
         let result = Self::generate_thumbnail_from_data(&data, max_size);
         let gen_elapsed = gen_start.elapsed();
-        
+
         let total_elapsed = total_start.elapsed();
-        
+
         // 只在耗时超过 100ms 时打印详细日志
         if total_elapsed.as_millis() > 100 {
             log::info!(
@@ -835,7 +868,7 @@ impl PageContentManager {
                 data.len() / 1024
             );
         }
-        
+
         result
     }
 
@@ -843,31 +876,36 @@ impl PageContentManager {
     /// 优先使用 WIC（支持 AVIF/HEIC/JXL），失败时回退到 image crate
     fn generate_thumbnail_from_data(data: &[u8], max_size: u32) -> Result<ThumbnailItem, String> {
         let start = std::time::Instant::now();
-        
+
         // Windows: 优先使用 WIC 内置缩放（支持 AVIF/HEIC/JXL 等）
         #[cfg(target_os = "windows")]
         {
-            use crate::core::wic_decoder::{decode_and_scale_with_wic, wic_result_to_dynamic_image};
+            use crate::core::wic_decoder::{
+                decode_and_scale_with_wic, wic_result_to_dynamic_image,
+            };
             use image::ImageFormat;
             use std::io::Cursor;
 
             let wic_start = std::time::Instant::now();
             if let Ok(result) = decode_and_scale_with_wic(data, max_size, max_size) {
                 let wic_decode_elapsed = wic_start.elapsed();
-                
+
                 let convert_start = std::time::Instant::now();
                 if let Ok(img) = wic_result_to_dynamic_image(result) {
                     let convert_elapsed = convert_start.elapsed();
-                    
+
                     let width = img.width();
                     let height = img.height();
-                    
+
                     let encode_start = std::time::Instant::now();
                     let mut buffer = Vec::new();
-                    if img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP).is_ok() {
+                    if img
+                        .write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP)
+                        .is_ok()
+                    {
                         let encode_elapsed = encode_start.elapsed();
                         let total_elapsed = start.elapsed();
-                        
+
                         // 只在耗时超过 50ms 时打印详细日志
                         if total_elapsed.as_millis() > 50 {
                             log::debug!(
@@ -879,7 +917,7 @@ impl PageContentManager {
                                 width, height
                             );
                         }
-                        
+
                         return Ok(ThumbnailItem {
                             data: buffer,
                             width,
@@ -917,17 +955,19 @@ impl PageContentManager {
             use image::codecs::webp::WebPEncoder;
             use image::ImageEncoder;
             let encoder = WebPEncoder::new_lossless(&mut buffer);
-            encoder.write_image(
-                thumbnail.as_bytes(),
-                thumbnail.width(),
-                thumbnail.height(),
-                thumbnail.color().into(),
-            ).map_err(|e| format!("编码 WebP 失败: {}", e))?;
+            encoder
+                .write_image(
+                    thumbnail.as_bytes(),
+                    thumbnail.width(),
+                    thumbnail.height(),
+                    thumbnail.color().into(),
+                )
+                .map_err(|e| format!("编码 WebP 失败: {}", e))?;
         }
         let encode_elapsed = encode_start.elapsed();
-        
+
         let total_elapsed = start.elapsed();
-        
+
         // 只在耗时超过 50ms 时打印详细日志
         if total_elapsed.as_millis() > 50 {
             log::debug!(
@@ -950,14 +990,14 @@ impl PageContentManager {
 
     /// 获取总页数
     pub fn total_pages(&self) -> usize {
-        self.current_book.as_ref().map(|b| b.total_pages).unwrap_or(0)
+        self.current_book
+            .as_ref()
+            .map(|b| b.total_pages)
+            .unwrap_or(0)
     }
-    
+
     /// 获取 ArchiveManager 的克隆（用于并行处理）
     pub fn get_archive_manager_clone(&self) -> Option<ArchiveManager> {
-        self.archive_manager
-            .lock()
-            .ok()
-            .map(|guard| guard.clone())
+        self.archive_manager.lock().ok().map(|guard| guard.clone())
     }
 }

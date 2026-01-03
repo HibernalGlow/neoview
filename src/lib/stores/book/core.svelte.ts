@@ -12,6 +12,7 @@ import { fileBrowserStore } from '../fileBrowser.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
+import { pageNavigationDedup } from '$lib/utils/requestDedup';
 
 import { SvelteMap } from 'svelte/reactivity';
 import {
@@ -282,6 +283,14 @@ class BookStore {
     const maxIndex = this.state.currentBook.totalPages - 1;
     if (index < 0 || index > maxIndex) return;
 
+    // 【性能优化】快速翻页去重，防止短时间内重复导航到同一页面
+    const dedupKey = `nav-${this.state.currentBook.path}-${index}`;
+    const requestId = pageNavigationDedup.tryAcquire(dedupKey);
+    if (requestId === null) {
+      console.debug(`🔄 跳过重复翻页请求: page=${index}`);
+      return;
+    }
+
     try {
       await bookApi.navigateToPage(index);
       this.state.currentBook.currentPage = index;
@@ -307,6 +316,9 @@ class BookStore {
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
       this.state.error = String(err);
+    } finally {
+      // 确保释放去重锁
+      pageNavigationDedup.release(dedupKey);
     }
   }
 

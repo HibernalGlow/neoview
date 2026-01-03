@@ -312,6 +312,32 @@ export async function preloadThumbnails(
 	return invoke<number[]>('pm_preload_thumbnails', { indices, centerIndex, maxSize });
 }
 
+/**
+ * 【性能优化】查询页面缓存状态
+ * 
+ * 返回指定范围内每个页面是否在后端缓存中
+ * 前端可用于智能预加载决策，避免重复请求已缓存的页面
+ * 
+ * @param startPage 起始页面索引
+ * @param count 查询页数
+ * @returns 布尔数组，表示每个页面是否已缓存
+ */
+export async function getCacheStatus(startPage: number, count: number): Promise<boolean[]> {
+	return invoke<boolean[]>('pm_get_cache_status', { startPage, count });
+}
+
+/**
+ * 【性能优化】获取指定范围内未缓存的页面索引
+ * 
+ * 便捷方法，直接返回需要预加载的页面
+ */
+export async function getUncachedPages(startPage: number, count: number): Promise<number[]> {
+	const statuses = await getCacheStatus(startPage, count);
+	return statuses
+		.map((cached, i) => cached ? null : startPage + i)
+		.filter((p): p is number => p !== null);
+}
+
 // ===== 工具函数 =====
 
 /**

@@ -308,3 +308,192 @@ pub struct AdvancedPerformanceSettings {
 - [NeeView/Thumbnail/ThumbnailCache.cs](./ref/NeeView/Thumbnail/ThumbnailCache.cs) - SQLite 缓存、延迟写入
 - [NeeView/SuperResolution/SuperResolutionImageCache.cs](./ref/NeeView/SuperResolution/SuperResolutionImageCache.cs) - 混合缓存策略
 - [Spacedrive/core/src/custom_uri/mod.rs](./ref/spacedrive/core/src/custom_uri/mod.rs) - LRU 元数据缓存、事件失效
+
+---
+
+## 🖥️ 前端加载延迟优化
+
+### 当前架构分析
+
+前端图片加载流程：
+
+```
+用户翻页 → BookStore.navigateToPage
+        → ImageLoaderCore.loadPage
+        → readPageBlobV2 (IPC/Protocol)
+        → 后端 PageManager → 返回 ArrayBuffer
+        → 创建 Blob → 渲染到 Canvas/Img
+```
+
+**延迟瓶颈（按影响排序）：**
+
+| 环节                     | 典型延迟 | 问题                   |
+| ------------------------ | -------- | ---------------------- |
+| 后端加载 (backendLoadMs) | 30-150ms | 压缩包解压、大文件读取 |
+| IPC 传输                 | 5-30ms   | 大图片序列化开销       |
+| Blob 创建                | 1-5ms    | 内存拷贝               |
+| 图片解码                 | 10-50ms  | 主线程阻塞             |
+
+### 前端优化方案
+
+#### F1. 翻页去抖 + 请求取消（高优先级）
+
+**问题**: 快速翻页时生成大量请求，旧请求还在处理
+
+**方案**: 在前端添加智能去抖
+
+```typescript
+// lib/utils/pageNavigation.ts
+import { RequestDeduplicator } from './requestDedup';
+
+const pageNavigationDedup = new RequestDeduplicator(100); // 100ms 窗口
+
+export async function navigateToPageDebounced(index: number) {
+	const key = `page-${index}`;
+	if (!pageNavigationDedup.tryAcquire(key)) {
+		return; // 跳过重复请求
+	}
+	try {
+		await bookStore.navigateToPage(index);
+	} finally {
+		pageNavigationDedup.release(key);
+	}
+}
+```
+
+#### F2. 预解码缓存 ✅ 已实现
+
+**位置**: `lib/stackview/stores/preDecodeCache.svelte.ts`
+
+**已有功能**:
+
+- `PreDecodeCacheStore` 类实现了完整的预解码逻辑
+- LRU 淘汰策略（默认最多 20 张）
+- 支持超分图替换原图预解码
+- 响应式版本号触发 UI 更新
+- 与 `renderQueue.ts` 集成的分层预加载
+
+**集成点**:
+
+- `stackImageLoader.ts` 调用 `preDecodeCache.preDecodeAndCache()`
+- `renderQueue.ts` 使用 `preDecodeCache.has()` 检查缓存状态
+
+#### F3. 请求优先级队列优化
+
+**当前**: LoadQueue 只有 3 个优先级
+**优化**: 使用更细粒度的优先级
+
+```typescript
+export const LoadPriority = {
+	CRITICAL: 1000, // 当前页（必须立即加载）
+	HIGH: 100, // 下一页/上一页
+	NORMAL: 50, // 预加载（±3页）
+	LOW: 10, // 远预加载（±5页）
+	BACKGROUND: 1 // 缩略图
+};
+```
+
+#### F4. Protocol 模式预取增强
+
+**当前**: `preloadArchiveImages` 使用 `<link rel="prefetch">`
+**优化**: 结合后端缓存状态，避免重复预取
+
+```typescript
+async function smartPreload(bookHash: string, currentPage: number) {
+	// 1. 查询后端缓存状态
+	const cacheStatus = await invoke<boolean[]>('get_page_cache_status', {
+		bookHash,
+		startPage: currentPage - 3,
+		count: 7
+	});
+
+	// 2. 只预取未缓存的页面
+	const pagesToPreload = cacheStatus
+		.map((cached, i) => (cached ? null : currentPage - 3 + i))
+		.filter((p) => p !== null);
+
+	preloadArchiveImages(bookHash, pagesToPreload);
+}
+```
+
+### 前后端衔接优化
+
+#### B1. 后端缓存状态查询（低开销）
+
+添加轻量级 IPC 命令查询缓存状态：
+
+```rust
+#[tauri::command]
+pub fn get_page_cache_status(
+    book_hash: &str,
+    start_page: usize,
+    count: usize,
+) -> Vec<bool> {
+    // 直接查询 PageCache，不读取数据
+    (start_page..start_page + count)
+        .map(|i| page_cache.contains(book_hash, i))
+        .collect()
+}
+```
+
+#### B2. 后端预加载完成事件
+
+使用 Tauri 事件系统通知前端预加载完成：
+
+```rust
+// 后端
+app.emit("preload_complete", PreloadEvent {
+    book_hash,
+    pages: vec![1, 2, 3]
+});
+
+// 前端监听
+listen<PreloadEvent>('preload_complete', (event) => {
+  // 更新 UI 状态，避免重复请求
+  markPagesAsPreloaded(event.payload.pages);
+});
+```
+
+#### B3. 流式传输大图片
+
+对于 > 5MB 的图片，使用流式传输而不是一次性返回：
+
+```typescript
+// 前端
+async function loadLargeImage(pageIndex: number) {
+	const stream = await invoke<ReadableStream>('get_page_stream', { pageIndex });
+	const reader = stream.getReader();
+	// 分块读取，可显示进度
+}
+```
+
+### 实施路线图
+
+#### Phase 1: 快速修复（1天） ✅ 已完成
+
+- [x] 后端请求去重 (`core/request_dedup.rs`)
+- [x] Protocol 缓存 (`core/custom_protocol.rs`)
+- [x] **前端翻页去抖**（`lib/stores/book/core.svelte.ts` + `lib/utils/requestDedup.ts`）
+
+#### Phase 2: 核心优化（2-3天） ✅ 已完成
+
+- [x] 后端批量写入 (`core/batch_write.rs`)
+- [x] **前端 ImageBitmap 预解码** ← 项目已有 `preDecodeCache.svelte.ts`
+- [x] **后端缓存状态查询** (`pm_get_cache_status` 命令 + 前端 API)
+
+#### Phase 3: 进阶优化（后续）
+
+- [ ] 预加载完成事件（Tauri 事件系统）
+- [ ] 流式大图传输（> 5MB 分块）
+- [ ] 请求优先级细化（5级优先级）
+
+---
+
+## 📊 预期延迟改进
+
+| 场景         | 当前延迟 | 优化后   | 改进方式             |
+| ------------ | -------- | -------- | -------------------- |
+| 缓存命中翻页 | 10-30ms  | 5-10ms   | 预解码 ImageBitmap   |
+| 首次加载     | 50-150ms | 30-80ms  | Protocol 缓存 + 去重 |
+| 快速连续翻页 | 延迟累积 | 请求去重 | 前后端去抖           |
+| 回翻已浏览页 | 50-100ms | 5-10ms   | 后端缓存 + 预解码    |

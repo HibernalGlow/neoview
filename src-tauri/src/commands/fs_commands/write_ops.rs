@@ -53,8 +53,7 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
             return Err(format!("文件不存在: {}", path_clone));
         }
 
-        // 使用 PowerShell 的 Remove-Item 配合 -Recurse 删除到回收站
-        // Shell.Application 的 MoveHere 方法可以移动到回收站
+        // 使用 PowerShell 的 Shell.Application COM 对象移动到回收站
         let ps_script = format!(
             r#"
             $shell = New-Object -ComObject Shell.Application
@@ -70,29 +69,41 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
             path_clone.replace("'", "''")
         );
 
-        let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-            .output()
-            .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
+        // 使用 CREATE_NO_WINDOW 标志隐藏窗口
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
+            let output = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &ps_script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
 
-        if output.status.success() {
-            // 检查文件是否真的被删除了
-            if !path_buf.exists() {
-                log::info!("✅ 已移动到回收站: {}", path_clone);
-                Ok(())
-            } else {
-                // PowerShell 成功但文件还在，可能是异步操作，等待一下
-                std::thread::sleep(std::time::Duration::from_millis(500));
+            if output.status.success() {
                 if !path_buf.exists() {
                     log::info!("✅ 已移动到回收站: {}", path_clone);
                     Ok(())
                 } else {
-                    Err(format!("移动到回收站失败: 文件仍然存在"))
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if !path_buf.exists() {
+                        log::info!("✅ 已移动到回收站: {}", path_clone);
+                        Ok(())
+                    } else {
+                        Err("移动到回收站失败: 文件仍然存在".to_string())
+                    }
                 }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(format!("移动到回收站失败: {}", stderr))
             }
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("移动到回收站失败: {}", stderr))
+        }
+        
+        #[cfg(not(windows))]
+        {
+            // 非 Windows 平台使用 trash 库
+            trash::delete(&path_buf).map_err(|e| format!("移动到回收站失败: {}", e))
         }
     })
     .await

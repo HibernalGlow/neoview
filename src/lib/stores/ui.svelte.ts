@@ -11,6 +11,7 @@ import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
 import { pageDistributionStore } from './pageDistributionStore.svelte';
+import { showInfoToast } from '$lib/utils/toast';
 
 // ============================================================================
 // 类型定义
@@ -544,7 +545,15 @@ export async function pageLeft() {
 		const step = getPageStep();
 		const targetIndex = Math.max(currentIndex - step, 0);
 
-		if (targetIndex === currentIndex) return;
+		if (targetIndex === currentIndex) {
+			// 已在第一页，检查是否显示边界提示
+			const settings = settingsManager.getSettings();
+			const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
+			if (enableBoundaryToast) {
+				showInfoToast('已是第一页');
+			}
+			return;
+		}
 
 		await bookStore.navigateToPage(targetIndex);
 
@@ -597,6 +606,12 @@ export async function pageRight() {
 
 		if (targetIndex === currentIndex) {
 			console.log('📖 pageRight: 已是最后一页');
+			// 已在最后一页，检查是否显示边界提示
+			const settings = settingsManager.getSettings();
+			const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
+			if (enableBoundaryToast) {
+				showInfoToast('已是最后一页');
+			}
 			return;
 		}
 

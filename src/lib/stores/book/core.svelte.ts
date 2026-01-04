@@ -343,7 +343,15 @@ class BookStore {
   }
 
   async nextPage() {
-    if (!this.canNextPage) return;
+    if (!this.canNextPage) {
+      // 已在最后一页，检查是否显示边界提示
+      const settings = settingsManager.getSettings();
+      const enableBoundaryToast = settings.view?.switchToast?.enableBoundaryToast ?? true;
+      if (enableBoundaryToast) {
+        showToast({ title: '已是最后一页', variant: 'info' });
+      }
+      return;
+    }
     try {
       const newIndex = await bookApi.nextPage();
       if (this.state.currentBook) {
@@ -361,7 +369,15 @@ class BookStore {
   }
 
   async previousPage() {
-    if (!this.canPreviousPage) return;
+    if (!this.canPreviousPage) {
+      // 已在第一页，检查是否显示边界提示
+      const settings = settingsManager.getSettings();
+      const enableBoundaryToast = settings.view?.switchToast?.enableBoundaryToast ?? true;
+      if (enableBoundaryToast) {
+        showToast({ title: '已是第一页', variant: 'info' });
+      }
+      return;
+    }
     try {
       const newIndex = await bookApi.previousPage();
       if (this.state.currentBook) {

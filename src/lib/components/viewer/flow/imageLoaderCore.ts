@@ -472,6 +472,13 @@ export class ImageLoaderCore {
 	}
 
 	/**
+	 * 【性能优化】获取缓存数量（O(1)）
+	 */
+	getCacheSize(): number {
+		return this.blobCache.getStats().count;
+	}
+
+	/**
 	 * 获取队列状态
 	 */
 	getQueueStatus() {

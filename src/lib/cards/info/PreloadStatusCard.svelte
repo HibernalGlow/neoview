@@ -45,16 +45,10 @@ const preDecodedCount = $derived.by(() => {
 	return preDecodeCache.getStats().size;
 });
 
-// 计算已预加载页数（Blob 缓存）
+// 【性能优化】计算已预加载页数（使用 O(1) 的 size 属性）
 const preloadedCount = $derived.by(() => {
 	void imagePoolVersion;
-	let count = 0;
-	for (let i = 0; i < totalPages; i++) {
-		if (imagePool.has(i)) {
-			count++;
-		}
-	}
-	return count;
+	return imagePool.size;
 });
 
 // 计算队列状态
@@ -94,12 +88,14 @@ function saveToSettings() {
 	});
 }
 
-// 处理自适应开关
+// 处理自适应开关（持久化）
 async function handleAdaptiveChange(checked: boolean) {
 	adaptiveEnabled = checked;
 	if (checked) {
 		await applyAdaptive();
 	}
+	// 持久化设置
+	settingsManager.updateNestedSettings('performance', { adaptivePreload: checked });
 }
 
 // 处理范围变更
@@ -121,31 +117,48 @@ function handleDelayChange(type: 'high' | 'normal' | 'low', value: number) {
 	updateConfig(partial);
 }
 
-// 递进加载配置处理
+// 递进加载配置处理（持久化）
 function handleProgressiveEnabledChange(checked: boolean) {
 	renderQueue.setProgressiveConfig({ enabled: checked });
 	progressiveConfig = renderQueue.getProgressiveConfig();
+	saveProgressiveConfig();
 }
 
 function handleProgressiveDwellTimeChange(value: number) {
 	renderQueue.setProgressiveConfig({ dwellTime: value });
 	progressiveConfig = renderQueue.getProgressiveConfig();
+	saveProgressiveConfig();
 }
 
 function handleProgressiveBatchSizeChange(value: number) {
 	renderQueue.setProgressiveConfig({ batchSize: value });
 	progressiveConfig = renderQueue.getProgressiveConfig();
+	saveProgressiveConfig();
 }
 
 function handleProgressiveMaxPagesChange(value: number) {
 	renderQueue.setProgressiveConfig({ maxPages: value });
 	progressiveConfig = renderQueue.getProgressiveConfig();
+	saveProgressiveConfig();
 }
 
-// 预解码缓存设置
+// 保存递进加载配置到设置
+function saveProgressiveConfig() {
+	settingsManager.updateNestedSettings('performance', {
+		progressiveLoad: {
+			enabled: progressiveConfig.enabled,
+			dwellTime: progressiveConfig.dwellTime,
+			batchSize: progressiveConfig.batchSize,
+			maxPages: progressiveConfig.maxPages
+		}
+	});
+}
+
+// 预解码缓存设置（持久化）
 function handlePreDecodeCacheMaxSizeChange(value: number) {
 	preDecodeCache.setMaxSize(value);
 	preDecodeCacheMaxSize = value;
+	settingsManager.updateNestedSettings('performance', { preDecodeCacheSize: value });
 }
 
 function clearPreDecodeCache() {
@@ -159,6 +172,33 @@ function onStateChange() {
 
 onMount(() => {
 	renderQueue.setOnStateChange(onStateChange);
+	
+	// 【持久化】从设置加载配置
+	const settings = settingsManager.getSettings();
+	const perf = settings.performance;
+	
+	// 自适应开关
+	if (perf.adaptivePreload !== undefined) {
+		adaptiveEnabled = perf.adaptivePreload;
+	}
+	
+	// 预解码缓存容量
+	if (perf.preDecodeCacheSize !== undefined && perf.preDecodeCacheSize > 0) {
+		preDecodeCache.setMaxSize(perf.preDecodeCacheSize);
+		preDecodeCacheMaxSize = perf.preDecodeCacheSize;
+	}
+	
+	// 递进加载配置
+	if (perf.progressiveLoad) {
+		renderQueue.setProgressiveConfig(perf.progressiveLoad);
+		progressiveConfig = renderQueue.getProgressiveConfig();
+	}
+	
+	console.log('📋 [PreloadStatusCard] 已从设置加载配置', {
+		adaptivePreload: adaptiveEnabled,
+		preDecodeCacheSize: preDecodeCacheMaxSize,
+		progressiveLoad: progressiveConfig
+	});
 });
 
 onDestroy(() => {

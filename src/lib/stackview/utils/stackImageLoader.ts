@@ -318,6 +318,13 @@ export class StackImageLoader {
   }
 
   /**
+   * 【性能优化】获取缓存数量（O(1)）
+   */
+  getCacheSize(): number {
+    return this.core.getCacheSize();
+  }
+
+  /**
    * 预加载范围
    * 【性能优化】使用 loadPage 预加载，确保尺寸被缓存
    */

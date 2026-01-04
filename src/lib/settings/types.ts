@@ -45,6 +45,17 @@ export interface NeoViewSettings {
     preLoadSize: number; // number of items
     multiThreadedRendering: boolean;
     maxThreads: number;
+    /** 自适应预加载开关 */
+    adaptivePreload?: boolean;
+    /** 预解码缓存容量 */
+    preDecodeCacheSize?: number;
+    /** 递进加载配置 */
+    progressiveLoad?: {
+      enabled: boolean;
+      dwellTime: number; // 秒
+      batchSize: number;
+      maxPages: number;
+    };
   };
   image: {
     supportedFormats: string[];

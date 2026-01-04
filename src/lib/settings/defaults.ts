@@ -26,7 +26,15 @@ export const defaultSettings: NeoViewSettings = {
     cacheMemorySize: 512,
     preLoadSize: 3,
     multiThreadedRendering: true,
-    maxThreads: 2
+    maxThreads: 2,
+    adaptivePreload: true,
+    preDecodeCacheSize: 20,
+    progressiveLoad: {
+      enabled: false,
+      dwellTime: 3,
+      batchSize: 5,
+      maxPages: 50
+    }
   },
   image: {
     supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],

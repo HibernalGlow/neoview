@@ -41,73 +41,50 @@ pub async fn rename_path(
 }
 
 /// 移动到回收站
-/// 使用 PowerShell 命令执行，绕过文件句柄占用问题
+/// 使用 `spawn_blocking` 在独立线程执行，避免 Windows COM 线程模型冲突
+/// 包含重试机制以处理文件暂时被占用的情况
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
-    let path_clone = path.clone();
-    
+    let path_buf = PathBuf::from(path);
+
     spawn_blocking(move || {
-        let path_buf = PathBuf::from(&path_clone);
-        
         if !path_buf.exists() {
-            return Err(format!("文件不存在: {}", path_clone));
+            return Err(format!("文件不存在: {}", path_buf.display()));
         }
 
-        // 使用 PowerShell 的 Shell.Application COM 对象移动到回收站
-        let ps_script = format!(
-            r#"
-            $shell = New-Object -ComObject Shell.Application
-            $recycleBin = $shell.NameSpace(10)
-            $item = $shell.NameSpace(0).ParseName('{}')
-            if ($item) {{
-                $recycleBin.MoveHere($item.Path, 0x0040)
-                Start-Sleep -Milliseconds 500
-            }} else {{
-                exit 1
-            }}
-            "#,
-            path_clone.replace("'", "''")
-        );
+        // 尝试删除，如果失败则重试
+        let max_retries = 3;
+        let mut last_error = String::new();
 
-        // 使用 CREATE_NO_WINDOW 标志隐藏窗口
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            
-            let output = std::process::Command::new("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &ps_script])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output()
-                .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
+        for attempt in 0..max_retries {
+            match trash::delete(&path_buf) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    last_error = e.to_string();
+                    log::warn!(
+                        "移动到回收站失败 (尝试 {}/{}): {} - {}",
+                        attempt + 1,
+                        max_retries,
+                        path_buf.display(),
+                        last_error
+                    );
 
-            if output.status.success() {
-                if !path_buf.exists() {
-                    log::info!("✅ 已移动到回收站: {}", path_clone);
-                    Ok(())
-                } else {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    if !path_buf.exists() {
-                        log::info!("✅ 已移动到回收站: {}", path_clone);
-                        Ok(())
-                    } else {
-                        Err("移动到回收站失败: 文件仍然存在".to_string())
+                    if attempt < max_retries - 1 {
+                        // 等待一段时间后重试（让其他进程释放文件句柄）
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            100 * (attempt as u64 + 1),
+                        ));
                     }
                 }
-            } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                Err(format!("移动到回收站失败: {}", stderr))
             }
         }
-        
-        #[cfg(not(windows))]
-        {
-            // 非 Windows 平台使用 trash 库
-            trash::delete(&path_buf).map_err(|e| format!("移动到回收站失败: {}", e))
-        }
+
+        Err(format!(
+            "移动到回收站失败 (已重试{max_retries}次): {last_error}"
+        ))
     })
     .await
-    .map_err(|e| format!("spawn_blocking error: {}", e))?
+    .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
 
 /// 异步移动到回收站（绕开 IPC 协议问题）

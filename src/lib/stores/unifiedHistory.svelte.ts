@@ -115,6 +115,7 @@ export const unifiedHistoryStore = {
       thumbnail?: string;
       videoProgress?: VideoProgress;
       contentType?: ContentType;
+      currentFilePath?: string;
     } = {}
   ) {
     console.log('📝 [UnifiedHistory] add() called:', { pathStack, currentIndex, totalItems, options });
@@ -137,6 +138,7 @@ export const unifiedHistoryStore = {
         id: existing?.id ?? crypto.randomUUID(),
         pathStack,
         currentIndex,
+        currentFilePath: options.currentFilePath ?? existing?.currentFilePath,
         displayName: options.displayName ?? existing?.displayName ?? extractName(pathStack[pathStack.length - 1]?.path ?? ''),
         thumbnail: options.thumbnail ?? existing?.thumbnail,
         timestamp: Date.now(),
@@ -163,7 +165,7 @@ export const unifiedHistoryStore = {
   /**
    * 更新索引（不改变时间戳顺序）
    */
-  updateIndex(pathStack: ContentRef[], currentIndex: number, totalItems: number) {
+  updateIndex(pathStack: ContentRef[], currentIndex: number, totalItems: number, currentFilePath?: string) {
     update(history => {
       const key = pathStack.map(refToString).join('>>');
       const existingIndex = history.findIndex(h => 
@@ -176,6 +178,7 @@ export const unifiedHistoryStore = {
           ...newHistory[existingIndex],
           currentIndex,
           totalItems,
+          currentFilePath: currentFilePath ?? newHistory[existingIndex].currentFilePath,
         };
         saveToStorage(newHistory);
         return newHistory;

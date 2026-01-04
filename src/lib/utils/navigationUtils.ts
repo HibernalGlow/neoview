@@ -85,7 +85,8 @@ export async function openFileSystemItem(
             const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
             const historyEntry = unifiedHistoryStore.findByPath(path);
             const initialPage = historyEntry?.currentIndex ?? 0;
-            await bookStore.openDirectoryAsBook(path, { initialPage });
+            const initialFilePath = historyEntry?.currentFilePath;
+            await bookStore.openDirectoryAsBook(path, { initialPage, initialFilePath });
             return;
         }
         // If NOT syncing silently, we assume the user wants to switch to the file browser and see the folder.

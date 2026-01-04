@@ -199,8 +199,26 @@ class BookStore {
         console.warn('⚠️ 应用锁定媒体优先模式失败:', err);
       }
     }
-
-    const targetPage = clampInitialPage(book.totalPages, options.initialPage);
+    // 计算目标页面：优先使用 initialFilePath 查找，找不到时回退到 initialPage
+    let targetPage = clampInitialPage(book.totalPages, options.initialPage);
+    
+    // 如果提供了 initialFilePath，尝试按路径查找页面索引
+    if (options.initialFilePath && Array.isArray(book.pages)) {
+      const normalizedTargetPath = options.initialFilePath.replace(/\\/g, '/').toLowerCase();
+      const foundIndex = book.pages.findIndex(page => {
+        if (!page?.path) return false;
+        const normalizedPagePath = page.path.replace(/\\/g, '/').toLowerCase();
+        return normalizedPagePath === normalizedTargetPath;
+      });
+      
+      if (foundIndex >= 0) {
+        targetPage = foundIndex;
+        console.log('📍 [History] Found page by path:', options.initialFilePath, '-> index', foundIndex);
+      } else {
+        console.log('⚠️ [History] Page not found by path, falling back to index:', options.initialPage);
+      }
+    }
+    
     book.currentPage = targetPage;
 
     this.state.currentBook = book;
@@ -219,7 +237,12 @@ class BookStore {
     if (!options.skipHistory) {
       import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
         const pathStack = this.buildPathStack();
-        unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { displayName: book.name });
+        const currentPage = book.pages?.[targetPage];
+        const currentFilePath = currentPage?.path;
+        unifiedHistoryStore.add(pathStack, targetPage, book.totalPages, { 
+          displayName: book.name,
+          currentFilePath 
+        });
       }).catch(() => {});
     }
 
@@ -304,12 +327,17 @@ class BookStore {
           const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
           const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
           const pathStack = this.buildPathStack();
-          unifiedHistoryStore.add(pathStack, index, this.state.currentBook.totalPages, { displayName: name });
+          unifiedHistoryStore.add(pathStack, index, this.state.currentBook.totalPages, { 
+            displayName: name,
+            currentFilePath: currentPage.path 
+          });
         }
       } else {
         const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
         const pathStack = this.buildPathStack();
-        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages);
+        const currentPage = this.state.currentBook.pages?.[index];
+        const currentFilePath = currentPage?.path;
+        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages, currentFilePath);
       }
 
       this.showPageSwitchToastIfEnabled();
@@ -418,12 +446,17 @@ class BookStore {
         const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
         const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
         const pathStack = this.buildPathStack();
-        unifiedHistoryStore.add(pathStack, newIndex, book.totalPages, { displayName: name });
+        unifiedHistoryStore.add(pathStack, newIndex, book.totalPages, { 
+          displayName: name,
+          currentFilePath: currentPage.path 
+        });
       }
     } else {
       const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
       const pathStack = this.buildPathStack();
-      unifiedHistoryStore.updateIndex(pathStack, newIndex, book.totalPages);
+      const currentPage = book.pages?.[newIndex];
+      const currentFilePath = currentPage?.path;
+      unifiedHistoryStore.updateIndex(pathStack, newIndex, book.totalPages, currentFilePath);
     }
   }
 

@@ -351,7 +351,8 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 			const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
 			const historyEntry = unifiedHistoryStore.findByPath(item.path);
 			const initialPage = historyEntry?.currentIndex ?? 0;
-			await bookStore.openDirectoryAsBook(item.path, { initialPage });
+			const initialFilePath = historyEntry?.currentFilePath;
+			await bookStore.openDirectoryAsBook(item.path, { initialPage, initialFilePath });
 		} catch (err) {
 			console.error('[FolderActions] Failed to open folder as book:', err);
 		}

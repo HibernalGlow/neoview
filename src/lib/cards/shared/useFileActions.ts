@@ -215,7 +215,8 @@ export function createItemOpenActions(
 			// 查找历史记录，恢复上次阅读位置
 			const historyEntry = unifiedHistoryStore.findByPath(item.path);
 			const initialPage = historyEntry?.currentIndex ?? 0;
-			await bookStore.openDirectoryAsBook(item.path, { initialPage });
+			const initialFilePath = historyEntry?.currentFilePath;
+			await bookStore.openDirectoryAsBook(item.path, { initialPage, initialFilePath });
 		}
 	};
 

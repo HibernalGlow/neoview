@@ -31,8 +31,10 @@ export interface BookState {
 }
 
 export interface OpenBookOptions {
-  /** 打开时希望跳转到的页面 */
+  /** 打开时希望跳转到的页面索引（回退用） */
   initialPage?: number;
+  /** 打开时希望跳转到的页面文件路径（优先使用，解决排序变化问题） */
+  initialFilePath?: string;
   /** 跳过添加历史记录 */
   skipHistory?: boolean;
   /** 是否使用流式打开（压缩包默认启用，设为 false 可禁用） */

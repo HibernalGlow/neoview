@@ -174,8 +174,11 @@ export interface UnifiedHistoryEntry {
   /** 路径栈（支持嵌套定位） */
   pathStack: ContentRef[];
 
-  /** 最深层当前索引 */
+  /** 最深层当前索引（回退用） */
   currentIndex: number;
+
+  /** 当前页面文件路径（优先用于恢复，解决排序变化问题）*/
+  currentFilePath?: string;
 
   /** 显示名称 */
   displayName: string;

@@ -347,7 +347,11 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 	async function handleOpenFolderAsBook(item: FsItem) {
 		if (!item.isDir) return;
 		try {
-			await bookStore.openDirectoryAsBook(item.path);
+			// 查找历史记录，恢复上次阅读位置
+			const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+			const historyEntry = unifiedHistoryStore.findByPath(item.path);
+			const initialPage = historyEntry?.currentIndex ?? 0;
+			await bookStore.openDirectoryAsBook(item.path, { initialPage });
 		} catch (err) {
 			console.error('[FolderActions] Failed to open folder as book:', err);
 		}

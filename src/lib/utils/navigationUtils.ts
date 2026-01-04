@@ -81,7 +81,11 @@ export async function openFileSystemItem(
         // 如果是强制在应用内打开（CLI 启动），在 viewer 中打开文件夹作为书籍
         if (forceInApp) {
             console.log('📂 forceInApp: opening directory as book in viewer', path);
-            await bookStore.openDirectoryAsBook(path);
+            // 查找历史记录，恢复上次阅读位置
+            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+            const historyEntry = unifiedHistoryStore.findByPath(path);
+            const initialPage = historyEntry?.currentIndex ?? 0;
+            await bookStore.openDirectoryAsBook(path, { initialPage });
             return;
         }
         // If NOT syncing silently, we assume the user wants to switch to the file browser and see the folder.

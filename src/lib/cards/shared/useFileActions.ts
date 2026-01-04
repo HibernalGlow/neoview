@@ -211,7 +211,12 @@ export function createItemOpenActions(
 	};
 
 	const handleOpenFolderAsBook = async (item: FsItem) => {
-		if (item.isDir) await bookStore.openDirectoryAsBook(item.path);
+		if (item.isDir) {
+			// 查找历史记录，恢复上次阅读位置
+			const historyEntry = unifiedHistoryStore.findByPath(item.path);
+			const initialPage = historyEntry?.currentIndex ?? 0;
+			await bookStore.openDirectoryAsBook(item.path, { initialPage });
+		}
 	};
 
 	const handleOpenInNewTab = (item: FsItem) => {

@@ -145,6 +145,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'benchmark',
 		canHide: true,
 	},
+	'preloadStatus': {
+		id: 'preloadStatus',
+		title: '预加载状态',
+		icon: Loader,
+		defaultPanel: 'info',
+		canHide: true,
+	},
 	'systemMonitor': {
 		id: 'systemMonitor',
 		title: '系统资源监控',

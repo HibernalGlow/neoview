@@ -1,17 +1,15 @@
 /**
- * RenderQueue - 分层渲染队列
+ * RenderQueue - 分层渲染队列（卡片预加载管理）
  * 
  * 管理图片加载和预解码的优先级，参考 OpenComic 的实现：
  * - 当前页立即加载（CRITICAL）
  * - 周围页延迟加载（HIGH/NORMAL/LOW）
  * - 快速翻页时取消过时任务
  * 
- * OpenComic 的关键代码：
- * ```javascript
- * setRenderQueue(visbleImages.prev, visbleImages.next);  // 立即
- * setTimeout(() => setRenderQueue(maxPrev, maxNext), 400);  // 延迟
- * if (queueIndex !== queue.index('readingRender')) return;  // 取消检查
- * ```
+ * 【动态配置支持】
+ * - 支持从设置中读取预加载数量
+ * - 支持运行时动态调整预加载范围
+ * - 支持基于系统能力的自适应配置
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
@@ -61,6 +59,84 @@ export interface QueueStatus {
   currentToken: number;
 }
 
+/** 预加载配置 */
+export interface PreloadConfig {
+  /** 高优先级范围（±N 页） */
+  highRange: number;
+  /** 普通优先级范围（±N 页） */
+  normalRange: number;
+  /** 低优先级范围（±N 页） */
+  lowRange: number;
+  /** 高优先级延迟（ms） */
+  highDelay: number;
+  /** 普通优先级延迟（ms） */
+  normalDelay: number;
+  /** 低优先级延迟（ms） */
+  lowDelay: number;
+}
+
+/** 递进加载配置 */
+export interface ProgressiveLoadConfig {
+  /** 是否启用递进加载 */
+  enabled: boolean;
+  /** 停留时间（秒） */
+  dwellTime: number;
+  /** 每次递进加载的页数 */
+  batchSize: number;
+  /** 最大递进页数（999 表示全部） */
+  maxPages: number;
+}
+
+/** 递进加载状态 */
+export interface ProgressiveLoadState {
+  /** 是否正在运行 */
+  isRunning: boolean;
+  /** 倒计时秒数 */
+  countdown: number;
+  /** 计时器是否激活 */
+  isTimerActive: boolean;
+  /** 已递进加载的最远页码 */
+  furthestLoadedIndex: number;
+}
+
+/** 默认预加载配置 */
+const DEFAULT_PRELOAD_CONFIG: PreloadConfig = {
+  highRange: 1,
+  normalRange: 3,
+  lowRange: 5,
+  highDelay: 50,
+  normalDelay: 150,
+  lowDelay: 300,
+};
+
+/** 低端设备预加载配置 */
+const LOW_END_PRELOAD_CONFIG: PreloadConfig = {
+  highRange: 1,
+  normalRange: 2,
+  lowRange: 3,
+  highDelay: 100,
+  normalDelay: 250,
+  lowDelay: 500,
+};
+
+/** 高端设备预加载配置 */
+const HIGH_END_PRELOAD_CONFIG: PreloadConfig = {
+  highRange: 2,
+  normalRange: 4,
+  lowRange: 7,
+  highDelay: 30,
+  normalDelay: 100,
+  lowDelay: 200,
+};
+
+/** 默认递进加载配置 */
+const DEFAULT_PROGRESSIVE_CONFIG: ProgressiveLoadConfig = {
+  enabled: false,
+  dwellTime: 3,
+  batchSize: 5,
+  maxPages: 50,
+};
+
 // ============================================================================
 // RenderQueue 类
 // ============================================================================
@@ -82,20 +158,71 @@ export class RenderQueue {
   private delayTimers: ReturnType<typeof setTimeout>[] = [];
   
   /** 预加载范围配置 */
-  private config = {
-    /** 高优先级范围（±1 页） */
-    highRange: 1,
-    /** 普通优先级范围（±2-3 页） */
-    normalRange: 3,
-    /** 低优先级范围（±4-5 页） */
-    lowRange: 5,
-    /** 高优先级延迟（ms） */
-    highDelay: 50,
-    /** 普通优先级延迟（ms） */
-    normalDelay: 150,
-    /** 低优先级延迟（ms） */
-    lowDelay: 300,
+  private config: PreloadConfig = { ...DEFAULT_PRELOAD_CONFIG };
+  
+  /** 递进加载配置 */
+  private progressiveConfig: ProgressiveLoadConfig = { ...DEFAULT_PROGRESSIVE_CONFIG };
+  
+  /** 递进加载状态 */
+  private progressiveState: ProgressiveLoadState = {
+    isRunning: false,
+    countdown: 0,
+    isTimerActive: false,
+    furthestLoadedIndex: -1,
   };
+  
+  /** 递进加载定时器 */
+  private progressiveDwellTimer: ReturnType<typeof setTimeout> | null = null;
+  private progressiveCountdownTimer: ReturnType<typeof setInterval> | null = null;
+  
+  /** 状态变更回调 */
+  private onStateChange: (() => void) | null = null;
+  
+  /**
+   * 从设置同步预加载配置
+   */
+  async syncFromSettings(): Promise<void> {
+    try {
+      const { settingsManager } = await import('$lib/settings/settingsManager');
+      const settings = settingsManager.getSettings();
+      const preLoadSize = settings.performance?.preLoadSize;
+      
+      if (preLoadSize !== undefined && preLoadSize > 0) {
+        // 根据用户设置的预加载大小调整范围
+        // preLoadSize 表示总预加载数，按比例分配到各优先级
+        this.config.highRange = Math.max(1, Math.floor(preLoadSize * 0.2));
+        this.config.normalRange = Math.max(2, Math.floor(preLoadSize * 0.5));
+        this.config.lowRange = preLoadSize;
+        console.log(`📋 [RenderQueue] 从设置同步预加载配置: preLoadSize=${preLoadSize}`, this.config);
+      }
+    } catch (error) {
+      console.warn('⚠️ [RenderQueue] 同步设置失败，使用默认配置', error);
+    }
+  }
+  
+  /**
+   * 应用系统能力自适应配置
+   */
+  async applyAdaptiveConfig(): Promise<void> {
+    try {
+      const { getAdaptiveConfig } = await import('$lib/utils/systemCapabilities');
+      const adaptiveConfig = await getAdaptiveConfig();
+      
+      // 根据系统能力选择预设配置
+      if (adaptiveConfig.preloadAhead <= 2) {
+        this.config = { ...LOW_END_PRELOAD_CONFIG };
+        console.log('📋 [RenderQueue] 应用低端设备配置');
+      } else if (adaptiveConfig.preloadAhead >= 5) {
+        this.config = { ...HIGH_END_PRELOAD_CONFIG };
+        console.log('📋 [RenderQueue] 应用高端设备配置');
+      } else {
+        this.config = { ...DEFAULT_PRELOAD_CONFIG };
+        console.log('📋 [RenderQueue] 应用默认配置');
+      }
+    } catch (error) {
+      console.warn('⚠️ [RenderQueue] 获取系统能力失败，使用默认配置', error);
+    }
+  }
   
   /**
    * 设置当前页面，触发分层加载
@@ -103,6 +230,11 @@ export class RenderQueue {
    * @param pageIndex 当前页面索引
    */
   async setCurrentPage(pageIndex: number): Promise<void> {
+    // 首次调用时同步配置
+    if (this.currentPageIndex === -1) {
+      await this.syncFromSettings();
+    }
+    
     // 取消之前的任务
     this.cancelAll();
     
@@ -140,6 +272,9 @@ export class RenderQueue {
       if (token !== this.currentToken) return;
       this.scheduleRange(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
     }, this.config.lowDelay));
+    
+    // 5. 重置递进加载状态
+    this.resetProgressiveState();
   }
   
   /**
@@ -317,10 +452,229 @@ export class RenderQueue {
   }
   
   /**
+   * 获取当前预加载配置
+   */
+  getConfig(): PreloadConfig {
+    return { ...this.config };
+  }
+  
+  /**
    * 更新配置
    */
-  setConfig(config: Partial<typeof this.config>): void {
+  setConfig(config: Partial<PreloadConfig>): void {
     Object.assign(this.config, config);
+    console.log('📋 [RenderQueue] 配置已更新', this.config);
+  }
+  
+  /**
+   * 获取预加载窗口范围
+   * 返回当前配置下的预加载索引范围
+   */
+  getPreloadWindow(): { forward: number[]; backward: number[]; all: number[] } {
+    const book = bookStore.currentBook;
+    if (!book) return { forward: [], backward: [], all: [] };
+    
+    const totalPages = book.pages.length;
+    const center = this.currentPageIndex;
+    const forward: number[] = [];
+    const backward: number[] = [];
+    
+    // 向前预加载
+    for (let i = 1; i <= this.config.lowRange; i++) {
+      const idx = center + i;
+      if (idx < totalPages) forward.push(idx);
+    }
+    
+    // 向后预加载
+    for (let i = 1; i <= this.config.lowRange; i++) {
+      const idx = center - i;
+      if (idx >= 0) backward.push(idx);
+    }
+    
+    return { forward, backward, all: [...backward.reverse(), ...forward] };
+  }
+  
+  /**
+   * 检查索引是否在预加载窗口内
+   */
+  isInPreloadWindow(pageIndex: number): boolean {
+    const center = this.currentPageIndex;
+    const distance = Math.abs(pageIndex - center);
+    return distance <= this.config.lowRange;
+  }
+  
+  /**
+   * 获取索引的预加载优先级
+   */
+  getPreloadPriority(pageIndex: number): number {
+    const center = this.currentPageIndex;
+    const distance = Math.abs(pageIndex - center);
+    
+    if (distance === 0) return RenderPriority.CRITICAL;
+    if (distance <= this.config.highRange) return RenderPriority.HIGH;
+    if (distance <= this.config.normalRange) return RenderPriority.NORMAL;
+    if (distance <= this.config.lowRange) return RenderPriority.LOW;
+    return RenderPriority.BACKGROUND;
+  }
+  
+  // ============================================================================
+  // 递进加载功能
+  // ============================================================================
+  
+  /**
+   * 设置状态变更回调
+   */
+  setOnStateChange(callback: (() => void) | null): void {
+    this.onStateChange = callback;
+  }
+  
+  /**
+   * 通知状态变更
+   */
+  private notifyStateChange(): void {
+    if (this.onStateChange) {
+      this.onStateChange();
+    }
+  }
+  
+  /**
+   * 获取递进加载配置
+   */
+  getProgressiveConfig(): ProgressiveLoadConfig {
+    return { ...this.progressiveConfig };
+  }
+  
+  /**
+   * 获取递进加载状态
+   */
+  getProgressiveState(): ProgressiveLoadState {
+    return { ...this.progressiveState };
+  }
+  
+  /**
+   * 更新递进加载配置
+   */
+  setProgressiveConfig(config: Partial<ProgressiveLoadConfig>): void {
+    const wasEnabled = this.progressiveConfig.enabled;
+    Object.assign(this.progressiveConfig, config);
+    console.log('📋 [RenderQueue] 递进加载配置已更新', this.progressiveConfig);
+    
+    // 如果启用状态变化，处理定时器
+    if (config.enabled !== undefined) {
+      if (config.enabled && !wasEnabled) {
+        this.startProgressiveDwellTimer();
+      } else if (!config.enabled && wasEnabled) {
+        this.stopProgressiveDwellTimer();
+      }
+    }
+    
+    // 如果停留时间变化且已启用，重启定时器
+    if (config.dwellTime !== undefined && this.progressiveConfig.enabled) {
+      this.startProgressiveDwellTimer();
+    }
+    
+    this.notifyStateChange();
+  }
+  
+  /**
+   * 启动递进加载停留计时器
+   */
+  startProgressiveDwellTimer(): void {
+    this.stopProgressiveDwellTimer();
+    if (!this.progressiveConfig.enabled) return;
+    
+    // 设置倒计时
+    this.progressiveState.countdown = this.progressiveConfig.dwellTime;
+    this.progressiveState.isTimerActive = true;
+    this.notifyStateChange();
+    
+    // 每秒更新倒计时
+    this.progressiveCountdownTimer = setInterval(() => {
+      this.progressiveState.countdown = Math.max(0, this.progressiveState.countdown - 1);
+      this.notifyStateChange();
+    }, 1000);
+    
+    // 停留时间到后触发递进加载
+    this.progressiveDwellTimer = setTimeout(() => {
+      this.triggerProgressiveLoad();
+    }, this.progressiveConfig.dwellTime * 1000);
+  }
+  
+  /**
+   * 停止递进加载停留计时器
+   */
+  stopProgressiveDwellTimer(): void {
+    if (this.progressiveDwellTimer) {
+      clearTimeout(this.progressiveDwellTimer);
+      this.progressiveDwellTimer = null;
+    }
+    if (this.progressiveCountdownTimer) {
+      clearInterval(this.progressiveCountdownTimer);
+      this.progressiveCountdownTimer = null;
+    }
+    this.progressiveState.isTimerActive = false;
+    this.progressiveState.countdown = 0;
+    this.notifyStateChange();
+  }
+  
+  /**
+   * 触发递进加载
+   */
+  async triggerProgressiveLoad(): Promise<void> {
+    if (!this.progressiveConfig.enabled) return;
+    
+    // 停止倒计时
+    if (this.progressiveCountdownTimer) {
+      clearInterval(this.progressiveCountdownTimer);
+      this.progressiveCountdownTimer = null;
+    }
+    
+    this.progressiveState.isRunning = true;
+    this.progressiveState.countdown = 0;
+    this.notifyStateChange();
+    
+    const book = bookStore.currentBook;
+    if (!book) {
+      this.progressiveState.isRunning = false;
+      this.progressiveState.isTimerActive = false;
+      this.notifyStateChange();
+      return;
+    }
+    
+    const totalPages = book.pages.length;
+    const maxPages = this.progressiveConfig.maxPages === 999 ? totalPages : this.progressiveConfig.maxPages;
+    const batchSize = this.progressiveConfig.batchSize;
+    
+    // 计算起始位置：从当前预加载窗口之后开始
+    const startIndex = this.currentPageIndex + this.config.lowRange + 1;
+    const endIndex = Math.min(startIndex + batchSize, this.currentPageIndex + maxPages, totalPages);
+    
+    console.log(`📈 [RenderQueue] 递进加载触发: 当前页 ${this.currentPageIndex + 1}, 范围 ${startIndex + 1}-${endIndex}`);
+    
+    // 递进加载
+    for (let i = startIndex; i < endIndex; i++) {
+      if (!preDecodeCache.has(i)) {
+        await this.loadAndPreDecode(i, this.currentToken);
+        this.progressiveState.furthestLoadedIndex = Math.max(this.progressiveState.furthestLoadedIndex, i);
+        this.notifyStateChange();
+      }
+    }
+    
+    this.progressiveState.isRunning = false;
+    this.progressiveState.isTimerActive = false;
+    this.notifyStateChange();
+    
+    console.log(`✅ [RenderQueue] 递进加载完成: 最远页 ${this.progressiveState.furthestLoadedIndex + 1}`);
+  }
+  
+  /**
+   * 重置递进加载状态（切换页面时调用）
+   */
+  resetProgressiveState(): void {
+    this.progressiveState.furthestLoadedIndex = -1;
+    if (this.progressiveConfig.enabled) {
+      this.startProgressiveDwellTimer();
+    }
   }
 }
 
@@ -329,3 +683,6 @@ export class RenderQueue {
 // ============================================================================
 
 export const renderQueue = new RenderQueue();
+
+// 导出配置预设
+export { DEFAULT_PRELOAD_CONFIG, LOW_END_PRELOAD_CONFIG, HIGH_END_PRELOAD_CONFIG, DEFAULT_PROGRESSIVE_CONFIG };

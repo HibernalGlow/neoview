@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * NeoView - Base Sidebar Component
-	 * 可复用的侧边栏基础组件 - 支持自动隐藏、钉住、拖拽调整、Tab排序
+	 * 可复用的侧边栏基础组件 - 支持钉住、拖拽调整、Tab排序
 	 */
 	import { Pin, PinOff, ExternalLink, GripVertical } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -59,7 +59,6 @@
 		storageKey
 	}: Props = $props();
 
-	let hideTimer: number | null = null;
 	let isResizing = $state(false);
 	let startX = 0;
 	let startWidth = 0;
@@ -77,10 +76,6 @@
 	$effect(() => {
 		if (isPinned) {
 			isVisible = true;
-			if (hideTimer) {
-				clearTimeout(hideTimer);
-				hideTimer = null;
-			}
 		}
 	});
 
@@ -104,29 +99,15 @@
 		}
 	});
 
-	// 鼠标进入
+	// 鼠标进入（保留最基础的开启逻辑）
 	function handleMouseEnter() {
-		if (hideTimer) {
-			clearTimeout(hideTimer);
-			hideTimer = null;
-		}
 		isVisible = true;
 		if (onVisibilityChange) {
 			onVisibilityChange(true);
 		}
 	}
 
-	// 鼠标离开
-	function handleMouseLeave() {
-		if (!isResizing && !isPinned) {
-			hideTimer = setTimeout(() => {
-				isVisible = false;
-				if (onVisibilityChange) {
-					onVisibilityChange(false);
-				}
-			}, 500) as unknown as number;
-		}
-	}
+	// 移除了 handleMouseLeave 和所有的全局定时器判定，交给外层 HoverWrapper 处理
 
 	// 拖拽调整宽度
 	function handleResizeStart(e: MouseEvent) {
@@ -288,38 +269,8 @@
 	class={containerClass}
 	style="width: {width}px;"
 	onmouseenter={handleMouseEnter}
-	onmouseleave={handleMouseLeave}
 	role="complementary"
 >
-	<!-- 右键菜单 -->
-	{#if contextMenuVisible && selectedTab}
-		<div
-			class="bg-popover/80 fixed z-50 min-w-[150px] rounded-md border py-1 shadow-lg backdrop-blur-md"
-			style="left: {contextMenuPosition.x}px; top: {contextMenuPosition.y}px;"
-			role="menu"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => {
-				if (e.key === 'Escape') {
-					closeContextMenu();
-				} else if (e.key === 'Enter' || e.key === ' ') {
-					e.preventDefault();
-					openTabInNewWindow();
-				}
-			}}
-			tabindex="-1"
-		>
-			<button
-				class="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
-				onclick={openTabInNewWindow}
-				role="menuitem"
-				type="button"
-			>
-				<ExternalLink class="h-4 w-4" />
-				在独立窗口中打开
-			</button>
-		</div>
-	{/if}
-
 	{#if position === 'left'}
 		<!-- 左侧布局：图标栏 | 内容 | 拖拽条 -->
 		<div class={iconBarClass}>

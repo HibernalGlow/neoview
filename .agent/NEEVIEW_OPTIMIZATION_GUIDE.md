@@ -466,7 +466,10 @@ const PROFILES: PerformanceProfile[] = [
 2. ✅ **Solid 压缩包预展开** - 新增 `solid_pre_extractor.rs`
    - 检测 Solid 7z/CB7 压缩包
    - 后台异步展开到临时目录
-   - 混合解压策略：小文件→内存，大文件→临时文件
+   - **混合解压策略**（参考 `SevenZipHybridExtractor.cs`）：
+     - 小文件（< 10MB）→ 内存
+     - 大文件 → 临时文件
+     - **嵌套压缩包** → 临时文件（`is_supported_archive()` 检测）
    - 支持取消/暂停/恢复
 
 3. ✅ **快速翻页检测** - 修改 `renderQueue.ts`

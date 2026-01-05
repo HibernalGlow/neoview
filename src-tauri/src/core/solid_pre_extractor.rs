@@ -4,6 +4,7 @@
 //! - 检测 Solid 7z/RAR 压缩包
 //! - 后台异步展开到临时目录
 //! - 提供从预展开缓存读取的接口
+//! - 混合解压策略：小文件→内存，大文件/嵌套压缩包→临时文件
 //!
 //! Solid 压缩包的问题：
 //! - 必须顺序解压，无法随机访问
@@ -11,16 +12,92 @@
 //! - 对于大压缩包会导致严重的延迟
 
 use log::{debug, info, warn};
+use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 use tokio::sync::Notify;
+
+// ============================================================================
+// 支持的压缩包扩展名（用于检测嵌套压缩包）
+// ============================================================================
+
+/// 支持的压缩包扩展名集合
+static SUPPORTED_ARCHIVE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    [
+        // ZIP 系列
+        "zip", "cbz", // RAR 系列
+        "rar", "cbr", // 7z 系列
+        "7z", "cb7", // 其他
+        "tar", "gz", "bz2", "xz", "lzma",
+    ]
+    .into_iter()
+    .collect()
+});
+
+/// 检测文件是否为支持的压缩包格式（嵌套压缩包检测）
+///
+/// 参考 NeeView 的 `ArchiveManager.Current.IsSupported(info.FileName, false, true)`
+#[inline]
+pub fn is_supported_archive(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            let lower = ext.to_ascii_lowercase();
+            SUPPORTED_ARCHIVE_EXTENSIONS.contains(lower.as_str())
+        })
+        .unwrap_or(false)
+}
+
+/// 解压目标类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtractTarget {
+    /// 解压到内存（小文件）
+    Memory,
+    /// 解压到临时文件（大文件、嵌套压缩包、内存不足）
+    TempFile,
+}
+
+/// 判断应该解压到哪里
+///
+/// 参考 NeeView 的 SevenZipHybridExtractor.GetStreamFunc:
+/// - 如果是嵌套压缩包 -> TempFile
+/// - 如果内存已满 -> TempFile
+/// - 如果文件过大 -> TempFile
+/// - 否则 -> Memory
+#[inline]
+pub fn determine_extract_target(
+    filename: &str,
+    file_size: usize,
+    memory_threshold: usize,
+    current_memory: usize,
+    max_memory: usize,
+) -> ExtractTarget {
+    // 嵌套压缩包必须解压到临时文件
+    if is_supported_archive(filename) {
+        debug!("📦 嵌套压缩包检测: {} -> TempFile", filename);
+        return ExtractTarget::TempFile;
+    }
+
+    // 大文件解压到临时文件
+    if file_size > memory_threshold {
+        return ExtractTarget::TempFile;
+    }
+
+    // 内存不足时解压到临时文件
+    if current_memory + file_size > max_memory {
+        return ExtractTarget::TempFile;
+    }
+
+    ExtractTarget::Memory
+}
 
 /// 预展开状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -346,40 +423,51 @@ impl SolidPreExtractor {
                 *extract_count += 1;
                 *extract_bytes += actual_size;
 
-                // 根据大小决定存储位置
-                let pre_extracted = if actual_size > memory_threshold
-                    || current_memory.load(Ordering::Relaxed) + actual_size > max_memory
-                {
-                    // 写入临时文件
-                    let safe_name =
-                        name.replace(['/', '\\', '?', '*', ':', '"', '<', '>', '|'], "_");
-                    let temp_path = temp_dir.join(format!("{}_{}", *extract_count, safe_name));
+                // 使用混合解压策略判断存储位置
+                // 参考 NeeView 的 SevenZipHybridExtractor.GetStreamFunc
+                let current_mem = current_memory.load(Ordering::Relaxed);
+                let target = determine_extract_target(
+                    &name,
+                    actual_size,
+                    memory_threshold,
+                    current_mem,
+                    max_memory,
+                );
 
-                    match File::create(&temp_path) {
-                        Ok(mut file) => {
-                            if let Err(e) = file.write_all(&data) {
-                                warn!("写入临时文件失败: {} - {}", temp_path.display(), e);
+                let pre_extracted = match target {
+                    ExtractTarget::TempFile => {
+                        // 写入临时文件（大文件、嵌套压缩包、内存不足）
+                        let safe_name =
+                            name.replace(['/', '\\', '?', '*', ':', '"', '<', '>', '|'], "_");
+                        let temp_path = temp_dir.join(format!("{}_{}", *extract_count, safe_name));
+
+                        match File::create(&temp_path) {
+                            Ok(mut file) => {
+                                if let Err(e) = file.write_all(&data) {
+                                    warn!("写入临时文件失败: {} - {}", temp_path.display(), e);
+                                    return Ok(true);
+                                }
+                                debug!("📦 预展开 -> TempFile: {} size={}", name, actual_size);
+                                PreExtractedData::TempFile(temp_path)
+                            }
+                            Err(e) => {
+                                warn!("创建临时文件失败: {} - {}", temp_path.display(), e);
                                 return Ok(true);
                             }
-                            PreExtractedData::TempFile(temp_path)
-                        }
-                        Err(e) => {
-                            warn!("创建临时文件失败: {} - {}", temp_path.display(), e);
-                            return Ok(true);
                         }
                     }
-                } else {
-                    // 保存到内存
-                    current_memory.fetch_add(actual_size, Ordering::Relaxed);
-                    PreExtractedData::Memory(data)
+                    ExtractTarget::Memory => {
+                        // 保存到内存（小文件）
+                        current_memory.fetch_add(actual_size, Ordering::Relaxed);
+                        debug!("📦 预展开 -> Memory: {} size={}", name, actual_size);
+                        PreExtractedData::Memory(data)
+                    }
                 };
 
                 // 存储展开的数据
                 extracted_entries
                     .write()
                     .insert(name.clone(), pre_extracted);
-
-                debug!("📦 预展开: {} size={}", name, actual_size);
 
                 Ok(true)
             })

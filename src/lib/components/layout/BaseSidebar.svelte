@@ -68,8 +68,6 @@
 	let contextMenuVisible = $state(false);
 	let contextMenuPosition = $state({ x: 0, y: 0 });
 	let selectedTab = $state<Tab | null>(null);
-	let sidebarContainer: HTMLDivElement | null = null;
-	let lastMousePosition = { x: 0, y: 0 };
 
 	const isPinned = $derived($pinnedStore);
 	const width = $derived($widthStore);
@@ -106,76 +104,6 @@
 		}
 	});
 
-	// 跟踪鼠标位置
-	function handleMouseMove(e: MouseEvent) {
-		lastMousePosition = { x: e.clientX, y: e.clientY };
-	}
-
-	// 检查元素是否是浮动弹出层（tooltip/popover/menu/输入法等）
-	function isFloatingElement(element: Element | null): boolean {
-		if (!element) return false;
-		
-		// 检查常见的浮动元素类名和属性
-		const floatingSelectors = [
-			'[role="tooltip"]',
-			'[role="menu"]',
-			'[role="listbox"]',
-			'[role="dialog"]',
-			'[data-radix-popper-content-wrapper]',
-			'[data-floating-ui-portal]',
-			'.popover',
-			'.tooltip',
-			'.dropdown',
-			'.menu',
-			'.context-menu',
-			'[class*="popover"]',
-			'[class*="tooltip"]',
-			'[class*="dropdown"]',
-			'[class*="floating"]'
-		];
-		
-		// 检查元素本身或其父元素是否匹配
-		let current: Element | null = element;
-		while (current) {
-			for (const selector of floatingSelectors) {
-				try {
-					if (current.matches(selector)) {
-						return true;
-					}
-				} catch {
-					// 忽略无效选择器
-				}
-			}
-			// 检查是否是 fixed/absolute 定位的元素
-			const style = window.getComputedStyle(current);
-			if (style.position === 'fixed' && current !== sidebarContainer) {
-				// fixed 元素通常是浮动层
-				const zIndex = parseInt(style.zIndex) || 0;
-				if (zIndex >= 50) {
-					return true;
-				}
-			}
-			current = current.parentElement;
-		}
-		return false;
-	}
-
-	// 检查鼠标是否真的在侧边栏区域外
-	function isMouseOutsideSidebar(): boolean {
-		if (!sidebarContainer) return true;
-		
-		const rect = sidebarContainer.getBoundingClientRect();
-		const { x, y } = lastMousePosition;
-		
-		// 给一点容差，避免边界抖动
-		const padding = 5;
-		const isOutside = position === 'left'
-			? x > rect.right + padding
-			: x < rect.left - padding;
-		
-		return isOutside || y < rect.top - padding || y > rect.bottom + padding;
-	}
-
 	// 鼠标进入
 	function handleMouseEnter() {
 		if (hideTimer) {
@@ -189,35 +117,9 @@
 	}
 
 	// 鼠标离开
-	function handleMouseLeave(e: MouseEvent) {
+	function handleMouseLeave() {
 		if (!isResizing && !isPinned) {
-			// 检查是否移动到了浮动元素（tooltip/popover/输入法等）
-			const relatedTarget = e.relatedTarget as Element | null;
-			if (isFloatingElement(relatedTarget)) {
-				// 移动到浮动元素，不隐藏
-				return;
-			}
-			
 			hideTimer = setTimeout(() => {
-				// 隐藏前二次确认鼠标是否真的离开了侧边栏区域
-				// 用 elementFromPoint 检查当前鼠标位置的元素
-				const elementAtMouse = document.elementFromPoint(lastMousePosition.x, lastMousePosition.y);
-				
-				// 如果鼠标在浮动元素上，不隐藏
-				if (isFloatingElement(elementAtMouse)) {
-					return;
-				}
-				
-				// 如果鼠标还在侧边栏区域内，不隐藏
-				if (!isMouseOutsideSidebar()) {
-					return;
-				}
-				
-				// 如果元素仍在侧边栏容器内，不隐藏
-				if (sidebarContainer && elementAtMouse && sidebarContainer.contains(elementAtMouse)) {
-					return;
-				}
-				
 				isVisible = false;
 				if (onVisibilityChange) {
 					onVisibilityChange(false);
@@ -383,12 +285,10 @@
 {/if}
 
 <div
-	bind:this={sidebarContainer}
 	class={containerClass}
 	style="width: {width}px;"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
-	onmousemove={handleMouseMove}
 	role="complementary"
 >
 	<!-- 右键菜单 -->

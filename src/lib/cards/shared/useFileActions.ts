@@ -230,6 +230,16 @@ export function createItemOpenActions(
 			} else {
 				handleNavigate(item.path);
 			}
+		} else {
+			// 文件：打开其所在文件夹并定位
+			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
+			const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+			folderTabActions.createTab(parentPath);
+			if (ctx.isVirtualInstance && initialPath) {
+				externalNavigationRequest.set({ path: parentPath, timestamp: Date.now() });
+			} else {
+				handleNavigate(parentPath);
+			}
 		}
 	};
 

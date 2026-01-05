@@ -267,8 +267,8 @@
 						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
 						onclick={handleOpenInNewTab}
 					>
-						<PanelRight class="h-4 w-4" />
-						<span>在新标签页打开</span>
+						<FolderOpen class="h-4 w-4" />
+						<span>打开所在文件夹</span>
 					</button>
 					<button
 						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"

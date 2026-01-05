@@ -235,6 +235,8 @@ export function createItemOpenActions(
 			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
 			const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
 			folderTabActions.createTab(parentPath);
+			// 设置待聚焦的文件路径，让 FolderStack 在加载完成后定位到该文件
+			folderTabActions.focusOnPath(item.path);
 			if (ctx.isVirtualInstance && initialPath) {
 				externalNavigationRequest.set({ path: parentPath, timestamp: Date.now() });
 			} else {

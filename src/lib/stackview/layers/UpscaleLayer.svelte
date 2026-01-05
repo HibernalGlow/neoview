@@ -46,9 +46,11 @@
     return upscaleStore.getPageStatus(pageIndex);
   });
   
-  /** 是否正在加载 */
+  /** 是否正在加载（如果已有超分图则不显示 loading） */
   let isLoading = $derived(
-    enabled && (status === 'pending' || status === 'processing' || status === 'checking')
+    enabled && 
+    !imagePool.hasUpscaled(pageIndex) && 
+    (status === 'pending' || status === 'processing' || status === 'checking')
   );
   
   /** 是否已完成超分 */

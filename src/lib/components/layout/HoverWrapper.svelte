@@ -26,8 +26,72 @@
 	let hideTimer: number | null = null;
 	let showTimer: number | null = null;
 	let isContextMenuOpen = $state(false);
+	let wrapperContainer = $state<HTMLDivElement | null>(null);
 
-	// 悬停显示/隐藏逻辑
+	// 判定收回逻辑：基于物理边界 + DOM 卫护
+	$effect(() => {
+		if (isVisible && !pinned && !isContextMenuOpen) {
+			const checkMousePosition = (e: MouseEvent) => {
+				if (!wrapperContainer) return;
+				
+				// 1. 优先检查鼠标是否还在侧边栏 DOM 结构内
+				// 使用 elementFromPoint 来确保即使是动态挂载的子元素也能被捕捉
+				const elementAtMouse = document.elementFromPoint(e.clientX, e.clientY);
+				if (wrapperContainer.contains(elementAtMouse)) {
+					// 只要还在侧边栏范围内，清理定时器并直接返回
+					if (hideTimer) {
+						clearTimeout(hideTimer);
+						hideTimer = null;
+					}
+					return;
+				}
+
+				// 2. 如果不在 DOM 内，则进行物理边界检查
+				const rect = wrapperContainer.getBoundingClientRect();
+				const { clientX } = e;
+				const threshold = 10; // 给一点点缓冲区
+
+				// 判定逻辑：
+				// 如果容器在屏幕左侧（左侧边栏）
+				if (rect.left < window.innerWidth / 2) {
+					// 只有鼠标坐标明确超过了容器的最右侧边界（进入主区），才收回
+					if (clientX > rect.right + threshold) {
+						performHide();
+					} else if (hideTimer) {
+						// 鼠标虽然出去了，但如果是向上/向下/向左出去了，或者在输入法上（坐标没过线），取消隐藏
+						clearTimeout(hideTimer);
+						hideTimer = null;
+					}
+				} 
+				// 如果容器在屏幕右侧（右侧边栏）
+				else {
+					// 只有鼠标坐标明确低于容器的最左侧边界，才收回
+					if (clientX < rect.left - threshold) {
+						performHide();
+					} else if (hideTimer) {
+						clearTimeout(hideTimer);
+						hideTimer = null;
+					}
+				}
+			};
+
+			window.addEventListener('mousemove', checkMousePosition);
+			return () => window.removeEventListener('mousemove', checkMousePosition);
+		}
+	});
+
+	function performHide() {
+		if (hideTimer || isContextMenuOpen) return;
+		hideTimer = setTimeout(() => {
+			if (!isContextMenuOpen) {
+				isVisible = false;
+				onVisibilityChange?.(false);
+			}
+			hideTimer = null;
+		}, hideDelay) as unknown as number;
+	}
+
+	// 悬停显示逻辑
 	function handleMouseEnter() {
 		if (!pinned) {
 			if (hideTimer) {
@@ -52,18 +116,7 @@
 	}
 
 	function handleMouseLeave() {
-		if (!pinned && !isContextMenuOpen) {
-			if (showTimer) {
-				clearTimeout(showTimer);
-				showTimer = null;
-			}
-			hideTimer = setTimeout(() => {
-				if (!isContextMenuOpen) {
-					isVisible = false;
-					onVisibilityChange?.(false);
-				}
-			}, hideDelay) as unknown as number;
-		}
+		// 已由物理边界检测取代
 	}
 
 	// 处理右键菜单
@@ -150,6 +203,7 @@
 </script>
 
 <div
+	bind:this={wrapperContainer}
 	class="relative flex h-full"
 	data-hover-wrapper="true"
 	onmouseenter={handleMouseEnter}

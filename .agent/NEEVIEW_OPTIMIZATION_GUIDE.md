@@ -1,5 +1,7 @@
 # NeeView 超大压缩包与超多图片优化指南
 
+> **Phase 1 已完成** ✅ (2026-01-05)
+
 ## 概述
 
 参考 NeeView 的架构设计，优化 NeoView 在处理超大压缩包（几千张图片）和快速翻页时的流畅浏览体验。
@@ -454,11 +456,24 @@ const PROFILES: PerformanceProfile[] = [
 
 ## 3. 实施优先级
 
-### Phase 1: 快速见效 (建议先实施)
+### Phase 1: 快速见效 ✅ 已完成
 
-1. **方向感知缓存淘汰** - 修改 `lru_image_cache.rs`
-2. **快速翻页检测** - 修改 `renderQueue.ts`
-3. **内存压力自适应** - 新增监控逻辑
+1. ✅ **距离感知缓存淘汰** - 修改 `lru_image_cache.rs`
+   - 添加 `page_index` 字段到缓存条目
+   - 实现 `evict_by_distance(origin, direction)` 方法
+   - 翻页反方向页面优先删除
+   - 添加页面锁定机制 (`lock_page` / `unlock_page`)
+2. ✅ **Solid 压缩包预展开** - 新增 `solid_pre_extractor.rs`
+   - 检测 Solid 7z/CB7 压缩包
+   - 后台异步展开到临时目录
+   - 混合解压策略：小文件→内存，大文件→临时文件
+   - 支持取消/暂停/恢复
+
+3. ✅ **快速翻页检测** - 修改 `renderQueue.ts`
+   - 检测连续快速翻页（间隔 < 200ms，连续 3 次）
+   - 快速翻页模式：仅加载当前页，跳过预加载
+   - 停止翻页后 500ms 自动恢复正常预加载
+   - 添加翻页方向感知的智能预加载
 
 ### Phase 2: 核心优化
 

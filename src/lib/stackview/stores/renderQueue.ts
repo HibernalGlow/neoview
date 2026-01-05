@@ -175,6 +175,34 @@ export class RenderQueue {
   private progressiveDwellTimer: ReturnType<typeof setTimeout> | null = null;
   private progressiveCountdownTimer: ReturnType<typeof setInterval> | null = null;
   
+  // ============================================================================
+  // 快速翻页检测 (参考 NeeView 优化)
+  // ============================================================================
+  
+  /** 上次翻页时间戳 */
+  private lastPageTurnTime = 0;
+  
+  /** 连续快速翻页计数 */
+  private rapidTurnCount = 0;
+  
+  /** 快速翻页阈值 (ms) - 两次翻页间隔小于此值视为快速翻页 */
+  private readonly RAPID_TURN_THRESHOLD_MS = 200;
+  
+  /** 触发快速翻页模式所需的连续次数 */
+  private readonly RAPID_TURN_TRIGGER_COUNT = 3;
+  
+  /** 是否处于快速翻页模式 */
+  private isRapidTurnMode = false;
+  
+  /** 快速翻页恢复定时器 */
+  private rapidTurnRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  
+  /** 上一个页面索引（用于计算翻页方向） */
+  private previousPageIndex = -1;
+  
+  /** 当前翻页方向 (1: 向后, -1: 向前) */
+  private currentDirection: 1 | -1 = 1;
+  
   /** 状态变更回调 */
   private onStateChange: (() => void) | null = null;
   
@@ -235,6 +263,32 @@ export class RenderQueue {
       await this.syncFromSettings();
     }
     
+    // 检测快速翻页
+    const now = Date.now();
+    const timeSinceLastTurn = now - this.lastPageTurnTime;
+    this.lastPageTurnTime = now;
+    
+    // 计算翻页方向
+    if (this.previousPageIndex >= 0) {
+      this.currentDirection = pageIndex > this.previousPageIndex ? 1 : -1;
+    }
+    this.previousPageIndex = pageIndex;
+    
+    // 快速翻页检测
+    if (timeSinceLastTurn < this.RAPID_TURN_THRESHOLD_MS && timeSinceLastTurn > 0) {
+      this.rapidTurnCount++;
+      
+      if (this.rapidTurnCount >= this.RAPID_TURN_TRIGGER_COUNT) {
+        if (!this.isRapidTurnMode) {
+          console.log(`⚡ [RenderQueue] 进入快速翻页模式 (连续 ${this.rapidTurnCount} 次快速翻页)`);
+          this.isRapidTurnMode = true;
+        }
+      }
+    } else {
+      // 翻页速度减慢，重置计数
+      this.rapidTurnCount = 0;
+    }
+    
     // 取消之前的任务
     this.cancelAll();
     
@@ -248,33 +302,130 @@ export class RenderQueue {
     
     const totalPages = book.pages.length;
     
-    console.log(`📋 渲染队列: 设置当前页 ${pageIndex + 1}/${totalPages}`);
+    // 快速翻页模式：仅加载当前页，跳过预加载以提高响应速度
+    if (this.isRapidTurnMode) {
+      console.log(`⚡ [RenderQueue] 快速翻页: 仅加载页 ${pageIndex + 1}`);
+      
+      // 仅加载当前页
+      if (!preDecodeCache.has(pageIndex)) {
+        await this.loadAndPreDecode(pageIndex, token);
+      }
+      
+      // 设置恢复定时器：停止翻页后 500ms 恢复正常预加载
+      this.clearRapidTurnRecoveryTimer();
+      this.rapidTurnRecoveryTimer = setTimeout(() => {
+        console.log(`✅ [RenderQueue] 退出快速翻页模式，恢复正常预加载`);
+        this.isRapidTurnMode = false;
+        this.rapidTurnCount = 0;
+        // 恢复正常预加载
+        this.scheduleNormalPreload(this.currentPageIndex, token, totalPages);
+        // 重置递进加载状态
+        this.resetProgressiveState();
+      }, 500);
+      
+      return;
+    }
     
+    console.log(`📋 渲染队列: 设置当前页 ${pageIndex + 1}/${totalPages} (方向: ${this.currentDirection > 0 ? '→' : '←'})`);
+    
+    // 正常模式：分层预加载
+    await this.scheduleNormalPreload(pageIndex, token, totalPages);
+    
+    // 重置递进加载状态
+    this.resetProgressiveState();
+  }
+  
+  /**
+   * 清除快速翻页恢复定时器
+   */
+  private clearRapidTurnRecoveryTimer(): void {
+    if (this.rapidTurnRecoveryTimer) {
+      clearTimeout(this.rapidTurnRecoveryTimer);
+      this.rapidTurnRecoveryTimer = null;
+    }
+  }
+  
+  /**
+   * 执行正常的分层预加载
+   */
+  private async scheduleNormalPreload(
+    pageIndex: number, 
+    token: number, 
+    totalPages: number
+  ): Promise<void> {
     // 1. 立即加载当前页（如果未预解码）
     if (!preDecodeCache.has(pageIndex)) {
       await this.loadAndPreDecode(pageIndex, token);
     }
     
-    // 2. 延迟加载高优先级页面（±1 页）
+    // 3. 延迟加载高优先级页面（主方向 ±1 页）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleRange(pageIndex, 1, this.config.highRange, RenderPriority.HIGH, token, totalPages);
+      this.scheduleDirectionalRange(pageIndex, 1, this.config.highRange, RenderPriority.HIGH, token, totalPages);
     }, this.config.highDelay));
     
-    // 3. 延迟加载普通优先级页面（±2-3 页）
+    // 4. 延迟加载普通优先级页面（±2-3 页）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleRange(pageIndex, this.config.highRange + 1, this.config.normalRange, RenderPriority.NORMAL, token, totalPages);
+      this.scheduleDirectionalRange(pageIndex, this.config.highRange + 1, this.config.normalRange, RenderPriority.NORMAL, token, totalPages);
     }, this.config.normalDelay));
     
-    // 4. 延迟加载低优先级页面（±4-5 页）
+    // 5. 延迟加载低优先级页面（±4-5 页）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleRange(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
+      this.scheduleDirectionalRange(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
     }, this.config.lowDelay));
+  }
+  
+  /**
+   * 基于翻页方向的智能预加载调度
+   * 主方向（currentDirection）加载更多页面，反方向加载较少
+   */
+  private scheduleDirectionalRange(
+    centerIndex: number,
+    startOffset: number,
+    endOffset: number,
+    priority: number,
+    token: number,
+    totalPages: number
+  ): void {
+    const pagesToLoad: number[] = [];
     
-    // 5. 重置递进加载状态
-    this.resetProgressiveState();
+    // 主方向（翻页方向）加载更多
+    const primaryDirection = this.currentDirection;
+    const primaryCount = endOffset; // 主方向加载完整范围
+    const secondaryCount = Math.max(1, Math.floor(endOffset / 2)); // 反方向加载一半
+    
+    // 主方向页面
+    for (let i = startOffset; i <= primaryCount; i++) {
+      const idx = centerIndex + (i * primaryDirection);
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
+        pagesToLoad.push(idx);
+      }
+    }
+    
+    // 反方向页面（数量减半）
+    for (let i = startOffset; i <= secondaryCount; i++) {
+      const idx = centerIndex - (i * primaryDirection);
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
+        pagesToLoad.push(idx);
+      }
+    }
+    
+    // 去重
+    const uniquePages = [...new Set(pagesToLoad)];
+    
+    if (uniquePages.length > 0) {
+      console.log(`📋 方向感知预加载: 优先级=${priority}, 方向=${primaryDirection > 0 ? '→' : '←'}, 页面=[${uniquePages.map(p => p + 1).join(', ')}]`);
+    }
+    
+    // 添加到队列
+    for (const idx of uniquePages) {
+      this.addTask(idx, priority, token);
+    }
+    
+    // 处理队列
+    this.processQueue();
   }
   
   /**
@@ -428,6 +579,9 @@ export class RenderQueue {
     }
     this.delayTimers = [];
     
+    // 清除快速翻页恢复定时器
+    this.clearRapidTurnRecoveryTimer();
+    
     // 标记所有任务为已取消
     for (const task of this.tasks) {
       if (task.status === 'pending') {
@@ -464,6 +618,25 @@ export class RenderQueue {
   setConfig(config: Partial<PreloadConfig>): void {
     Object.assign(this.config, config);
     console.log('📋 [RenderQueue] 配置已更新', this.config);
+  }
+  
+  /**
+   * 获取快速翻页状态
+   */
+  getRapidTurnStatus(): { isRapidMode: boolean; count: number; direction: 1 | -1 } {
+    return {
+      isRapidMode: this.isRapidTurnMode,
+      count: this.rapidTurnCount,
+      direction: this.currentDirection,
+    };
+  }
+  
+  /**
+   * 获取当前翻页方向
+   * @returns 1: 向后, -1: 向前
+   */
+  getDirection(): 1 | -1 {
+    return this.currentDirection;
   }
   
   /**

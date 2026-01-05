@@ -62,6 +62,7 @@ pub mod stretto_cache;
 // 性能优化模块
 pub mod batch_write;
 pub mod request_dedup;
+pub mod solid_pre_extractor; // Solid 压缩包预展开优化
 
 pub use book_manager::BookManager;
 pub use dimension_cache::DimensionCache;

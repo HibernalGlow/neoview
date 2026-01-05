@@ -281,16 +281,6 @@
 					toggleNode(node.path);
 				}
 			}}
-			onkeydown={(event: KeyboardEvent) => {
-				if (event.key === 'Enter' || event.key === ' ') {
-					event.preventDefault();
-					if (item) {
-						handleItemClick(item, index);
-					} else if (hasChildren) {
-						toggleNode(node.path);
-					}
-				}
-			}}
 			ondblclick={() => {
 				if (item) {
 					handleItemDoubleClick(item, index);

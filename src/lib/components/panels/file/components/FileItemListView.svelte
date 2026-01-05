@@ -141,12 +141,7 @@
 		onClick?.();
 	}}
 	oncontextmenu={onContextMenu}
-	onkeydown={(e) => {
-		if ((e.key === 'Enter' || e.key === ' ') && onClick) {
-			e.preventDefault();
-			onClick();
-		}
-	}}
+
 	role="button"
 	tabindex="0"
 >

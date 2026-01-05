@@ -124,16 +124,7 @@ async function handleOpenExternal(e: MouseEvent) {
 	await open(item.path);
 }
 
-function handleKeyDown(e: KeyboardEvent) {
-	if (e.key === 'Enter' || e.key === ' ') {
-		e.preventDefault();
-		if (e.key === 'Enter') {
-			onOpen?.(item);
-		} else {
-			handleClick(e as unknown as MouseEvent);
-		}
-	}
-}
+// [已移除] 键盘导航现由全局键位绑定系统处理，避免冲突
 </script>
 
 {#if $viewStyle === 'list'}
@@ -143,7 +134,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-		onkeydown={handleKeyDown}
+
 		role="button"
 		tabindex="0"
 	>
@@ -186,7 +177,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-		onkeydown={handleKeyDown}
+
 		role="button"
 		tabindex="0"
 	>
@@ -237,7 +228,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-		onkeydown={handleKeyDown}
+
 		role="button"
 		tabindex="0"
 	>
@@ -293,7 +284,7 @@ function handleKeyDown(e: KeyboardEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-		onkeydown={handleKeyDown}
+
 		role="button"
 		tabindex="0"
 	>

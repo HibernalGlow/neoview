@@ -343,63 +343,7 @@
 		dispatch('itemSelect', { item, index, multiSelect: true });
 	}
 
-	// 键盘导航优化：使用 requestAnimationFrame 避免阻塞主线程，改善 INP
-	function handleKeydown(e: KeyboardEvent) {
-		if (items.length === 0) return;
-
-		const nav = (delta: number) => {
-			e.preventDefault();
-			// 使用 requestAnimationFrame 延迟滚动，避免阻塞输入响应
-			requestAnimationFrame(() => {
-				let next = selectedIndex + delta;
-				next = Math.max(0, Math.min(items.length - 1, next));
-				if (next !== selectedIndex) {
-					onSelectedIndexChange({ index: next });
-					dispatch('selectedIndexChange', { index: next });
-					const rowIndex = Math.floor(next / columns);
-					// 使用 'auto' 行为减少动画开销
-					$virtualizer.scrollToIndex(rowIndex, { align: 'auto', behavior: 'auto' });
-				}
-			});
-		};
-
-		switch (e.key) {
-			case 'ArrowDown':
-				nav(columns);
-				break;
-			case 'ArrowUp':
-				nav(-columns);
-				break;
-			case 'ArrowRight':
-				nav(1);
-				break;
-			case 'ArrowLeft':
-				nav(-1);
-				break;
-			case 'Home':
-				e.preventDefault();
-				requestAnimationFrame(() => {
-					if (selectedIndex !== 0) {
-						onSelectedIndexChange({ index: 0 });
-						$virtualizer.scrollToIndex(0, { align: 'start', behavior: 'auto' });
-					}
-				});
-				break;
-			case 'End':
-				e.preventDefault();
-				requestAnimationFrame(() => {
-					const last = items.length - 1;
-					if (selectedIndex !== last) {
-						onSelectedIndexChange({ index: last });
-						const lastRowIndex = Math.floor(last / columns);
-						$virtualizer.scrollToIndex(lastRowIndex, { align: 'end', behavior: 'auto' });
-					}
-				});
-				break;
-			default:
-				return;
-		}
-	}
+	// [已移除] 键盘导航现由全局键位绑定系统处理，避免冲突
 
 	// --- Utils ---
 	function toRelativeKey(path: string): string {
@@ -478,7 +422,7 @@
 		role="listbox"
 		aria-label="文件列表"
 		onscroll={handleScroll}
-		onkeydown={handleKeydown}
+
 		onclick={handleContainerClick}
 		ondblclick={handleContainerDoubleClick}
 	>

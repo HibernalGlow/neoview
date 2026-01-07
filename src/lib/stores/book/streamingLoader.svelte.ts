@@ -103,10 +103,7 @@ export class StreamingLoaderManager {
 // ==================== 工具函数 ====================
 
 /** 检测路径是否为压缩包 */
-export function isArchivePath(path: string): boolean {
-  const ext = path.split('.').pop()?.toLowerCase() ?? '';
-  return ['zip', 'rar', '7z', 'cbz', 'cbr', 'cb7'].includes(ext);
-}
+export { isArchiveFilePath as isArchivePath } from '$lib/utils/pathUtils';
 
 /** 触发流式扫描进度事件 */
 export function dispatchStreamingProgress(scannedCount: number, entries: unknown[]): void {

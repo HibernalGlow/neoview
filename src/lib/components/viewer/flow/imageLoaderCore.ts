@@ -100,12 +100,26 @@ export class ImageLoaderCore {
 		// 1. 检查缓存
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
-			const dimensions = await getImageDimensions(item.blob);
-			logImageTrace(`cache-${pageIndex}`, 'cache hit', { pageIndex });
+			
+			// 【性能优化】优先使用已缓存的尺寸，避免重复解码
+			let dimensions = this.blobCache.getDimensions(pageIndex);
+			if (dimensions === undefined) {
+				// 尚未缓存尺寸，异步获取并缓存
+				getImageDimensions(item.blob).then(dims => {
+					this.blobCache.setDimensions(pageIndex, dims);
+					this.options.onDimensionsReady?.(pageIndex, dims);
+				});
+				dimensions = null; // 稍后通过回调提供
+			} else if (dimensions !== null) {
+				// 已有缓存，直接通知
+				this.options.onDimensionsReady?.(pageIndex, dimensions);
+			}
+			
+			logImageTrace(`cache-${pageIndex}`, 'cache hit', { pageIndex, hasDimensions: dimensions !== null });
 			return {
 				url: item.url,
 				blob: item.blob,
-				dimensions,
+				dimensions: dimensions ?? null,
 				fromCache: true
 			};
 		}
@@ -234,10 +248,12 @@ export class ImageLoaderCore {
 						fromCache: false
 					});
 
-					// 异步获取尺寸并回调（不阻塞）
+					// 异步获取尺寸并缓存（不阻塞）
 					if (!this.invalidated) {
 						getImageDimensions(blob).then(dimensions => {
 							if (!this.invalidated) {
+								// 【性能优化】缓存尺寸
+								this.blobCache.setDimensions(pageIndex, dimensions);
 								this.options.onDimensionsReady?.(pageIndex, dimensions);
 							}
 						});

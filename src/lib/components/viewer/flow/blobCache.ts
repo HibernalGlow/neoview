@@ -8,6 +8,8 @@ export interface BlobCacheItem {
 	url: string;
 	lastAccessed: number;
 	size: number;
+	/** 【性能优化】缓存图片尺寸，避免重复解码 */
+	dimensions?: { width: number; height: number } | null;
 }
 
 export interface BlobCacheConfig {
@@ -57,6 +59,23 @@ export class BlobCache {
 	 */
 	getBlob(pageIndex: number): Blob | undefined {
 		return this.get(pageIndex)?.blob;
+	}
+
+	/**
+	 * 【性能优化】获取已缓存的尺寸
+	 */
+	getDimensions(pageIndex: number): { width: number; height: number } | null | undefined {
+		return this.cache.get(pageIndex)?.dimensions;
+	}
+
+	/**
+	 * 【性能优化】设置图片尺寸（加载后缓存）
+	 */
+	setDimensions(pageIndex: number, dimensions: { width: number; height: number } | null): void {
+		const item = this.cache.get(pageIndex);
+		if (item) {
+			item.dimensions = dimensions;
+		}
 	}
 
 	/**

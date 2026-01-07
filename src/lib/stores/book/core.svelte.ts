@@ -325,9 +325,19 @@ class BookStore {
     }
 
     try {
-      await bookApi.navigateToPage(index);
+      // 【IPC优化】先更新本地状态以获得即时 UI 响应
       this.state.currentBook.currentPage = index;
       this.syncAppStateBookSlice('user');
+
+      // 更新 pageFrameStore 的当前位置
+      pageFrameStore.gotoPage(index);
+
+      // 异步通知后端（触发预加载）
+      bookApi.navigateToPage(index).catch(err => {
+        console.warn('⚠️ 后端导航通知失败:', err);
+      });
+
+      // 异步更新面板信息
       this.syncInfoPanelBookInfo();
 
       if (this.state.singleFileMode) {
@@ -391,13 +401,35 @@ class BookStore {
       return;
     }
     try {
-      const newIndex = await bookApi.nextPage();
-      if (this.state.currentBook) {
-        this.state.currentBook.currentPage = newIndex;
-        await this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice('user');
-        await this.updateHistoryAfterNavigation(newIndex);
+      const book = this.state.currentBook;
+      if (!book) return;
+
+      // 【IPC优化】使用本地 PageFrameBuilder 计算下一帧位置
+      let newIndex: number;
+      if (pageFrameStore.isInitialized()) {
+        const nextPos = pageFrameStore.getNextPosition();
+        if (nextPos) {
+          newIndex = nextPos.index;
+        } else {
+          // 降级：简单 +1
+          newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
+        }
+      } else {
+        // 降级：简单 +1
+        newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
       }
+
+      // 通知后端以触发预加载
+      await bookApi.navigateToPage(newIndex);
+
+      this.state.currentBook.currentPage = newIndex;
+      await this.syncInfoPanelBookInfo();
+      this.syncAppStateBookSlice('user');
+      await this.updateHistoryAfterNavigation(newIndex);
+
+      // 更新 pageFrameStore 的当前位置
+      pageFrameStore.gotoPage(newIndex);
+
       this.showPageSwitchToastIfEnabled();
       return newIndex;
     } catch (err) {
@@ -417,13 +449,35 @@ class BookStore {
       return;
     }
     try {
-      const newIndex = await bookApi.previousPage();
-      if (this.state.currentBook) {
-        this.state.currentBook.currentPage = newIndex;
-        await this.syncInfoPanelBookInfo();
-        this.syncAppStateBookSlice('user');
-        await this.updateHistoryAfterNavigation(newIndex);
+      const book = this.state.currentBook;
+      if (!book) return;
+
+      // 【IPC优化】使用本地 PageFrameBuilder 计算上一帧位置
+      let newIndex: number;
+      if (pageFrameStore.isInitialized()) {
+        const prevPos = pageFrameStore.getPrevPosition();
+        if (prevPos) {
+          newIndex = prevPos.index;
+        } else {
+          // 降级：简单 -1
+          newIndex = Math.max(book.currentPage - 1, 0);
+        }
+      } else {
+        // 降级：简单 -1
+        newIndex = Math.max(book.currentPage - 1, 0);
       }
+
+      // 通知后端以触发预加载
+      await bookApi.navigateToPage(newIndex);
+
+      this.state.currentBook.currentPage = newIndex;
+      await this.syncInfoPanelBookInfo();
+      this.syncAppStateBookSlice('user');
+      await this.updateHistoryAfterNavigation(newIndex);
+
+      // 更新 pageFrameStore 的当前位置
+      pageFrameStore.gotoPage(newIndex);
+
       return newIndex;
     } catch (err) {
       console.error('❌ Error going to previous page:', err);

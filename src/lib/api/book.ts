@@ -22,11 +22,21 @@ export async function navigateToPage(pageIndex: number): Promise<void> {
 	return await invoke('navigate_to_page', { pageIndex });
 }
 
+/**
+ * @deprecated 已迁移到前端本地计算，请使用 pageFrameStore.getNextPosition()
+ * 保留以兼容旧代码，但建议不再使用
+ */
 export async function nextPage(): Promise<number> {
+	console.warn('⚠️ bookApi.nextPage() 已弃用，请使用 pageFrameStore.getNextPosition()');
 	return await invoke<number>('next_page');
 }
 
+/**
+ * @deprecated 已迁移到前端本地计算，请使用 pageFrameStore.getPrevPosition()
+ * 保留以兼容旧代码，但建议不再使用
+ */
 export async function previousPage(): Promise<number> {
+	console.warn('⚠️ bookApi.previousPage() 已弃用，请使用 pageFrameStore.getPrevPosition()');
 	return await invoke<number>('previous_page');
 }
 

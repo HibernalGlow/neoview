@@ -10,7 +10,7 @@ import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
-import { pageDistributionStore } from './pageDistributionStore.svelte';
+import { pageFrameStore } from './pageFrame.svelte';
 import { showInfoToast } from '$lib/utils/toast';
 
 // ============================================================================
@@ -252,11 +252,17 @@ function getPageStep(): number {
 		return 1;
 	}
 	
-	// 【优化】使用预计算的页面分布，O(1) 查表
+	// 【优化】使用本地 PageFrameBuilder 计算步进
 	const currentIndex = bookStore.currentPageIndex;
-	const step = pageDistributionStore.getPageStepForIndex(currentIndex);
-	if (step > 0) {
-		return step;
+	
+	// 如果 pageFrameStore 已初始化，使用帧信息计算步进
+	if (pageFrameStore.isInitialized()) {
+		const frame = pageFrameStore.buildFrame({ index: currentIndex, part: 0 });
+		if (frame) {
+			// 帧的页面数量就是步进值
+			const pageCount = frame.endIndex - frame.startIndex + 1;
+			return Math.max(1, pageCount);
+		}
 	}
 	
 	// 降级：使用原有的实时计算逻辑
@@ -417,23 +423,23 @@ export function toggleViewMode() {
 		const alt: ViewMode = locked === 'single' ? 'panorama' : 'single';
 		const next: ViewMode = currentMode === locked ? alt : locked;
 		viewMode.set(next);
-		// 【优化】同步更新预计算页面分布
-		pageDistributionStore.setDoublePage(next === 'double');
+		// 【优化】同步更新本地 PageFrameBuilder
+		pageFrameStore.setPageMode(next === 'double' ? 'double' : 'single');
 		return;
 	}
 
 	viewMode.update((mode) => {
 		const next = mode === 'single' ? 'double' : mode === 'double' ? 'panorama' : 'single';
-		// 【优化】同步更新预计算页面分布
-		pageDistributionStore.setDoublePage(next === 'double');
+		// 【优化】同步更新本地 PageFrameBuilder
+		pageFrameStore.setPageMode(next === 'double' ? 'double' : 'single');
 		return next;
 	});
 }
 
 export function setViewMode(mode: ViewMode) {
 	viewMode.set(mode);
-	// 【优化】同步更新预计算页面分布
-	pageDistributionStore.setDoublePage(mode === 'double');
+	// 【优化】同步更新本地 PageFrameBuilder
+	pageFrameStore.setPageMode(mode === 'double' ? 'double' : 'single');
 }
 
 export function toggleViewModeLock(mode: ViewMode) {

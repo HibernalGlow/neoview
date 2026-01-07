@@ -34,6 +34,7 @@ import type {
 } from './types';
 import { isArchivePath } from './streamingLoader.svelte';
 import { renderSwitchToastTemplate } from './toast';
+import { pageFrameStore } from '../pageFrame.svelte';
 
 export type { SwitchToastContext };
 
@@ -225,6 +226,12 @@ class BookStore {
     this.syncAppStateBookSlice();
     this.state.viewerOpen = true;
     
+    // 初始化 pageFrameStore 用于本地布局计算（同步调用）
+    if (book.pages && book.pages.length > 0) {
+      pageFrameStore.initFromBookPages(book.pages);
+      console.log('📐 [PageFrame] 已初始化页面帧布局，共', book.pages.length, '页');
+    }
+    
     if (targetPage > 0 && book.totalPages > 0) {
       bookApi.navigateToPage(targetPage).catch(navErr => {
         console.error('❌ Error navigating to initial page after open:', navErr);
@@ -262,6 +269,9 @@ class BookStore {
     this.state.upscaledImageData = null;
     infoPanelStore.resetAll();
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
+    
+    // 重置 pageFrameStore（同步调用）
+    pageFrameStore.reset();
   }
 
   async cancelCurrentLoad() {

@@ -3,42 +3,29 @@
  * 
  * 基于 NeeView 架构的页面帧管理
  * 支持单页/双页模式、横向页面分割、RTL 阅读方向
+ * 
+ * v2.0: 重构为前端本地计算，消除 IPC 延迟
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { 
+	PageFrameBuilder,
+	type Page,
+	type PagePosition,
+	type PageFrame,
+	type PageFrameContext,
+	type PageMode,
+	type ReadOrder,
+	type WidePageStretch,
+	type CropRect,
+	defaultPageFrameContext,
+	PagePositionUtils,
+	PageFrameUtils,
+	CropRectUtils
+} from '$lib/core/pageFrame';
 
-// ===== 类型定义 =====
+// ===== 类型定义 (兼容原有接口) =====
 
-/** 页面模式 */
-export type PageMode = 'single' | 'double';
-
-/** 阅读顺序 */
-export type ReadOrder = 'ltr' | 'rtl';
-
-/** 拉伸模式 */
-export type StretchMode = 
-	| 'none'
-	| 'uniform'
-	| 'uniformToFill'
-	| 'uniformToVertical'
-	| 'uniformToHorizontal'
-	| 'fill';
-
-/** 自动旋转类型 */
-export type AutoRotateType = 'none' | 'left' | 'right' | 'auto';
-
-/** 裁剪区域 */
-export interface CropRect {
-	x: number;
-	y: number;
-	width: number;
-	height: number;
-}
-
-/** 宽页拉伸模式 */
-export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
-
-/** 页面帧元素信息 */
+/** 页面帧元素信息 (兼容后端格式) */
 export interface PageFrameElementInfo {
 	pageIndex: number;
 	part: number;
@@ -67,7 +54,7 @@ export interface SizeInfo {
 	height: number;
 }
 
-/** 页面帧信息 */
+/** 页面帧信息 (兼容后端格式) */
 export interface PageFrameInfo {
 	elements: PageFrameElementInfo[];
 	frameRange: PageRangeInfo;
@@ -78,26 +65,36 @@ export interface PageFrameInfo {
 	endIndex: number;
 }
 
-/** 页面帧上下文配置 */
-export interface PageFrameContext {
-	pageMode: PageMode;
-	readOrder: ReadOrder;
-	isSupportedDividePage: boolean;
-	isSupportedWidePage: boolean;
-	isSupportedSingleFirst: boolean;
-	isSupportedSingleLast: boolean;
-	dividePageRate: number;
-	autoRotate: AutoRotateType;
-	stretchMode: StretchMode;
-	canvasSize: SizeInfo;
-	/** 宽页拉伸模式（双页模式下的对齐方式） */
-	widePageStretch: WidePageStretch;
-}
+// Re-export types for consumers
+export type { PageMode, ReadOrder, CropRect, WidePageStretch, PageFrameContext };
 
-/** 页面位置 */
-export interface PagePosition {
-	index: number;
-	part: number;
+// ===== 转换函数 =====
+
+/** 将内部 PageFrame 转换为兼容格式 */
+function toPageFrameInfo(frame: PageFrame): PageFrameInfo {
+	return {
+		elements: frame.elements.map(e => ({
+			pageIndex: e.page.index,
+			part: e.pageRange.min.part,
+			cropRect: e.cropRect,
+			isLandscape: e.page.width > e.page.height,
+			isDummy: e.isDummy,
+			scale: e.scale,
+			width: e.page.width * (e.cropRect?.width ?? 1) * e.scale,
+			height: e.page.height * (e.cropRect?.height ?? 1) * e.scale
+		})),
+		frameRange: {
+			minIndex: frame.frameRange.min.index,
+			minPart: frame.frameRange.min.part,
+			maxIndex: frame.frameRange.max.index,
+			maxPart: frame.frameRange.max.part
+		},
+		size: frame.size,
+		angle: frame.angle,
+		scale: frame.scale,
+		startIndex: frame.frameRange.min.index,
+		endIndex: frame.frameRange.max.index
+	};
 }
 
 // ===== 状态定义 =====
@@ -115,37 +112,29 @@ interface PageFrameState {
 	loading: boolean;
 	/** 错误信息 */
 	error: string | null;
+	/** 页面列表是否已初始化 */
+	initialized: boolean;
 }
 
 // ===== 默认值 =====
 
-const defaultContext: PageFrameContext = {
-	pageMode: 'single',
-	readOrder: 'ltr',
-	isSupportedDividePage: false,
-	isSupportedWidePage: true,
-	isSupportedSingleFirst: true,
-	isSupportedSingleLast: false,
-	dividePageRate: 1.0,
-	autoRotate: 'none',
-	stretchMode: 'uniform',
-	canvasSize: { width: 0, height: 0 },
-	widePageStretch: 'uniformHeight'
-};
-
 const defaultState: PageFrameState = {
 	currentFrame: null,
 	currentPosition: { index: 0, part: 0 },
-	context: { ...defaultContext },
+	context: { ...defaultPageFrameContext },
 	totalVirtualPages: 0,
 	loading: false,
-	error: null
+	error: null,
+	initialized: false
 };
 
 // ===== Store 实现 =====
 
 function createPageFrameStore() {
 	let state = $state<PageFrameState>({ ...defaultState });
+	
+	// 本地 PageFrameBuilder 实例
+	let builder: PageFrameBuilder | null = null;
 
 	return {
 		/** 获取状态 */
@@ -156,67 +145,114 @@ function createPageFrameStore() {
 		/** 重置状态 */
 		reset() {
 			state = { ...defaultState };
+			builder = null;
 		},
 
-		/** 更新上下文配置 */
-		async updateContext(updates: Partial<PageFrameContext>): Promise<void> {
-			try {
-				await invoke('pf_update_context', {
-					pageMode: updates.pageMode,
-					readOrder: updates.readOrder,
-					dividePage: updates.isSupportedDividePage,
-					widePage: updates.isSupportedWidePage,
-					singleFirst: updates.isSupportedSingleFirst,
-					singleLast: updates.isSupportedSingleLast,
-					divideRate: updates.dividePageRate,
-					canvasWidth: updates.canvasSize?.width,
-					canvasHeight: updates.canvasSize?.height,
-					widePageStretch: updates.widePageStretch
-				});
+		/**
+		 * 初始化页面列表
+		 * 
+		 * 必须在使用其他方法前调用，设置页面数据
+		 */
+		setPages(pages: Page[]): void {
+			builder = new PageFrameBuilder(pages, state.context);
+			state.totalVirtualPages = builder.totalVirtualPages();
+			state.initialized = true;
+			console.log(`[PageFrameStore] 初始化 ${pages.length} 页, 虚拟页数: ${state.totalVirtualPages}`);
+		},
 
-				// 更新本地状态
-				state.context = { ...state.context, ...updates };
+		/**
+		 * 从 BookInfo 的 pages 初始化
+		 * 
+		 * 兼容层：将 BookInfo.pages 转换为 Page[]
+		 */
+		initFromBookPages(pages: Array<{
+			index?: number;
+			path?: string;
+			innerPath?: string;
+			name?: string;
+			size?: number;
+			width?: number;
+			height?: number;
+		}>): void {
+			const convertedPages: Page[] = pages.map((p, i) => ({
+				index: p.index ?? i,
+				path: p.path ?? '',
+				innerPath: p.innerPath ?? p.name ?? '',
+				name: p.name ?? '',
+				size: p.size ?? 0,
+				width: p.width ?? 0,
+				height: p.height ?? 0,
+				aspectRatio: (p.height && p.height > 0) ? (p.width ?? 0) / p.height : 1.0
+			}));
+			this.setPages(convertedPages);
+		},
 
-				// 重新获取总虚拟页数
-				await this.refreshTotalPages();
-
-				// 重新构建当前帧
-				await this.buildCurrentFrame();
-			} catch (error) {
-				console.error('[PageFrameStore] 更新上下文失败:', error);
-				state.error = String(error);
+		/**
+		 * 更新页面尺寸
+		 * 
+		 * 当异步加载图片后获取到真实尺寸时调用
+		 */
+		updatePageSize(pageIndex: number, width: number, height: number): void {
+			if (!builder) return;
+			
+			const page = builder.getPage(pageIndex);
+			if (page) {
+				// 更新页面尺寸
+				page.width = width;
+				page.height = height;
+				page.aspectRatio = height > 0 ? width / height : 1.0;
+				
+				// 重新设置页面列表以更新分割缓存
+				const pages: Page[] = [];
+				for (let i = 0; i < builder.pageCount(); i++) {
+					const p = builder.getPage(i);
+					if (p) pages.push(p);
+				}
+				builder.setPages(pages);
 			}
+		},
+
+		/** 更新上下文配置 (本地，无 IPC) */
+		updateContext(updates: Partial<PageFrameContext>): void {
+			// 更新本地状态
+			state.context = { ...state.context, ...updates };
+			
+			// 更新 builder 的上下文
+			if (builder) {
+				builder.setContext(state.context);
+				state.totalVirtualPages = builder.totalVirtualPages();
+			}
+
+			// 重新构建当前帧
+			this.buildCurrentFrame();
 		},
 
 		/** 获取上下文配置 */
-		async getContext(): Promise<PageFrameContext> {
-			try {
-				const ctx = await invoke<PageFrameContext>('pf_get_context');
-				state.context = ctx;
-				return ctx;
-			} catch (error) {
-				console.error('[PageFrameStore] 获取上下文失败:', error);
-				return state.context;
-			}
+		getContext(): PageFrameContext {
+			return state.context;
 		},
 
-		/** 构建指定位置的帧 */
-		async buildFrame(position: PagePosition): Promise<PageFrameInfo | null> {
+		/** 构建指定位置的帧 (本地，无 IPC) */
+		buildFrame(position: PagePosition): PageFrameInfo | null {
+			if (!builder) {
+				console.warn('[PageFrameStore] Builder 未初始化');
+				return null;
+			}
+
+			state.loading = true;
+			state.error = null;
+
 			try {
-				state.loading = true;
-				state.error = null;
-
-				const frame = await invoke<PageFrameInfo | null>('pf_build_frame', {
-					index: position.index,
-					part: position.part
-				});
-
+				const frame = builder.buildFrame(position);
+				
 				if (frame) {
-					state.currentFrame = frame;
+					const frameInfo = toPageFrameInfo(frame);
+					state.currentFrame = frameInfo;
 					state.currentPosition = position;
+					return frameInfo;
 				}
-
-				return frame;
+				
+				return null;
 			} catch (error) {
 				console.error('[PageFrameStore] 构建帧失败:', error);
 				state.error = String(error);
@@ -227,137 +263,125 @@ function createPageFrameStore() {
 		},
 
 		/** 构建当前位置的帧 */
-		async buildCurrentFrame(): Promise<PageFrameInfo | null> {
+		buildCurrentFrame(): PageFrameInfo | null {
 			return this.buildFrame(state.currentPosition);
 		},
 
-		/** 跳转到指定页面 */
-		async gotoPage(pageIndex: number): Promise<PageFrameInfo | null> {
-			try {
-				// 获取包含该页面的帧位置
-				const [index, part] = await invoke<[number, number]>('pf_frame_position_for_index', {
-					pageIndex
-				});
-
-				return this.buildFrame({ index, part });
-			} catch (error) {
-				console.error('[PageFrameStore] 跳转页面失败:', error);
-				state.error = String(error);
+		/** 跳转到指定页面 (本地，无 IPC) */
+		gotoPage(pageIndex: number): PageFrameInfo | null {
+			if (!builder) {
+				console.warn('[PageFrameStore] Builder 未初始化');
 				return null;
 			}
+
+			// 获取包含该页面的帧位置
+			const position = builder.framePositionForIndex(pageIndex);
+			return this.buildFrame(position);
 		},
 
-		/** 下一帧 */
-		async nextFrame(): Promise<PageFrameInfo | null> {
-			try {
-				const result = await invoke<[number, number] | null>('pf_next_position', {
-					index: state.currentPosition.index,
-					part: state.currentPosition.part
-				});
+		/** 下一帧 (本地，无 IPC) */
+		nextFrame(): PageFrameInfo | null {
+			if (!builder) return null;
 
-				if (result) {
-					const [index, part] = result;
-					return this.buildFrame({ index, part });
-				}
-
-				return null;
-			} catch (error) {
-				console.error('[PageFrameStore] 下一帧失败:', error);
-				state.error = String(error);
-				return null;
+			const next = builder.nextFramePosition(state.currentPosition);
+			if (next) {
+				return this.buildFrame(next);
 			}
+			return null;
 		},
 
-		/** 上一帧 */
-		async prevFrame(): Promise<PageFrameInfo | null> {
-			try {
-				const result = await invoke<[number, number] | null>('pf_prev_position', {
-					index: state.currentPosition.index,
-					part: state.currentPosition.part
-				});
+		/** 上一帧 (本地，无 IPC) */
+		prevFrame(): PageFrameInfo | null {
+			if (!builder) return null;
 
-				if (result) {
-					const [index, part] = result;
-					return this.buildFrame({ index, part });
-				}
-
-				return null;
-			} catch (error) {
-				console.error('[PageFrameStore] 上一帧失败:', error);
-				state.error = String(error);
-				return null;
+			const prev = builder.prevFramePosition(state.currentPosition);
+			if (prev) {
+				return this.buildFrame(prev);
 			}
+			return null;
 		},
 
-		/** 刷新总虚拟页数 */
-		async refreshTotalPages(): Promise<number> {
-			try {
-				const total = await invoke<number>('pf_total_virtual_pages');
-				state.totalVirtualPages = total;
-				return total;
-			} catch (error) {
-				console.error('[PageFrameStore] 获取总页数失败:', error);
-				return 0;
-			}
+		/** 获取总虚拟页数 (本地，无 IPC) */
+		refreshTotalPages(): number {
+			if (!builder) return 0;
+			state.totalVirtualPages = builder.totalVirtualPages();
+			return state.totalVirtualPages;
 		},
 
-		/** 检查页面是否分割 */
-		async isPageSplit(index: number): Promise<boolean> {
-			try {
-				return await invoke<boolean>('pf_is_page_split', { index });
-			} catch (error) {
-				console.error('[PageFrameStore] 检查分割失败:', error);
-				return false;
-			}
+		/** 检查页面是否分割 (本地，无 IPC) */
+		isPageSplit(index: number): boolean {
+			if (!builder) return false;
+			return builder.isPageSplit(index);
 		},
 
-		/** 从虚拟索引获取位置 */
-		async positionFromVirtual(virtualIndex: number): Promise<PagePosition> {
-			try {
-				const [index, part] = await invoke<[number, number]>('pf_position_from_virtual', {
-					virtualIndex
-				});
-				return { index, part };
-			} catch (error) {
-				console.error('[PageFrameStore] 转换虚拟索引失败:', error);
-				return { index: 0, part: 0 };
-			}
+		/** 从虚拟索引获取位置 (本地，无 IPC) */
+		positionFromVirtual(virtualIndex: number): PagePosition {
+			if (!builder) return { index: 0, part: 0 };
+			return builder.positionFromVirtual(virtualIndex);
+		},
+
+		/** 获取包含指定页面的帧位置 (本地，无 IPC) */
+		framePositionForIndex(pageIndex: number): PagePosition {
+			if (!builder) return { index: pageIndex, part: 0 };
+			return builder.framePositionForIndex(pageIndex);
+		},
+
+		/** 获取下一帧位置 (不构建帧) */
+		getNextPosition(): PagePosition | null {
+			if (!builder) return null;
+			return builder.nextFramePosition(state.currentPosition);
+		},
+
+		/** 获取上一帧位置 (不构建帧) */
+		getPrevPosition(): PagePosition | null {
+			if (!builder) return null;
+			return builder.prevFramePosition(state.currentPosition);
 		},
 
 		/** 设置页面模式 */
-		async setPageMode(mode: PageMode): Promise<void> {
-			await this.updateContext({ pageMode: mode });
+		setPageMode(mode: PageMode): void {
+			this.updateContext({ pageMode: mode });
 		},
 
 		/** 设置阅读顺序 */
-		async setReadOrder(order: ReadOrder): Promise<void> {
-			await this.updateContext({ readOrder: order });
+		setReadOrder(order: ReadOrder): void {
+			this.updateContext({ readOrder: order });
 		},
 
 		/** 设置是否分割横向页面 */
-		async setDividePage(enabled: boolean): Promise<void> {
-			await this.updateContext({ isSupportedDividePage: enabled });
+		setDividePage(enabled: boolean): void {
+			this.updateContext({ isSupportedDividePage: enabled });
 		},
 
 		/** 设置画布尺寸 */
-		async setCanvasSize(width: number, height: number): Promise<void> {
-			await this.updateContext({ canvasSize: { width, height } });
+		setCanvasSize(width: number, height: number): void {
+			this.updateContext({ canvasSize: { width, height } });
 		},
 
 		/** 切换页面模式 */
-		async togglePageMode(): Promise<void> {
+		togglePageMode(): void {
 			const newMode = state.context.pageMode === 'single' ? 'double' : 'single';
-			await this.setPageMode(newMode);
+			this.setPageMode(newMode);
 		},
 
 		/** 切换分割模式 */
-		async toggleDividePage(): Promise<void> {
-			await this.setDividePage(!state.context.isSupportedDividePage);
+		toggleDividePage(): void {
+			this.setDividePage(!state.context.isSupportedDividePage);
 		},
 
 		/** 设置宽页拉伸模式 */
-		async setWidePageStretch(mode: WidePageStretch): Promise<void> {
-			await this.updateContext({ widePageStretch: mode });
+		setWidePageStretch(mode: WidePageStretch): void {
+			this.updateContext({ widePageStretch: mode });
+		},
+
+		/** 检查是否已初始化 */
+		isInitialized(): boolean {
+			return state.initialized && builder !== null;
+		},
+
+		/** 获取页面数量 */
+		pageCount(): number {
+			return builder?.pageCount() ?? 0;
 		}
 	};
 }
@@ -372,11 +396,7 @@ export const pageFrameStore = createPageFrameStore();
  * 将裁剪区域转换为 CSS clip-path
  */
 export function cropRectToClipPath(crop: CropRect): string {
-	const top = crop.y * 100;
-	const right = (1 - crop.x - crop.width) * 100;
-	const bottom = (1 - crop.y - crop.height) * 100;
-	const left = crop.x * 100;
-	return `inset(${top.toFixed(1)}% ${right.toFixed(1)}% ${bottom.toFixed(1)}% ${left.toFixed(1)}%)`;
+	return CropRectUtils.toCssClipPath(crop);
 }
 
 /**

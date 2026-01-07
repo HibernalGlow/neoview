@@ -516,6 +516,12 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.syncInfoPanelBookInfo();
 
+      // 【Phase 4】排序后重新初始化 pageFrameStore
+      if (updatedBook.pages && updatedBook.pages.length > 0) {
+        pageFrameStore.initFromBookPages(updatedBook.pages);
+        console.log('📐 [PageFrame] 排序后重新初始化，模式:', sortMode);
+      }
+
       const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
       const pathStack = this.buildPathStack();
       unifiedHistoryStore.updateIndex(pathStack, updatedBook.currentPage, updatedBook.totalPages);

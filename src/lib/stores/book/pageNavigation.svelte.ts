@@ -137,7 +137,7 @@ export class PageNavigationManager {
     }
   }
 
-  /** 下一页 */
+  /** 下一页 - 使用本地 PageFrameBuilder 计算 */
   async nextPage(): Promise<number | undefined> {
     if (!this.canGoNext()) {
       console.log('📘 Already on last page');
@@ -145,20 +145,42 @@ export class PageNavigationManager {
     }
 
     try {
-      const newIndex = await bookApi.nextPage();
       const book = this.callbacks.getCurrentBook();
-      
-      if (book) {
-        this.callbacks.updateCurrentPage(newIndex);
-        await this.callbacks.syncInfoPanel();
-        this.callbacks.syncAppState('user');
-        await this.updateHistoryAfterNavigation(newIndex);
+      if (!book) return;
 
-        if (this.callbacks.onPageChanged) {
-          const page = this.getCurrentPage();
-          await this.callbacks.onPageChanged(newIndex, page);
+      // 【Phase 3】使用本地 PageFrameBuilder 计算下一帧位置
+      const { pageFrameStore } = await import('../pageFrame.svelte');
+      
+      let newIndex: number;
+      if (pageFrameStore.isInitialized()) {
+        const nextPos = pageFrameStore.getNextPosition();
+        if (nextPos) {
+          newIndex = nextPos.index;
+        } else {
+          // 降级：简单 +1
+          newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
         }
+      } else {
+        // 降级：简单 +1
+        newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
       }
+
+      // 仍然通知后端以触发预加载
+      await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
+
+      this.callbacks.updateCurrentPage(newIndex);
+      await this.callbacks.syncInfoPanel();
+      this.callbacks.syncAppState('user');
+      await this.updateHistoryAfterNavigation(newIndex);
+
+      // 更新 pageFrameStore 的当前位置
+      pageFrameStore.gotoPage(newIndex);
+
+      if (this.callbacks.onPageChanged) {
+        const page = this.getCurrentPage();
+        await this.callbacks.onPageChanged(newIndex, page);
+      }
+      
       return newIndex;
     } catch (err) {
       console.error('❌ Error going to next page:', err);
@@ -166,7 +188,7 @@ export class PageNavigationManager {
     }
   }
 
-  /** 上一页 */
+  /** 上一页 - 使用本地 PageFrameBuilder 计算 */
   async previousPage(): Promise<number | undefined> {
     if (!this.canGoPrevious()) {
       console.log('📘 Already on first page');
@@ -174,20 +196,42 @@ export class PageNavigationManager {
     }
 
     try {
-      const newIndex = await bookApi.previousPage();
       const book = this.callbacks.getCurrentBook();
-      
-      if (book) {
-        this.callbacks.updateCurrentPage(newIndex);
-        await this.callbacks.syncInfoPanel();
-        this.callbacks.syncAppState('user');
-        await this.updateHistoryAfterNavigation(newIndex);
+      if (!book) return;
 
-        if (this.callbacks.onPageChanged) {
-          const page = this.getCurrentPage();
-          await this.callbacks.onPageChanged(newIndex, page);
+      // 【Phase 3】使用本地 PageFrameBuilder 计算上一帧位置
+      const { pageFrameStore } = await import('../pageFrame.svelte');
+      
+      let newIndex: number;
+      if (pageFrameStore.isInitialized()) {
+        const prevPos = pageFrameStore.getPrevPosition();
+        if (prevPos) {
+          newIndex = prevPos.index;
+        } else {
+          // 降级：简单 -1
+          newIndex = Math.max(book.currentPage - 1, 0);
         }
+      } else {
+        // 降级：简单 -1
+        newIndex = Math.max(book.currentPage - 1, 0);
       }
+
+      // 仍然通知后端以触发预加载
+      await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
+
+      this.callbacks.updateCurrentPage(newIndex);
+      await this.callbacks.syncInfoPanel();
+      this.callbacks.syncAppState('user');
+      await this.updateHistoryAfterNavigation(newIndex);
+
+      // 更新 pageFrameStore 的当前位置
+      pageFrameStore.gotoPage(newIndex);
+
+      if (this.callbacks.onPageChanged) {
+        const page = this.getCurrentPage();
+        await this.callbacks.onPageChanged(newIndex, page);
+      }
+      
       return newIndex;
     } catch (err) {
       console.error('❌ Error going to previous page:', err);

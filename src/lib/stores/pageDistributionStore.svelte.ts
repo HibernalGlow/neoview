@@ -1,8 +1,17 @@
 /**
  * PageDistributionStore - 页面分布状态管理
  * 
- * 使用预计算的页面分布，提供 O(1) 翻页查询
- * 参考 OpenComic 的 imagesDistribution 实现
+ * @deprecated 该模块将在未来版本中合并到 pageFrameStore
+ * 建议使用 pageFrameStore 进行新代码开发
+ * 
+ * 迁移映射：
+ * - pageDistributionStore.setDoublePage() -> pageFrameStore.setPageMode('double')
+ * - pageDistributionStore.getPageStepForIndex() -> 使用 pageFrameStore.buildFrame() 的 frameRange
+ * - pageDistributionStore.initialize() -> pageFrameStore.initFromBookPages()
+ * 
+ * 现有功能（保留以兼容旧代码）：
+ * - 使用预计算的页面分布，提供 O(1) 翻页查询
+ * - 参考 OpenComic 的 imagesDistribution 实现
  * 
  * 核心优势：
  * 1. 翻页时直接查表，无需重新计算

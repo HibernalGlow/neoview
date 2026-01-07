@@ -364,7 +364,9 @@ export function revokeObjectURL(url: string): void {
 	URL.revokeObjectURL(url);
 }
 
-// ===== PageFrame API =====
+// ===== PageFrame API (已迁移到前端本地计算) =====
+// 这些类型定义保留以兼容现有代码，但 API 函数已移除
+// 请使用 pageFrameStore 进行布局计算
 
 /** 宽页拉伸模式 */
 export type WidePageStretch = 'none' | 'uniformHeight' | 'uniformWidth';
@@ -416,80 +418,16 @@ export interface PageFrameContext {
 	widePageStretch: WidePageStretch;
 }
 
-/**
- * 更新 PageFrame 上下文配置
- */
-export async function updatePageFrameContext(updates: {
-	pageMode?: string;
-	readOrder?: string;
-	dividePage?: boolean;
-	widePage?: boolean;
-	singleFirst?: boolean;
-	singleLast?: boolean;
-	divideRate?: number;
-	canvasWidth?: number;
-	canvasHeight?: number;
-	/** 宽页拉伸模式 */
-	widePageStretch?: WidePageStretch;
-}): Promise<void> {
-	return invoke('pf_update_context', updates);
-}
-
-/**
- * 获取 PageFrame 上下文
- */
-export async function getPageFrameContext(): Promise<PageFrameContext> {
-	return invoke<PageFrameContext>('pf_get_context');
-}
-
-/**
- * 构建指定位置的帧
- */
-export async function buildFrame(index: number, part?: number): Promise<PageFrameInfo | null> {
-	return invoke<PageFrameInfo | null>('pf_build_frame', { index, part });
-}
-
-/**
- * 获取下一帧位置
- */
-export async function getNextFramePosition(index: number, part?: number): Promise<[number, number] | null> {
-	return invoke<[number, number] | null>('pf_next_position', { index, part });
-}
-
-/**
- * 获取上一帧位置
- */
-export async function getPrevFramePosition(index: number, part?: number): Promise<[number, number] | null> {
-	return invoke<[number, number] | null>('pf_prev_position', { index, part });
-}
-
-/**
- * 获取总虚拟页数
- */
-export async function getTotalVirtualPages(): Promise<number> {
-	return invoke<number>('pf_total_virtual_pages');
-}
-
-/**
- * 检查页面是否分割
- */
-export async function isPageSplit(index: number): Promise<boolean> {
-	return invoke<boolean>('pf_is_page_split', { index });
-}
-
-/**
- * 从虚拟索引获取位置
- */
-export async function positionFromVirtual(virtualIndex: number): Promise<[number, number]> {
-	return invoke<[number, number]>('pf_position_from_virtual', { virtualIndex });
-}
-
-/**
- * 获取包含指定页面的帧位置
- */
-export async function framePositionForIndex(pageIndex: number): Promise<[number, number]> {
-	return invoke<[number, number]>('pf_frame_position_for_index', { pageIndex });
-}
+// NOTE: PageFrame API 函数已移除，请使用 pageFrameStore：
+// - updatePageFrameContext -> pageFrameStore.updateContext()
+// - getPageFrameContext -> pageFrameStore.getContext()
+// - buildFrame -> pageFrameStore.buildFrame()
+// - getNextFramePosition -> pageFrameStore.getNextPosition()
+// - getPrevFramePosition -> pageFrameStore.getPrevPosition()
+// - getTotalVirtualPages -> pageFrameStore.refreshTotalPages()
+// - isPageSplit -> pageFrameStore.isPageSplit()
+// - positionFromVirtual -> pageFrameStore.positionFromVirtual()
+// - framePositionForIndex -> pageFrameStore.framePositionForIndex()
 
 
 // ===== 事件监听 =====

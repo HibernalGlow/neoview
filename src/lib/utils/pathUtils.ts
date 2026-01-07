@@ -182,3 +182,98 @@ export function getParentDirectory(path: string): string {
 export function getFileName(path: string): string {
     return path.split(/[\\/]/).pop() || path;
 }
+
+/**
+ * 从路径中提取扩展名（小写）
+ */
+export function getFileExtension(path: string): string {
+    const fileName = getFileName(path);
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex > 0) {
+        return fileName.substring(dotIndex + 1).toLowerCase();
+    }
+    return '';
+}
+
+// ===== 文件类型检测（本地，无需 IPC）=====
+
+/**
+ * 支持的视频扩展名
+ */
+const VIDEO_EXTENSIONS = new Set([
+    'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'm4v',
+    'mpg', 'mpeg', '3gp', 'ogv', 'ts', 'mts', 'm2ts'
+]);
+
+/**
+ * 支持的图片扩展名
+ */
+const IMAGE_EXTENSIONS = new Set([
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico',
+    'avif', 'heic', 'heif', 'tiff', 'tif', 'jfif', 'pjpeg', 'pjp'
+]);
+
+/**
+ * 支持的压缩包扩展名
+ */
+const ARCHIVE_EXTENSIONS_SET = new Set([
+    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 
+    'cbz', 'cbr', 'cb7', 'cbt'
+]);
+
+/**
+ * 检查是否为视频文件（本地检测，无需 IPC）
+ */
+export function isVideoFilePath(path: string): boolean {
+    const ext = getFileExtension(path);
+    return VIDEO_EXTENSIONS.has(ext);
+}
+
+/**
+ * 检查是否为图片文件（本地检测，无需 IPC）
+ */
+export function isImageFilePath(path: string): boolean {
+    const ext = getFileExtension(path);
+    return IMAGE_EXTENSIONS.has(ext);
+}
+
+/**
+ * 检查是否为压缩包文件（本地检测，无需 IPC）
+ */
+export function isArchiveFilePath(path: string): boolean {
+    const ext = getFileExtension(path);
+    return ARCHIVE_EXTENSIONS_SET.has(ext);
+}
+
+/**
+ * 获取文件的 MIME 类型（基于扩展名）
+ */
+export function getMimeTypeFromPath(path: string): string {
+    const ext = getFileExtension(path);
+    const mimeMap: Record<string, string> = {
+        // Images
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp',
+        'svg': 'image/svg+xml',
+        'avif': 'image/avif',
+        'heic': 'image/heic',
+        'tiff': 'image/tiff',
+        'tif': 'image/tiff',
+        // Videos
+        'mp4': 'video/mp4',
+        'webm': 'video/webm',
+        'mkv': 'video/x-matroska',
+        'avi': 'video/x-msvideo',
+        'mov': 'video/quicktime',
+        // Archives
+        'zip': 'application/zip',
+        'rar': 'application/vnd.rar',
+        '7z': 'application/x-7z-compressed',
+    };
+    return mimeMap[ext] || 'application/octet-stream';
+}
+

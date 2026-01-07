@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "neoview",
-  "version": "5.6.1",
+  "version": "5.6.3",
   "mainBinaryName": "neoview",
   "identifier": "NeoView",
   "build": {

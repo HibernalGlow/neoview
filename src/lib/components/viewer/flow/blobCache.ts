@@ -10,6 +10,8 @@ export interface BlobCacheItem {
 	size: number;
 	/** 【性能优化】缓存图片尺寸，避免重复解码 */
 	dimensions?: { width: number; height: number } | null;
+	/** 【性能优化】预解码的 ImageBitmap，避免渲染时解码 */
+	bitmap?: ImageBitmap;
 }
 
 export interface BlobCacheConfig {
@@ -79,6 +81,31 @@ export class BlobCache {
 	}
 
 	/**
+	 * 【性能优化】获取预解码的 ImageBitmap
+	 */
+	getBitmap(pageIndex: number): ImageBitmap | undefined {
+		return this.cache.get(pageIndex)?.bitmap;
+	}
+
+	/**
+	 * 【性能优化】设置预解码的 ImageBitmap
+	 */
+	setBitmap(pageIndex: number, bitmap: ImageBitmap): void {
+		const item = this.cache.get(pageIndex);
+		if (item) {
+			// 关闭旧的 bitmap
+			if (item.bitmap) {
+				item.bitmap.close();
+			}
+			item.bitmap = bitmap;
+			// 同时更新尺寸
+			if (!item.dimensions) {
+				item.dimensions = { width: bitmap.width, height: bitmap.height };
+			}
+		}
+	}
+
+	/**
 	 * 设置缓存
 	 */
 	set(pageIndex: number, blob: Blob): string {
@@ -112,6 +139,10 @@ export class BlobCache {
 		const item = this.cache.get(pageIndex);
 		if (item) {
 			URL.revokeObjectURL(item.url);
+			// 【重要】释放 ImageBitmap 防止内存泄漏
+			if (item.bitmap) {
+				item.bitmap.close();
+			}
 			this.currentSize -= item.size;
 			return this.cache.delete(pageIndex);
 		}
@@ -124,6 +155,10 @@ export class BlobCache {
 	clear(): void {
 		for (const [, item] of this.cache) {
 			URL.revokeObjectURL(item.url);
+			// 【重要】释放所有 ImageBitmap
+			if (item.bitmap) {
+				item.bitmap.close();
+			}
 		}
 		this.cache.clear();
 		this.currentSize = 0;

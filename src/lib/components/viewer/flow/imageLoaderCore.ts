@@ -269,28 +269,34 @@ export class ImageLoaderCore {
 
 	/**
 	 * 快速加载当前页（最高优先级，带渐进式加载）
-	 * 【优化】先返回图片，异步获取尺寸
+	 * 【优化】使用缓存的尺寸，异步预解码 ImageBitmap
 	 * 【关键】加载完成后通知 thumbnailService 开始加载缩略图
 	 */
 	async loadCurrentPage(): Promise<LoadResult> {
 		const pageIndex = bookStore.currentPageIndex;
 		
-		// 如果缓存中有，立即返回（不等待尺寸）
+		// 如果缓存中有，立即返回
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
 			console.log(`⚡ 快速显示缓存: 页码 ${pageIndex + 1}`);
 			// 更新延迟追踪（缓存命中）
 			updateCacheHitLatencyTrace(item.blob, pageIndex);
-			// 异步获取尺寸
-			getImageDimensions(item.blob).then(dimensions => {
+			
+			// 【性能优化】使用缓存的尺寸，避免重复解码
+			let dimensions = this.blobCache.getDimensions(pageIndex);
+			if (dimensions === undefined) {
+				// 尚未缓存尺寸，触发预解码
+				this.schedulePreDecode(pageIndex);
+			} else if (dimensions !== null) {
 				this.options.onDimensionsReady?.(pageIndex, dimensions);
-			});
+			}
+			
 			// 【关键】通知缩略图服务主图已就绪
 			thumbnailService.notifyMainImageReady();
 			return {
 				url: item.url,
 				blob: item.blob,
-				dimensions: null, // 不阻塞，异步获取
+				dimensions: dimensions ?? null,
 				fromCache: true
 			};
 		}
@@ -299,7 +305,36 @@ export class ImageLoaderCore {
 		const result = await this.loadPage(pageIndex, LoadPriority.CRITICAL);
 		// 【关键】主图加载完成，通知缩略图服务开始加载
 		thumbnailService.notifyMainImageReady();
+		// 触发预解码
+		this.schedulePreDecode(pageIndex);
 		return result;
+	}
+
+	/**
+	 * 【性能优化】调度 ImageBitmap 预解码
+	 * 预解码后可直接绘制到 Canvas，避免渲染时阻塞
+	 */
+	private async schedulePreDecode(pageIndex: number): Promise<void> {
+		// 检查是否已有 bitmap
+		if (this.blobCache.getBitmap(pageIndex)) return;
+		
+		const blob = this.blobCache.getBlob(pageIndex);
+		if (!blob) return;
+		
+		try {
+			const bitmap = await createImageBitmap(blob);
+			if (!this.invalidated && this.blobCache.has(pageIndex)) {
+				this.blobCache.setBitmap(pageIndex, bitmap);
+				// setBitmap 会同时更新尺寸
+				const dimensions = { width: bitmap.width, height: bitmap.height };
+				this.options.onDimensionsReady?.(pageIndex, dimensions);
+			} else {
+				// 实例已失效或页面已被清除
+				bitmap.close();
+			}
+		} catch (error) {
+			console.warn(`预解码页面 ${pageIndex} 失败:`, error);
+		}
 	}
 
 	/**
@@ -478,6 +513,22 @@ export class ImageLoaderCore {
 	 */
 	getCachedBlob(pageIndex: number): Blob | undefined {
 		return this.blobCache.getBlob(pageIndex);
+	}
+
+	/**
+	 * 【性能优化】获取缓存的 ImageBitmap（如果有）
+	 * 用于直接绘制到 Canvas，避免渲染时解码
+	 */
+	getCachedBitmap(pageIndex: number): ImageBitmap | undefined {
+		return this.blobCache.getBitmap(pageIndex);
+	}
+
+	/**
+	 * 【性能优化】获取缓存的尺寸（如果有）
+	 * 避免重复解码获取尺寸
+	 */
+	getCachedDimensions(pageIndex: number): { width: number; height: number } | null | undefined {
+		return this.blobCache.getDimensions(pageIndex);
 	}
 
 	/**

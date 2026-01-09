@@ -125,34 +125,6 @@ export async function openBook(path: string): Promise<BookInfo> {
 }
 
 /**
- * 快速打开书籍（首屏优化）
- * 
- * 先返回前 N 页，后台继续扫描
- * 扫描完成后会触发 `book-pages-ready` 事件
- * 
- * @param path 书籍路径
- * @param quickLimit 快速扫描的页数限制（默认 10）
- * @returns QuickOpenResult，包含部分页面信息和是否需要等待完整列表
- */
-export async function openBookQuick(path: string, quickLimit: number = 10): Promise<QuickOpenResult> {
-	console.log('📖 [PageManager] openBookQuick:', path, 'limit:', quickLimit);
-	return invoke<QuickOpenResult>('pm_open_book_quick', { path, quickLimit });
-}
-
-/** 快速打开结果 */
-export interface QuickOpenResult {
-	info: BookInfo;
-	/** 是否为部分结果（需要等待 book-pages-ready 事件） */
-	isPartial: boolean;
-}
-
-/** 页面列表就绪事件 */
-export interface BookPagesReadyEvent {
-	path: string;
-	totalPages: number;
-}
-
-/**
  * 关闭书籍
  */
 export async function closeBook(): Promise<void> {

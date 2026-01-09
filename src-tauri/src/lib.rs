@@ -534,7 +534,6 @@ pub fn run() {
             commands::benchmark_commands::run_transcode_benchmark,
             // Page Manager commands (NeeView 架构)
             commands::page_commands::pm_open_book,
-            commands::page_commands::pm_open_book_quick,
             commands::page_commands::pm_close_book,
             commands::page_commands::pm_get_book_info,
             commands::page_commands::pm_goto_page,
@@ -551,7 +550,6 @@ pub fn run() {
             commands::page_commands::pm_get_large_file_threshold,
             commands::page_commands::pm_set_large_file_threshold,
             commands::page_commands::pm_preload_thumbnails,
-            commands::page_commands::pm_get_cache_status,
             // System Monitor commands
             commands::get_system_stats,
             commands::get_system_info,

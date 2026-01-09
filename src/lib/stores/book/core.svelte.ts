@@ -171,33 +171,7 @@ class BookStore {
   }
 
   private async openBookNormal(path: string, options: OpenBookOptions) {
-    // 打开书籍 - 使用标准 API
     const book = await bookApi.openBook(path);
-    
-    // 对于压缩包，注册后台扫描完成事件监听
-    // 如果后端有更新的页面列表，自动刷新
-    const isArchive = isArchivePath(path);
-    if (isArchive) {
-      const { listen } = await import('@tauri-apps/api/event');
-      type PagesReadyPayload = { path: string; totalPages: number };
-      const unlistenPromise = listen<PagesReadyPayload>('book-pages-ready', (event) => {
-        if (event.payload.path === path && this.state.currentBook?.path === path) {
-          if (event.payload.totalPages !== this.state.currentBook.totalPages) {
-            console.log('📖 后台扫描完成，刷新页面列表:', event.payload.totalPages, '页');
-            bookApi.getCurrentBook().then(latestBook => {
-              if (latestBook && this.state.currentBook?.path === path) {
-                this.state.currentBook = latestBook;
-                this.syncAppStateBookSlice();
-                pageFrameStore.initFromBookPages(latestBook.pages || []);
-              }
-            }).catch(() => {});
-          }
-          unlistenPromise.then(unlisten => unlisten());
-        }
-      });
-    }
-
-    
     console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
     // 应用锁定的排序模式

@@ -1,14 +1,12 @@
 //! `NeoView` - Book Manager
 //! 书籍管理核心模块
 
-use crate::core::archive_index_cache::{is_image_file, ArchiveIndex, IndexCache, IndexEntry};
+use crate::core::archive_index_cache::{ArchiveIndex, IndexCache, IndexEntry, is_image_file};
 use crate::core::archive_preheat::PreheatSystem;
-use crate::core::load_command_queue::{
-    CommandQueue, LoadMetrics, LoadOptions, LoadResult, PerformanceMonitor,
-};
+use crate::core::load_command_queue::{CommandQueue, LoadMetrics, LoadOptions, LoadResult, PerformanceMonitor};
 use crate::core::path_utils::{build_path_key, calculate_path_hash};
 use crate::core::video_exts;
-use crate::models::{BookInfo, BookType, MediaPriorityMode, Page, PageSortMode};
+use crate::models::{BookInfo, BookType, Page, PageSortMode, MediaPriorityMode};
 use log::{debug, info};
 use natural_sort_rs::natural_cmp;
 use rand::seq::SliceRandom;
@@ -156,14 +154,8 @@ impl BookManager {
 
         // 按文件名自然排序
         entries.sort_by(|a, b| {
-            let a_name =
-                a.1.file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-            let b_name =
-                b.1.file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
+            let a_name = a.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let b_name = b.1.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             natural_cmp::<str, _>(&a_name, &b_name)
         });
 
@@ -222,7 +214,7 @@ impl BookManager {
     /// 加载压缩包中的图片页面（使用索引缓存）
     fn load_archive_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
         let start = Instant::now();
-
+        
         // 尝试从缓存获取索引
         let index = if let Some(cached) = self.index_cache.get(path) {
             debug!("📦 使用缓存索引: {}", path.display());
@@ -252,8 +244,7 @@ impl BookManager {
 
         // 创建页面列表
         for (idx, item) in page_items.iter().enumerate() {
-            let path_key =
-                build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
+            let path_key = build_path_key(&book.path, &item.path, &book.book_type, Some(&item.name));
             let stable_hash = calculate_path_hash(&path_key);
 
             let page = Page::new(idx, item.path.clone(), item.name.clone(), item.size)
@@ -309,11 +300,7 @@ impl BookManager {
     }
 
     /// 异步打开书籍（支持取消）
-    pub fn open_book_async(
-        &mut self,
-        path: &str,
-        options: LoadOptions,
-    ) -> Result<BookInfo, String> {
+    pub fn open_book_async(&mut self, path: &str, options: LoadOptions) -> Result<BookInfo, String> {
         let start = Instant::now();
         let path_buf = PathBuf::from(path);
 
@@ -363,21 +350,21 @@ impl BookManager {
     /// 加载 EPUB 电子书中的图片页面
     fn load_epub_pages(&self, path: &Path, book: &mut BookInfo) -> Result<(), String> {
         use crate::core::ebook::EbookManager;
-
+        
         let path_str = path.to_string_lossy();
         let image_paths = EbookManager::list_epub_images(&path_str)?;
-
+        
         log::info!("📚 BookManager: 从 EPUB 加载 {} 张图片", image_paths.len());
-
+        
         for (index, inner_path) in image_paths.into_iter().enumerate() {
             let name = Path::new(&inner_path)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or(&inner_path)
                 .to_string();
-
+            
             let stable_hash = calculate_path_hash(&format!("{}:{}", path_str, inner_path));
-
+            
             // EPUB 内的图片，使用 epub_path:inner_path 作为唯一 path
             let unique_path = format!("{}:{}", path_str, inner_path);
             let page = Page::new(index, unique_path, name.clone(), 0)
@@ -386,7 +373,7 @@ impl BookManager {
                 .with_entry_index(index);
             book.pages.push(page);
         }
-
+        
         book.total_pages = book.pages.len();
         Ok(())
     }
@@ -411,11 +398,6 @@ impl BookManager {
     /// 获取当前书籍
     pub fn get_current_book(&self) -> Option<&BookInfo> {
         self.current_book.as_ref()
-    }
-
-    /// 设置当前书籍（用于快速打开）
-    pub fn set_current_book(&mut self, book: BookInfo) {
-        self.current_book = Some(book);
     }
 
     /// 设置当前书籍的排序模式

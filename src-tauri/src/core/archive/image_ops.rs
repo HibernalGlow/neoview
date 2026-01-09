@@ -1,11 +1,13 @@
 // 图片操作模块
 // 包含从压缩包加载图片、JXL 转换、首图查找等操作
 
-use super::types::{ArchiveFormat, ArchiveMetadata};
-use super::utils::{detect_image_mime_type, get_archive_metadata, is_image_file, normalize_archive_key};
-use super::zip_handler;
 use super::rar_handler;
 use super::sevenz_handler;
+use super::types::{ArchiveFormat, ArchiveMetadata};
+use super::utils::{
+    detect_image_mime_type, get_archive_metadata, is_image_file, normalize_archive_key,
+};
+use super::zip_handler;
 use crate::core::archive_index::ArchiveIndexCache;
 use crate::core::blob_registry::BlobRegistry;
 use std::fs::File;
@@ -24,13 +26,16 @@ pub fn extract_file(
 ) -> Result<Vec<u8>, String> {
     let format = ArchiveFormat::from_extension(archive_path);
     match format {
-        ArchiveFormat::Zip => zip_handler::extract_file_from_zip(archive_cache, archive_path, file_path),
-        ArchiveFormat::Rar => rar_handler::extract_file_from_rar(index_cache, archive_path, file_path),
-        ArchiveFormat::SevenZ => sevenz_handler::extract_file_from_7z(index_cache, archive_path, file_path),
-        ArchiveFormat::Unknown => Err(format!(
-            "不支持的压缩包格式: {}",
-            archive_path.display()
-        )),
+        ArchiveFormat::Zip => {
+            zip_handler::extract_file_from_zip(archive_cache, archive_path, file_path)
+        }
+        ArchiveFormat::Rar => {
+            rar_handler::extract_file_from_rar(index_cache, archive_path, file_path)
+        }
+        ArchiveFormat::SevenZ => {
+            sevenz_handler::extract_file_from_7z(index_cache, archive_path, file_path)
+        }
+        ArchiveFormat::Unknown => Err(format!("不支持的压缩包格式: {}", archive_path.display())),
     }
 }
 
@@ -38,16 +43,14 @@ pub fn extract_file(
 pub fn load_image_from_archive_binary(
     archive_cache: &zip_handler::ZipArchiveCache,
     index_cache: &Arc<ArchiveIndexCache>,
-    image_cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
+    image_cache: &Arc<
+        std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>,
+    >,
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Vec<u8>, String> {
-    let cache_key = format!(
-        "{}::{}",
-        normalize_archive_key(archive_path),
-        file_path
-    );
-    
+    let cache_key = format!("{}::{}", normalize_archive_key(archive_path), file_path);
+
     // 检查缓存
     if let Some(cached) = get_cached_image(image_cache, &cache_key) {
         println!(
@@ -148,9 +151,7 @@ pub fn load_jxl_from_zip(image_data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// 获取压缩包中的所有图片路径（支持 ZIP/RAR/7z）
-pub fn get_images_from_archive(
-    archive_path: &Path,
-) -> Result<Vec<String>, String> {
+pub fn get_images_from_archive(archive_path: &Path) -> Result<Vec<String>, String> {
     let entries = list_contents(archive_path)?;
 
     let images: Vec<String> = entries
@@ -169,10 +170,7 @@ pub fn list_contents(archive_path: &Path) -> Result<Vec<super::types::ArchiveEnt
         ArchiveFormat::Zip => zip_handler::list_zip_contents(archive_path),
         ArchiveFormat::Rar => rar_handler::list_rar_contents(archive_path),
         ArchiveFormat::SevenZ => sevenz_handler::list_7z_contents(archive_path),
-        ArchiveFormat::Unknown => Err(format!(
-            "不支持的压缩包格式: {}",
-            archive_path.display()
-        )),
+        ArchiveFormat::Unknown => Err(format!("不支持的压缩包格式: {}", archive_path.display())),
     }
 }
 
@@ -194,8 +192,8 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
 
     // 优先查找常见的图片命名模式
     let priority_patterns = [
-        "cover", "front", "title", "page-001", "page_001", "001", "vol", "chapter", "ch",
-        "p001", "p_001", "img",
+        "cover", "front", "title", "page-001", "page_001", "001", "vol", "chapter", "ch", "p001",
+        "p_001", "img",
     ];
 
     // 先按优先级查找
@@ -247,11 +245,8 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
 
 /// 扫描压缩包内的前N张图片（限制扫描数量）
 /// 用于快速获取首图，避免扫描整个压缩包
-pub fn scan_archive_images_fast(
-    archive_path: &Path,
-    limit: usize,
-) -> Result<Vec<String>, String> {
-    println!(
+pub fn scan_archive_images_fast(archive_path: &Path, limit: usize) -> Result<Vec<String>, String> {
+    log::info!(
         "⚡ scan_archive_images_fast start: {} limit={}",
         archive_path.display(),
         limit
@@ -262,63 +257,40 @@ pub fn scan_archive_images_fast(
     let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
     let mut images = Vec::new();
-    let scan_limit = limit.min(archive.len()); // 限制扫描数量
+    let total_entries = archive.len();
 
-    // 优先查找常见的图片命名模式
-    let priority_patterns = [
-        "cover", "front", "title", "page-001", "page_001", "001", "vol", "chapter", "ch",
-        "p001", "p_001", "img",
-    ];
+    // 扫描所有条目直到找到足够的图片
+    for i in 0..total_entries {
+        if images.len() >= limit {
+            break;
+        }
 
-    // 先按优先级查找
-    for i in 0..scan_limit {
         let entry = archive
             .by_index(i)
             .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-
-        let name = entry.name().to_string();
-        let name_lower = name.to_lowercase();
 
         if entry.is_dir() {
             continue;
         }
 
-        if !is_image_file(&name) {
-            continue;
-        }
-
-        for pattern in &priority_patterns {
-            if name_lower.contains(pattern) {
-                images.push(name.clone());
-                println!("⚡ 快速扫描找到优先图片: {}", name);
-                return Ok(images);
-            }
-        }
-    }
-
-    // 如果没找到优先图片，扫描前limit个文件
-    for i in 0..scan_limit {
-        let entry = archive
-            .by_index(i)
-            .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-
         let name = entry.name().to_string();
-
-        if entry.is_dir() {
-            continue;
-        }
 
         if is_image_file(&name) {
-            images.push(name.clone());
-            println!("⚡ 快速扫描找到图片: {}", name);
-            return Ok(images);
+            images.push(name);
         }
     }
 
+    log::info!(
+        "⚡ scan_archive_images_fast 找到 {} 张图片 (limit={})",
+        images.len(),
+        limit
+    );
+
     if images.is_empty() {
-        println!("⚡ 压缩包内未找到图片");
         Err("压缩包内未找到图片".to_string())
     } else {
+        // 按自然排序
+        images.sort_by(|a, b| natural_sort_rs::natural_cmp::<str, _>(a, b));
         Ok(images)
     }
 }
@@ -365,7 +337,8 @@ pub fn get_first_image_blob(
     blob_registry: &Arc<BlobRegistry>,
     archive_path: &Path,
 ) -> Result<String, String> {
-    let (blob_url, _) = get_first_image_blob_or_scan(archive_cache, index_cache, blob_registry, archive_path)?;
+    let (blob_url, _) =
+        get_first_image_blob_or_scan(archive_cache, index_cache, blob_registry, archive_path)?;
     Ok(blob_url)
 }
 
@@ -394,7 +367,9 @@ pub fn get_first_image_bytes(
 // ============================================================================
 
 fn get_cached_image(
-    cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
+    cache: &Arc<
+        std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>,
+    >,
     key: &str,
 ) -> Option<Vec<u8>> {
     if let Ok(mut cache) = cache.lock() {
@@ -407,12 +382,14 @@ fn get_cached_image(
 }
 
 fn store_cached_image(
-    cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
+    cache: &Arc<
+        std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>,
+    >,
     key: String,
     data: Vec<u8>,
 ) {
     use super::types::IMAGE_CACHE_LIMIT;
-    
+
     if let Ok(mut cache) = cache.lock() {
         cache.insert(
             key,

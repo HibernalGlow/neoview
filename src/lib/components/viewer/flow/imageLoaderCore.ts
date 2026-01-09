@@ -37,8 +37,6 @@ export interface ImageLoaderCoreOptions {
 	maxCacheSizeMB?: number;
 	onImageReady?: (pageIndex: number, url: string, blob: Blob) => void;
 	onDimensionsReady?: (pageIndex: number, dimensions: { width: number; height: number } | null) => void;
-	/** 【新增】当 ImageBitmap 预解码完成时调用 */
-	onBitmapReady?: (pageIndex: number) => void;
 	onError?: (pageIndex: number, error: Error) => void;
 }
 
@@ -313,23 +311,12 @@ export class ImageLoaderCore {
 	}
 
 	/**
-	 * 设置 Bitmap 就绪回调
-	 */
-	setOnBitmapReady(callback: (pageIndex: number) => void): void {
-		this.options.onBitmapReady = callback;
-	}
-
-	/**
 	 * 【性能优化】调度 ImageBitmap 预解码
 	 * 预解码后可直接绘制到 Canvas，避免渲染时阻塞
 	 */
 	private async schedulePreDecode(pageIndex: number): Promise<void> {
 		// 检查是否已有 bitmap
-		if (this.blobCache.getBitmap(pageIndex)) {
-			// 如果已有，也触发次回调以防监听者丢失
-			this.options.onBitmapReady?.(pageIndex);
-			return;
-		}
+		if (this.blobCache.getBitmap(pageIndex)) return;
 		
 		const blob = this.blobCache.getBlob(pageIndex);
 		if (!blob) return;
@@ -341,7 +328,6 @@ export class ImageLoaderCore {
 				// setBitmap 会同时更新尺寸
 				const dimensions = { width: bitmap.width, height: bitmap.height };
 				this.options.onDimensionsReady?.(pageIndex, dimensions);
-				this.options.onBitmapReady?.(pageIndex);
 			} else {
 				// 实例已失效或页面已被清除
 				bitmap.close();

@@ -36,6 +36,92 @@ pub async fn pm_open_book(
     manager.open_book(&path).await
 }
 
+/// 快速打开书籍（首屏优化）
+///
+/// 先返回前 N 页，后台继续扫描
+/// 扫描完成后通过 `book-pages-ready` 事件推送完整页面列表
+#[tauri::command]
+pub async fn pm_open_book_quick(
+    path: String,
+    quick_limit: Option<usize>,
+    app: AppHandle,
+    state: State<'_, PageManagerState>,
+) -> Result<QuickOpenResult, String> {
+    let limit = quick_limit.unwrap_or(10);
+    log::info!("📖 [PageCommand] open_book_quick: {} limit={}", path, limit);
+
+    let (info, needs_scan) = {
+        let mut manager = state.manager.lock().await;
+        manager.open_book_quick(&path, limit).await?
+    };
+
+    // 如果需要后台扫描，启动异步任务
+    if needs_scan {
+        let path_clone = path.clone();
+        let state_clone = state.inner().manager.clone();
+        let app_clone = app.clone();
+
+        tokio::spawn(async move {
+            log::info!("📖 [PageCommand] 开始后台扫描: {}", path_clone);
+
+            // 执行完整扫描
+            let all_pages = {
+                let manager = state_clone.lock().await;
+                manager.scan_archive_full(&path_clone)
+            };
+
+            match all_pages {
+                Ok(pages) => {
+                    let total = pages.len();
+                    // 更新 PageContentManager
+                    {
+                        let mut manager = state_clone.lock().await;
+                        if let Err(e) = manager.update_book_pages(&path_clone, pages) {
+                            log::error!("📖 [PageCommand] 更新页面列表失败: {}", e);
+                            return;
+                        }
+                    }
+
+                    // 发送事件通知前端
+                    let event = BookPagesReadyEvent {
+                        path: path_clone.clone(),
+                        total_pages: total,
+                    };
+                    if let Err(e) = app_clone.emit("book-pages-ready", &event) {
+                        log::error!("📖 [PageCommand] 发送事件失败: {}", e);
+                    } else {
+                        log::info!("📖 [PageCommand] 后台扫描完成: {} 页", total);
+                    }
+                }
+                Err(e) => {
+                    log::error!("📖 [PageCommand] 后台扫描失败: {}", e);
+                }
+            }
+        });
+    }
+
+    Ok(QuickOpenResult {
+        info,
+        is_partial: needs_scan,
+    })
+}
+
+/// 快速打开结果
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickOpenResult {
+    pub info: BookInfo,
+    pub is_partial: bool,
+}
+
+/// 页面列表就绪事件
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BookPagesReadyEvent {
+    pub path: String,
+    pub total_pages: usize,
+}
+
 /// 关闭书籍
 #[tauri::command]
 pub async fn pm_close_book(state: State<'_, PageManagerState>) -> Result<(), String> {

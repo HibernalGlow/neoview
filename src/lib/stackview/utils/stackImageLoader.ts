@@ -14,6 +14,7 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 import { preDecodeCache } from '../stores/preDecodeCache.svelte';
 import { renderQueue } from '../stores/renderQueue';
+import { bitmapAvailabilityStore } from '../stores/bitmapAvailabilityStore.svelte';
 
 // ============================================================================
 // 类型定义
@@ -64,6 +65,10 @@ export class StackImageLoader {
           this.dimensionsCache.set(pageIndex, dimensions);
         }
       });
+      // 【新增】注册 Bitmap 就绪回调
+      core.setOnBitmapReady((pageIndex) => {
+        bitmapAvailabilityStore.markReady(pageIndex);
+      });
       this.dimensionsCallbackRegistered = true;
     }
     
@@ -87,6 +92,7 @@ export class StackImageLoader {
       this.dimensionsCallbackRegistered = false;
       // 【翻页优化】清空预解码缓存
       preDecodeCache.setCurrentBook(bookPath);
+      bitmapAvailabilityStore.setCurrentBook(bookPath);
     }
   }
 
@@ -281,6 +287,13 @@ export class StackImageLoader {
   }
 
   /**
+   * 获取缓存的 ImageBitmap
+   */
+  getCachedBitmap(pageIndex: number): ImageBitmap | undefined {
+    return this.core.getCachedBitmap(pageIndex);
+  }
+
+  /**
    * 获取缓存的背景色
    */
   getCachedBackgroundColor(pageIndex: number): string | undefined {
@@ -440,6 +453,7 @@ export class StackImageLoader {
     this.precomputedScaleCache.clear();
     // 【翻页优化】清空预解码缓存
     preDecodeCache.clear();
+    bitmapAvailabilityStore.clear();
     renderQueue.cancelAll();
   }
 }

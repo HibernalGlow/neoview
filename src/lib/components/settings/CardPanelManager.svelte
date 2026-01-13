@@ -240,14 +240,14 @@
 							</Table.Cell>
 							<Table.Cell>
 								<div
-									class="bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-								>
-									{#if cardDef?.icon}
-										<svelte:component this={cardDef.icon} class="h-4 w-4" />
-									{:else}
-										<LayoutGrid class="h-4 w-4" />
-									{/if}
-								</div>
+								class="bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
+							>
+								{#if cardDef?.icon}
+									<svelte:component this={cardDef.icon} class="h-4.5 w-4.5" />
+								{:else}
+									<LayoutGrid class="h-4.5 w-4.5" />
+								{/if}
+							</div>
 							</Table.Cell>
 							<Table.Cell>
 								<div class="flex min-w-0 flex-col">

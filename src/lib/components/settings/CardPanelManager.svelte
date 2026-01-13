@@ -93,48 +93,85 @@
 		return counts;
 	});
 
-	// 拖拽状态
-	let draggedCardId = $state<string | null>(null);
+	// 拖拽状态变量已重构为 dragId
 	let dropTargetCardId = $state<string | null>(null);
 
-	// 拖拽处理函数 (Native DnD)
-	function handleDragStart(event: DragEvent, card: CardConfig) {
-		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
-			event.dataTransfer.setData('text/plain', card.id);
-			draggedCardId = card.id;
-		}
+	// --- 自定义指针拖拽逻辑 (Pointer-based DnD) ---
+	let dragId = $state<string | null>(null);
+	let startY = $state(0);
+	let currentDeltaY = $state(0);
+	let dragIndex = $state(-1);
+
+	function handlePointerDown(event: PointerEvent, card: CardConfig, index: number) {
+		if (event.button !== 0) return;
+		const target = event.target as HTMLElement;
+		if (target.closest('button') || target.closest('a')) return;
+
+		console.log('Pointer down for card drag:', card.id);
+		dragId = card.id;
+		startY = event.clientY;
+		currentDeltaY = 0;
+		dragIndex = index;
+		dropTargetCardId = null;
+
+		const row = event.currentTarget as HTMLElement;
+		row.setPointerCapture(event.pointerId);
 	}
 
-	function handleDragOver(event: DragEvent, card: CardConfig) {
-		event.preventDefault();
-		if (event.dataTransfer) {
-			event.dataTransfer.dropEffect = 'move';
-		}
-		if (draggedCardId && draggedCardId !== card.id) {
-			dropTargetCardId = card.id;
-		}
-	}
+	function handlePointerMove(event: PointerEvent) {
+		if (!dragId) return;
+		currentDeltaY = event.clientY - startY;
 
-	function handleDrop(event: DragEvent, targetCard: CardConfig) {
-		event.preventDefault();
-		const sourceId = event.dataTransfer?.getData('text/plain');
+		// 极其稳健的落点检测：直接查找鼠标下的行元素
+		const element = document.elementFromPoint(event.clientX, event.clientY);
+		const row = element?.closest('[data-drag-id]') as HTMLElement;
 		
-		if (sourceId && sourceId !== targetCard.id) {
-			const sourceCard = filteredCards.find(c => c.id === sourceId);
-			if (sourceCard && sourceCard.panelId === targetCard.panelId) {
-				const targetIndex = filteredCards.findIndex(c => c.id === targetCard.id);
-				cardConfigStore.moveCard(sourceCard.panelId, sourceId, targetIndex);
+		if (row && row.dataset.dragId && row.dataset.dragId !== dragId) {
+			const targetId = row.dataset.dragId;
+			const targetCard = filteredCards.find(c => c.id === targetId);
+			
+			// 仅在同一个面板内支持拖拽预览
+			if (targetCard && targetCard.panelId === filteredCards[dragIndex].panelId) {
+				dropTargetCardId = targetId;
+			} else {
+				dropTargetCardId = null;
+			}
+		} else {
+			dropTargetCardId = null;
+		}
+	}
+
+	function handlePointerUp(event: PointerEvent) {
+		if (!dragId) return;
+
+		const sourceId = dragId;
+		const cards = filteredCards;
+		
+		if (dropTargetCardId && dropTargetCardId !== sourceId) {
+			const sourceCard = cards.find(c => c.id === sourceId);
+			const targetCard = cards.find(c => c.id === dropTargetCardId);
+			
+			if (sourceCard && targetCard && sourceCard.panelId === targetCard.panelId) {
+				// 获取目标面板内的所有卡片，找到目标卡片的实际排序索引
+				const panelCards = cardConfigStore.getPanelCards(sourceCard.panelId);
+				const targetIdx = panelCards.findIndex(c => c.id === dropTargetCardId);
+				if (targetIdx !== -1) {
+					cardConfigStore.moveCard(sourceCard.panelId, sourceId, targetIdx);
+				}
 			}
 		}
-		
-		handleDragEnd();
-	}
 
-	function handleDragEnd() {
-		draggedCardId = null;
+		dragId = null;
 		dropTargetCardId = null;
+		currentDeltaY = 0;
+		dragIndex = -1;
+		
+		const row = event.currentTarget as HTMLElement;
+		if (row && row.releasePointerCapture) {
+			row.releasePointerCapture(event.pointerId);
+		}
 	}
+	// --- 代码清理：移除原生 DnD 函数 ---
 
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
@@ -307,16 +344,17 @@
 						</Table.Row>
 					{/if}
 					<Table.Row
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, card)}
-						ondragover={(e) => handleDragOver(e, card)}
-						ondrop={(e) => handleDrop(e, card)}
-						ondragend={handleDragEnd}
+						onpointerdown={(e) => handlePointerDown(e, card, index)}
+						onpointermove={handlePointerMove}
+						onpointerup={handlePointerUp}
+						onpointercancel={handlePointerUp}
+						data-drag-id={card.id}
 						class={cn(
-							'group transition-colors',
-							draggedCardId === card.id && 'opacity-40 bg-muted/30 grayscale',
-							dropTargetCardId === card.id && draggedCardId !== card.id && 'bg-primary/10 ring-2 ring-primary/50'
+							'group transition-all duration-200 select-none touch-none',
+							dragId === card.id && 'z-50 shadow-xl ring-2 ring-primary/50 bg-accent relative translate-y-0 opacity-90 scale-[1.02] pointer-events-none',
+							dropTargetCardId === card.id && dragId !== card.id && 'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
 						)}
+						style={dragId === card.id ? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;` : ''}
 					>
 						<Table.Cell class="px-2">
 							<div

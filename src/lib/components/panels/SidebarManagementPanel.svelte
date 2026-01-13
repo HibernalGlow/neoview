@@ -98,55 +98,103 @@
 	let rightPanels = $derived($sidebarRightPanels);
 	let hiddenPanels = $derived($sidebarHiddenPanels);
 
-	// 拖拽状态
-	let draggedPanelId = $state<string | null>(null);
+	// --- 自定义指针拖拽逻辑 (Pointer-based DnD) ---
+	let dragId = $state<string | null>(null);
 	let dropTargetPanelId = $state<string | null>(null);
+	let startY = $state(0);
+	let currentDeltaY = $state(0);
+	let dragIndex = $state(-1); // 拖拽行在当前 filteredPanelsForGroup 中的索引
 
-	// 拖拽处理函数 (Native DnD)
-	function handleDragStart(event: DragEvent, panel: PanelConfig) {
-		if (event.dataTransfer) {
-			event.dataTransfer.effectAllowed = 'move';
-			event.dataTransfer.setData('text/plain', panel.id);
-			draggedPanelId = panel.id;
-		}
+	function handlePointerDown(event: PointerEvent, panel: PanelConfig, index: number) {
+		// 仅允许主键点击（左键）
+		if (event.button !== 0) return;
+		
+		// 如果点击的是按钮或其他交互元素，不触发拖拽
+		const target = event.target as HTMLElement;
+		if (target.closest('button') || target.closest('a')) return;
+
+		console.log('Pointer down for drag:', panel.id);
+		
+		dragId = panel.id;
+		startY = event.clientY;
+		currentDeltaY = 0;
+		dragIndex = index;
+		dropTargetPanelId = null;
+
+		// 捕获指针，确保移出元素后依然能接收 move 事件
+		const row = event.currentTarget as HTMLElement;
+		row.setPointerCapture(event.pointerId);
 	}
 
-	function handleDragOver(event: DragEvent, panel: PanelConfig) {
-		event.preventDefault(); // 允许放置
-		if (event.dataTransfer) {
-			event.dataTransfer.dropEffect = 'move';
-		}
-		
-		if (draggedPanelId && draggedPanelId !== panel.id) {
-			dropTargetPanelId = panel.id;
-		}
-	}
+	function handlePointerMove(event: PointerEvent) {
+		if (!dragId) return;
+		currentDeltaY = event.clientY - startY;
 
-	function handleDrop(event: DragEvent, targetPanel: PanelConfig) {
-		event.preventDefault();
-		const sourceId = event.dataTransfer?.getData('text/plain');
+		// 极其稳健的落点检测：直接查找鼠标下的行元素
+		const element = document.elementFromPoint(event.clientX, event.clientY);
+		const row = element?.closest('[data-drag-id]') as HTMLElement;
 		
-		if (sourceId && sourceId !== targetPanel.id) {
-			const panels = panelsBySide[activeLayoutGroup] || [];
-			const sourcePanel = panels.find(p => p.id === sourceId);
+		if (row && row.dataset.dragId && row.dataset.dragId !== dragId) {
+			const targetId = row.dataset.dragId;
+			const targetPanel = filteredPanelsForGroup.find(p => p.id === targetId);
 			
-			if (sourcePanel) {
-				// 交换顺序
-				const sourceOrder = sourcePanel.order;
-				const targetOrder = targetPanel.order;
-				sidebarConfigStore.setPanelOrder(sourceId, targetOrder);
-				sidebarConfigStore.setPanelOrder(targetPanel.id, sourceOrder);
+			// 仅在同侧内预览（跨侧拖拽通过勋章或下拉菜单处理，此处仅处理排序）
+			if (targetPanel && targetPanel.side === filteredPanelsForGroup[dragIndex].side) {
+				dropTargetPanelId = targetId;
+			} else {
+				dropTargetPanelId = null;
+			}
+		} else {
+			dropTargetPanelId = null;
+		}
+	}
+
+	function handlePointerUp(event: PointerEvent) {
+		if (!dragId) return;
+
+		const sourceId = dragId;
+		const panels = filteredPanelsForGroup;
+		
+		if (dropTargetPanelId && dropTargetPanelId !== sourceId) {
+			const sourceIdx = panels.findIndex(p => p.id === sourceId);
+			const targetIdx = panels.findIndex(p => p.id === dropTargetPanelId);
+			
+			if (sourceIdx !== -1 && targetIdx !== -1) {
+				const sourcePanel = panels[sourceIdx];
+				const targetPanel = panels[targetIdx];
+				
+				if (sourcePanel.side === targetPanel.side) {
+					// 采用“插入”逻辑而非“交换”逻辑，确保排序自然
+					// 计算该侧所有面板的新顺序
+					const sidePanels = [...panels.filter(p => p.side === sourcePanel.side)];
+					const sIdx = sidePanels.findIndex(p => p.id === sourceId);
+					const tIdx = sidePanels.findIndex(p => p.id === dropTargetPanelId);
+					
+					if (sIdx !== -1 && tIdx !== -1) {
+						const result = [...sidePanels];
+						const [removed] = result.splice(sIdx, 1);
+						result.splice(tIdx, 0, removed);
+						
+						// 批量更新顺序
+						result.forEach((p, i) => {
+							sidebarConfigStore.setPanelOrder(p.id as PanelId, i);
+						});
+					}
+				}
 			}
 		}
-		
-		draggedPanelId = null;
-		dropTargetPanelId = null;
-	}
 
-	function handleDragEnd() {
-		draggedPanelId = null;
+		dragId = null;
 		dropTargetPanelId = null;
+		currentDeltaY = 0;
+		dragIndex = -1;
+		
+		const row = event.currentTarget as HTMLElement;
+		if (row && row.releasePointerCapture) {
+			row.releasePointerCapture(event.pointerId);
+		}
 	}
+	// --- 代码清理：移除原生 DnD 函数 ---
 
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
@@ -448,16 +496,17 @@
 								</Table.Row>
 							{/if}
 							<Table.Row
-								draggable="true"
-								ondragstart={(e) => handleDragStart(e, panel)}
-								ondragover={(e) => handleDragOver(e, panel)}
-								ondrop={(e) => handleDrop(e, panel)}
-								ondragend={handleDragEnd}
+								onpointerdown={(e) => handlePointerDown(e, panel, index)}
+								onpointermove={handlePointerMove}
+								onpointerup={handlePointerUp}
+								onpointercancel={handlePointerUp}
+								data-drag-id={panel.id}
 								class={cn(
-									'group transition-colors',
-									draggedPanelId === panel.id && 'opacity-40 bg-muted/30 grayscale',
-									dropTargetPanelId === panel.id && draggedPanelId !== panel.id && 'bg-primary/10 ring-2 ring-primary/50'
+									'group transition-all duration-200 select-none touch-none',
+									dragId === panel.id && 'z-50 shadow-xl ring-2 ring-primary/50 bg-accent relative translate-y-0 opacity-90 scale-[1.02] pointer-events-none',
+									dropTargetPanelId === panel.id && dragId !== panel.id && 'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
 								)}
+								style={dragId === panel.id ? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;` : ''}
 							>
 								<Table.Cell class="px-2">
 									<div

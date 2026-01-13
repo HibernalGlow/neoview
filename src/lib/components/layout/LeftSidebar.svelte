@@ -5,7 +5,7 @@
 	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical, GripHorizontal, Move, CornerRightDown } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical, GripHorizontal, MousePointer2, ArrowDownRight } from '@lucide/svelte';
 	import { readable } from 'svelte/store';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
@@ -335,7 +335,7 @@
 										onpointercancel={handleDragEnd}
 										title="拖拽移动侧边栏"
 									>
-										<Move class="h-4 w-4" />
+										<MousePointer2 class="h-4 w-4" />
 									</button>
 								{/if}
 							</div>
@@ -408,18 +408,20 @@
 				</button>
 
 				<!-- 边角缩放手柄 (右下角) -->
-				<button
-					type="button"
-					class="absolute bottom-0 right-0 z-[60] p-1 cursor-nwse-resize text-muted-foreground/30 hover:text-primary transition-colors
-						{isCornerResizing ? 'text-primary' : ''}"
-					onpointerdown={handleCornerResizeStart}
-					onpointermove={handleCornerResizeMove}
-					onpointerup={handleCornerResizeEnd}
-					onpointercancel={handleCornerResizeEnd}
-					aria-label="同时调整侧边栏宽高"
-				>
-					<CornerRightDown class="h-4 w-4" />
-				</button>
+				{#if $leftSidebarHeight !== 'full'}
+					<button
+						type="button"
+						class="absolute bottom-0 right-0 z-[60] p-1 cursor-nwse-resize text-muted-foreground/30 hover:text-primary transition-colors
+							{isCornerResizing ? 'text-primary' : ''}"
+						onpointerdown={handleCornerResizeStart}
+						onpointermove={handleCornerResizeMove}
+						onpointerup={handleCornerResizeEnd}
+						onpointercancel={handleCornerResizeEnd}
+						aria-label="同时调整侧边栏宽高"
+					>
+						<ArrowDownRight class="h-4 w-4" />
+					</button>
+				{/if}
 			</Sidebar.Root>
 		</Sidebar.Provider>
 	</div>

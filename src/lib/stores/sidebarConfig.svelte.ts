@@ -238,9 +238,11 @@ export interface SidebarConfigState {
 	leftSidebarHeight: SidebarHeightPreset;
 	leftSidebarCustomHeight: number; // 自定义高度百分比 (10-100)
 	leftSidebarVerticalAlign: SidebarVerticalAlign;
+	leftSidebarHorizontalPos: number; // X轴位置 0-100 (0=贴边, 100=中心)
 	rightSidebarHeight: SidebarHeightPreset;
 	rightSidebarCustomHeight: number;
 	rightSidebarVerticalAlign: SidebarVerticalAlign;
+	rightSidebarHorizontalPos: number; // X轴位置 0-100 (0=贴边, 100=中心)
 }
 
 // 从 PANEL_DEFINITIONS 自动生成默认面板配置
@@ -272,9 +274,11 @@ const initialState: SidebarConfigState = {
 	leftSidebarHeight: 'full',
 	leftSidebarCustomHeight: 100,
 	leftSidebarVerticalAlign: 0,
+	leftSidebarHorizontalPos: 0,
 	rightSidebarHeight: 'full',
 	rightSidebarCustomHeight: 100,
-	rightSidebarVerticalAlign: 0
+	rightSidebarVerticalAlign: 0,
+	rightSidebarHorizontalPos: 0
 };
 
 // 从 localStorage 加载配置
@@ -472,6 +476,16 @@ function createSidebarConfigStore() {
 			update(state => ({ ...state, rightSidebarVerticalAlign: align }));
 		},
 
+		setLeftSidebarHorizontalPos(pos: number) {
+			const clampedPos = Math.max(0, Math.min(100, pos));
+			update(state => ({ ...state, leftSidebarHorizontalPos: clampedPos }));
+		},
+
+		setRightSidebarHorizontalPos(pos: number) {
+			const clampedPos = Math.max(0, Math.min(100, pos));
+			update(state => ({ ...state, rightSidebarHorizontalPos: clampedPos }));
+		},
+
 		// 切换侧边栏
 		toggleLeftSidebar() {
 			update(state => ({ ...state, leftSidebarOpen: !state.leftSidebarOpen }));
@@ -592,9 +606,11 @@ export const sidebarHiddenPanels = derived(sidebarConfigStore, $state =>
 export const leftSidebarHeight = derived(sidebarConfigStore, $state => $state.leftSidebarHeight);
 export const leftSidebarCustomHeight = derived(sidebarConfigStore, $state => $state.leftSidebarCustomHeight);
 export const leftSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.leftSidebarVerticalAlign);
+export const leftSidebarHorizontalPos = derived(sidebarConfigStore, $state => $state.leftSidebarHorizontalPos);
 export const rightSidebarHeight = derived(sidebarConfigStore, $state => $state.rightSidebarHeight);
 export const rightSidebarCustomHeight = derived(sidebarConfigStore, $state => $state.rightSidebarCustomHeight);
 export const rightSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.rightSidebarVerticalAlign);
+export const rightSidebarHorizontalPos = derived(sidebarConfigStore, $state => $state.rightSidebarHorizontalPos);
 
 // 高度预设到百分比的映射
 export const SIDEBAR_HEIGHT_PRESETS: Record<SidebarHeightPreset, number> = {

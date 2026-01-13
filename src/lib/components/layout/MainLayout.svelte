@@ -19,9 +19,11 @@
 		leftSidebarHeight,
 		leftSidebarCustomHeight,
 		leftSidebarVerticalAlign,
+		leftSidebarHorizontalPos,
 		rightSidebarHeight,
 		rightSidebarCustomHeight,
 		rightSidebarVerticalAlign,
+		rightSidebarHorizontalPos,
 		getSidebarHeightPercent,
 		getVerticalAlignStyle
 	} from '$lib/stores';
@@ -44,12 +46,16 @@
 	let leftVerticalStyle = $derived(getVerticalAlignStyle($leftSidebarVerticalAlign, leftHeightPercent));
 	let leftHeightStyle = $derived(`height: ${leftHeightPercent}%;`);
 	let leftWidth = $derived($leftSidebarOpen ? $leftSidebarWidth : (hoverAreas?.leftTriggerWidth ?? 32));
+	// X轴位置: 0=贴左边, 100=居中(对于左侧边栏)
+	let leftXOffset = $derived($leftSidebarHorizontalPos > 0 ? `left: ${$leftSidebarHorizontalPos * 0.5}%;` : 'left: 0;');
 
 	// 计算右侧边栏高度和对齐样式
 	let rightHeightPercent = $derived(getSidebarHeightPercent($rightSidebarHeight, $rightSidebarCustomHeight));
 	let rightVerticalStyle = $derived(getVerticalAlignStyle($rightSidebarVerticalAlign, rightHeightPercent));
 	let rightHeightStyle = $derived(`height: ${rightHeightPercent}%;`);
 	let rightWidth = $derived($rightSidebarOpen ? $rightSidebarWidth : (hoverAreas?.rightTriggerWidth ?? 32));
+	// X轴位置: 0=贴右边, 100=居中(对于右侧边栏)
+	let rightXOffset = $derived($rightSidebarHorizontalPos > 0 ? `right: ${$rightSidebarHorizontalPos * 0.5}%;` : 'right: 0;');
 
 	// 调试日志
 	$effect(() => {
@@ -182,20 +188,20 @@
 	<!-- 自动隐藏底部缩略图栏 -->
 	<BottomThumbnailBar />
 
-	<!-- 左侧边栏（悬浮，始终可用） -->
+	<!-- 左侧边栏（悬浮，支持自由移动） -->
 	<div
-		class="absolute left-0 z-[55] pointer-events-none"
-		style="{leftVerticalStyle} {leftHeightStyle} width: {leftWidth}px;"
+		class="absolute z-[55] pointer-events-none"
+		style="{leftXOffset} {leftVerticalStyle} {leftHeightStyle} width: {leftWidth}px;"
 	>
 		<div class="pointer-events-auto h-full w-full">
 			<LeftSidebar onResize={handleSidebarResize} />
 		</div>
 	</div>
 
-	<!-- 右侧边栏（悬浮，始终可用） -->
+	<!-- 右侧边栏（悬浮，支持自由移动） -->
 	<div
-		class="absolute right-0 z-[55] pointer-events-none"
-		style="{rightVerticalStyle} {rightHeightStyle} width: {rightWidth}px;"
+		class="absolute z-[55] pointer-events-none"
+		style="{rightXOffset} {rightVerticalStyle} {rightHeightStyle} width: {rightWidth}px;"
 	>
 		<div class="pointer-events-auto h-full w-full">
 			<RightSidebar onResize={handleRightSidebarResize} />

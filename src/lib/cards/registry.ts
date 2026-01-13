@@ -231,6 +231,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'info',
 		canHide: true,
 	},
+	'sidebarHeight': {
+		id: 'sidebarHeight',
+		title: '侧边栏高度',
+		icon: PanelLeft,
+		defaultPanel: 'info',
+		canHide: true,
+	},
 
 	// ==================== Properties 面板卡片 ====================
 	'emmTags': {

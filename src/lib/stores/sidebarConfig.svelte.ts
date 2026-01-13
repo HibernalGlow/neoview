@@ -13,6 +13,12 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
 
+// 侧边栏高度预设
+export type SidebarHeightPreset = 'full' | '2/3' | 'half' | '1/3' | 'custom';
+
+// 侧边栏垂直对齐
+export type SidebarVerticalAlign = 'top' | 'center' | 'bottom';
+
 /**
  * 面板定义 - 添加新面板只需在这里添加一条记录
  * 系统会自动处理类型、图标、emoji、默认配置等
@@ -228,6 +234,13 @@ export interface SidebarConfigState {
 	rightSidebarPinned: boolean;
 	leftSidebarOpen: boolean;
 	rightSidebarOpen: boolean;
+	// 侧边栏高度配置
+	leftSidebarHeight: SidebarHeightPreset;
+	leftSidebarCustomHeight: number; // 自定义高度百分比 (10-100)
+	leftSidebarVerticalAlign: SidebarVerticalAlign;
+	rightSidebarHeight: SidebarHeightPreset;
+	rightSidebarCustomHeight: number;
+	rightSidebarVerticalAlign: SidebarVerticalAlign;
 }
 
 // 从 PANEL_DEFINITIONS 自动生成默认面板配置
@@ -254,7 +267,14 @@ const initialState: SidebarConfigState = {
 	leftSidebarPinned: true,
 	rightSidebarPinned: false,
 	leftSidebarOpen: true,
-	rightSidebarOpen: false
+	rightSidebarOpen: false,
+	// 高度配置默认值
+	leftSidebarHeight: 'full',
+	leftSidebarCustomHeight: 100,
+	leftSidebarVerticalAlign: 'top',
+	rightSidebarHeight: 'full',
+	rightSidebarCustomHeight: 100,
+	rightSidebarVerticalAlign: 'top'
 };
 
 // 从 localStorage 加载配置
@@ -304,7 +324,14 @@ function saveToStorage(state: SidebarConfigState) {
 			leftSidebarPinned: state.leftSidebarPinned,
 			rightSidebarPinned: state.rightSidebarPinned,
 			leftSidebarOpen: state.leftSidebarOpen,
-			rightSidebarOpen: state.rightSidebarOpen
+			rightSidebarOpen: state.rightSidebarOpen,
+			// 高度配置
+			leftSidebarHeight: state.leftSidebarHeight,
+			leftSidebarCustomHeight: state.leftSidebarCustomHeight,
+			leftSidebarVerticalAlign: state.leftSidebarVerticalAlign,
+			rightSidebarHeight: state.rightSidebarHeight,
+			rightSidebarCustomHeight: state.rightSidebarCustomHeight,
+			rightSidebarVerticalAlign: state.rightSidebarVerticalAlign
 		};
 		localStorage.setItem('neoview-sidebar-config', JSON.stringify(toSave));
 	} catch (e) {
@@ -416,6 +443,33 @@ function createSidebarConfigStore() {
 
 		setRightSidebarOpen(open: boolean) {
 			update(state => ({ ...state, rightSidebarOpen: open }));
+		},
+
+		// 设置侧边栏高度
+		setLeftSidebarHeight(height: SidebarHeightPreset) {
+			update(state => ({ ...state, leftSidebarHeight: height }));
+		},
+
+		setRightSidebarHeight(height: SidebarHeightPreset) {
+			update(state => ({ ...state, rightSidebarHeight: height }));
+		},
+
+		setLeftSidebarCustomHeight(height: number) {
+			const clampedHeight = Math.max(10, Math.min(100, height));
+			update(state => ({ ...state, leftSidebarCustomHeight: clampedHeight }));
+		},
+
+		setRightSidebarCustomHeight(height: number) {
+			const clampedHeight = Math.max(10, Math.min(100, height));
+			update(state => ({ ...state, rightSidebarCustomHeight: clampedHeight }));
+		},
+
+		setLeftSidebarVerticalAlign(align: SidebarVerticalAlign) {
+			update(state => ({ ...state, leftSidebarVerticalAlign: align }));
+		},
+
+		setRightSidebarVerticalAlign(align: SidebarVerticalAlign) {
+			update(state => ({ ...state, rightSidebarVerticalAlign: align }));
 		},
 
 		// 切换侧边栏
@@ -533,3 +587,41 @@ export const sidebarHiddenPanels = derived(sidebarConfigStore, $state =>
 		.filter(p => !p.visible)
 		.sort((a, b) => a.order - b.order)
 );
+
+// 高度配置派生 stores
+export const leftSidebarHeight = derived(sidebarConfigStore, $state => $state.leftSidebarHeight);
+export const leftSidebarCustomHeight = derived(sidebarConfigStore, $state => $state.leftSidebarCustomHeight);
+export const leftSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.leftSidebarVerticalAlign);
+export const rightSidebarHeight = derived(sidebarConfigStore, $state => $state.rightSidebarHeight);
+export const rightSidebarCustomHeight = derived(sidebarConfigStore, $state => $state.rightSidebarCustomHeight);
+export const rightSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.rightSidebarVerticalAlign);
+
+// 高度预设到百分比的映射
+export const SIDEBAR_HEIGHT_PRESETS: Record<SidebarHeightPreset, number> = {
+	'full': 100,
+	'2/3': 66.67,
+	'half': 50,
+	'1/3': 33.33,
+	'custom': 100 // 自定义时使用 customHeight 值
+};
+
+// 获取实际高度百分比
+export function getSidebarHeightPercent(preset: SidebarHeightPreset, customHeight: number): number {
+	return preset === 'custom' ? customHeight : SIDEBAR_HEIGHT_PRESETS[preset];
+}
+
+// 获取垂直对齐样式
+export function getVerticalAlignStyle(align: SidebarVerticalAlign, heightPercent: number): string {
+	if (heightPercent >= 100) return 'top: 0; bottom: 0;';
+	
+	switch (align) {
+		case 'top':
+			return 'top: 0;';
+		case 'bottom':
+			return 'bottom: 0;';
+		case 'center':
+			return `top: ${(100 - heightPercent) / 2}%;`;
+		default:
+			return 'top: 0;';
+	}
+}

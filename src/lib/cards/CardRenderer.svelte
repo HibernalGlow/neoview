@@ -40,6 +40,7 @@
 		pageTransition: () => import('./info/PageTransitionCard.svelte'),
 		ambientBackground: () => import('./info/AmbientBackgroundCard.svelte'),
 		preloadStatus: () => import('./info/PreloadStatusCard.svelte'),
+		sidebarHeight: () => import('./info/SidebarHeightCard.svelte'),
 		// Properties
 		emmTags: () => import('./properties/EmmTagsCard.svelte'),
 		aiTags: () => import('./properties/AiTagsCard.svelte'),

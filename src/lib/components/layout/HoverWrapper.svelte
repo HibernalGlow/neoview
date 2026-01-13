@@ -178,7 +178,7 @@
 
 <div
 	bind:this={wrapperContainer}
-	class="relative flex h-full"
+	class="relative flex h-full w-full"
 	data-hover-wrapper="true"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}

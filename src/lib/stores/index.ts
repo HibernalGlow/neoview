@@ -32,10 +32,22 @@ export {
 	sidebarHiddenPanels,
 	activePanel,
 	setActivePanelTab,
+	// 高度配置
+	leftSidebarHeight,
+	leftSidebarCustomHeight,
+	leftSidebarVerticalAlign,
+	rightSidebarHeight,
+	rightSidebarCustomHeight,
+	rightSidebarVerticalAlign,
+	SIDEBAR_HEIGHT_PRESETS,
+	getSidebarHeightPercent,
+	getVerticalAlignStyle,
 	type PanelId,
 	type PanelPosition,
 	type PanelConfig,
-	type SidebarConfigState
+	type SidebarConfigState,
+	type SidebarHeightPreset,
+	type SidebarVerticalAlign
 } from './sidebarConfig.svelte';
 
 // 兼容性别名

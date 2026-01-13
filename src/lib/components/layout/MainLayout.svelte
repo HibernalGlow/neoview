@@ -14,7 +14,16 @@
 		zoomOut,
 		sidebarLeftPanels,
 		sidebarRightPanels,
-		activePanel
+		activePanel,
+		// 高度配置
+		leftSidebarHeight,
+		leftSidebarCustomHeight,
+		leftSidebarVerticalAlign,
+		rightSidebarHeight,
+		rightSidebarCustomHeight,
+		rightSidebarVerticalAlign,
+		getSidebarHeightPercent,
+		getVerticalAlignStyle
 	} from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import LeftSidebar from './LeftSidebar.svelte';
@@ -29,6 +38,36 @@
 	let { children } = $props();
 	let settings = $state(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
+
+	// 计算左侧边栏高度和对齐样式
+	let leftHeightPercent = $derived(getSidebarHeightPercent($leftSidebarHeight, $leftSidebarCustomHeight));
+	let leftVerticalStyle = $derived(getVerticalAlignStyle($leftSidebarVerticalAlign, leftHeightPercent));
+	let leftHeightStyle = $derived(`height: ${leftHeightPercent}%;`);
+	let leftWidth = $derived($leftSidebarOpen ? $leftSidebarWidth : (hoverAreas?.leftTriggerWidth ?? 32));
+
+	// 计算右侧边栏高度和对齐样式
+	let rightHeightPercent = $derived(getSidebarHeightPercent($rightSidebarHeight, $rightSidebarCustomHeight));
+	let rightVerticalStyle = $derived(getVerticalAlignStyle($rightSidebarVerticalAlign, rightHeightPercent));
+	let rightHeightStyle = $derived(`height: ${rightHeightPercent}%;`);
+	let rightWidth = $derived($rightSidebarOpen ? $rightSidebarWidth : (hoverAreas?.rightTriggerWidth ?? 32));
+
+	// 调试日志
+	$effect(() => {
+		console.log('[MainLayout] Left:', {
+			preset: $leftSidebarHeight,
+			percent: leftHeightPercent,
+			width: leftWidth,
+			style: leftHeightStyle,
+			alignStyle: leftVerticalStyle
+		});
+		console.log('[MainLayout] Right:', {
+			preset: $rightSidebarHeight,
+			percent: rightHeightPercent,
+			width: rightWidth,
+			style: rightHeightStyle,
+			alignStyle: rightVerticalStyle
+		});
+	});
 
 	function handleSidebarResize(width: number) {
 		leftSidebarWidth.set(width);
@@ -145,26 +184,20 @@
 
 	<!-- 左侧边栏（悬浮，始终可用） -->
 	<div
-		class="absolute bottom-0 left-0 top-0 z-[55] {$leftSidebarOpen
-			? 'pointer-events-auto'
-			: 'pointer-events-none'}"
+		class="absolute left-0 z-[55] pointer-events-none"
+		style="{leftVerticalStyle} {leftHeightStyle} width: {leftWidth}px;"
 	>
-		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div
-			class="pointer-events-auto absolute bottom-0 left-0 top-0"
-			style={`width: ${hoverAreas?.leftTriggerWidth ?? 32}px;`}
-		>
+		<div class="pointer-events-auto h-full w-full">
 			<LeftSidebar onResize={handleSidebarResize} />
 		</div>
 	</div>
 
 	<!-- 右侧边栏（悬浮，始终可用） -->
-	<div class="pointer-events-none absolute bottom-0 right-0 top-0 z-[55]">
-		<!-- 只在图标栏区域（约48px宽）响应悬停 -->
-		<div
-			class="pointer-events-auto absolute bottom-0 right-0 top-0"
-			style={`width: ${hoverAreas?.rightTriggerWidth ?? 32}px;`}
-		>
+	<div
+		class="absolute right-0 z-[55] pointer-events-none"
+		style="{rightVerticalStyle} {rightHeightStyle} width: {rightWidth}px;"
+	>
+		<div class="pointer-events-auto h-full w-full">
 			<RightSidebar onResize={handleRightSidebarResize} />
 		</div>
 	</div>

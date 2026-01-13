@@ -679,9 +679,9 @@
 										<Table.Cell class="px-0">
 											<div class="flex items-center justify-center">
 												<div
-													class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
+													class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-8 w-8 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
 												>
-													<ActionIcon class="h-4.5 w-4.5" />
+													<ActionIcon class="h-4 w-4" />
 												</div>
 											</div>
 										</Table.Cell>
@@ -757,11 +757,11 @@
 																	{...props}
 																	variant="ghost"
 																	size="icon"
-																	class="h-7 w-7 rounded-lg text-blue-500 hover:bg-blue-500/10"
+																	class="h-6 w-6 rounded-lg text-blue-500 hover:bg-blue-500/10"
 																	onclick={() =>
 																		startEditing(binding.action, 'keyboard', currentEditingCtx)}
 																>
-																	<Keyboard class="h-3.5 w-3.5" />
+																	<Keyboard class="h-3 w-3" />
 																</Button>
 															{/snippet}
 														</Tooltip.Trigger>
@@ -782,9 +782,9 @@
 																				{...menuProps}
 																				variant="ghost"
 																				size="icon"
-																				class="h-7 w-7 rounded-lg text-green-500 hover:bg-green-500/10"
+																				class="h-6 w-6 rounded-lg text-green-500 hover:bg-green-500/10"
 																			>
-																				<Mouse class="h-3.5 w-3.5" />
+																				<Mouse class="h-3 w-3" />
 																			</Button>
 																		{/snippet}
 																	</DropdownMenu.Trigger>
@@ -835,11 +835,11 @@
 																	{...props}
 																	variant="ghost"
 																	size="icon"
-																	class="h-7 w-7 rounded-lg text-purple-500 hover:bg-purple-500/10"
+																	class="h-6 w-6 rounded-lg text-purple-500 hover:bg-purple-500/10"
 																	onclick={() =>
 																		startEditing(binding.action, 'touch', currentEditingCtx)}
 																>
-																	<Hand class="h-3.5 w-3.5" />
+																	<Hand class="h-3 w-3" />
 																</Button>
 															{/snippet}
 														</Tooltip.Trigger>
@@ -856,11 +856,11 @@
 																	{...props}
 																	variant="ghost"
 																	size="icon"
-																	class="h-7 w-7 rounded-lg text-orange-500 hover:bg-orange-500/10"
+																	class="h-6 w-6 rounded-lg text-orange-500 hover:bg-orange-500/10"
 																	onclick={() =>
 																		startEditing(binding.action, 'area', currentEditingCtx)}
 																>
-																	<TargetIcon class="h-3.5 w-3.5" />
+																	<TargetIcon class="h-3 w-3" />
 																</Button>
 															{/snippet}
 														</Tooltip.Trigger>
@@ -1019,11 +1019,11 @@
 											<Button
 												variant="ghost"
 												size="icon"
-												class="h-7 w-7 rounded-lg opacity-0 transition-all group-hover:opacity-60 hover:opacity-100"
+												class="h-6 w-6 rounded-lg opacity-0 transition-all group-hover:opacity-60 hover:opacity-100"
 												onclick={() => keyBindingsStore.resetBindingToDefault(binding.action)}
 												title="恢复此项默认绑定"
 											>
-												<RotateCcw class="h-3.5 w-3.5" />
+												<RotateCcw class="h-3 w-3" />
 											</Button>
 										</Table.Cell>
 									</Table.Row>

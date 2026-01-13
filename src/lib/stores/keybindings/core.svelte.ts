@@ -162,6 +162,21 @@ class KeyBindingsStore {
 		}
 	}
 
+	changeBindingContext(action: string, input: InputBinding, fromCtx: BindingContext, index: number, isContextual: boolean, toCtx: BindingContext) {
+		const actionBinding = this.bindings.find(b => b.action === action);
+		if (!actionBinding) return;
+
+		// 移除原有绑定
+		if (isContextual) {
+			this.removeContextBinding(action, fromCtx, index);
+		} else {
+			this.removeBinding(action, index);
+		}
+
+		// 添加到新上下文
+		this.addContextBinding(action, input, toCtx);
+	}
+
 	clearContextBindings(action: string, context: BindingContext) {
 		const actionBinding = this.bindings.find(b => b.action === action);
 		if (!actionBinding?.contextBindings) return;

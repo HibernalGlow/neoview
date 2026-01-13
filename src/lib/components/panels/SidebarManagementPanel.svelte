@@ -249,9 +249,9 @@
 	}
 
 	function getPanelStatusColor(side: 'left' | 'right' | 'hidden') {
-		if (side === 'left') return 'default';
-		if (side === 'right') return 'secondary';
-		return 'outline';
+		if (side === 'left') return 'blue';
+		if (side === 'right') return 'purple';
+		return 'red';
 	}
 
 	function assignPanel(panelId: PanelId, side: 'left' | 'right' | 'hidden') {
@@ -367,7 +367,7 @@
 									<Table.Cell class="px-0">
 										<div class="flex items-center justify-center">
 											<div
-												class="bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
+												class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
 											>
 												{#if panel.icon}
 													<svelte:component this={panel.icon} class="h-4.5 w-4.5" />

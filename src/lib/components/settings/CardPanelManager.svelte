@@ -241,7 +241,7 @@
 							<Table.Cell class="px-0">
 								<div class="flex items-center justify-center">
 									<div
-										class="bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
+										class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
 									>
 										{#if cardDef?.icon}
 											<svelte:component this={cardDef.icon} class="h-4.5 w-4.5" />
@@ -270,7 +270,7 @@
 												class="hover:bg-muted h-7 rounded-lg px-1 font-normal"
 											>
 												<Badge
-													variant="outline"
+													variant={card.visible ? 'default' : 'outline'}
 													class="pointer-events-none h-4 px-1 text-[9px] font-bold tracking-tighter uppercase truncate max-w-[80px] block text-center"
 												>
 													{group.title}

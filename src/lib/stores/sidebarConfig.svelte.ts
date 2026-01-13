@@ -131,11 +131,11 @@ export const PANEL_DEFINITIONS = {
 		icon: Settings,
 		emoji: '⚙️',
 		defaultPosition: 'left' as PanelPosition,
-		defaultVisible: false,
+		defaultVisible: true,
 		defaultOrder: 99,
-		canMove: false,
+		canMove: true,
 		canHide: true,
-		supportsCards: false
+		supportsCards: true
 	},
 	// 开发/测试面板
 	benchmark: {

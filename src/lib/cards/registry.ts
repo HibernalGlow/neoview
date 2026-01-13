@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette, Play } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette, Play, LayoutGrid } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -491,6 +491,92 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		title: '语音控制',
 		icon: Mic,
 		defaultPanel: 'ai',
+		canHide: true,
+	},
+
+	// ==================== Settings 卡片 ====================
+	'settingsGeneral': {
+		id: 'settingsGeneral',
+		title: '通用设置',
+		icon: Settings,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsSystem': {
+		id: 'settingsSystem',
+		title: '系统设置',
+		icon: Monitor,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsView': {
+		id: 'settingsView',
+		title: '视图设置',
+		icon: Eye,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsImage': {
+		id: 'settingsImage',
+		title: '影像设置',
+		icon: Image,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsBook': {
+		id: 'settingsBook',
+		title: '书籍设置',
+		icon: BookOpen,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsPerformance': {
+		id: 'settingsPerformance',
+		title: '性能设置',
+		icon: Zap,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsTheme': {
+		id: 'settingsTheme',
+		title: '外观设置',
+		icon: Palette,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsNotification': {
+		id: 'settingsNotification',
+		title: '通知设置',
+		icon: Bell,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsPanels': {
+		id: 'settingsPanels',
+		title: '边栏管理',
+		icon: PanelLeft,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsCards': {
+		id: 'settingsCards',
+		title: '卡片管理',
+		icon: LayoutGrid,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsBindings': {
+		id: 'settingsBindings',
+		title: '操作绑定',
+		icon: Sliders,
+		defaultPanel: 'settings',
+		canHide: true,
+	},
+	'settingsData': {
+		id: 'settingsData',
+		title: '数据设置',
+		icon: Database,
+		defaultPanel: 'settings',
 		canHide: true,
 	},
 };

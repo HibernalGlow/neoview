@@ -63,7 +63,7 @@ function getCardPanelIds(): PanelId[] {
 	return getCardSupportingPanels();
 }
 
-const CURRENT_CONFIG_VERSION = 12; // 增加版本号来强制重置（添加 AI 面板卡片）
+const CURRENT_CONFIG_VERSION = 13; // 增加版本号来强制重置（添加设置卡片）
 const STORAGE_KEY = `neoview_card_configs_v${CURRENT_CONFIG_VERSION}`;
 
 // 创建响应式状态

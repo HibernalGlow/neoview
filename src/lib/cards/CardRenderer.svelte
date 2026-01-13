@@ -81,7 +81,20 @@
 		aiTranslationCache: () => import('./ai/AiTranslationCacheCard.svelte'),
 		aiTranslationTest: () => import('./ai/AiTranslationTestCard.svelte'),
 		voiceControl: () => import('./ai/VoiceControlCard.svelte'),
-		translationOverlay: () => import('./ai/TranslationOverlayCard.svelte')
+		translationOverlay: () => import('./ai/TranslationOverlayCard.svelte'),
+		// Settings
+		settingsGeneral: () => import('./settings/GeneralSettingsCard.svelte'),
+		settingsSystem: () => import('./settings/SystemSettingsCard.svelte'),
+		settingsView: () => import('./settings/ViewSettingsCard.svelte'),
+		settingsImage: () => import('./settings/ImageSettingsCard.svelte'),
+		settingsBook: () => import('./settings/BookSettingsCard.svelte'),
+		settingsPerformance: () => import('./settings/PerformanceSettingsCard.svelte'),
+		settingsTheme: () => import('./settings/ThemeSettingsCard.svelte'),
+		settingsNotification: () => import('./settings/NotificationSettingsCard.svelte'),
+		settingsPanels: () => import('./settings/PanelManagementCard.svelte'),
+		settingsCards: () => import('./settings/CardManagementCard.svelte'),
+		settingsBindings: () => import('./settings/BindingsSettingsCard.svelte'),
+		settingsData: () => import('./settings/DataSettingsCard.svelte')
 	};
 
 	// 组件缓存（避免重复加载）

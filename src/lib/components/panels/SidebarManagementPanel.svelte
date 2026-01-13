@@ -52,6 +52,7 @@
 		Filter
 	} from '@lucide/svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Button } from '$lib/components/ui/button';
 	import * as Table from '$lib/components/ui/table';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -77,6 +78,16 @@
 
 	let activeTab = $state('layout');
 	let searchQuery = $state('');
+	// 分组标签页：默认加载左侧栏
+	let activeLayoutGroup = $state<'all' | 'left' | 'right' | 'hidden'>('left');
+
+	// 动态分组列表
+	const layoutGroups = $derived([
+		{ id: 'all' as const, title: '全部', icon: LayoutGrid, count: leftPanels.length + rightPanels.length + hiddenPanels.length },
+		{ id: 'left' as const, title: '左侧栏', icon: PanelLeft, count: leftPanels.length },
+		{ id: 'right' as const, title: '右侧栏', icon: PanelRight, count: rightPanels.length },
+		{ id: 'hidden' as const, title: '已隐藏', icon: EyeOff, count: hiddenPanels.length }
+	]);
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
@@ -242,6 +253,46 @@
 		return groups.filter((g) => g.items.length > 0);
 	});
 
+	// 当前分组的面板数据
+	const filteredPanelsForGroup = $derived.by(() => {
+		const query = searchQuery.toLowerCase().trim();
+		let sourcePanels: (PanelConfig & { side: 'left' | 'right' | 'hidden' })[] = [];
+
+		if (activeLayoutGroup === 'all') {
+			sourcePanels = [
+				...leftPanels.map((p) => ({ ...p, side: 'left' as const })),
+				...rightPanels.map((p) => ({ ...p, side: 'right' as const })),
+				...hiddenPanels.map((p) => ({ ...p, side: 'hidden' as const }))
+			];
+		} else if (activeLayoutGroup === 'left') {
+			sourcePanels = leftPanels.map((p) => ({ ...p, side: 'left' as const }));
+		} else if (activeLayoutGroup === 'right') {
+			sourcePanels = rightPanels.map((p) => ({ ...p, side: 'right' as const }));
+		} else {
+			sourcePanels = hiddenPanels.map((p) => ({ ...p, side: 'hidden' as const }));
+		}
+
+		return !query
+			? sourcePanels
+			: sourcePanels.filter(
+					(p) => p.title.toLowerCase().includes(query) || p.id.toLowerCase().includes(query)
+				);
+	});
+
+	// 各栏位的面板列表映射
+	const panelsBySide = $derived({
+		left: leftPanels,
+		right: rightPanels,
+		hidden: hiddenPanels
+	});
+
+	// 获取各分组面板数量（用于标签页计数）
+	const groupCounts = $derived({
+		left: leftPanels.length,
+		right: rightPanels.length,
+		hidden: hiddenPanels.length
+	});
+
 	function getPanelStatus(side: 'left' | 'right' | 'hidden') {
 		if (side === 'left') return '左侧栏';
 		if (side === 'right') return '右侧栏';
@@ -323,6 +374,35 @@
 				</div>
 			</div>
 
+			<!-- 分组标签页 -->
+			<div class="flex items-center gap-2 px-1">
+				<Tabs.Root value={activeLayoutGroup} onValueChange={(v) => activeLayoutGroup = v as any} class="w-full">
+					<Tabs.List class="bg-muted/50 flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border p-1 shadow-sm">
+						<Tooltip.Provider>
+							{#each layoutGroups as group}
+								<Tooltip.Root delayDuration={300}>
+									<Tooltip.Trigger asChild>
+										{#snippet children({ props })}
+											<Tabs.Trigger
+												{...props}
+												value={group.id}
+												class="data-[state=active]:bg-background data-[state=active]:text-primary flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs transition-all data-[state=active]:shadow-sm"
+											>
+												<svelte:component this={group.icon} class="h-4 w-4" />
+												<Badge variant="secondary" class="h-4.5 min-w-4.5 justify-center px-1 text-[9px] opacity-70">
+													{group.count}
+												</Badge>
+											</Tabs.Trigger>
+										{/snippet}
+									</Tooltip.Trigger>
+									<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs">{group.title}</Tooltip.Content>
+								</Tooltip.Root>
+							{/each}
+						</Tooltip.Provider>
+					</Tabs.List>
+				</Tabs.Root>
+			</div>
+
 			<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
 				<Table.Root class="table-fixed">
 					<Table.Header class="bg-muted/50">
@@ -335,199 +415,189 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each groupedPanels as group}
-							<Table.Row class="bg-muted/20 hover:bg-muted/20">
-								<Table.Cell colspan={5} class="py-2.5 px-4 text-left">
-									<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/80">
-										<svelte:component this={group.icon} class="h-3.5 w-3.5" />
-										{group.title}
-										<span class="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
-											{group.items.length}
-										</span>
+						{#each filteredPanelsForGroup as panel, index (panel.id)}
+							{#if activeLayoutGroup === 'all' && (index === 0 || filteredPanelsForGroup[index - 1].side !== panel.side)}
+								<Table.Row class="bg-muted/20 hover:bg-muted/20">
+									<Table.Cell colspan={5} class="px-4 py-2 text-left">
+										<div
+											class="text-muted-foreground/60 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase"
+										>
+											{#if panel.side === 'left'}
+												<PanelLeft class="h-3 w-3" />
+												左侧栏
+											{:else if panel.side === 'right'}
+												<PanelRight class="h-3 w-3" />
+												右侧栏
+											{:else}
+												<EyeOff class="h-3 w-3" />
+												已隐藏
+											{/if}
+										</div>
+									</Table.Cell>
+								</Table.Row>
+							{/if}
+							<Table.Row
+								class={cn(
+									'group transition-colors',
+									isPointerDragging &&
+										draggedPanelId === panel.id &&
+										'bg-muted/30 opacity-50 grayscale'
+								)}
+							>
+								<Table.Cell class="px-2">
+									<div
+										class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 flex cursor-grab items-center justify-center p-1 transition-colors"
+										onpointerdown={(e) => handlePointerDown(e, panel)}
+									>
+										<GripVertical class="h-4 w-4" />
 									</div>
 								</Table.Cell>
-							</Table.Row>
-							{#each group.items as panel, index (panel.id)}
-								<Table.Row
-									class={cn(
-										'group transition-colors',
-										isPointerDragging &&
-											draggedPanelId === panel.id &&
-											'bg-muted/30 opacity-50 grayscale'
-									)}
-								>
-									<Table.Cell class="px-2">
+								<Table.Cell class="px-0">
+									<div class="flex items-center justify-center">
 										<div
-											class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 p-1 transition-colors cursor-grab flex items-center justify-center"
-											onpointerdown={(e) => handlePointerDown(e, panel)}
+											class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
 										>
-											<GripVertical class="h-4 w-4" />
+											{#if panel.icon}
+												<svelte:component this={panel.icon} class="h-4.5 w-4.5" />
+											{:else}
+												<LayoutGrid class="h-4.5 w-4.5" />
+											{/if}
 										</div>
-									</Table.Cell>
-									<Table.Cell class="px-0">
-										<div class="flex items-center justify-center">
-											<div
-												class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
+									</div>
+								</Table.Cell>
+								<Table.Cell class="min-w-0 px-2">
+									<div class="flex min-w-0 flex-col overflow-hidden">
+										<span class="block truncate font-medium" title={panel.title}
+											>{panel.title}</span
+										>
+										<span
+											class="text-muted-foreground block truncate font-mono text-[10px] uppercase opacity-50"
+											>{panel.id}</span
+										>
+									</div>
+								</Table.Cell>
+								<Table.Cell class="px-1 text-center">
+									<DropdownMenu.Root>
+										<DropdownMenu.Trigger asChild>
+											{#snippet children({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="sm"
+													class="hover:bg-muted h-7 rounded-lg px-1 font-normal"
+												>
+													<Badge
+														variant={getPanelStatusColor(panel.side)}
+														class="pointer-events-none h-4 px-1 text-[9px] font-bold tracking-tighter uppercase"
+													>
+														{getPanelStatus(panel.side)}
+													</Badge>
+												</Button>
+											{/snippet}
+										</DropdownMenu.Trigger>
+										<DropdownMenu.Content
+											align="start"
+											class="border-muted/50 rounded-xl p-1 shadow-lg"
+										>
+											<DropdownMenu.Item
+												onclick={() => assignPanel(panel.id, 'left')}
+												class="gap-2 rounded-lg"
 											>
-												{#if panel.icon}
-													<svelte:component this={panel.icon} class="h-4.5 w-4.5" />
-												{:else}
-													<LayoutGrid class="h-4.5 w-4.5" />
-												{/if}
-											</div>
-										</div>
-									</Table.Cell>
-									<Table.Cell class="min-w-0 px-2">
-										<div class="flex min-w-0 flex-col overflow-hidden">
-											<span class="truncate font-medium block" title={panel.title}>{panel.title}</span>
-											<span
-												class="text-muted-foreground font-mono text-[10px] uppercase opacity-50 truncate block"
-												>{panel.id}</span
+												<PanelLeft class="h-4 w-4 text-blue-500" />
+												<span>左侧栏</span>
+											</DropdownMenu.Item>
+											<DropdownMenu.Item
+												onclick={() => assignPanel(panel.id, 'right')}
+												class="gap-2 rounded-lg"
 											>
-										</div>
-									</Table.Cell>
-									<Table.Cell class="px-1 text-center">
+												<PanelRight class="h-4 w-4 text-purple-500" />
+												<span>右侧栏</span>
+											</DropdownMenu.Item>
+											{#if panel.canHide}
+												<DropdownMenu.Separator />
+												<DropdownMenu.Item
+													onclick={() => assignPanel(panel.id, 'hidden')}
+													class="text-destructive focus:text-destructive gap-2 rounded-lg"
+												>
+													<EyeOff class="h-4 w-4" />
+													<span>隐藏</span>
+												</DropdownMenu.Item>
+											{/if}
+										</DropdownMenu.Content>
+									</DropdownMenu.Root>
+								</Table.Cell>
+								<Table.Cell class="pr-4 text-right">
+									<div class="flex items-center justify-end gap-0.5">
+										{#if panel.side === 'hidden'}
+											<Button
+												variant="ghost"
+												size="icon"
+												class="text-primary hover:bg-primary/10 h-8 w-8 rounded-lg"
+												onclick={() => restorePanel(panel)}
+												title="恢复到默认位置"
+											>
+												<RotateCcw class="h-4 w-4" />
+											</Button>
+										{:else}
+											<Button
+												variant="ghost"
+												size="icon"
+												class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
+												disabled={index === 0}
+												onclick={() => movePanelUp(panel, panelsBySide[panel.side])}
+											>
+												<ArrowUp class="h-3.5 w-3.5" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
+												disabled={index === filteredPanelsForGroup.length - 1}
+												onclick={() => movePanelDown(panel, panelsBySide[panel.side])}
+											>
+												<ArrowDown class="h-3.5 w-3.5" />
+											</Button>
+										{/if}
 										<DropdownMenu.Root>
 											<DropdownMenu.Trigger asChild>
 												{#snippet children({ props })}
 													<Button
 														{...props}
 														variant="ghost"
-														size="sm"
-														class="hover:bg-muted h-7 rounded-lg px-1 font-normal"
+														size="icon"
+														class="ml-1 h-8 w-8 rounded-lg"
 													>
-														<Badge
-															variant={getPanelStatusColor(panel.side)}
-															class="pointer-events-none h-4 px-1 text-[9px] font-bold tracking-tighter uppercase"
-														>
-															{getPanelStatus(panel.side)}
-														</Badge>
+														<MoreHorizontal class="h-4 w-4" />
 													</Button>
 												{/snippet}
 											</DropdownMenu.Trigger>
-											<DropdownMenu.Content
-												align="start"
-												class="border-muted/50 rounded-xl p-1 shadow-lg"
-											>
+											<DropdownMenu.Content align="end" class="rounded-xl p-1">
 												<DropdownMenu.Item
-													onclick={() => assignPanel(panel.id, 'left')}
-													class="gap-2 rounded-lg"
+													onclick={() =>
+														sidebarConfigStore.setPanelVisible(panel.id, panel.side === 'hidden')}
+													disabled={!panel.canHide}
+													class="gap-2"
 												>
-													<PanelLeft class="h-4 w-4 text-blue-500" />
-													<span>左侧栏</span>
-												</DropdownMenu.Item>
-												<DropdownMenu.Item
-													onclick={() => assignPanel(panel.id, 'right')}
-													class="gap-2 rounded-lg"
-												>
-													<PanelRight class="h-4 w-4 text-purple-500" />
-													<span>右侧栏</span>
-												</DropdownMenu.Item>
-												{#if panel.canHide}
-													<DropdownMenu.Separator />
-													<DropdownMenu.Item
-														onclick={() => assignPanel(panel.id, 'hidden')}
-														class="text-destructive focus:text-destructive gap-2 rounded-lg"
-													>
+													{#if panel.side === 'hidden'}
+														<Eye class="h-4 w-4" />
+														<span>显示面板</span>
+													{:else}
 														<EyeOff class="h-4 w-4" />
-														<span>隐藏</span>
-													</DropdownMenu.Item>
-												{/if}
+														<span>隐藏面板</span>
+													{/if}
+												</DropdownMenu.Item>
 											</DropdownMenu.Content>
 										</DropdownMenu.Root>
-									</Table.Cell>
-									<Table.Cell class="pr-4 text-right">
-										<div class="flex items-center justify-end gap-0.5">
-											{#if panel.side === 'hidden'}
-												<Button
-													variant="ghost"
-													size="icon"
-													class="h-8 w-8 rounded-lg text-primary hover:bg-primary/10"
-													onclick={() => restorePanel(panel)}
-													title="恢复到默认位置"
-												>
-													<RotateCcw class="h-4 w-4" />
-												</Button>
-											{:else}
-												<Button
-													variant="ghost"
-													size="icon"
-													class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
-													disabled={index === 0}
-													onclick={() => {
-														const list =
-															panel.side === 'left'
-																? leftPanels
-																: panel.side === 'right'
-																	? rightPanels
-																	: hiddenPanels;
-														movePanelUp(panel, list);
-													}}
-												>
-													<ArrowUp class="h-3.5 w-3.5" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
-													disabled={index === group.items.length - 1}
-													onclick={() => {
-														const list =
-															panel.side === 'left'
-																? leftPanels
-																: panel.side === 'right'
-																	? rightPanels
-																	: hiddenPanels;
-														movePanelDown(panel, list);
-													}}
-												>
-													<ArrowDown class="h-3.5 w-3.5" />
-												</Button>
-											{/if}
-											<DropdownMenu.Root>
-												<DropdownMenu.Trigger asChild>
-													{#snippet children({ props })}
-														<Button
-															{...props}
-															variant="ghost"
-															size="icon"
-															class="ml-1 h-8 w-8 rounded-lg"
-														>
-															<MoreHorizontal class="h-4 w-4" />
-														</Button>
-													{/snippet}
-												</DropdownMenu.Trigger>
-												<DropdownMenu.Content align="end" class="rounded-xl p-1">
-													<DropdownMenu.Item
-														onclick={() =>
-															sidebarConfigStore.setPanelVisible(
-																panel.id,
-																panel.side === 'hidden'
-															)}
-														disabled={!panel.canHide}
-														class="gap-2"
-													>
-														{#if panel.side === 'hidden'}
-															<Eye class="h-4 w-4" />
-															<span>显示面板</span>
-														{:else}
-															<EyeOff class="h-4 w-4" />
-															<span>隐藏面板</span>
-														{/if}
-													</DropdownMenu.Item>
-												</DropdownMenu.Content>
-											</DropdownMenu.Root>
-										</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
+									</div>
+								</Table.Cell>
+							</Table.Row>
 						{/each}
 					</Table.Body>
 				</Table.Root>
 
-				{#if groupedPanels.length === 0}
+				{#if filteredPanelsForGroup.length === 0}
 					<div
-						class="bg-muted/5 flex flex-col items-center justify-center py-20 text-muted-foreground"
+						class="bg-muted/5 text-muted-foreground flex flex-col items-center justify-center py-20"
 					>
 						<LayoutGrid class="mb-4 h-12 w-12 opacity-10" />
 						<p class="text-sm">未找到匹配的面板</p>
@@ -882,7 +952,9 @@
 
 	<!-- 拖拽预览 -->
 	{#if isPointerDragging && dragPreview && draggedPanelId}
-		{@const panel = [...leftPanels, ...rightPanels, ...hiddenPanels].find((p) => p.id === draggedPanelId)}
+		{@const panel = [...leftPanels, ...rightPanels, ...hiddenPanels].find(
+			(p) => p.id === draggedPanelId
+		)}
 		{#if panel}
 			<div
 				class="pointer-events-none fixed z-[100] scale-105"

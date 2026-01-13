@@ -103,29 +103,17 @@
 	let draggedPanelId = $state<string | null>(null);
 	let isPointerDragging = $state(false);
 	let dragPreview = $state<{ x: number; y: number } | null>(null);
-	let dropTargetPanelId = $state<string | null>(null);
-	let dragHandleElement = $state<HTMLElement | null>(null);
+	let dropTargetIndex = $state<number | null>(null);
 
 	// 拖拽处理函数
 	function handlePointerDown(event: PointerEvent, panel: PanelConfig) {
 		// 只有点击手柄时触发
-		const handle = (event.target as HTMLElement).closest('.drag-handle') as HTMLElement;
-		if (!handle) return;
+		if (!(event.target as HTMLElement).closest('.drag-handle')) return;
 
 		event.preventDefault();
-		event.stopPropagation();
 		draggedPanelId = panel.id;
 		isPointerDragging = true;
-		dragPreview = { x: event.clientX, y: event.clientY };
-		dragHandleElement = handle;
-		handle.setPointerCapture(event.pointerId);
-	}
-
-	// 悬停检测 - 设置放置目标
-	function handleDragEnter(panelId: string) {
-		if (isPointerDragging && draggedPanelId && panelId !== draggedPanelId) {
-			dropTargetPanelId = panelId;
-		}
+		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
 	}
 
 	// 保存提示消息
@@ -186,34 +174,11 @@
 	}
 
 	$effect(() => {
-		function handleWindowPointerUp(e: PointerEvent) {
+		function handleWindowPointerUp() {
 			if (!isPointerDragging) return;
-
-			// 如果有有效的放置目标，执行顺序交换
-			if (draggedPanelId && dropTargetPanelId && draggedPanelId !== dropTargetPanelId) {
-				const panels = panelsBySide[activeLayoutGroup] || [];
-				const draggedPanel = panels.find(p => p.id === draggedPanelId);
-				const targetPanel = panels.find(p => p.id === dropTargetPanelId);
-
-				if (draggedPanel && targetPanel) {
-					// 交换两个面板的顺序
-					const draggedOrder = draggedPanel.order;
-					const targetOrder = targetPanel.order;
-					sidebarConfigStore.setPanelOrder(draggedPanelId, targetOrder);
-					sidebarConfigStore.setPanelOrder(dropTargetPanelId, draggedOrder);
-				}
-			}
-
-			// 释放指针捕获
-			if (dragHandleElement) {
-				dragHandleElement.releasePointerCapture(e.pointerId);
-			}
-
 			isPointerDragging = false;
 			draggedPanelId = null;
 			dragPreview = null;
-			dropTargetPanelId = null;
-			dragHandleElement = null;
 		}
 		window.addEventListener('pointerup', handleWindowPointerUp);
 		return () => {
@@ -224,7 +189,7 @@
 	$effect(() => {
 		if (!isPointerDragging) return;
 		function handleWindowPointerMove(e: PointerEvent) {
-			dragPreview = { x: e.clientX, y: e.clientY };
+			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
 		}
 		window.addEventListener('pointermove', handleWindowPointerMove);
 		return () => {
@@ -472,16 +437,11 @@
 								</Table.Row>
 							{/if}
 							<Table.Row
-								onpointerenter={() => handleDragEnter(panel.id)}
 								class={cn(
 									'group transition-colors',
 									isPointerDragging &&
 										draggedPanelId === panel.id &&
-										'bg-muted/30 opacity-50 grayscale',
-									isPointerDragging &&
-										dropTargetPanelId === panel.id &&
-										draggedPanelId !== panel.id &&
-										'bg-primary/10 ring-primary/50 ring-2'
+										'bg-muted/30 opacity-50 grayscale'
 								)}
 							>
 								<Table.Cell class="px-2">
@@ -997,7 +957,7 @@
 		)}
 		{#if panel}
 			<div
-				class="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-1/2 scale-105"
+				class="pointer-events-none fixed z-[100] scale-105"
 				style="left: {dragPreview.x}px; top: {dragPreview.y}px;"
 			>
 				<div

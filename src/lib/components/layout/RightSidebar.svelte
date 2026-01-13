@@ -4,7 +4,7 @@
 	 * 右侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical, Move } from '@lucide/svelte';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
 		activeRightPanel,
@@ -14,6 +14,10 @@
 		rightSidebarLockState,
 		rightSidebarOpen,
 		sidebarRightPanels,
+		sidebarConfigStore,
+		rightSidebarVerticalAlign,
+		rightSidebarHorizontalPos,
+		rightSidebarHeight,
 		type PanelId
 	} from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -77,6 +81,48 @@
 	function handleMouseUp() {
 		// console.log('[RightSidebar] handleMouseUp called, isResizing was:', isResizing);
 		isResizing = false;
+	}
+
+	// 拖拽移动侧边栏位置
+	let isDragging = $state(false);
+	let dragStartX = 0;
+	let dragStartY = 0;
+	let initialXPos = 0;
+	let initialYPos = 0;
+
+	function handleDragStart(e: PointerEvent) {
+		if ($rightSidebarHeight === 'full') return; // 全高模式不允许拖拽
+		isDragging = true;
+		dragStartX = e.clientX;
+		dragStartY = e.clientY;
+		initialXPos = $rightSidebarHorizontalPos;
+		initialYPos = $rightSidebarVerticalAlign;
+		(e.target as HTMLElement).setPointerCapture(e.pointerId);
+		e.preventDefault();
+	}
+
+	function handleDragMove(e: PointerEvent) {
+		if (!isDragging) return;
+		
+		const deltaX = e.clientX - dragStartX;
+		const deltaY = e.clientY - dragStartY;
+		
+		// 转换为百分比 (右侧边栏 X 轴反向)
+		const xDeltaPercent = (deltaX / window.innerWidth) * -200; // 负号因为右侧边栏左移=增加偏移
+		const yDeltaPercent = (deltaY / window.innerHeight) * 200;
+		
+		const newXPos = Math.max(0, Math.min(100, initialXPos + xDeltaPercent));
+		const newYPos = Math.max(0, Math.min(100, initialYPos + yDeltaPercent));
+		
+		sidebarConfigStore.setRightSidebarHorizontalPos(newXPos);
+		sidebarConfigStore.setRightSidebarVerticalAlign(newYPos);
+	}
+
+	function handleDragEnd(e: PointerEvent) {
+		if (isDragging) {
+			isDragging = false;
+			(e.target as HTMLElement).releasePointerCapture(e.pointerId);
+		}
 	}
 
 	// 钉住/取消钉住
@@ -202,6 +248,21 @@
 										<Pin class="h-4 w-4" />
 									{/if}
 								</Button>
+								<!-- 拖拽移动按钮 -->
+								{#if $rightSidebarHeight !== 'full'}
+									<button
+										type="button"
+										class="h-9 w-9 flex items-center justify-center rounded-md cursor-move transition-colors
+											{isDragging ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground hover:text-foreground'}"
+										onpointerdown={handleDragStart}
+										onpointermove={handleDragMove}
+										onpointerup={handleDragEnd}
+										onpointercancel={handleDragEnd}
+										title="拖拽移动侧边栏"
+									>
+										<Move class="h-4 w-4" />
+									</button>
+								{/if}
 							</div>
 						</Sidebar.Header>
 

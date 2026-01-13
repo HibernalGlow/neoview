@@ -5,7 +5,7 @@
 	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical, Move } from '@lucide/svelte';
 	import { readable } from 'svelte/store';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
@@ -16,6 +16,10 @@
 		leftSidebarLockState,
 		leftSidebarOpen,
 		sidebarLeftPanels,
+		sidebarConfigStore,
+		leftSidebarVerticalAlign,
+		leftSidebarHorizontalPos,
+		leftSidebarHeight,
 		type PanelId,
 		type PanelTabType
 	} from '$lib/stores';
@@ -90,6 +94,48 @@
 
 	function handleMouseUp() {
 		isResizing = false;
+	}
+
+	// 拖拽移动侧边栏位置
+	let isDragging = $state(false);
+	let dragStartX = 0;
+	let dragStartY = 0;
+	let initialXPos = 0;
+	let initialYPos = 0;
+
+	function handleDragStart(e: PointerEvent) {
+		if ($leftSidebarHeight === 'full') return; // 全高模式不允许拖拽
+		isDragging = true;
+		dragStartX = e.clientX;
+		dragStartY = e.clientY;
+		initialXPos = $leftSidebarHorizontalPos;
+		initialYPos = $leftSidebarVerticalAlign;
+		(e.target as HTMLElement).setPointerCapture(e.pointerId);
+		e.preventDefault();
+	}
+
+	function handleDragMove(e: PointerEvent) {
+		if (!isDragging) return;
+		
+		const deltaX = e.clientX - dragStartX;
+		const deltaY = e.clientY - dragStartY;
+		
+		// 转换为百分比 (屏幕宽度/高度的比例)
+		const xDeltaPercent = (deltaX / window.innerWidth) * 200; // 放大系数让拖拽更敏感
+		const yDeltaPercent = (deltaY / window.innerHeight) * 200;
+		
+		const newXPos = Math.max(0, Math.min(100, initialXPos + xDeltaPercent));
+		const newYPos = Math.max(0, Math.min(100, initialYPos + yDeltaPercent));
+		
+		sidebarConfigStore.setLeftSidebarHorizontalPos(newXPos);
+		sidebarConfigStore.setLeftSidebarVerticalAlign(newYPos);
+	}
+
+	function handleDragEnd(e: PointerEvent) {
+		if (isDragging) {
+			isDragging = false;
+			(e.target as HTMLElement).releasePointerCapture(e.pointerId);
+		}
 	}
 
 	// 钉住/取消钉住
@@ -219,6 +265,21 @@
 										<Pin class="h-4 w-4" />
 									{/if}
 								</Button>
+								<!-- 拖拽移动按钮 -->
+								{#if $leftSidebarHeight !== 'full'}
+									<button
+										type="button"
+										class="h-9 w-9 flex items-center justify-center rounded-md cursor-move transition-colors
+											{isDragging ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground hover:text-foreground'}"
+										onpointerdown={handleDragStart}
+										onpointermove={handleDragMove}
+										onpointerup={handleDragEnd}
+										onpointercancel={handleDragEnd}
+										title="拖拽移动侧边栏"
+									>
+										<Move class="h-4 w-4" />
+									</button>
+								{/if}
 							</div>
 						</Sidebar.Header>
 

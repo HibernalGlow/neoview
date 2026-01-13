@@ -17,7 +17,7 @@ export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
 export type SidebarHeightPreset = 'full' | '2/3' | 'half' | '1/3' | 'custom';
 
 // 侧边栏垂直对齐
-export type SidebarVerticalAlign = 'top' | 'center' | 'bottom';
+export type SidebarVerticalAlign = number; // 0 (top) to 100 (bottom)
 
 /**
  * 面板定义 - 添加新面板只需在这里添加一条记录
@@ -271,10 +271,10 @@ const initialState: SidebarConfigState = {
 	// 高度配置默认值
 	leftSidebarHeight: 'full',
 	leftSidebarCustomHeight: 100,
-	leftSidebarVerticalAlign: 'top',
+	leftSidebarVerticalAlign: 0,
 	rightSidebarHeight: 'full',
 	rightSidebarCustomHeight: 100,
-	rightSidebarVerticalAlign: 'top'
+	rightSidebarVerticalAlign: 0
 };
 
 // 从 localStorage 加载配置
@@ -614,14 +614,7 @@ export function getSidebarHeightPercent(preset: SidebarHeightPreset, customHeigh
 export function getVerticalAlignStyle(align: SidebarVerticalAlign, heightPercent: number): string {
 	if (heightPercent >= 100) return 'top: 0; bottom: 0;';
 	
-	switch (align) {
-		case 'top':
-			return 'top: 0;';
-		case 'bottom':
-			return 'bottom: 0;';
-		case 'center':
-			return `top: ${(100 - heightPercent) / 2}%;`;
-		default:
-			return 'top: 0;';
-	}
+	// align 为 0 表示顶部，100 表示底部，50 表示居中
+	const topPercent = (100 - heightPercent) * (align / 100);
+	return `top: ${topPercent}%;`;
 }

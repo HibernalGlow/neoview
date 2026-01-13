@@ -26,7 +26,8 @@
 		ArrowDown,
 		MoreHorizontal,
 		GripVertical,
-		Eye
+		Eye,
+		Filter
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -39,6 +40,8 @@
 	const allPanelIds = getCardSupportingPanels();
 
 	let searchQuery = $state('');
+	// 默认按面板过滤，初始化为首个面板
+	let panelFilter = $state<string>(allPanelIds[0] || 'all');
 
 	// 合并后的所有卡片数据
 	const allCards = $derived.by(() => {
@@ -56,15 +59,26 @@
 	});
 
 	// 搜索过滤后的卡片
-	const filteredCards = $derived.by(() => {
+	const groupedCards = $derived.by(() => {
 		const query = searchQuery.toLowerCase().trim();
-		if (!query) return allCards;
-		return allCards.filter(
-			(c) =>
-				c.title.toLowerCase().includes(query) ||
-				c.id.toLowerCase().includes(query) ||
-				c.panelTitle.toLowerCase().includes(query)
-		);
+		
+		const groups = allPanelIds.map(panelId => {
+			const cards = allCards.filter(c => c.panelId === panelId);
+			const filtered = !query 
+				? cards 
+				: cards.filter(c => 
+					c.title.toLowerCase().includes(query) || 
+					c.id.toLowerCase().includes(query)
+				);
+			
+			return {
+				id: panelId,
+				title: getPanelTitle(panelId),
+				items: filtered
+			};
+		});
+
+		return groups.filter(g => g.items.length > 0);
 	});
 
 	// 拖拽状态
@@ -129,8 +143,16 @@
 		if (targetPanelId === 'hidden') {
 			cardConfigStore.setCardVisible(card.panelId, card.id, false);
 		} else {
-			cardConfigStore.moveCardToPanel(card.panelId, card.id, targetPanelId as PanelId);
+			cardConfigStore.moveCardToPanel(card.id, targetPanelId as PanelId);
 			cardConfigStore.setCardVisible(targetPanelId as PanelId, card.id, true);
+		}
+	}
+
+	function restoreCard(card: CardConfig) {
+		const def = cardRegistry[card.id];
+		if (def) {
+			cardConfigStore.moveCardToPanel(card.id, def.defaultPanel);
+			cardConfigStore.setCardVisible(def.defaultPanel, card.id, true);
 		}
 	}
 </script>
@@ -146,7 +168,7 @@
 			<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 			<Input
 				bind:value={searchQuery}
-				placeholder="搜索卡片或所属面板..."
+				placeholder="搜索卡片..."
 				class="h-10 rounded-xl pl-9"
 			/>
 		</div>
@@ -188,156 +210,183 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each filteredCards as card, index (card.id + card.panelId)}
-					{@const cardDef = cardRegistry[card.id]}
-					<Table.Row
-						class={cn(
-							'group transition-colors',
-							isPointerDragging && draggedCardId === card.id && 'bg-muted/30 opacity-50 grayscale'
-						)}
-					>
-						<Table.Cell>
-							<div
-								class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 cursor-grab p-1 transition-colors"
-								onpointerdown={(e) => handlePointerDown(e, card)}
-							>
-								<GripVertical class="h-4 w-4" />
+				{#each groupedCards as group}
+					<Table.Row class="bg-muted/20 hover:bg-muted/20">
+						<Table.Cell colspan={5} class="py-2.5 px-4">
+							<div class="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground/80">
+								<MapPin class="h-3.5 w-3.5" />
+								{group.title}
+								<span class="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+									{group.items.length}
+								</span>
 							</div>
 						</Table.Cell>
-						<Table.Cell>
-							<div
-								class="bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-							>
-								{#if cardDef?.icon}
-									<svelte:component this={cardDef.icon} class="h-4 w-4" />
-								{:else}
-									<LayoutGrid class="h-4 w-4" />
-								{/if}
-							</div>
-						</Table.Cell>
-						<Table.Cell>
-							<div class="flex min-w-0 flex-col">
-								<span class="truncate font-medium">{card.title}</span>
-								<span class="text-muted-foreground font-mono text-[10px] uppercase opacity-50"
-									>{card.id}</span
+					</Table.Row>
+					{#each group.items as card, index (card.id + card.panelId)}
+						{@const cardDef = cardRegistry[card.id]}
+						<Table.Row
+							class={cn(
+								'group transition-colors',
+								isPointerDragging && draggedCardId === card.id && 'bg-muted/30 opacity-50 grayscale'
+							)}
+						>
+							<Table.Cell>
+								<div
+									class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 cursor-grab p-1 transition-colors"
+									onpointerdown={(e) => handlePointerDown(e, card)}
 								>
-							</div>
-						</Table.Cell>
-						<Table.Cell>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger asChild>
-									{#snippet children({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="sm"
-											class="hover:bg-muted h-7 gap-1.5 rounded-lg px-2 font-normal"
-										>
-											<Badge
-												variant={card.visible ? 'default' : 'outline'}
-												class="pointer-events-none h-4 px-1.5 text-[10px] font-bold tracking-tighter uppercase"
-											>
-												{card.visible ? card.panelTitle : '已隐藏'}
-											</Badge>
-										</Button>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content
-									align="start"
-									class="max-h-[300px] overflow-y-auto rounded-xl p-1 shadow-lg"
+									<GripVertical class="h-4 w-4" />
+								</div>
+							</Table.Cell>
+							<Table.Cell>
+								<div
+									class="bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
 								>
-									<DropdownMenu.Label
-										class="text-muted-foreground px-2 py-1.5 text-[10px] font-bold uppercase"
-										>分配到面板</DropdownMenu.Label
-									>
-									{#each allPanelIds as panelId}
-										<DropdownMenu.Item
-											onclick={() => assignCard(card, panelId)}
-											class="gap-2 rounded-lg"
-										>
-											<MapPin class="text-muted-foreground/50 h-4 w-4" />
-											<span>{getPanelTitle(panelId)}</span>
-										</DropdownMenu.Item>
-									{/each}
-									{#if card.canHide}
-										<DropdownMenu.Separator />
-										<DropdownMenu.Item
-											onclick={() => assignCard(card, 'hidden')}
-											class="text-destructive focus:text-destructive gap-2 rounded-lg"
-										>
-											<EyeOff class="h-4 w-4" />
-											<span>隐藏卡片</span>
-										</DropdownMenu.Item>
+									{#if cardDef?.icon}
+										<svelte:component this={cardDef.icon} class="h-4 w-4" />
+									{:else}
+										<LayoutGrid class="h-4 w-4" />
 									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
-						</Table.Cell>
-						<Table.Cell class="text-right">
-							<div class="flex items-center justify-end gap-1">
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8 rounded-lg"
-									onclick={() => {
-										const list = cardConfigStore.getPanelCards(card.panelId);
-										const idx = list.findIndex((c) => c.id === card.id);
-										if (idx > 0) cardConfigStore.moveCard(card.panelId, card.id, idx - 1);
-									}}
-								>
-									<ArrowUp class="h-4 w-4" />
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8 rounded-lg"
-									onclick={() => {
-										const list = cardConfigStore.getPanelCards(card.panelId);
-										const idx = list.findIndex((c) => c.id === card.id);
-										if (idx < list.length - 1)
-											cardConfigStore.moveCard(card.panelId, card.id, idx + 1);
-									}}
-								>
-									<ArrowDown class="h-4 w-4" />
-								</Button>
+								</div>
+							</Table.Cell>
+							<Table.Cell>
+								<div class="flex min-w-0 flex-col">
+									<span class="truncate font-medium">{card.title}</span>
+									<span class="text-muted-foreground font-mono text-[10px] uppercase opacity-50"
+										>{card.id}</span
+									>
+								</div>
+							</Table.Cell>
+							<Table.Cell>
 								<DropdownMenu.Root>
 									<DropdownMenu.Trigger asChild>
 										{#snippet children({ props })}
 											<Button
 												{...props}
 												variant="ghost"
-												size="icon"
-												class="ml-1 h-8 w-8 rounded-lg"
+												size="sm"
+												class="hover:bg-muted h-7 gap-1.5 rounded-lg px-2 font-normal"
 											>
-												<MoreHorizontal class="h-4 w-4" />
+												<Badge
+													variant={card.visible ? 'default' : 'outline'}
+													class="pointer-events-none h-4 px-1.5 text-[10px] font-bold uppercase tracking-tighter"
+												>
+													{card.visible ? card.panelTitle : '已隐藏'}
+												</Badge>
 											</Button>
 										{/snippet}
 									</DropdownMenu.Trigger>
-									<DropdownMenu.Content align="end" class="rounded-xl p-1">
-										<DropdownMenu.Item
-											onclick={() =>
-												cardConfigStore.setCardVisible(card.panelId, card.id, !card.visible)}
-											disabled={!card.canHide}
-											class="gap-2"
+									<DropdownMenu.Content
+										align="start"
+										class="max-h-[300px] overflow-y-auto rounded-xl p-1 shadow-lg"
+									>
+										<DropdownMenu.Label
+											class="text-muted-foreground px-2 py-1.5 text-[10px] font-bold uppercase"
+											>分配到面板</DropdownMenu.Label
 										>
-											{#if card.visible}
+										{#each allPanelIds as panelId}
+											<DropdownMenu.Item
+												onclick={() => assignCard(card, panelId)}
+												class="gap-2 rounded-lg"
+											>
+												<MapPin class="text-muted-foreground/50 h-4 w-4" />
+												<span>{getPanelTitle(panelId)}</span>
+											</DropdownMenu.Item>
+										{/each}
+										{#if card.canHide}
+											<DropdownMenu.Separator />
+											<DropdownMenu.Item
+												onclick={() => assignCard(card, 'hidden')}
+												class="text-destructive focus:text-destructive gap-2 rounded-lg"
+											>
 												<EyeOff class="h-4 w-4" />
 												<span>隐藏卡片</span>
-											{:else}
-												<Eye class="h-4 w-4" />
-												<span>显示卡片</span>
-											{/if}
-										</DropdownMenu.Item>
+											</DropdownMenu.Item>
+										{/if}
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
-							</div>
-						</Table.Cell>
-					</Table.Row>
+							</Table.Cell>
+							<Table.Cell class="text-right">
+								<div class="flex items-center justify-end gap-1">
+									{#if !card.visible}
+										<Button
+											variant="ghost"
+											size="icon"
+											class="text-primary hover:bg-primary/10 h-8 w-8 rounded-lg"
+											onclick={() => restoreCard(card)}
+											title="恢复到默认面板"
+										>
+											<RotateCcw class="h-4 w-4" />
+										</Button>
+									{:else}
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-8 w-8 rounded-lg"
+											disabled={index === 0}
+											onclick={() => {
+												const list = cardConfigStore.getPanelCards(card.panelId);
+												const idx = list.findIndex((c) => c.id === card.id);
+												if (idx > 0) cardConfigStore.moveCard(card.panelId, card.id, idx - 1);
+											}}
+										>
+											<ArrowUp class="h-4 w-4" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="icon"
+											class="h-8 w-8 rounded-lg"
+											disabled={index === group.items.length - 1}
+											onclick={() => {
+												const list = cardConfigStore.getPanelCards(card.panelId);
+												const idx = list.findIndex((c) => c.id === card.id);
+												if (idx < list.length - 1)
+													cardConfigStore.moveCard(card.panelId, card.id, idx + 1);
+											}}
+										>
+											<ArrowDown class="h-4 w-4" />
+										</Button>
+									{/if}
+									<DropdownMenu.Root>
+										<DropdownMenu.Trigger asChild>
+											{#snippet children({ props })}
+												<Button
+													{...props}
+													variant="ghost"
+													size="icon"
+													class="ml-1 h-8 w-8 rounded-lg"
+												>
+													<MoreHorizontal class="h-4 w-4" />
+												</Button>
+											{/snippet}
+										</DropdownMenu.Trigger>
+										<DropdownMenu.Content align="end" class="rounded-xl p-1">
+											<DropdownMenu.Item
+												onclick={() =>
+													cardConfigStore.setCardVisible(card.panelId, card.id, !card.visible)}
+												disabled={!card.canHide}
+												class="gap-2"
+											>
+												{#if card.visible}
+													<EyeOff class="h-4 w-4" />
+													<span>隐藏卡片</span>
+												{:else}
+													<Eye class="h-4 w-4" />
+													<span>显示卡片</span>
+												{/if}
+											</DropdownMenu.Item>
+										</DropdownMenu.Content>
+									</DropdownMenu.Root>
+								</div>
+							</Table.Cell>
+						</Table.Row>
+					{/each}
 				{/each}
 			</Table.Body>
 		</Table.Root>
 
-		{#if filteredCards.length === 0}
-			<div class="text-muted-foreground bg-muted/5 flex flex-col items-center justify-center py-20">
+		{#if groupedCards.length === 0}
+			<div class="bg-muted/5 flex flex-col items-center justify-center py-20 text-muted-foreground">
 				<LayoutGrid class="mb-4 h-12 w-12 opacity-10" />
 				<p class="text-sm">未找到匹配的卡片</p>
 			</div>

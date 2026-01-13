@@ -74,13 +74,13 @@
 	// Folder Panel 标签页管理
 	import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { folderPanelActions } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
-import {
-	dispatchViewerAction,
-	isVideoAction,
-	isSlideshowAction,
-	remapPageActionForVideoSeekMode
-} from '$lib/utils/viewerActionDispatcher';
-import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActionHandlers';
+	import {
+		dispatchViewerAction,
+		isVideoAction,
+		isSlideshowAction,
+		remapPageActionForVideoSeekMode
+	} from '$lib/utils/viewerActionDispatcher';
+	import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActionHandlers';
 
 	// 卡片显示/隐藏状态
 	let showProjectCard = $state(true);
@@ -177,10 +177,12 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 		try {
 			const selected = await open({
 				multiple: false,
-				filters: [{
-					name: '视频文件',
-					extensions: ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
-				}]
+				filters: [
+					{
+						name: '视频文件',
+						extensions: ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
+					}
+				]
 			});
 
 			if (selected) {
@@ -250,11 +252,11 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 	// 初始化缩略图管理器和处理 CLI 启动参数
 	// 语音命令事件监听器
 	let voiceCommandHandler: ((event: Event) => void) | null = null;
-	
+
 	onMount(async () => {
 		// 加载空页面设置
 		loadEmptySettings();
-		
+
 		// 初始化卡片窗口系统
 		try {
 			await initCardWindowSystem();
@@ -264,10 +266,10 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 		} catch (error) {
 			console.error('❌ 卡片窗口系统初始化失败:', error);
 		}
-		
+
 		// 初始化默认上下文为图片浏览模式
 		keyBindingsStore.setContexts(['global', 'viewer']);
-		
+
 		try {
 			// V3 缩略图系统初始化
 			const thumbnailPath = 'D:\\temp\\neoview';
@@ -299,7 +301,7 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 
 			if (cliPath) {
 				console.log('📂 CLI 启动: 原始路径:', cliPath);
-				
+
 				// 1. 规范化路径（处理相对路径、空格、特殊字符）
 				let normalizedPath: string;
 				try {
@@ -310,7 +312,7 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 					showErrorToast('路径无效', `无法解析路径: ${cliPath}`);
 					return;
 				}
-				
+
 				// 2. 验证路径是否存在
 				const exists = await validatePath(normalizedPath);
 				if (!exists) {
@@ -318,12 +320,12 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 					showErrorToast('路径不存在', normalizedPath);
 					return;
 				}
-				
+
 				// 3. 获取路径类型
 				console.log('📂 CLI 启动: 开始获取路径类型...');
 				const pathType = await getPathType(normalizedPath);
 				console.log('📂 CLI 启动: 路径类型:', pathType);
-				
+
 				// 4. 根据路径类型打开
 				// 复刻 NeeView 行为：在 folder 卡片中用新标签页打开
 				switch (pathType) {
@@ -336,17 +338,20 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 						const newTabId = folderTabActions.createTab(normalizedPath);
 						console.log('📂 CLI: 新标签页已创建, tabId:', newTabId);
 						// 3. 等待一帧让 Svelte 更新 DOM
-						await new Promise(resolve => requestAnimationFrame(resolve));
+						await new Promise((resolve) => requestAnimationFrame(resolve));
 						console.log('📂 CLI: DOM 更新完成');
 						break;
 					case 'archive': {
 						// 压缩包：在 viewer 中打开，同时在 folder 面板中定位到压缩包所在文件夹
 						console.log('📦 CLI: 打开压缩包作为书籍:', normalizedPath);
-						
+
 						// 1. 获取压缩包所在的父文件夹
-						const archiveParentDir = normalizedPath.substring(0, Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/')));
+						const archiveParentDir = normalizedPath.substring(
+							0,
+							Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/'))
+						);
 						console.log('📦 CLI: 压缩包所在文件夹:', archiveParentDir);
-						
+
 						// 2. 在 folder 面板中创建新标签页，定位到父文件夹
 						if (archiveParentDir) {
 							setActivePanelTab('folder');
@@ -355,7 +360,7 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 							folderTabActions.focusOnPath(normalizedPath);
 							console.log('📦 CLI: 设置待聚焦路径:', normalizedPath);
 						}
-						
+
 						// 3. 在 viewer 中打开压缩包
 						await bookStore.openBook(normalizedPath);
 						break;
@@ -363,11 +368,14 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 					case 'file': {
 						// 普通文件：在 viewer 中打开，同时在 folder 面板中定位到文件所在文件夹
 						console.log('📄 CLI: 打开文件:', normalizedPath);
-						
+
 						// 1. 获取文件所在的父文件夹
-						const parentDir = normalizedPath.substring(0, Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/')));
+						const parentDir = normalizedPath.substring(
+							0,
+							Math.max(normalizedPath.lastIndexOf('\\'), normalizedPath.lastIndexOf('/'))
+						);
 						console.log('📄 CLI: 文件所在文件夹:', parentDir);
-						
+
 						// 2. 在 folder 面板中创建新标签页，定位到父文件夹
 						if (parentDir) {
 							setActivePanelTab('folder');
@@ -376,7 +384,7 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 							folderTabActions.focusOnPath(normalizedPath);
 							console.log('📄 CLI: 设置待聚焦路径:', normalizedPath);
 						}
-						
+
 						// 3. 在 viewer 中打开文件
 						const meta = await getFileMetadata(normalizedPath);
 						await openFileSystemItem(normalizedPath, meta.isDir, { forceInApp: true });
@@ -497,7 +505,6 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 			}
 		}
 
-
 		// 使用统一的动作处理器执行动作
 		const ctx: ActionHandlerContext = { handleDeleteCurrentArchivePage };
 		const handled = await executeAppAction(action, ctx);
@@ -534,17 +541,10 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 		const target = e.target as HTMLElement;
 		const isInTopToolbar = target.closest('[data-top-toolbar]') !== null;
 		const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
+		const isInSidebar = target.closest('[data-sidebar]') !== null;
 
-		// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-		if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
-			// console.log('边栏已打开或点击在上下栏区域内，禁用全局区域点击响应', {
-			// 	leftSidebarOpen: $leftSidebarOpen,
-			// 	rightSidebarOpen: $rightSidebarOpen,
-			// 	isInTopToolbar,
-			// 	isInBottomBar,
-			// 	targetElement: target.tagName,
-			// 	targetClass: target.className
-			// });
+		// 如果点击在侧边栏内容、上栏或下栏区域内，则不处理区域点击
+		if (isInSidebar || isInTopToolbar || isInBottomBar) {
 			return;
 		}
 
@@ -590,17 +590,10 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 		const target = e.target as HTMLElement;
 		const isInTopToolbar = target.closest('[data-top-toolbar]') !== null;
 		const isInBottomBar = target.closest('[data-bottom-bar]') !== null;
+		const isInSidebar = target.closest('[data-sidebar]') !== null;
 
-		// 如果任一边栏打开，或点击在上下栏区域内，则不处理区域点击
-		if ($leftSidebarOpen || $rightSidebarOpen || isInTopToolbar || isInBottomBar) {
-			// console.log('边栏已打开或点击在上下栏区域内，禁用全局区域按下响应', {
-			// 	leftSidebarOpen: $leftSidebarOpen,
-			// 	rightSidebarOpen: $rightSidebarOpen,
-			// 	isInTopToolbar,
-			// 	isInBottomBar,
-			// 	targetElement: target.tagName,
-			// 	targetClass: target.className
-			// });
+		// 如果点击在侧边栏内容、上栏或下栏区域内，则不处理区域点击
+		if (isInSidebar || isInTopToolbar || isInBottomBar) {
 			return;
 		}
 
@@ -678,161 +671,169 @@ import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActio
 			</EmptyHeader> -->
 			<EmptyContent class="relative z-10">
 				<!-- 项目卡片 - 隐藏时变透明，保持布局 -->
-				<ProjectCard class="mb-6 transition-opacity duration-300 {showProjectCard ? 'opacity-100' : 'opacity-0 pointer-events-none'}" />
+				<ProjectCard
+					class="mb-6 transition-opacity duration-300 {showProjectCard
+						? 'opacity-100'
+						: 'pointer-events-none opacity-0'}"
+				/>
 
 				<!-- 控制按钮组容器 - 使用group实现悬停显示 -->
 				<div class="empty-controls-container group">
-					<div class="empty-controls opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center gap-2">
-					<!-- 隐藏/显示卡片按钮 -->
-					<button
-						onclick={toggleProjectCard}
-						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-						title={showProjectCard ? '隐藏卡片' : '显示卡片'}
+					<div
+						class="empty-controls flex items-center gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
 					>
-						{#if showProjectCard}
-							<EyeOff class="h-4 w-4" />
-						{:else}
-							<Eye class="h-4 w-4" />
-						{/if}
-					</button>
-
-					<!-- 上传背景图按钮 -->
-					<button
-						onclick={() => fileInputRef?.click()}
-						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-						title="上传背景图"
-					>
-						<ImageUp class="h-4 w-4" />
-					</button>
-
-					<!-- 清除背景图按钮（仅当有背景图时显示） -->
-					{#if backgroundImageUrl}
+						<!-- 隐藏/显示卡片按钮 -->
 						<button
-							onclick={clearBackgroundImage}
-							class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-							title="清除背景图"
+							onclick={toggleProjectCard}
+							class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105"
+							title={showProjectCard ? '隐藏卡片' : '显示卡片'}
 						>
-							<X class="h-4 w-4" />
-						</button>
-					{/if}
-
-					<!-- 上传背景视频按钮 -->
-					<button
-						onclick={handleBackgroundVideoUpload}
-						class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-						title="上传背景视频"
-					>
-						<Video class="h-4 w-4" />
-					</button>
-
-					<!-- 清除背景视频按钮（仅当有背景视频时显示） -->
-					{#if backgroundVideoUrl}
-						<button
-							onclick={clearBackgroundVideo}
-							class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105"
-							title="清除背景视频"
-						>
-							<X class="h-4 w-4" />
-						</button>
-					{/if}
-
-					<!-- 视频设置按钮（仅当有背景视频时显示） -->
-					{#if backgroundVideoUrl}
-						<div class="relative">
-							<button
-								onclick={() => showVideoSettings = !showVideoSettings}
-								class="empty-control-btn h-9 w-9 rounded-lg flex items-center justify-center transition-all hover:scale-105 {showVideoSettings ? 'bg-primary/20' : ''}"
-								title="视频设置"
-							>
-								<Settings2 class="h-4 w-4" />
-							</button>
-
-							<!-- 视频设置面板 -->
-							{#if showVideoSettings}
-								<div
-									class="absolute bottom-full left-0 mb-2 w-64 rounded-lg p-4 shadow-lg"
-									style="background: hsl(var(--card) / 0.95); backdrop-filter: blur(16px); border: 1px solid hsl(var(--border) / 0.5);"
-									onclick={(e) => e.stopPropagation()}
-								>
-									<div class="mb-3 flex items-center justify-between">
-										<span class="text-sm font-medium">视频设置</span>
-										<button
-											class="text-muted-foreground hover:text-foreground transition-colors"
-											onclick={() => showVideoSettings = false}
-										>
-											<X class="h-4 w-4" />
-										</button>
-									</div>
-
-									<!-- 透明度 -->
-									<div class="mb-4">
-										<div class="mb-1 flex items-center justify-between">
-											<span class="text-xs text-muted-foreground">透明度</span>
-											<span class="text-xs font-mono">{Math.round(videoOpacity * 100)}%</span>
-										</div>
-										<input
-											type="range"
-											min="0"
-											max="1"
-											step="0.05"
-											bind:value={videoOpacity}
-											oninput={saveEmptySettings}
-											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
-										/>
-									</div>
-
-									<!-- 模糊度 -->
-									<div class="mb-4">
-										<div class="mb-1 flex items-center justify-between">
-											<span class="text-xs text-muted-foreground">模糊度</span>
-											<span class="text-xs font-mono">{videoBlur}px</span>
-										</div>
-										<input
-											type="range"
-											min="0"
-											max="20"
-											step="1"
-											bind:value={videoBlur}
-											oninput={saveEmptySettings}
-											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
-										/>
-									</div>
-
-									<!-- 播放速率 -->
-									<div>
-										<div class="mb-1 flex items-center justify-between">
-											<span class="text-xs text-muted-foreground">播放速率</span>
-											<span class="text-xs font-mono">{videoPlaybackRate.toFixed(2)}x</span>
-										</div>
-										<input
-											type="range"
-											min="0.25"
-											max="2"
-											step="0.1"
-											bind:value={videoPlaybackRate}
-											oninput={saveEmptySettings}
-											class="w-full h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer"
-										/>
-									</div>
-
-									<!-- 重置按钮 -->
-									<div class="mt-4 pt-3 border-t border-border/50">
-										<button
-											onclick={() => {
-												videoOpacity = 0.3;
-												videoBlur = 0;
-												videoPlaybackRate = 1.0;
-												saveEmptySettings();
-											}}
-											class="w-full px-3 py-1.5 text-xs rounded-md bg-primary/10 hover:bg-primary/20 transition-colors"
-										>
-											重置为默认值
-										</button>
-									</div>
-								</div>
+							{#if showProjectCard}
+								<EyeOff class="h-4 w-4" />
+							{:else}
+								<Eye class="h-4 w-4" />
 							{/if}
-						</div>
-					{/if}
+						</button>
+
+						<!-- 上传背景图按钮 -->
+						<button
+							onclick={() => fileInputRef?.click()}
+							class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105"
+							title="上传背景图"
+						>
+							<ImageUp class="h-4 w-4" />
+						</button>
+
+						<!-- 清除背景图按钮（仅当有背景图时显示） -->
+						{#if backgroundImageUrl}
+							<button
+								onclick={clearBackgroundImage}
+								class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105"
+								title="清除背景图"
+							>
+								<X class="h-4 w-4" />
+							</button>
+						{/if}
+
+						<!-- 上传背景视频按钮 -->
+						<button
+							onclick={handleBackgroundVideoUpload}
+							class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105"
+							title="上传背景视频"
+						>
+							<Video class="h-4 w-4" />
+						</button>
+
+						<!-- 清除背景视频按钮（仅当有背景视频时显示） -->
+						{#if backgroundVideoUrl}
+							<button
+								onclick={clearBackgroundVideo}
+								class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105"
+								title="清除背景视频"
+							>
+								<X class="h-4 w-4" />
+							</button>
+						{/if}
+
+						<!-- 视频设置按钮（仅当有背景视频时显示） -->
+						{#if backgroundVideoUrl}
+							<div class="relative">
+								<button
+									onclick={() => (showVideoSettings = !showVideoSettings)}
+									class="empty-control-btn flex h-9 w-9 items-center justify-center rounded-lg transition-all hover:scale-105 {showVideoSettings
+										? 'bg-primary/20'
+										: ''}"
+									title="视频设置"
+								>
+									<Settings2 class="h-4 w-4" />
+								</button>
+
+								<!-- 视频设置面板 -->
+								{#if showVideoSettings}
+									<div
+										class="absolute bottom-full left-0 mb-2 w-64 rounded-lg p-4 shadow-lg"
+										style="background: hsl(var(--card) / 0.95); backdrop-filter: blur(16px); border: 1px solid hsl(var(--border) / 0.5);"
+										onclick={(e) => e.stopPropagation()}
+									>
+										<div class="mb-3 flex items-center justify-between">
+											<span class="text-sm font-medium">视频设置</span>
+											<button
+												class="text-muted-foreground hover:text-foreground transition-colors"
+												onclick={() => (showVideoSettings = false)}
+											>
+												<X class="h-4 w-4" />
+											</button>
+										</div>
+
+										<!-- 透明度 -->
+										<div class="mb-4">
+											<div class="mb-1 flex items-center justify-between">
+												<span class="text-muted-foreground text-xs">透明度</span>
+												<span class="font-mono text-xs">{Math.round(videoOpacity * 100)}%</span>
+											</div>
+											<input
+												type="range"
+												min="0"
+												max="1"
+												step="0.05"
+												bind:value={videoOpacity}
+												oninput={saveEmptySettings}
+												class="bg-primary/20 h-1 w-full cursor-pointer appearance-none rounded-lg"
+											/>
+										</div>
+
+										<!-- 模糊度 -->
+										<div class="mb-4">
+											<div class="mb-1 flex items-center justify-between">
+												<span class="text-muted-foreground text-xs">模糊度</span>
+												<span class="font-mono text-xs">{videoBlur}px</span>
+											</div>
+											<input
+												type="range"
+												min="0"
+												max="20"
+												step="1"
+												bind:value={videoBlur}
+												oninput={saveEmptySettings}
+												class="bg-primary/20 h-1 w-full cursor-pointer appearance-none rounded-lg"
+											/>
+										</div>
+
+										<!-- 播放速率 -->
+										<div>
+											<div class="mb-1 flex items-center justify-between">
+												<span class="text-muted-foreground text-xs">播放速率</span>
+												<span class="font-mono text-xs">{videoPlaybackRate.toFixed(2)}x</span>
+											</div>
+											<input
+												type="range"
+												min="0.25"
+												max="2"
+												step="0.1"
+												bind:value={videoPlaybackRate}
+												oninput={saveEmptySettings}
+												class="bg-primary/20 h-1 w-full cursor-pointer appearance-none rounded-lg"
+											/>
+										</div>
+
+										<!-- 重置按钮 -->
+										<div class="border-border/50 mt-4 border-t pt-3">
+											<button
+												onclick={() => {
+													videoOpacity = 0.3;
+													videoBlur = 0;
+													videoPlaybackRate = 1.0;
+													saveEmptySettings();
+												}}
+												class="bg-primary/10 hover:bg-primary/20 w-full rounded-md px-3 py-1.5 text-xs transition-colors"
+											>
+												重置为默认值
+											</button>
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</div>
 

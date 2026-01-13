@@ -22,20 +22,40 @@
 		{ value: 'bottom-right', label: '右下', gridClass: 'col-start-3 row-start-3' }
 	];
 
+	// 判断区域是否被侧边栏遮挡
+	function isAreaBlocked(area: ViewArea): boolean {
+		// 左侧边栏打开时，左侧区域被遮挡
+		if (sidebarOpen && (area === 'top-left' || area === 'middle-left' || area === 'bottom-left')) {
+			return true;
+		}
+		// 右侧边栏打开时，右侧区域被遮挡
+		if (
+			rightSidebarOpen &&
+			(area === 'top-right' || area === 'middle-right' || area === 'bottom-right')
+		) {
+			return true;
+		}
+		return false;
+	}
+
 	// 处理区域点击
 	function handleAreaClick(area: ViewArea, event: MouseEvent) {
-		// 如果任一边栏打开，则不处理区域点击
-		if (sidebarOpen || rightSidebarOpen) {
+		// 如果该区域被侧边栏遮挡，则不处理
+		if (isAreaBlocked(area)) {
 			return;
 		}
-		
+
 		// 获取按键信息
 		const button = event.button === 0 ? 'left' : event.button === 1 ? 'middle' : 'right';
 		const clickType = event.detail === 2 ? 'double-click' : 'click';
-		
+
 		// 查找对应的操作
-		const action = keyBindingsStore.findActionByAreaClick(area, button as 'left' | 'right' | 'middle', clickType as 'click' | 'double-click');
-		
+		const action = keyBindingsStore.findActionByAreaClick(
+			area,
+			button as 'left' | 'right' | 'middle',
+			clickType as 'click' | 'double-click'
+		);
+
 		if (action) {
 			// 触发操作事件
 			dispatch('areaAction', { action, area, button, clickType });
@@ -43,12 +63,12 @@
 	}
 
 	// 处理右键菜单
-	function handleContextMenu(event: MouseEvent) {
-		// 如果任一边栏打开，则不处理右键菜单
-		if (sidebarOpen || rightSidebarOpen) {
+	function handleContextMenu(area: ViewArea, event: MouseEvent) {
+		// 如果该区域被侧边栏遮挡，则不处理右键菜单
+		if (isAreaBlocked(area)) {
 			return;
 		}
-		
+
 		event.preventDefault();
 	}
 
@@ -77,47 +97,55 @@
 </script>
 
 {#if show}
-	<div class="area-overlay fixed inset-0 z-[50] pointer-events-none">
+	<div class="area-overlay pointer-events-none fixed inset-0 z-[50]">
 		<!-- 半透明背景 -->
-		<div class="absolute inset-0 bg-black/20 pointer-events-none"></div>
-		
-		<!-- 9区域网格 - 根据边栏状态决定是否响应点击 -->
-		<div class="absolute inset-4 grid grid-cols-3 grid-rows-3 gap-2 {sidebarOpen || rightSidebarOpen ? 'pointer-events-none' : 'pointer-events-auto'}">
+		<div class="pointer-events-none absolute inset-0 bg-black/20"></div>
+
+		<!-- 9区域网格 - 始终启用点击，由 handleAreaClick 判断是否被遮挡 -->
+		<div class="pointer-events-auto absolute inset-4 grid grid-cols-3 grid-rows-3 gap-2">
 			{#each areas as area}
 				<div
-				class="border-2 border-white/60 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center cursor-pointer transition-all duration-200 hover:scale-105 hover:border-white/80 {area.gridClass}"
-				data-area={area.value}
-				onclick={(e) => handleAreaClick(area.value, e)}
-				oncontextmenu={handleContextMenu}
-				title="点击测试区域绑定"
-				role="button"
-				tabindex="0"
-				aria-label="{area.label}区域"
-			>
+					class="flex cursor-pointer items-center justify-center rounded-lg border-2 border-white/60 bg-white/10 backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:border-white/80 hover:bg-white/20 {area.gridClass} {isAreaBlocked(
+						area.value
+					)
+						? 'pointer-events-none opacity-30'
+						: ''}"
+					data-area={area.value}
+					onclick={(e) => handleAreaClick(area.value, e)}
+					oncontextmenu={(e) => handleContextMenu(area.value, e)}
+					title="点击测试区域绑定"
+					role="button"
+					tabindex="0"
+					aria-label="{area.label}区域"
+				>
 					<div class="text-center">
-						<div class="text-white font-bold text-lg drop-shadow-lg">{area.label}</div>
-						<div class="text-white/80 text-xs drop-shadow">{area.value}</div>
+						<div class="text-lg font-bold text-white drop-shadow-lg">{area.label}</div>
+						<div class="text-xs text-white/80 drop-shadow">{area.value}</div>
 					</div>
 				</div>
 			{/each}
 		</div>
 
 		<!-- 关闭提示 -->
-		<div class="absolute top-4 right-4 bg-black/60 text-white px-3 py-2 rounded-lg text-sm pointer-events-auto">
+		<div
+			class="pointer-events-auto absolute top-4 right-4 rounded-lg bg-black/60 px-3 py-2 text-sm text-white"
+		>
 			<div class="flex items-center gap-2">
 				<span>按 ESC 关闭</span>
 				<button
-				class="ml-2 text-white/80 hover:text-white transition-colors"
-				onclick={() => (show = false)}
-				aria-label="关闭区域覆盖层"
-			>
+					class="ml-2 text-white/80 transition-colors hover:text-white"
+					onclick={() => (show = false)}
+					aria-label="关闭区域覆盖层"
+				>
 					✕
 				</button>
 			</div>
 		</div>
 
 		<!-- 操作提示 -->
-		<div class="absolute bottom-4 left-4 bg-black/60 text-white px-3 py-2 rounded-lg text-sm max-w-xs pointer-events-none">
+		<div
+			class="pointer-events-none absolute bottom-4 left-4 max-w-xs rounded-lg bg-black/60 px-3 py-2 text-sm text-white"
+		>
 			<div class="space-y-1">
 				<div>• 左键/右键/中键点击测试区域</div>
 				<div>• 双击测试双击绑定</div>

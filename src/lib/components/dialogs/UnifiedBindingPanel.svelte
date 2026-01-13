@@ -640,8 +640,10 @@
 		<div class="px-4 pt-2">
 			<Tabs.List class="h-auto w-full flex-wrap gap-1">
 				{#each categories as category}
-					<Tabs.Trigger value={category} class="text-xs">
+					{@const count = keyBindingsStore.getBindingsByCategory(category).length}
+					<Tabs.Trigger value={category} class="text-xs gap-1.5">
 						{category}
+						<Badge variant="secondary" class="h-4 min-w-4 px-1 text-[9px] font-normal">{count}</Badge>
 					</Tabs.Trigger>
 				{/each}
 			</Tabs.List>
@@ -666,9 +668,10 @@
 								<Table.Row>
 									<Table.Head class="w-12 px-0 text-center">#</Table.Head>
 									<Table.Head class="w-auto px-2">操作项</Table.Head>
-									<Table.Head class="w-36 px-2">目标环境</Table.Head>
-									<Table.Head class="w-1/2 px-2">当前绑定</Table.Head>
-									<Table.Head class="w-16 pr-6 text-right"></Table.Head>
+									<Table.Head class="w-32 px-2">目标环境</Table.Head>
+									<Table.Head class="w-1/3 px-2">当前绑定</Table.Head>
+									<Table.Head class="w-16 px-2">分类</Table.Head>
+									<Table.Head class="w-10 pr-2 text-right"></Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
@@ -698,6 +701,7 @@
 												>
 											</div>
 										</Table.Cell>
+
 
 										<!-- 添加操作列 -->
 										<Table.Cell class="px-2 py-4">
@@ -1014,8 +1018,13 @@
 											</div>
 										</Table.Cell>
 
+										<!-- 分类 Badge -->
+										<Table.Cell class="px-2 py-4">
+											<Badge variant="outline" class="text-[9px] font-normal">{binding.category}</Badge>
+										</Table.Cell>
+
 										<!-- 重置操作 -->
-										<Table.Cell class="py-4 pr-6 text-right">
+										<Table.Cell class="py-4 pr-2 text-right">
 											<Button
 												variant="ghost"
 												size="icon"

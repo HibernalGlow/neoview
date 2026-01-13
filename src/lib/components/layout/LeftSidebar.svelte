@@ -5,7 +5,7 @@
 	 * 左侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical, GripHorizontal, Move } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical, GripHorizontal, Move, CornerRightDown } from '@lucide/svelte';
 	import { readable } from 'svelte/store';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
@@ -20,6 +20,7 @@
 		leftSidebarVerticalAlign,
 		leftSidebarHorizontalPos,
 		leftSidebarHeight,
+		leftSidebarCustomHeight,
 		showDragHandle,
 		type PanelId,
 		type PanelTabType
@@ -136,6 +137,61 @@
 		if (isDragging) {
 			isDragging = false;
 			(e.target as HTMLElement).releasePointerCapture(e.pointerId);
+		}
+	}
+
+	// 边角缩放 (同时调整宽和高)
+	let isCornerResizing = $state(false);
+	let cornerStartX = 0;
+	let cornerStartY = 0;
+	let cornerStartWidth = 0;
+	let cornerStartHeight = 0;
+
+	function handleCornerResizeStart(e: PointerEvent) {
+		isCornerResizing = true;
+		cornerStartX = e.clientX;
+		cornerStartY = e.clientY;
+		cornerStartWidth = $leftSidebarWidth;
+		cornerStartHeight = $leftSidebarHeight === 'full' ? 100 : $leftSidebarCustomHeight;
+		
+		// 如果是全高模式开始缩放，先切换到自定义模式
+		if ($leftSidebarHeight === 'full') {
+			sidebarConfigStore.setLeftSidebarHeight('custom');
+			sidebarConfigStore.setLeftSidebarCustomHeight(100);
+		}
+		
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		e.preventDefault();
+		e.stopPropagation();
+	}
+
+	function handleCornerResizeMove(e: PointerEvent) {
+		if (!isCornerResizing) return;
+
+		// 宽度调整
+		const deltaX = e.clientX - cornerStartX;
+		const newWidth = Math.max(200, Math.min(600, cornerStartWidth + deltaX));
+		leftSidebarWidth.set(newWidth);
+		onResize?.(newWidth);
+
+		// 高度调整
+		const deltaY = e.clientY - cornerStartY;
+		const deltaHeightPercent = (deltaY / window.innerHeight) * 100;
+		const newHeight = Math.max(10, Math.min(100, cornerStartHeight + deltaHeightPercent));
+		
+		if (newHeight >= 99.5) {
+			sidebarConfigStore.setLeftSidebarHeight('full');
+			sidebarConfigStore.setLeftSidebarCustomHeight(100);
+		} else {
+			sidebarConfigStore.setLeftSidebarHeight('custom');
+			sidebarConfigStore.setLeftSidebarCustomHeight(newHeight);
+		}
+	}
+
+	function handleCornerResizeEnd(e: PointerEvent) {
+		if (isCornerResizing) {
+			isCornerResizing = false;
+			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
 		}
 	}
 
@@ -349,6 +405,20 @@
 					aria-label="调整侧边栏宽度"
 				>
 					<GripVertical class="h-4 w-4" />
+				</button>
+
+				<!-- 边角缩放手柄 (右下角) -->
+				<button
+					type="button"
+					class="absolute bottom-0 right-0 z-[60] p-1 cursor-nwse-resize text-muted-foreground/30 hover:text-primary transition-colors
+						{isCornerResizing ? 'text-primary' : ''}"
+					onpointerdown={handleCornerResizeStart}
+					onpointermove={handleCornerResizeMove}
+					onpointerup={handleCornerResizeEnd}
+					onpointercancel={handleCornerResizeEnd}
+					aria-label="同时调整侧边栏宽高"
+				>
+					<CornerRightDown class="h-4 w-4" />
 				</button>
 			</Sidebar.Root>
 		</Sidebar.Provider>

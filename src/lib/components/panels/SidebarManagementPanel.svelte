@@ -324,14 +324,14 @@
 			</div>
 
 			<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
-				<Table.Root>
+				<Table.Root class="table-fixed">
 					<Table.Header class="bg-muted/50">
 						<Table.Row>
-							<Table.Head class="w-[40px]"></Table.Head>
-							<Table.Head class="w-[50px]">图标</Table.Head>
-							<Table.Head>名称</Table.Head>
-							<Table.Head class="w-[120px]">位置</Table.Head>
-							<Table.Head class="w-[150px] text-right">操作</Table.Head>
+							<Table.Head class="w-10 px-2"></Table.Head>
+							<Table.Head class="w-12 px-0 text-center">图标</Table.Head>
+							<Table.Head class="w-auto">名称</Table.Head>
+							<Table.Head class="w-[90px] px-2 text-center">状态</Table.Head>
+							<Table.Head class="w-[130px] pr-4 text-right">操作</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
@@ -356,35 +356,37 @@
 											'bg-muted/30 opacity-50 grayscale'
 									)}
 								>
-									<Table.Cell>
+									<Table.Cell class="px-2">
 										<div
-											class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 p-1 transition-colors cursor-grab"
+											class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 p-1 transition-colors cursor-grab flex items-center justify-center"
 											onpointerdown={(e) => handlePointerDown(e, panel)}
 										>
 											<GripVertical class="h-4 w-4" />
 										</div>
 									</Table.Cell>
-									<Table.Cell>
-										<div
-										class="bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
-									>
-										{#if panel.icon}
-											<svelte:component this={panel.icon} class="h-4.5 w-4.5" />
-										{:else}
-											<LayoutGrid class="h-4.5 w-4.5" />
-										{/if}
-									</div>
+									<Table.Cell class="px-0">
+										<div class="flex items-center justify-center">
+											<div
+												class="bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 shadow-sm"
+											>
+												{#if panel.icon}
+													<svelte:component this={panel.icon} class="h-4.5 w-4.5" />
+												{:else}
+													<LayoutGrid class="h-4.5 w-4.5" />
+												{/if}
+											</div>
+										</div>
 									</Table.Cell>
-									<Table.Cell>
-										<div class="flex min-w-0 flex-col">
-											<span class="truncate font-medium">{panel.title}</span>
+									<Table.Cell class="min-w-0 px-2">
+										<div class="flex min-w-0 flex-col overflow-hidden">
+											<span class="truncate font-medium block" title={panel.title}>{panel.title}</span>
 											<span
-												class="text-muted-foreground font-mono text-[10px] uppercase opacity-50"
+												class="text-muted-foreground font-mono text-[10px] uppercase opacity-50 truncate block"
 												>{panel.id}</span
 											>
 										</div>
 									</Table.Cell>
-									<Table.Cell>
+									<Table.Cell class="px-1 text-center">
 										<DropdownMenu.Root>
 											<DropdownMenu.Trigger asChild>
 												{#snippet children({ props })}
@@ -392,11 +394,11 @@
 														{...props}
 														variant="ghost"
 														size="sm"
-														class="hover:bg-muted h-7 rounded-lg px-2 font-normal gap-1.5"
+														class="hover:bg-muted h-7 rounded-lg px-1 font-normal"
 													>
 														<Badge
 															variant={getPanelStatusColor(panel.side)}
-															class="pointer-events-none h-4 px-1.5 text-[10px] font-bold uppercase tracking-tighter"
+															class="pointer-events-none h-4 px-1 text-[9px] font-bold tracking-tighter uppercase"
 														>
 															{getPanelStatus(panel.side)}
 														</Badge>
@@ -434,8 +436,8 @@
 											</DropdownMenu.Content>
 										</DropdownMenu.Root>
 									</Table.Cell>
-									<Table.Cell class="text-right">
-										<div class="flex items-center justify-end gap-1">
+									<Table.Cell class="pr-4 text-right">
+										<div class="flex items-center justify-end gap-0.5">
 											{#if panel.side === 'hidden'}
 												<Button
 													variant="ghost"
@@ -450,7 +452,7 @@
 												<Button
 													variant="ghost"
 													size="icon"
-													class="h-8 w-8 rounded-lg"
+													class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
 													disabled={index === 0}
 													onclick={() => {
 														const list =
@@ -462,12 +464,12 @@
 														movePanelUp(panel, list);
 													}}
 												>
-													<ArrowUp class="h-4 w-4" />
+													<ArrowUp class="h-3.5 w-3.5" />
 												</Button>
 												<Button
 													variant="ghost"
 													size="icon"
-													class="h-8 w-8 rounded-lg"
+													class="h-7 w-7 rounded-lg lg:h-8 lg:w-8"
 													disabled={index === group.items.length - 1}
 													onclick={() => {
 														const list =
@@ -479,7 +481,7 @@
 														movePanelDown(panel, list);
 													}}
 												>
-													<ArrowDown class="h-4 w-4" />
+													<ArrowDown class="h-3.5 w-3.5" />
 												</Button>
 											{/if}
 											<DropdownMenu.Root>

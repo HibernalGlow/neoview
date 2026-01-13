@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * NeoView - Sidebar Management Panel Component
-	 * 边栏管理面板 - 三区域拖拽布局管理
+	 * 边栏管理面板 - 现代化的列表管理界面
 	 * 完全使用 sidebarConfig store 动态管理面板配置
 	 */
 	import {
@@ -25,7 +25,11 @@
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import { emit } from '@tauri-apps/api/event';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
-	import { LayoutGrid, Settings2, PanelTop, PanelBottom, PanelLeft, PanelRight, EyeOff, Columns3, Navigation, Wrench, Folder, Bookmark, History, RulerDimensionLine, AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd } from '@lucide/svelte';
+	import { 
+		LayoutGrid, Settings2, PanelTop, PanelBottom, PanelLeft, PanelRight, 
+		EyeOff, Columns3, Navigation, Wrench, Folder, Bookmark, History, 
+		RotateCcw, ListChecks, GripVertical, MoreHorizontal, ArrowUp, ArrowDown
+	} from '@lucide/svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -45,7 +49,13 @@
 		type PanelMode
 	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 
+	import ManagementListView from '$lib/components/settings/ManagementListView.svelte';
+	import ManagementItemCard from '$lib/components/settings/ManagementItemCard.svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+
 	let activeTab = $state('layout');
+	let searchQuery = $state('');
+	let viewMode = $state<'grid' | 'list'>('grid');
 
 	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels.hoverAreas);
@@ -95,7 +105,6 @@
 		const { panel, source } = draggedPanel;
 		const targetArea = dragOverArea;
 
-		// 如果目标区域和源区域相同，不做任何操作
 		if (source === targetArea) {
 			draggedPanel = null;
 			isPointerDragging = false;
@@ -104,20 +113,16 @@
 			return;
 		}
 
-		// 直接更新 store - 使用 movePanel 方法
 		if (targetArea === 'waitingArea') {
-			// 隐藏面板
 			if (panel.canHide) {
 				sidebarConfigStore.setPanelVisible(panel.id, false);
 			}
 		} else if (targetArea === 'leftSidebar') {
-			// 移动到左侧栏
 			sidebarConfigStore.setPanelVisible(panel.id, true);
-			sidebarConfigStore.movePanel(panel.id, 999, 'left'); // 放到最后
+			sidebarConfigStore.movePanel(panel.id, 999, 'left');
 		} else if (targetArea === 'rightSidebar') {
-			// 移动到右侧栏
 			sidebarConfigStore.setPanelVisible(panel.id, true);
-			sidebarConfigStore.movePanel(panel.id, 999, 'right'); // 放到最后
+			sidebarConfigStore.movePanel(panel.id, 999, 'right');
 		}
 
 		draggedPanel = null;
@@ -129,25 +134,18 @@
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
 
-	// 应用布局（通知主窗口重新加载）
 	async function applyLayout() {
 		try {
-			// 发送事件让主窗口重新加载
 			await emit('reload-main-window');
 			saveMessage = '✓ 布局已应用';
-			setTimeout(() => {
-				saveMessage = null;
-			}, 2000);
+			setTimeout(() => { saveMessage = null; }, 2000);
 		} catch (err) {
 			console.error('应用布局失败:', err);
 			saveMessage = '❌ 应用失败';
-			setTimeout(() => {
-				saveMessage = null;
-			}, 2000);
+			setTimeout(() => { saveMessage = null; }, 2000);
 		}
 	}
 
-	// 重置布局
 	async function resetLayout() {
 		const confirmed = await confirm({
 			title: '确认重置',
@@ -159,19 +157,14 @@
 		if (confirmed) {
 			sidebarConfigStore.resetPanels();
 			saveMessage = '✓ 布局已重置';
-			setTimeout(() => {
-				saveMessage = null;
-			}, 2000);
+			setTimeout(() => { saveMessage = null; }, 2000);
 		}
 	}
 
-	// 移动面板顺序
 	function movePanelUp(panel: PanelConfig, panels: PanelConfig[]) {
 		const currentIndex = panels.findIndex(p => p.id === panel.id);
 		if (currentIndex <= 0) return;
-		
 		const prevPanel = panels[currentIndex - 1];
-		// 交换顺序
 		sidebarConfigStore.setPanelOrder(panel.id, prevPanel.order);
 		sidebarConfigStore.setPanelOrder(prevPanel.id, panel.order);
 	}
@@ -179,9 +172,7 @@
 	function movePanelDown(panel: PanelConfig, panels: PanelConfig[]) {
 		const currentIndex = panels.findIndex(p => p.id === panel.id);
 		if (currentIndex < 0 || currentIndex >= panels.length - 1) return;
-		
 		const nextPanel = panels[currentIndex + 1];
-		// 交换顺序
 		sidebarConfigStore.setPanelOrder(panel.id, nextPanel.order);
 		sidebarConfigStore.setPanelOrder(nextPanel.id, panel.order);
 	}
@@ -192,9 +183,7 @@
 			finalizeDrop();
 		}
 		window.addEventListener('pointerup', handleWindowPointerUp);
-		return () => {
-			window.removeEventListener('pointerup', handleWindowPointerUp);
-		};
+		return () => { window.removeEventListener('pointerup', handleWindowPointerUp); };
 	});
 
 	$effect(() => {
@@ -203,9 +192,7 @@
 			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
 		}
 		window.addEventListener('pointermove', handleWindowPointerMove);
-		return () => {
-			window.removeEventListener('pointermove', handleWindowPointerMove);
-		};
+		return () => { window.removeEventListener('pointermove', handleWindowPointerMove); };
 	});
 
 	const handleSettingsUpdate = (next: NeoViewSettings) => {
@@ -214,504 +201,325 @@
 
 	onMount(() => {
 		settingsManager.addListener(handleSettingsUpdate);
-		return () => {
-			settingsManager.removeListener(handleSettingsUpdate);
-		};
+		return () => { settingsManager.removeListener(handleSettingsUpdate); };
 	});
-
-	function updateHoverAreas(partial: Partial<NeoViewSettings['panels']['hoverAreas']>) {
-		settingsManager.updateNestedSettings('panels', { hoverAreas: { ...hoverAreas, ...partial } });
-	}
 
 	function updateAutoHideTiming(partial: Partial<NeoViewSettings['panels']['autoHideTiming']>) {
 		settingsManager.updateNestedSettings('panels', { autoHideTiming: { ...autoHideTiming, ...partial } });
 	}
 
-	</script>
-
-<div class="space-y-4 p-6">
-	<div class="space-y-2">
-		<h3 class="text-lg font-semibold">边栏管理</h3>
-		<p class="text-muted-foreground text-sm">拖拽面板到不同区域来自定义您的界面布局</p>
-	</div>
-
-	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="grid w-full grid-cols-2">
-			<Tabs.Trigger value="layout" class="gap-1.5 text-xs">
-				<LayoutGrid class="h-3.5 w-3.5" />
-				布局
-			</Tabs.Trigger>
-			<Tabs.Trigger value="settings" class="gap-1.5 text-xs">
-				<Settings2 class="h-3.5 w-3.5" />
-				设置
-			</Tabs.Trigger>
-		</Tabs.List>
-
-		<Tabs.Content value="settings" class="mt-4 space-y-4">
-	<!-- 文件面板组件显示设置 - 按面板类型分开 -->
-	<div class="rounded-lg border bg-card/40 p-4 space-y-4">
-		<h4 class="text-sm font-medium">文件面板组件</h4>
-		<p class="text-muted-foreground text-xs">分别管理文件夹、书签、历史面板的标签栏、面包屑、工具栏显示位置</p>
+	// 过滤后的面板数据
+	const filteredPanels = $derived.by(() => {
+		const query = searchQuery.toLowerCase().trim();
+		const all = [
+			...leftPanels.map(p => ({ ...p, side: 'left' as const })),
+			...rightPanels.map(p => ({ ...p, side: 'right' as const })),
+			...hiddenPanels.map(p => ({ ...p, side: 'hidden' as const }))
+		];
 		
-		<!-- 文件夹面板 -->
-		<div class="space-y-2 border-b pb-3">
-			<div class="flex items-center gap-2 mb-2">
-				<Folder class="h-4 w-4 text-blue-500" />
-				<span class="text-sm font-medium">文件夹面板</span>
-			</div>
-			<div class="grid grid-cols-3 gap-2 text-xs">
-				<!-- 标签栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Columns3 class="h-3 w-3" />
-						<span>标签栏</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$folderTabBarLayout === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'folder')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 面包屑 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Navigation class="h-3 w-3" />
-						<span>面包屑</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$folderBreadcrumbPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'folder')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 工具栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Wrench class="h-3 w-3" />
-						<span>工具栏</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$folderToolbarPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'folder')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-			</div>
+		if (!query) return all;
+		return all.filter(p => 
+			p.title.toLowerCase().includes(query) || 
+			p.id.toLowerCase().includes(query)
+		);
+	});
+
+	function getPanelStatus(side: 'left' | 'right' | 'hidden') {
+		if (side === 'left') return '左侧栏';
+		if (side === 'right') return '右侧栏';
+		return '已隐藏';
+	}
+
+	function getPanelStatusColor(side: 'left' | 'right' | 'hidden') {
+		if (side === 'left') return 'default';
+		if (side === 'right') return 'secondary';
+		return 'outline';
+	}
+
+	function assignPanel(panelId: PanelId, side: 'left' | 'right' | 'hidden') {
+		if (side === 'hidden') {
+			sidebarConfigStore.setPanelVisible(panelId, false);
+		} else {
+			sidebarConfigStore.setPanelVisible(panelId, true);
+			sidebarConfigStore.movePanel(panelId, 999, side);
+		}
+	}
+</script>
+
+<div class="h-full flex flex-col overflow-hidden bg-background">
+	<Tabs.Root bind:value={activeTab} class="flex-1 flex flex-col overflow-hidden">
+		<div class="px-6 pt-6 bg-background/80 backdrop-blur-md z-10 border-b pb-4">
+			<Tabs.List class="grid w-full grid-cols-2 h-12 rounded-2xl p-1 bg-muted/30">
+				<Tabs.Trigger value="layout" class="gap-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm">
+					<LayoutGrid class="h-4 w-4" />
+					布局管理
+				</Tabs.Trigger>
+				<Tabs.Trigger value="settings" class="gap-2 rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm">
+					<Settings2 class="h-4 w-4" />
+					高级设置
+				</Tabs.Trigger>
+			</Tabs.List>
 		</div>
 
-		<!-- 书签面板 -->
-		<div class="space-y-2 border-b pb-3">
-			<div class="flex items-center gap-2 mb-2">
-				<Bookmark class="h-4 w-4 text-amber-500" />
-				<span class="text-sm font-medium">书签面板</span>
-			</div>
-			<div class="grid grid-cols-3 gap-2 text-xs">
-				<!-- 标签栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Columns3 class="h-3 w-3" />
-						<span>标签栏</span>
+		<Tabs.Content value="layout" class="flex-1 overflow-auto mt-0 p-6 focus-visible:outline-none">
+			<ManagementListView
+				title="边栏布局"
+				description="管理左右边栏的面板位置、顺序和可见性。"
+				bind:searchQuery
+				onSearchChange={(val) => searchQuery = val}
+				{viewMode}
+				onViewModeChange={(mode) => viewMode = mode}
+			>
+				{#snippet actions()}
+					<div class="flex items-center gap-2">
+						{#if saveMessage}
+							<span class="text-xs text-green-600 font-medium animate-in fade-in slide-in-from-right-2">{saveMessage}</span>
+						{/if}
+						<Button variant="outline" size="sm" onclick={resetLayout} class="h-10 rounded-xl gap-2">
+							<RotateCcw class="h-4 w-4" />
+							重置
+						</Button>
+						<Button variant="default" size="sm" onclick={applyLayout} class="h-10 rounded-xl gap-2 shadow-sm">
+							<ListChecks class="h-4 w-4" />
+							应用面板
+						</Button>
 					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$bookmarkTabBarLayout === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'bookmark')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 面包屑 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Navigation class="h-3 w-3" />
-						<span>面包屑</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$bookmarkBreadcrumbPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'bookmark')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 工具栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Wrench class="h-3 w-3" />
-						<span>工具栏</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$bookmarkToolbarPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'bookmark')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-			</div>
-		</div>
+				{/snippet}
 
-		<!-- 历史面板 -->
-		<div class="space-y-2">
-			<div class="flex items-center gap-2 mb-2">
-				<History class="h-4 w-4 text-green-500" />
-				<span class="text-sm font-medium">历史面板</span>
-			</div>
-			<div class="grid grid-cols-3 gap-2 text-xs">
-				<!-- 标签栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Columns3 class="h-3 w-3" />
-						<span>标签栏</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$historyTabBarLayout === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'history')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 面包屑 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Navigation class="h-3 w-3" />
-						<span>面包屑</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$historyBreadcrumbPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'history')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-				<!-- 工具栏 -->
-				<div class="space-y-1">
-					<div class="flex items-center gap-1 text-muted-foreground">
-						<Wrench class="h-3 w-3" />
-						<span>工具栏</span>
-					</div>
-					<div class="flex gap-0.5">
-						{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
-							<Button
-								variant={$historyToolbarPosition === pos ? 'default' : 'ghost'}
-								size="sm"
-								class="h-6 w-6 p-0"
-								onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'history')}
-								title={pos === 'none' ? '隐藏' : pos === 'top' ? '顶部' : pos === 'bottom' ? '底部' : pos === 'left' ? '左侧' : '右侧'}
-							>
-								{#if pos === 'none'}<EyeOff class="h-3 w-3" />
-								{:else if pos === 'top'}<PanelTop class="h-3 w-3" />
-								{:else if pos === 'bottom'}<PanelBottom class="h-3 w-3" />
-								{:else if pos === 'left'}<PanelLeft class="h-3 w-3" />
-								{:else}<PanelRight class="h-3 w-3" />{/if}
-							</Button>
-						{/each}
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
+				{#each filteredPanels as panel, index (panel.id)}
+					<ManagementItemCard
+						id={panel.id}
+						title={panel.title}
+						icon={panel.icon}
+						subtitle={`ID: ${panel.id}`}
+						status={getPanelStatus(panel.side)}
+						statusColor={getPanelStatusColor(panel.side)}
+						active={isPointerDragging && draggedPanel?.panel.id === panel.id}
+						isFirst={index === 0}
+						isLast={index === filteredPanels.length - 1}
+						onMoveUp={() => {
+							const list = panel.side === 'left' ? leftPanels : panel.side === 'right' ? rightPanels : hiddenPanels;
+							movePanelUp(panel, list);
+						}}
+						onMoveDown={() => {
+							const list = panel.side === 'left' ? leftPanels : panel.side === 'right' ? rightPanels : hiddenPanels;
+							movePanelDown(panel, list);
+						}}
+						onToggleVisible={() => {
+							if (panel.canHide) {
+								sidebarConfigStore.setPanelVisible(panel.id, panel.side === 'hidden');
+							}
+						}}
+						onPointerDown={(e) => handlePointerDown(e, panel, panel.side === 'left' ? 'leftSidebar' : panel.side === 'right' ? 'rightSidebar' : 'waitingArea')}
+					>
+						{#snippet assignOptions()}
+							<DropdownMenu.Item onclick={() => assignPanel(panel.id, 'left')}>
+								<PanelLeft class="mr-2 h-4 w-4" />
+								<span>左侧栏</span>
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => assignPanel(panel.id, 'right')}>
+								<PanelRight class="mr-2 h-4 w-4" />
+								<span>右侧栏</span>
+							</DropdownMenu.Item>
+							{#if panel.canHide}
+								<DropdownMenu.Item onclick={() => assignPanel(panel.id, 'hidden')}>
+									<EyeOff class="mr-2 h-4 w-4" />
+									<span>隐藏</span>
+								</DropdownMenu.Item>
+							{/if}
+						{/snippet}
+					</ManagementItemCard>
+				{/each}
 
-	<!-- 自动隐藏时间设置 -->
-	<div class="mt-4 grid grid-cols-2 gap-4 rounded-lg border bg-card/40 p-4">
-		<div class="space-y-2">
-			<h4 class="text-sm font-medium">显示延迟（秒）</h4>
-			<input
-				type="number"
-				min="0"
-				step="0.1"
-				value={autoHideTiming.showDelaySec}
-				oninput={(e) => updateAutoHideTiming({ showDelaySec: Number((e.currentTarget as HTMLInputElement).value) })}
-				class="w-24 rounded border px-2 py-1 text-sm"
-			/>
-		</div>
-		<div class="space-y-2">
-			<h4 class="text-sm font-medium">隐藏延迟（秒）</h4>
-			<input
-				type="number"
-				min="0"
-				step="0.1"
-				value={autoHideTiming.hideDelaySec}
-				oninput={(e) => updateAutoHideTiming({ hideDelaySec: Number((e.currentTarget as HTMLInputElement).value) })}
-				class="w-24 rounded border px-2 py-1 text-sm"
-			/>
-		</div>
-	</div>
-
+				{#if filteredPanels.length === 0}
+					<div class="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground bg-muted/5 rounded-3xl border-2 border-dashed border-muted">
+						<LayoutGrid class="h-12 w-12 opacity-20 mb-4" />
+						<p>未找到匹配的面板</p>
+					</div>
+				{/if}
+			</ManagementListView>
 		</Tabs.Content>
 
-		<Tabs.Content value="layout" class="mt-4 space-y-4">
-	<!-- 操作按钮 -->
-	<div class="flex items-center gap-2">
-		<button
-			type="button"
-			class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-1.5 text-sm transition-colors"
-			onclick={applyLayout}
-		>
-			应用布局
-		</button>
-		<button
-			type="button"
-			class="bg-secondary hover:bg-secondary/80 rounded-md px-3 py-1.5 text-sm transition-colors"
-			onclick={resetLayout}
-		>
-			重置布局
-		</button>
-		{#if saveMessage}
-			<span class="text-sm text-green-600">{saveMessage}</span>
-		{/if}
-	</div>
-
-	<!-- 三栏布局 -->
-	<div class="grid min-h-[300px] grid-cols-3 gap-4">
-		<!-- 等待区 -->
-		<div
-			class="rounded-lg border-2 border-dashed p-4 {dragOverArea === 'waitingArea' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			onpointerenter={() => handleAreaPointerEnter('waitingArea')}
-			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
-		>
-			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
-			<div class="min-h-[200px] space-y-2">
-				{#each hiddenPanels as panel (panel.id)}
-					{@const Icon = panel.icon}
-					<div
-						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
-					>
-						<div class="flex items-center gap-2">
-							<div
-								class="cursor-grab rounded p-1 hover:bg-accent/50 active:cursor-grabbing"
-								onpointerdown={(e) => handlePointerDown(e, panel, 'waitingArea')}
-							>
-								<svg class="text-muted-foreground h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-								</svg>
-							</div>
-							<Icon class="h-4 w-4" />
-							<span class="text-sm font-medium">{panel.title}</span>
+		<Tabs.Content value="settings" class="flex-1 overflow-auto mt-0 p-6 focus-visible:outline-none">
+			<div class="grid gap-6 max-w-4xl mx-auto">
+				<!-- 文件面板组件设置 -->
+				<div class="rounded-3xl border bg-card/40 p-6 space-y-6 shadow-sm">
+					<div class="flex items-center gap-3">
+						<div class="p-2.5 rounded-2xl bg-primary/10 text-primary">
+							<Folder class="h-5 w-5" />
+						</div>
+						<div>
+							<h4 class="font-bold text-lg">面板组件交互</h4>
+							<p class="text-sm text-muted-foreground">精细化管理各面板内部件的显示布局</p>
 						</div>
 					</div>
-				{/each}
-				{#if hiddenPanels.length === 0}
-					<div class="text-muted-foreground py-8 text-center text-sm">拖拽面板到这里隐藏</div>
-				{/if}
-			</div>
-		</div>
 
-		<!-- 左侧栏 -->
-		<div
-			class="rounded-lg border-2 border-dashed p-4 {dragOverArea === 'leftSidebar' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			onpointerenter={() => handleAreaPointerEnter('leftSidebar')}
-			onpointerleave={() => handleAreaPointerLeave('leftSidebar')}
-		>
-			<h4 class="mb-3 text-center text-sm font-medium">左侧栏</h4>
-			<div class="min-h-[200px] space-y-2">
-				{#each leftPanels as panel, index (panel.id)}
-					{@const Icon = panel.icon}
-					<div
-						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
-					>
-						<div class="flex items-center gap-2">
-							<div
-								class="cursor-grab rounded p-1 hover:bg-accent/50 active:cursor-grabbing"
-								onpointerdown={(e) => handlePointerDown(e, panel, 'leftSidebar')}
-							>
-								<svg class="text-muted-foreground h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-								</svg>
+					<div class="grid gap-6">
+						<!-- 文件夹面板 -->
+						<div class="p-4 rounded-2xl bg-muted/30 space-y-4">
+							<div class="flex items-center gap-2">
+								<Folder class="h-4 w-4 text-blue-500" />
+								<span class="font-semibold">文件夹面板</span>
 							</div>
-							<Icon class="h-4 w-4" />
-							<span class="flex-1 text-sm font-medium">{panel.title}</span>
-							<!-- 上下箭头 -->
-							<div class="flex flex-col gap-0.5">
-								<button
-									type="button"
-									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
-									disabled={index === 0}
-									onclick={() => movePanelUp(panel, leftPanels)}
-									title="上移"
-								>
-									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
-									</svg>
-								</button>
-								<button
-									type="button"
-									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
-									disabled={index === leftPanels.length - 1}
-									onclick={() => movePanelDown(panel, leftPanels)}
-									title="下移"
-								>
-									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-									</svg>
-								</button>
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Columns3 class="h-3 w-3" />标签栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$folderTabBarLayout === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'folder')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Navigation class="h-3 w-3" />面包屑</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$folderBreadcrumbPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'folder')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Wrench class="h-3 w-3" />工具栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$folderToolbarPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'folder')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
 							</div>
 						</div>
-					</div>
-				{/each}
-				{#if leftPanels.length === 0}
-					<div class="text-muted-foreground py-8 text-center text-sm">拖拽面板到这里</div>
-				{/if}
-			</div>
-		</div>
 
-		<!-- 右侧栏 -->
-		<div
-			class="rounded-lg border-2 border-dashed p-4 {dragOverArea === 'rightSidebar' ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}"
-			onpointerenter={() => handleAreaPointerEnter('rightSidebar')}
-			onpointerleave={() => handleAreaPointerLeave('rightSidebar')}
-		>
-			<h4 class="mb-3 text-center text-sm font-medium">右侧栏</h4>
-			<div class="min-h-[200px] space-y-2">
-				{#each rightPanels as panel, index (panel.id)}
-					{@const Icon = panel.icon}
-					<div
-						class="bg-card rounded-md border p-3 transition-colors hover:bg-accent/50 {isPointerDragging && draggedPanel?.panel.id === panel.id ? 'opacity-50' : ''}"
-					>
-						<div class="flex items-center gap-2">
-							<div
-								class="cursor-grab rounded p-1 hover:bg-accent/50 active:cursor-grabbing"
-								onpointerdown={(e) => handlePointerDown(e, panel, 'rightSidebar')}
-							>
-								<svg class="text-muted-foreground h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-									<path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-								</svg>
+						<!-- 书签面板 -->
+						<div class="p-4 rounded-2xl bg-muted/30 space-y-4">
+							<div class="flex items-center gap-2">
+								<Bookmark class="h-4 w-4 text-amber-500" />
+								<span class="font-semibold">书签面板</span>
 							</div>
-							<Icon class="h-4 w-4" />
-							<span class="flex-1 text-sm font-medium">{panel.title}</span>
-							<!-- 上下箭头 -->
-							<div class="flex flex-col gap-0.5">
-								<button
-									type="button"
-									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
-									disabled={index === 0}
-									onclick={() => movePanelUp(panel, rightPanels)}
-									title="上移"
-								>
-									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
-									</svg>
-								</button>
-								<button
-									type="button"
-									class="rounded p-0.5 hover:bg-accent/50 disabled:opacity-30"
-									disabled={index === rightPanels.length - 1}
-									onclick={() => movePanelDown(panel, rightPanels)}
-									title="下移"
-								>
-									<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-									</svg>
-								</button>
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Columns3 class="h-3 w-3" />标签栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$bookmarkTabBarLayout === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'bookmark')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Navigation class="h-3 w-3" />面包屑</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$bookmarkBreadcrumbPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'bookmark')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Wrench class="h-3 w-3" />工具栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$bookmarkToolbarPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'bookmark')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- 历史面板 -->
+						<div class="p-4 rounded-2xl bg-muted/30 space-y-4">
+							<div class="flex items-center gap-2">
+								<History class="h-4 w-4 text-green-500" />
+								<span class="font-semibold">历史面板</span>
+							</div>
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Columns3 class="h-3 w-3" />标签栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$historyTabBarLayout === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setTabBarLayout(pos as TabBarLayout, 'history')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Navigation class="h-3 w-3" />面包屑</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$historyBreadcrumbPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setBreadcrumbPosition(pos as BreadcrumbPosition, 'history')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
+								<div class="space-y-2">
+									<label class="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Wrench class="h-3 w-3" />工具栏</label>
+									<div class="flex flex-wrap gap-1">
+										{#each ['none', 'top', 'bottom', 'left', 'right'] as pos}
+											<Button variant={$historyToolbarPosition === pos ? 'default' : 'outline'} size="sm" class="h-8 w-8 p-0 rounded-lg" onclick={() => folderTabActions.setToolbarPosition(pos as ToolbarPosition, 'history')}>
+												{#if pos === 'none'}<EyeOff class="h-3.5 w-3.5" />{:else if pos === 'top'}<PanelTop class="h-3.5 w-3.5" />{:else if pos === 'bottom'}<PanelBottom class="h-3.5 w-3.5" />{:else if pos === 'left'}<PanelLeft class="h-3.5 w-3.5" />{:else}<PanelRight class="h-3.5 w-3.5" />{/if}
+											</Button>
+										{/each}
+									</div>
+								</div>
 							</div>
 						</div>
 					</div>
-				{/each}
-				{#if rightPanels.length === 0}
-					<div class="text-muted-foreground py-8 text-center text-sm">拖拽面板到这里</div>
-				{/if}
+				</div>
+
+				<!-- 延迟设置 -->
+				<div class="rounded-3xl border bg-card/40 p-6 space-y-6 shadow-sm">
+					<div class="flex items-center gap-3">
+						<div class="p-2.5 rounded-2xl bg-amber-500/10 text-amber-500">
+							<History class="h-5 w-5" />
+						</div>
+						<div>
+							<h4 class="font-bold text-lg">交互响应速度</h4>
+							<p class="text-sm text-muted-foreground">调整边栏自动显示的延迟时间</p>
+						</div>
+					</div>
+					<div class="grid grid-cols-2 gap-6">
+						<div class="space-y-3">
+							<div class="flex items-center justify-between">
+								<span class="text-sm font-medium">显示延迟</span>
+								<span class="text-xs bg-muted px-2 py-1 rounded-lg">{autoHideTiming.showDelaySec}s</span>
+							</div>
+							<input type="range" min="0" max="2" step="0.1" value={autoHideTiming.showDelaySec} oninput={(e) => updateAutoHideTiming({ showDelaySec: Number(e.currentTarget.value) })} class="w-full accent-primary" />
+						</div>
+						<div class="space-y-3">
+							<div class="flex items-center justify-between">
+								<span class="text-sm font-medium">隐藏延迟</span>
+								<span class="text-xs bg-muted px-2 py-1 rounded-lg">{autoHideTiming.hideDelaySec}s</span>
+							</div>
+							<input type="range" min="0" max="5" step="0.1" value={autoHideTiming.hideDelaySec} oninput={(e) => updateAutoHideTiming({ hideDelaySec: Number(e.currentTarget.value) })} class="w-full accent-primary" />
+						</div>
+					</div>
+				</div>
 			</div>
-		</div>
-	</div>
+		</Tabs.Content>
+	</Tabs.Root>
 
 	<!-- 拖拽预览 -->
 	{#if isPointerDragging && dragPreview && draggedPanel}
 		{@const DragIcon = draggedPanel.panel.icon}
-		<div class="pointer-events-none fixed z-50" style="left: {dragPreview.x}px; top: {dragPreview.y}px;">
-			<div class="bg-card flex items-center gap-2 rounded-md border px-3 py-2 opacity-90 shadow-lg">
-				<DragIcon class="h-4 w-4" />
-				<span class="text-sm font-medium">{draggedPanel.panel.title}</span>
+		<div class="pointer-events-none fixed z-[100]" style="left: {dragPreview.x}px; top: {dragPreview.y}px;">
+			<div class="bg-card/90 backdrop-blur-md flex items-center gap-3 rounded-2xl border border-primary/50 px-4 py-3 shadow-2xl animate-in zoom-in-95">
+				<div class="bg-primary/10 p-1.5 rounded-lg text-primary">
+					<DragIcon class="h-5 w-5" />
+				</div>
+				<span class="font-semibold text-sm">{draggedPanel.panel.title}</span>
+				<div class="ml-2 bg-primary h-2 w-2 rounded-full animate-pulse"></div>
 			</div>
 		</div>
 	{/if}
-		</Tabs.Content>
-	</Tabs.Root>
 </div>

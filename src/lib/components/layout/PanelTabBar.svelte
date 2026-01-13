@@ -127,40 +127,41 @@
 			{/if}
 
 			<Tooltip.Root>
-				<Tooltip.Trigger asChild let:builder>
-					<button
-						use:builder.action
-						{...builder}
-						draggable="true"
-						ondragstart={(e) => handleDragStart(e, panel, index)}
-						ondragend={handleDragEnd}
-						onclick={() => handlePanelClick(panel.id)}
-						class="group relative w-full h-12 flex items-center justify-center border-b hover:bg-accent transition-colors {isActive
-							? 'bg-accent border-l-2 border-l-primary'
-							: ''}"
-					>
-						<!-- 拖拽手柄 -->
-						<div
-							class="absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-						>
-							<GripVertical class="h-3 w-3 text-muted-foreground" />
-						</div>
-
-						<!-- 图标 -->
-						<IconComponent class="h-5 w-5 {isActive ? 'text-primary' : 'text-muted-foreground'}" />
-
-						<!-- 切换到对面按钮 -->
+				<Tooltip.Trigger asChild>
+					{#snippet children({ props })}
 						<button
-							onclick={(e) => {
-								e.stopPropagation();
-								handleMoveToOpposite(panel.id);
-							}}
-							class="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10"
-							title="移动到对面侧边栏"
+							{...props}
+							draggable="true"
+							ondragstart={(e) => handleDragStart(e, panel, index)}
+							ondragend={handleDragEnd}
+							onclick={() => handlePanelClick(panel.id)}
+							class="group relative w-full h-12 flex items-center justify-center border-b hover:bg-accent transition-colors {isActive
+								? 'bg-accent border-l-2 border-l-primary'
+								: ''}"
 						>
-							<ArrowLeftRight class="h-3 w-3 text-muted-foreground" />
+							<!-- 拖拽手柄 -->
+							<div
+								class="absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+							>
+								<GripVertical class="h-3 w-3 text-muted-foreground" />
+							</div>
+
+							<!-- 图标 -->
+							<IconComponent class="h-5 w-5 {isActive ? 'text-primary' : 'text-muted-foreground'}" />
+
+							<!-- 切换到对面按钮 -->
+							<button
+								onclick={(e) => {
+									e.stopPropagation();
+									handleMoveToOpposite(panel.id);
+								}}
+								class="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10"
+								title="移动到对面侧边栏"
+							>
+								<ArrowLeftRight class="h-3 w-3 text-muted-foreground" />
+							</button>
 						</button>
-					</button>
+					{/snippet}
 				</Tooltip.Trigger>
 				<Tooltip.Content side={location === 'left' ? 'right' : 'left'}>
 					<p>{panel.title}</p>
@@ -175,17 +176,18 @@
 	<!-- 底部：侧边栏切换按钮 -->
 	{#if onMoveToOpposite}
 		<Tooltip.Root>
-			<Tooltip.Trigger asChild let:builder>
-				<Button
-					use:builder.action
-					{...builder}
-					variant="ghost"
-					size="icon"
-					class="h-12 rounded-none"
-					onclick={onMoveToOpposite}
-				>
-					<ArrowLeftRight class="h-4 w-4" />
-				</Button>
+			<Tooltip.Trigger asChild>
+				{#snippet children({ props })}
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon"
+						class="h-12 rounded-none"
+						onclick={onMoveToOpposite}
+					>
+						<ArrowLeftRight class="h-4 w-4" />
+					</Button>
+				{/snippet}
 			</Tooltip.Trigger>
 			<Tooltip.Content side={location === 'left' ? 'right' : 'left'}>
 				<p>切换到{location === 'left' ? '右' : '左'}侧边栏</p>

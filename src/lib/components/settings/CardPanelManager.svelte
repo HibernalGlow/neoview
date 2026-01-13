@@ -1,8 +1,7 @@
 <script lang="ts">
 	/**
 	 * CardPanelManager - 卡片面板管理器
-	 * 完全复制 SidebarManagementPanel 的三区域拖拽布局
-	 * 区域：等待区（隐藏）+ 各面板区（信息、属性、超分、洞察、基准测试）
+	 * 提供现代化的列表管理界面，支持搜索、快速分配和拖拽
 	 */
 	import {
 		cardConfigStore,
@@ -13,27 +12,43 @@
 	} from '$lib/stores/cardConfig.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import { cardRegistry } from '$lib/cards/registry';
+	import { 
+		LayoutGrid, Settings2, EyeOff, RotateCcw, ListChecks, 
+		PanelLeft, PanelRight, MapPin 
+	} from '@lucide/svelte';
+	import ManagementListView from '$lib/components/settings/ManagementListView.svelte';
+	import ManagementItemCard from '$lib/components/settings/ManagementItemCard.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
 	// 获取所有支持卡片的面板 ID
 	const allPanelIds = getCardSupportingPanels();
 
-	// 各面板的卡片列表
-	const panelCards = $derived.by(() => {
-		const result: Record<PanelId, CardConfig[]> = {} as Record<PanelId, CardConfig[]>;
+	let searchQuery = $state('');
+	let viewMode = $state<'grid' | 'list'>('grid');
+
+	// 合并后的所有卡片数据
+	const allCards = $derived.by(() => {
+		const result: (CardConfig & { panelTitle: string })[] = [];
 		for (const panelId of allPanelIds) {
-			result[panelId] = cardConfigStore.getPanelCards(panelId).filter((c) => c.visible);
+			const cards = cardConfigStore.getPanelCards(panelId);
+			result.push(...cards.map(c => ({
+				...c,
+				panelTitle: getPanelTitle(panelId)
+			})));
 		}
 		return result;
 	});
 
-	// 隐藏的卡片（等待区）
-	const hiddenCards = $derived.by(() => {
-		const result: CardConfig[] = [];
-		for (const panelId of allPanelIds) {
-			const cards = cardConfigStore.getPanelCards(panelId).filter((c) => !c.visible);
-			result.push(...cards);
-		}
-		return result;
+	// 搜索过滤后的卡片
+	const filteredCards = $derived.by(() => {
+		const query = searchQuery.toLowerCase().trim();
+		if (!query) return allCards;
+		return allCards.filter(c => 
+			c.title.toLowerCase().includes(query) || 
+			c.id.toLowerCase().includes(query) ||
+			c.panelTitle.toLowerCase().includes(query)
+		);
 	});
 
 	// 拖拽状态
@@ -75,7 +90,6 @@
 		const { card, source } = draggedCard;
 		const targetArea = dragOverArea;
 
-		// 如果目标区域和源区域相同，不做任何操作
 		if (source === targetArea) {
 			draggedCard = null;
 			isPointerDragging = false;
@@ -84,13 +98,13 @@
 			return;
 		}
 
-		// 移动到等待区（隐藏）
 		if (targetArea === 'waitingArea') {
 			if (card.canHide) {
 				cardConfigStore.setCardVisible(card.panelId, card.id, false);
 			}
 		} else {
-			// 移动到某个面板
+			// 移动到另一个面板（暂不支持跨面板直接拖拽逻辑，除非先移动到目标面板再设为可见，
+			// 这里简单处理为在当前面板内切换可见性，真正的跨面板通过下拉菜单实现）
 			cardConfigStore.setCardVisible(card.panelId, card.id, true);
 		}
 
@@ -115,23 +129,26 @@
 		if (confirmed) {
 			cardConfigStore.resetAll();
 			saveMessage = '✓ 布局已重置';
-			setTimeout(() => {
-				saveMessage = null;
-			}, 2000);
+			setTimeout(() => { saveMessage = null; }, 2000);
 		}
 	}
 
-	// 移动卡片顺序
-	function moveCardUp(card: CardConfig, cards: CardConfig[]) {
-		const currentIndex = cards.findIndex((c) => c.id === card.id);
-		if (currentIndex <= 0) return;
-		cardConfigStore.moveCard(card.panelId, card.id, card.order - 1);
-	}
-
-	function moveCardDown(card: CardConfig, cards: CardConfig[]) {
-		const currentIndex = cards.findIndex((c) => c.id === card.id);
-		if (currentIndex < 0 || currentIndex >= cards.length - 1) return;
-		cardConfigStore.moveCard(card.panelId, card.id, card.order + 1);
+	// 分配卡片到面板
+	function assignCard(card: CardConfig, targetPanelId: PanelId | 'hidden') {
+		if (targetPanelId === 'hidden') {
+			cardConfigStore.setCardVisible(card.panelId, card.id, false);
+		} else {
+			// 如果已经在该面板，仅显示
+			if (card.panelId === targetPanelId) {
+				cardConfigStore.setCardVisible(card.panelId, card.id, true);
+			} else {
+				// 跨面板移动：目前 store 主要是通过 visible 控制，
+				// 实际业务逻辑中，某些卡片可能固定在某些面板。
+				// 这里遵循 registry 中的定义或允许灵活移动。
+				cardConfigStore.moveCardToPanel?.(card.id, targetPanelId);
+				cardConfigStore.setCardVisible(targetPanelId, card.id, true);
+			}
+		}
 	}
 
 	$effect(() => {
@@ -140,9 +157,7 @@
 			finalizeDrop();
 		}
 		window.addEventListener('pointerup', handleWindowPointerUp);
-		return () => {
-			window.removeEventListener('pointerup', handleWindowPointerUp);
-		};
+		return () => { window.removeEventListener('pointerup', handleWindowPointerUp); };
 	});
 
 	$effect(() => {
@@ -151,180 +166,105 @@
 			dragPreview = { x: e.clientX, y: e.clientY };
 		}
 		window.addEventListener('pointermove', handleWindowPointerMove);
-		return () => {
-			window.removeEventListener('pointermove', handleWindowPointerMove);
-		};
+		return () => { window.removeEventListener('pointermove', handleWindowPointerMove); };
 	});
-
-	// 动态计算列数（最多3列）
-	const gridCols = $derived(Math.min(allPanelIds.length + 1, 3));
 </script>
 
-<div class="space-y-6 p-6">
-	<div class="space-y-2">
-		<h3 class="text-lg font-semibold">卡片管理</h3>
-		<p class="text-muted-foreground text-sm">拖拽卡片到不同面板区域来自定义布局</p>
-	</div>
-
-	<!-- 操作按钮 -->
-	<div class="flex items-center gap-2">
-		<button
-			type="button"
-			class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-1.5 text-sm transition-colors"
-			onclick={() => {
-				saveMessage = '✓ 已保存';
-				setTimeout(() => (saveMessage = null), 2000);
-			}}
-		>
-			保存
-		</button>
-		<button
-			type="button"
-			class="bg-secondary hover:bg-secondary/80 rounded-md px-3 py-1.5 text-sm transition-colors"
-			onclick={resetLayout}
-		>
-			重置布局
-		</button>
-		{#if saveMessage}
-			<span class="text-sm text-green-600">{saveMessage}</span>
-		{/if}
-	</div>
-
-	<!-- 多栏布局：等待区 + 各面板区（动态列数，最多3列） -->
-	<div
-		class="grid min-h-[300px] gap-4"
-		style="grid-template-columns: repeat({gridCols}, minmax(0, 1fr))"
+<div class="h-full flex flex-col bg-background p-6 overflow-auto">
+	<ManagementListView
+		title="卡片管理"
+		description="管理所有功能卡片的放置面板、排列顺序和显示状态。"
+		bind:searchQuery
+		onSearchChange={(val) => searchQuery = val}
+		{viewMode}
+		onViewModeChange={(mode) => viewMode = mode}
 	>
-		<!-- 等待区 -->
-		<div
-			class="rounded-lg border-2 border-dashed p-4 {dragOverArea === 'waitingArea'
-				? 'border-primary bg-primary/5'
-				: 'border-muted-foreground/30'}"
-			onpointerenter={() => handleAreaPointerEnter('waitingArea')}
-			onpointerleave={() => handleAreaPointerLeave('waitingArea')}
-		>
-			<h4 class="mb-3 text-center text-sm font-medium">等待区（隐藏）</h4>
-			<div class="flex min-h-[60px] flex-wrap content-start gap-1.5">
-				{#each hiddenCards as card (card.id)}
-					{@const cardDef = cardRegistry[card.id]}
-					<div
-						class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex cursor-grab select-none items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all active:cursor-grabbing {isPointerDragging &&
-						draggedCard?.card.id === card.id
-							? 'scale-95 opacity-50'
-							: ''}"
-						onpointerdown={(e) => handlePointerDown(e, card, 'waitingArea')}
-					>
-						<svg
-							class="text-muted-foreground h-3 w-3 opacity-50 group-hover:opacity-100"
-							fill="currentColor"
-							viewBox="0 0 20 20"
-						>
-							<path
-								d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
-							></path>
-						</svg>
-						{#if cardDef?.icon}
-							<svelte:component this={cardDef.icon} class="h-3.5 w-3.5" />
-						{/if}
-						<span>{card.title}</span>
-					</div>
-				{/each}
-				{#if hiddenCards.length === 0}
-					<div class="text-muted-foreground w-full py-4 text-center text-xs">
-						拖拽卡片到这里隐藏
-					</div>
+		{#snippet actions()}
+			<div class="flex items-center gap-2">
+				{#if saveMessage}
+					<span class="text-xs text-green-600 font-medium animate-in fade-in slide-in-from-right-2">{saveMessage}</span>
 				{/if}
+				<Button variant="outline" size="sm" onclick={resetLayout} class="h-10 rounded-xl gap-2">
+					<RotateCcw class="h-4 w-4" />
+					归位
+				</Button>
+				<Button variant="default" size="sm" onclick={() => { saveMessage = '✓ 已应用'; setTimeout(() => saveMessage = null, 2000); }} class="h-10 rounded-xl gap-2 shadow-sm">
+					<ListChecks class="h-4 w-4" />
+					保存配置
+				</Button>
 			</div>
-		</div>
+		{/snippet}
 
-		<!-- 各面板区 -->
-		{#each allPanelIds as panelId (panelId)}
-			{@const cards = panelCards[panelId] || []}
-			<div
-				class="rounded-lg border-2 border-dashed p-4 {dragOverArea === panelId
-					? 'border-primary bg-primary/5'
-					: 'border-muted-foreground/30'}"
-				onpointerenter={() => handleAreaPointerEnter(panelId)}
-				onpointerleave={() => handleAreaPointerLeave(panelId)}
+		{#each filteredCards as card, index (card.id)}
+			{@const cardDef = cardRegistry[card.id]}
+			<ManagementItemCard
+				id={card.id}
+				title={card.title}
+				icon={cardDef?.icon}
+				subtitle={`ID: ${card.id}`}
+				status={card.visible ? card.panelTitle : '隐藏'}
+				statusColor={card.visible ? 'default' : 'outline'}
+				active={isPointerDragging && draggedCard?.card.id === card.id}
+				isFirst={index === 0}
+				isLast={index === filteredCards.length - 1}
+				onMoveUp={() => {
+					const list = cardConfigStore.getPanelCards(card.panelId);
+					const currentIndex = list.findIndex(c => c.id === card.id);
+					if (currentIndex > 0) {
+						cardConfigStore.moveCard(card.panelId, card.id, card.order - 1);
+					}
+				}}
+				onMoveDown={() => {
+					const list = cardConfigStore.getPanelCards(card.panelId);
+					const currentIndex = list.findIndex(c => c.id === card.id);
+					if (currentIndex < list.length - 1) {
+						cardConfigStore.moveCard(card.panelId, card.id, card.order + 1);
+					}
+				}}
+				onToggleVisible={() => {
+					if (card.canHide) {
+						cardConfigStore.setCardVisible(card.panelId, card.id, !card.visible);
+					}
+				}}
+				onPointerDown={(e) => handlePointerDown(e, card, card.visible ? card.panelId : 'waitingArea')}
 			>
-				<h4 class="mb-3 text-center text-sm font-medium">{getPanelTitle(panelId)}</h4>
-				<div class="flex min-h-[60px] flex-wrap content-start gap-1.5">
-					{#each cards as card, index (card.id)}
-						{@const cardDef = cardRegistry[card.id]}
-						<div
-							class="bg-muted/50 hover:bg-accent hover:border-accent group inline-flex select-none items-center gap-1 rounded-full border px-1 py-0.5 text-xs font-medium transition-all {isPointerDragging &&
-							draggedCard?.card.id === card.id
-								? 'scale-95 opacity-50'
-								: ''}"
-						>
-							<!-- 上移按钮 -->
-							<button
-								type="button"
-								class="hover:bg-background/50 rounded p-0.5 disabled:opacity-30"
-								disabled={index === 0}
-								onclick={() => moveCardUp(card, cards)}
-								title="上移"
-							>
-								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M5 15l7-7 7 7"
-									></path>
-								</svg>
-							</button>
-							<!-- 拖拽手柄 -->
-							<div
-								class="cursor-grab px-1 active:cursor-grabbing"
-								onpointerdown={(e) => handlePointerDown(e, card, panelId)}
-							>
-								{#if cardDef?.icon}
-									<svelte:component this={cardDef.icon} class="mr-1 inline h-3.5 w-3.5" />
-								{/if}
-								<span>{card.title}</span>
-							</div>
-							<!-- 下移按钮 -->
-							<button
-								type="button"
-								class="hover:bg-background/50 rounded p-0.5 disabled:opacity-30"
-								disabled={index === cards.length - 1}
-								onclick={() => moveCardDown(card, cards)}
-								title="下移"
-							>
-								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M19 9l-7 7-7-7"
-									></path>
-								</svg>
-							</button>
-						</div>
+				{#snippet assignOptions()}
+					{#each allPanelIds as panelId}
+						<DropdownMenu.Item onclick={() => assignCard(card, panelId)}>
+							<MapPin class="mr-2 h-4 w-4" />
+							<span>{getPanelTitle(panelId)}</span>
+						</DropdownMenu.Item>
 					{/each}
-					{#if cards.length === 0}
-						<div class="text-muted-foreground w-full py-4 text-center text-xs">拖拽卡片到这里</div>
+					{#if card.canHide}
+						<DropdownMenu.Separator />
+						<DropdownMenu.Item onclick={() => assignCard(card, 'hidden')}>
+							<EyeOff class="mr-2 h-4 w-4" />
+							<span>隐藏卡片</span>
+						</DropdownMenu.Item>
 					{/if}
-				</div>
-			</div>
+				{/snippet}
+			</ManagementItemCard>
 		{/each}
-	</div>
+
+		{#if filteredCards.length === 0}
+			<div class="col-span-full flex flex-col items-center justify-center py-20 text-muted-foreground bg-muted/5 rounded-3xl border-2 border-dashed border-muted">
+				<LayoutGrid class="h-12 w-12 opacity-20 mb-4" />
+				<p>未找到匹配的卡片</p>
+			</div>
+		{/if}
+	</ManagementListView>
 
 	<!-- 拖拽预览 -->
 	{#if isPointerDragging && dragPreview && draggedCard}
 		{@const cardDef = cardRegistry[draggedCard.card.id]}
-		<div
-			class="pointer-events-none fixed z-50"
-			style="left: {dragPreview.x}px; top: {dragPreview.y}px; transform: translate(-50%, -50%);"
-		>
-			<div
-				class="bg-accent inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-lg"
-			>
+		<div class="pointer-events-none fixed z-[100]" style="left: {dragPreview.x}px; top: {dragPreview.y}px; transform: translate(-50%, -50%);">
+			<div class="bg-card/90 backdrop-blur-md flex items-center gap-3 rounded-2xl border border-primary/50 px-4 py-3 shadow-2xl animate-in zoom-in-95">
 				{#if cardDef?.icon}
-					<svelte:component this={cardDef.icon} class="h-3.5 w-3.5" />
+					<div class="bg-primary/10 p-1.5 rounded-lg text-primary">
+						<svelte:component this={cardDef.icon} class="h-5 w-5" />
+					</div>
 				{/if}
-				<span>{draggedCard.card.title}</span>
+				<span class="font-semibold text-sm">{draggedCard.card.title}</span>
 			</div>
 		</div>
 	{/if}

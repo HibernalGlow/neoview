@@ -99,21 +99,53 @@
 	let hiddenPanels = $derived($sidebarHiddenPanels);
 
 	// 拖拽状态
-	type AreaId = 'waitingArea' | 'leftSidebar' | 'rightSidebar';
 	let draggedPanelId = $state<string | null>(null);
-	let isPointerDragging = $state(false);
-	let dragPreview = $state<{ x: number; y: number } | null>(null);
-	let dropTargetIndex = $state<number | null>(null);
+	let dropTargetPanelId = $state<string | null>(null);
 
-	// 拖拽处理函数
-	function handlePointerDown(event: PointerEvent, panel: PanelConfig) {
-		// 只有点击手柄时触发
-		if (!(event.target as HTMLElement).closest('.drag-handle')) return;
+	// 拖拽处理函数 (Native DnD)
+	function handleDragStart(event: DragEvent, panel: PanelConfig) {
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', panel.id);
+			draggedPanelId = panel.id;
+		}
+	}
 
+	function handleDragOver(event: DragEvent, panel: PanelConfig) {
+		event.preventDefault(); // 允许放置
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move';
+		}
+		
+		if (draggedPanelId && draggedPanelId !== panel.id) {
+			dropTargetPanelId = panel.id;
+		}
+	}
+
+	function handleDrop(event: DragEvent, targetPanel: PanelConfig) {
 		event.preventDefault();
-		draggedPanelId = panel.id;
-		isPointerDragging = true;
-		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
+		const sourceId = event.dataTransfer?.getData('text/plain');
+		
+		if (sourceId && sourceId !== targetPanel.id) {
+			const panels = panelsBySide[activeLayoutGroup] || [];
+			const sourcePanel = panels.find(p => p.id === sourceId);
+			
+			if (sourcePanel) {
+				// 交换顺序
+				const sourceOrder = sourcePanel.order;
+				const targetOrder = targetPanel.order;
+				sidebarConfigStore.setPanelOrder(sourceId, targetOrder);
+				sidebarConfigStore.setPanelOrder(targetPanel.id, sourceOrder);
+			}
+		}
+		
+		draggedPanelId = null;
+		dropTargetPanelId = null;
+	}
+
+	function handleDragEnd() {
+		draggedPanelId = null;
+		dropTargetPanelId = null;
 	}
 
 	// 保存提示消息
@@ -173,29 +205,8 @@
 		sidebarConfigStore.setPanelVisible(panel.id, true);
 	}
 
-	$effect(() => {
-		function handleWindowPointerUp() {
-			if (!isPointerDragging) return;
-			isPointerDragging = false;
-			draggedPanelId = null;
-			dragPreview = null;
-		}
-		window.addEventListener('pointerup', handleWindowPointerUp);
-		return () => {
-			window.removeEventListener('pointerup', handleWindowPointerUp);
-		};
-	});
-
-	$effect(() => {
-		if (!isPointerDragging) return;
-		function handleWindowPointerMove(e: PointerEvent) {
-			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
-		}
-		window.addEventListener('pointermove', handleWindowPointerMove);
-		return () => {
-			window.removeEventListener('pointermove', handleWindowPointerMove);
-		};
-	});
+	// 移除 Pointer Events 逻辑
+	
 
 	const handleSettingsUpdate = (next: NeoViewSettings) => {
 		settings = next;
@@ -437,17 +448,20 @@
 								</Table.Row>
 							{/if}
 							<Table.Row
+								draggable="true"
+								ondragstart={(e) => handleDragStart(e, panel)}
+								ondragover={(e) => handleDragOver(e, panel)}
+								ondrop={(e) => handleDrop(e, panel)}
+								ondragend={handleDragEnd}
 								class={cn(
 									'group transition-colors',
-									isPointerDragging &&
-										draggedPanelId === panel.id &&
-										'bg-muted/30 opacity-50 grayscale'
+									draggedPanelId === panel.id && 'opacity-40 bg-muted/30 grayscale',
+									dropTargetPanelId === panel.id && draggedPanelId !== panel.id && 'bg-primary/10 ring-2 ring-primary/50'
 								)}
 							>
 								<Table.Cell class="px-2">
 									<div
 										class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 flex cursor-grab items-center justify-center p-1 transition-colors"
-										onpointerdown={(e) => handlePointerDown(e, panel)}
 									>
 										<GripVertical class="h-4 w-4" />
 									</div>
@@ -950,26 +964,4 @@
 		</Tabs.Content>
 	</Tabs.Root>
 
-	<!-- 拖拽预览 -->
-	{#if isPointerDragging && dragPreview && draggedPanelId}
-		{@const panel = [...leftPanels, ...rightPanels, ...hiddenPanels].find(
-			(p) => p.id === draggedPanelId
-		)}
-		{#if panel}
-			<div
-				class="pointer-events-none fixed z-[100] scale-105"
-				style="left: {dragPreview.x}px; top: {dragPreview.y}px;"
-			>
-				<div
-					class="bg-card/95 border-primary/50 animate-in zoom-in-95 flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md"
-				>
-					<div class="bg-primary/10 text-primary rounded-lg p-1.5">
-						<svelte:component this={panel.icon} class="h-5 w-5" />
-					</div>
-					<span class="text-sm font-semibold">{panel.title}</span>
-					<div class="bg-primary ml-2 h-2 w-2 animate-pulse rounded-full"></div>
-				</div>
-			</div>
-		{/if}
-	{/if}
 </div>

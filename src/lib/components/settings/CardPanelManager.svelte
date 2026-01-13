@@ -95,41 +95,46 @@
 
 	// 拖拽状态
 	let draggedCardId = $state<string | null>(null);
-	let isPointerDragging = $state(false);
-	let dragPreview = $state<{ x: number; y: number } | null>(null);
+	let dropTargetCardId = $state<string | null>(null);
 
-	// 拖拽处理函数
-	function handlePointerDown(event: PointerEvent, card: CardConfig) {
-		if (!(event.target as HTMLElement).closest('.drag-handle')) return;
-		event.preventDefault();
-		draggedCardId = card.id;
-		isPointerDragging = true;
-		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
+	// 拖拽处理函数 (Native DnD)
+	function handleDragStart(event: DragEvent, card: CardConfig) {
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', card.id);
+			draggedCardId = card.id;
+		}
 	}
 
-	$effect(() => {
-		function handleWindowPointerUp() {
-			if (!isPointerDragging) return;
-			isPointerDragging = false;
-			draggedCardId = null;
-			dragPreview = null;
+	function handleDragOver(event: DragEvent, card: CardConfig) {
+		event.preventDefault();
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move';
 		}
-		window.addEventListener('pointerup', handleWindowPointerUp);
-		return () => {
-			window.removeEventListener('pointerup', handleWindowPointerUp);
-		};
-	});
+		if (draggedCardId && draggedCardId !== card.id) {
+			dropTargetCardId = card.id;
+		}
+	}
 
-	$effect(() => {
-		if (!isPointerDragging) return;
-		function handleWindowPointerMove(e: PointerEvent) {
-			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
+	function handleDrop(event: DragEvent, targetCard: CardConfig) {
+		event.preventDefault();
+		const sourceId = event.dataTransfer?.getData('text/plain');
+		
+		if (sourceId && sourceId !== targetCard.id) {
+			const sourceCard = filteredCards.find(c => c.id === sourceId);
+			if (sourceCard && sourceCard.panelId === targetCard.panelId) {
+				const targetIndex = filteredCards.findIndex(c => c.id === targetCard.id);
+				cardConfigStore.moveCard(sourceCard.panelId, sourceId, targetIndex);
+			}
 		}
-		window.addEventListener('pointermove', handleWindowPointerMove);
-		return () => {
-			window.removeEventListener('pointermove', handleWindowPointerMove);
-		};
-	});
+		
+		handleDragEnd();
+	}
+
+	function handleDragEnd() {
+		draggedCardId = null;
+		dropTargetCardId = null;
+	}
 
 	// 保存提示消息
 	let saveMessage = $state<string | null>(null);
@@ -302,15 +307,20 @@
 						</Table.Row>
 					{/if}
 					<Table.Row
+						draggable="true"
+						ondragstart={(e) => handleDragStart(e, card)}
+						ondragover={(e) => handleDragOver(e, card)}
+						ondrop={(e) => handleDrop(e, card)}
+						ondragend={handleDragEnd}
 						class={cn(
 							'group transition-colors',
-							isPointerDragging && draggedCardId === card.id && 'bg-muted/30 opacity-50 grayscale'
+							draggedCardId === card.id && 'opacity-40 bg-muted/30 grayscale',
+							dropTargetCardId === card.id && draggedCardId !== card.id && 'bg-primary/10 ring-2 ring-primary/50'
 						)}
 					>
 						<Table.Cell class="px-2">
 							<div
 								class="drag-handle text-muted-foreground/20 group-hover:text-muted-foreground/60 flex cursor-grab items-center justify-center p-1 transition-colors"
-								onpointerdown={(e) => handlePointerDown(e, card)}
 							>
 								<GripVertical class="h-4 w-4" />
 							</div>
@@ -473,28 +483,4 @@
 	</div>
 </div>
 
-<!-- 拖拽预览 -->
-{#if isPointerDragging && dragPreview && draggedCardId}
-	{@const card = allCards.find((c) => c.id === draggedCardId)}
-	{#if card}
-		{@const cardDef = cardRegistry[card.id]}
-		<div
-			class="pointer-events-none fixed z-[100] scale-105"
-			style="left: {dragPreview.x}px; top: {dragPreview.y}px;"
-		>
-			<div
-				class="bg-card/95 border-primary/50 animate-in zoom-in-95 flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-md"
-			>
-				<div class="bg-primary/10 text-primary rounded-lg p-1.5">
-					{#if cardDef?.icon}
-						<svelte:component this={cardDef.icon} class="h-5 w-5" />
-					{:else}
-						<LayoutGrid class="h-5 w-5" />
-					{/if}
-				</div>
-				<span class="text-sm font-semibold">{card.title}</span>
-				<div class="bg-primary ml-2 h-2 w-2 animate-pulse rounded-full"></div>
-			</div>
-		</div>
-	{/if}
-{/if}
+

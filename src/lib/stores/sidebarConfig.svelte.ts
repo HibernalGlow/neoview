@@ -243,6 +243,7 @@ export interface SidebarConfigState {
 	rightSidebarCustomHeight: number;
 	rightSidebarVerticalAlign: SidebarVerticalAlign;
 	rightSidebarHorizontalPos: number; // X轴位置 0-100 (0=贴边, 100=中心)
+	showDragHandle: boolean; // 是否显示拖拽手柄
 }
 
 // 从 PANEL_DEFINITIONS 自动生成默认面板配置
@@ -278,7 +279,8 @@ const initialState: SidebarConfigState = {
 	rightSidebarHeight: 'full',
 	rightSidebarCustomHeight: 100,
 	rightSidebarVerticalAlign: 0,
-	rightSidebarHorizontalPos: 0
+	rightSidebarHorizontalPos: 0,
+	showDragHandle: false
 };
 
 // 从 localStorage 加载配置
@@ -486,6 +488,10 @@ function createSidebarConfigStore() {
 			update(state => ({ ...state, rightSidebarHorizontalPos: clampedPos }));
 		},
 
+		setShowDragHandle(show: boolean) {
+			update(state => ({ ...state, showDragHandle: show }));
+		},
+
 		// 切换侧边栏
 		toggleLeftSidebar() {
 			update(state => ({ ...state, leftSidebarOpen: !state.leftSidebarOpen }));
@@ -611,6 +617,7 @@ export const rightSidebarHeight = derived(sidebarConfigStore, $state => $state.r
 export const rightSidebarCustomHeight = derived(sidebarConfigStore, $state => $state.rightSidebarCustomHeight);
 export const rightSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.rightSidebarVerticalAlign);
 export const rightSidebarHorizontalPos = derived(sidebarConfigStore, $state => $state.rightSidebarHorizontalPos);
+export const showDragHandle = derived(sidebarConfigStore, $state => $state.showDragHandle);
 
 // 高度预设到百分比的映射
 export const SIDEBAR_HEIGHT_PRESETS: Record<SidebarHeightPreset, number> = {

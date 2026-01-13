@@ -4,7 +4,7 @@
 	 * 右侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical, Move } from '@lucide/svelte';
+	import { Pin, PinOff, GripVertical, GripHorizontal, Move } from '@lucide/svelte';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
 		activeRightPanel,
@@ -18,6 +18,7 @@
 		rightSidebarVerticalAlign,
 		rightSidebarHorizontalPos,
 		rightSidebarHeight,
+		showDragHandle,
 		type PanelId
 	} from '$lib/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -209,6 +210,7 @@
 		class="relative flex h-full"
 		style="--sidebar-width: {$rightSidebarWidth}px; width: {$rightSidebarWidth}px;"
 	>
+		<div class="flex-1 flex min-h-0">
 		<Sidebar.Provider
 			bind:open={localRightSidebarOpen}
 			onOpenChange={(v) => {
@@ -249,7 +251,7 @@
 									{/if}
 								</Button>
 								<!-- 拖拽移动按钮 -->
-								{#if $rightSidebarHeight !== 'full'}
+								{#if $showDragHandle && $rightSidebarHeight !== 'full'}
 									<button
 										type="button"
 										class="h-9 w-9 flex items-center justify-center rounded-md cursor-move transition-colors
@@ -334,6 +336,7 @@
 				</button>
 			</Sidebar.Root>
 		</Sidebar.Provider>
+	</div>
 	</div>
 </HoverWrapper>
 

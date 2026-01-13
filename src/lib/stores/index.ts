@@ -41,6 +41,7 @@ export {
 	rightSidebarCustomHeight,
 	rightSidebarVerticalAlign,
 	rightSidebarHorizontalPos,
+	showDragHandle,
 	SIDEBAR_HEIGHT_PRESETS,
 	getSidebarHeightPercent,
 	getVerticalAlignStyle,

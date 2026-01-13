@@ -26,6 +26,9 @@
 		MoveHorizontal,
 		Maximize2
 	} from '@lucide/svelte';
+	import { Switch } from '$lib/components/ui/switch';
+	import { Label } from '$lib/components/ui/label';
+	import { showDragHandle } from '$lib/stores/sidebarConfig.svelte';
 
 	let settings = $state(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels?.hoverAreas || {
@@ -93,9 +96,19 @@
 </script>
 
 <div class="text-muted-foreground space-y-5 text-xs">
-	<p class="text-muted-foreground/70 text-[10px] leading-relaxed">
-		自由调整侧边栏的尺寸与位置。高度 100% 时位置控制禁用。
-	</p>
+	<div class="flex items-center justify-between pb-1">
+		<p class="text-muted-foreground/70 text-[10px] leading-relaxed">
+			自由调整侧边栏的尺寸与位置。高度 100% 时位置控制禁用。
+		</p>
+		<div class="flex items-center gap-2">
+			<Label for="show-drag-handle" class="text-[10px] cursor-pointer">显示拖拽手柄</Label>
+			<Switch 
+				id="show-drag-handle" 
+				checked={$showDragHandle} 
+				onCheckedChange={(v) => sidebarConfigStore.setShowDragHandle(v)} 
+			/>
+		</div>
+	</div>
 
 	<div class="grid grid-cols-2 gap-x-6 gap-y-4">
 		<!-- 左侧边栏控制 -->

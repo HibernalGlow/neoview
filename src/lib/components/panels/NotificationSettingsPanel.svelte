@@ -104,97 +104,90 @@
 	}
 </script>
 
-<div class="space-y-4 p-6">
-	<div class="space-y-2">
-		<h3 class="flex items-center gap-2 text-lg font-semibold">
-			<Bell class="h-5 w-5" />
+<div class="space-y-3 p-4">
+	<div class="space-y-1">
+		<h3 class="flex items-center gap-2 text-base font-bold">
+			<Bell class="h-4.5 w-4.5" />
 			<span>通知</span>
 		</h3>
-		<p class="text-muted-foreground text-sm">配置 NeoView 全局通知 (toast) 的显示方式</p>
+		<p class="text-muted-foreground text-[11px]">配置 NeoView 全局通知 (toast) 的显示方式</p>
 	</div>
 
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="grid w-full grid-cols-3">
-			<Tabs.Trigger value="basic" class="gap-1.5 text-xs">
-				<Settings2 class="h-3.5 w-3.5" />
+		<Tabs.List class="grid h-8 w-full grid-cols-3 p-1">
+			<Tabs.Trigger value="basic" class="gap-1.5 text-[10px] py-1">
+				<Settings2 class="h-3 w-3" />
 				基本
 			</Tabs.Trigger>
-			<Tabs.Trigger value="display" class="gap-1.5 text-xs">
-				<Clock class="h-3.5 w-3.5" />
+			<Tabs.Trigger value="display" class="gap-1.5 text-[10px] py-1">
+				<Clock class="h-3 w-3" />
 				显示
 			</Tabs.Trigger>
-			<Tabs.Trigger value="types" class="gap-1.5 text-xs">
-				<Filter class="h-3.5 w-3.5" />
+			<Tabs.Trigger value="types" class="gap-1.5 text-[10px] py-1">
+				<Filter class="h-3 w-3" />
 				类型
 			</Tabs.Trigger>
 		</Tabs.List>
 
-		<Tabs.Content value="basic" class="mt-4 space-y-4">
+		<Tabs.Content value="basic" class="mt-3 space-y-3">
 		<!-- 显示通知 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">显示通知</h4>
+		<div class="space-y-1.5">
+			<h4 class="text-xs font-bold">显示通知</h4>
 			<div class="flex items-center justify-between gap-2">
-				<Label class="text-sm">显示通知 (ShowMessageStyle)</Label>
-				<Switch checked={enabled} onCheckedChange={handleToggleEnabled} />
+				<Label class="text-xs">启用通知显示</Label>
+				<Switch checked={enabled} onCheckedChange={handleToggleEnabled} class="scale-75" />
 			</div>
-			<p class="text-muted-foreground text-xs">关闭后将不再显示任何 toast 提示。</p>
 		</div>
 
 		<!-- 通知样式 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">通知样式</h4>
+		<div class="space-y-1.5">
+			<h4 class="text-xs font-bold">通知样式</h4>
 			<NativeSelect
-				class="w-full max-w-xs"
+				class="w-full max-w-xs h-8 text-xs"
 				bind:value={style}
 				disabled={!enabled}
 				onchange={() => handleStyleChange(style)}
 			>
 				<NativeSelectOption value="normal">普通</NativeSelectOption>
-				<NativeSelectOption value="normalIconOnly">普通 (仅图标)</NativeSelectOption>
-				<NativeSelectOption value="tiny">缩小显示</NativeSelectOption>
+				<NativeSelectOption value="normalIconOnly">仅图标</NativeSelectOption>
+				<NativeSelectOption value="tiny">缩小</NativeSelectOption>
 				<NativeSelectOption value="tinyIconOnly">缩小 (仅图标)</NativeSelectOption>
 				<NativeSelectOption value="none">不显示</NativeSelectOption>
 			</NativeSelect>
-			<p class="text-muted-foreground text-xs">
-				对应 NeeView 的 ShowMessageStyle：不显示 / 显示 / 缩小显示 等。
-			</p>
 		</div>
 
 		</Tabs.Content>
 
-		<Tabs.Content value="display" class="mt-4 space-y-4">
+		<Tabs.Content value="display" class="mt-3 space-y-3">
 		<!-- 显示时间 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">显示时间</h4>
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">显示时间 (秒)</Label>
 			<div class="flex items-center gap-2">
-				<span class="text-sm">每条通知持续时间</span>
 				<Input
 					type="number"
 					min="1"
 					max="10"
 					step="0.5"
-					class="h-8 w-24"
+					class="h-7 w-20 text-xs"
 					value={(durationMs / 1000).toFixed(1)}
 					oninput={(e) => {
 						const v = parseFloat((e.currentTarget as HTMLInputElement).value);
 						if (!Number.isNaN(v)) handleDurationChange(v);
 					}}
 				/>
-				<span class="text-muted-foreground text-xs">秒</span>
 			</div>
 		</div>
 
 		<!-- 同时显示数量 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">同时显示数量</h4>
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">最大并显数</Label>
 			<div class="flex items-center gap-2">
-				<span class="text-sm">最多同时显示通知数</span>
 				<Input
 					type="number"
 					min="1"
 					max="5"
 					step="1"
-					class="h-8 w-20"
+					class="h-7 w-20 text-xs"
 					value={maxVisible}
 					oninput={(e) => {
 						const v = parseInt((e.currentTarget as HTMLInputElement).value, 10);
@@ -206,50 +199,42 @@
 
 		</Tabs.Content>
 
-		<Tabs.Content value="types" class="mt-4 space-y-4">
-		<!-- 其他通知占位 -->
-		<div class="space-y-2">
-			<h4 class="text-sm font-semibold">其他通知（占位）</h4>
-			<p class="text-muted-foreground text-xs">以下选项仅作为通知类型的占位，当前版本中尚未接入具体逻辑。</p>
-			<div class="space-y-2 text-xs text-muted-foreground">
+		<Tabs.Content value="types" class="mt-3 space-y-3">
+		<!-- 通知类型 -->
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">启用通知类型</Label>
+			<div class="space-y-1 text-xs text-muted-foreground">
 				<div class="flex items-center justify-between gap-2">
-					<span>文件操作结果通知</span>
+					<span class="text-xs text-foreground">文件操作结果</span>
 					<Switch
 						checked={placeholderFileOps}
 						onCheckedChange={(v) => {
 							placeholderFileOps = v;
 							saveNotification();
 						}}
+						class="scale-75"
 					/>
 				</div>
 				<div class="flex items-center justify-between gap-2">
-					<span>任务进度通知</span>
+					<span class="text-xs text-foreground">任务进度</span>
 					<Switch
 						checked={placeholderTaskProgress}
 						onCheckedChange={(v) => {
 							placeholderTaskProgress = v;
 							saveNotification();
 						}}
+						class="scale-75"
 					/>
 				</div>
 				<div class="flex items-center justify-between gap-2">
-					<span>性能提示通知</span>
-					<Switch
-						checked={placeholderPerformanceTips}
-						onCheckedChange={(v) => {
-							placeholderPerformanceTips = v;
-							saveNotification();
-						}}
-					/>
-				</div>
-				<div class="flex items-center justify-between gap-2">
-					<span>系统提示通知</span>
+					<span class="text-xs text-foreground">系统与性能提示</span>
 					<Switch
 						checked={placeholderSystemMessages}
 						onCheckedChange={(v) => {
 							placeholderSystemMessages = v;
 							saveNotification();
 						}}
+						class="scale-75"
 					/>
 				</div>
 			</div>

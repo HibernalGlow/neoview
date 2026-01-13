@@ -100,7 +100,7 @@
 		<!-- 左侧标签栏 - 带 Dock 放大效果 -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="w-48 shrink-0 space-y-1 border-r p-2 overflow-auto"
+			class="w-12 sm:w-40 shrink-0 space-y-1 border-r p-1.5 overflow-x-hidden overflow-y-auto"
 			style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 			onmousemove={handleSidebarMouseMove}
 			onmouseleave={handleSidebarMouseLeave}
@@ -110,20 +110,21 @@
 				{@const scale = getIconScale(index)}
 				<button
 					bind:this={tabRefs[index]}
-					class="hover:bg-accent flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-colors {activeTab ===
+					class="hover:bg-accent flex w-full items-center justify-center sm:justify-start gap-0 sm:gap-2.5 rounded-lg px-0 sm:px-3 py-2.5 transition-all {activeTab ===
 					tab.value
-						? 'bg-primary text-primary-foreground'
-						: ''}"
+						? 'bg-primary text-primary-foreground shadow-sm'
+						: 'text-muted-foreground'}"
 					onclick={() => switchTab(tab.value)}
+					title={tab.label}
 					type="button"
 				>
 					<div
 						class="flex items-center justify-center transition-transform duration-150 ease-out"
-						style="transform: scale({scale}); transform-origin: left center;"
+						style="transform: scale({scale});"
 					>
-						<IconComponent class="h-5 w-5" />
+						<IconComponent class="h-4.5 w-4.5 sm:h-4 sm:w-4" />
 					</div>
-					<span class="font-medium">{tab.label}</span>
+					<span class="hidden sm:block truncate text-xs font-medium">{tab.label}</span>
 				</button>
 			{/each}
 		</div>

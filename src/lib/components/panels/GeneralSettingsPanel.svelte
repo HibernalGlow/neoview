@@ -102,13 +102,13 @@
 	}
 </script>
 
-<div class="space-y-4 p-6">
-	<div class="space-y-2">
-		<h3 class="flex items-center gap-2 text-lg font-semibold">
-			<Settings class="h-5 w-5" />
+<div class="space-y-3 p-4">
+	<div class="space-y-1">
+		<h3 class="flex items-center gap-2 text-base font-bold">
+			<Settings class="h-4.5 w-4.5" />
 			通用设置
 		</h3>
-		<p class="text-muted-foreground text-sm">配置 NeoView 的基本行为和外观</p>
+		<p class="text-muted-foreground text-[11px]">配置 NeoView 的基本行为和外观</p>
 	</div>
 
 	<Tabs.Root bind:value={activeTab} class="w-full">
@@ -127,11 +127,11 @@
 			</Tabs.Trigger>
 		</Tabs.List>
 
-		<Tabs.Content value="basic" class="mt-4 space-y-4">
+		<Tabs.Content value="basic" class="mt-3 space-y-3">
 		<!-- 语言设置 -->
-		<div class="space-y-2">
-			<Label class="text-sm font-semibold">语言</Label>
-			<NativeSelect class="w-full max-w-xs" value="zh-CN">
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">语言</Label>
+			<NativeSelect class="h-8 w-full max-w-xs text-xs" value="zh-CN">
 				<NativeSelectOption value="zh-CN">简体中文</NativeSelectOption>
 				<NativeSelectOption value="en-US">English</NativeSelectOption>
 				<NativeSelectOption value="ja-JP">日本語</NativeSelectOption>
@@ -149,12 +149,12 @@
 		</div>
 		</Tabs.Content>
 
-		<Tabs.Content value="startup" class="mt-4 space-y-4">
+		<Tabs.Content value="startup" class="mt-3 space-y-3">
 		<!-- 启动设置 -->
-		<div class="space-y-2">
-			<Label class="text-sm font-semibold">启动行为</Label>
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">启动行为</Label>
 			<label class="flex items-center justify-between gap-2">
-				<span class="text-sm">启动时打开上次的文件</span>
+				<span class="text-xs">启动时打开上次的文件</span>
 				<button
 					type="button"
 					class="cursor-pointer"
@@ -166,11 +166,12 @@
 					<Checkbox
 						checked={currentSettings.startup.openLastFile}
 						aria-label="启动时打开上次的文件"
+						class="h-4 w-4"
 					/>
 				</button>
 			</label>
 			<label class="flex items-center justify-between gap-2">
-				<span class="text-sm">最小化到系统托盘</span>
+				<span class="text-xs">最小化到系统托盘</span>
 				<button
 					type="button"
 					class="cursor-pointer"
@@ -182,11 +183,12 @@
 					<Checkbox
 						checked={currentSettings.startup.minimizeToTray}
 						aria-label="最小化到系统托盘"
+						class="h-4 w-4"
 					/>
 				</button>
 			</label>
 			<label class="flex items-center justify-between gap-2">
-				<span class="text-sm">启动时恢复上次浏览的文件夹（书架位置）</span>
+				<span class="text-xs">启动时恢复上次浏览的文件夹</span>
 				<button
 					type="button"
 					class="cursor-pointer"
@@ -197,89 +199,71 @@
 				>
 					<Checkbox
 						checked={currentSettings.startup.openLastFolder}
-						aria-label="启动时恢复上次浏览的文件夹（书架位置）"
+						aria-label="启动时恢复上次浏览的文件夹"
+						class="h-4 w-4"
 					/>
 				</button>
 			</label>
 		</div>
 		</Tabs.Content>
 
-		<Tabs.Content value="integration" class="mt-4 space-y-4">
+		<Tabs.Content value="integration" class="mt-3 space-y-3">
 		<!-- 资源管理器集成 -->
-		<div class="space-y-2">
+		<div class="space-y-1.5">
 			<div class="flex items-center gap-2">
-				<FolderOpen class="h-4 w-4 text-muted-foreground" />
-				<Label class="text-sm font-semibold">资源管理器集成</Label>
+				<FolderOpen class="h-3.5 w-3.5 text-muted-foreground" />
+				<Label class="text-xs font-bold">资源管理器集成</Label>
 			</div>
 			<div class="space-y-1">
 				<label class="flex items-center justify-between gap-2">
-					<span class="text-sm">在资源管理器右键菜单中添加“在 NeoView 中打开”</span>
+					<span class="text-xs">添加“在 NeoView 中打开”右键菜单</span>
 					<Switch
 						bind:checked={explorerContextMenuEnabled}
 						disabled={explorerContextMenuLoading}
+						class="scale-75"
 					/>
 				</label>
 				<div class="flex items-center justify-between gap-2">
-					<span class="text-xs text-muted-foreground">需要时可下载 .reg 手动导入注册表</span>
-					<Button variant="outline" size="sm" onclick={downloadExplorerContextMenuReg}>
+					<span class="text-[10px] text-muted-foreground">可下载 .reg 手动导入注册表</span>
+					<Button variant="outline" size="sm" class="h-7 text-[10px]" onclick={downloadExplorerContextMenuReg}>
 						导出 .reg
 					</Button>
 				</div>
-				{#if explorerContextMenuError}
-					<p class="text-xs text-destructive">{explorerContextMenuError}</p>
-				{:else if explorerContextMenuLoading}
-					<p class="text-xs text-muted-foreground">正在读取当前状态...</p>
-				{:else}
-					<p class="text-xs text-muted-foreground">
-						该设置使用当前可执行文件路径在 HKCU\Software\Classes 中注册右键菜单，适用于便携版。
-					</p>
-				{/if}
 			</div>
 		</div>
 
 		<!-- 缩略图目录 -->
-		<div class="space-y-2">
+		<div class="space-y-1.5">
 			<div class="flex items-center gap-2">
-				<FolderOpen class="h-4 w-4 text-muted-foreground" />
-				<Label class="text-sm font-semibold">缩略图目录</Label>
+				<FolderOpen class="h-3.5 w-3.5 text-muted-foreground" />
+				<Label class="text-xs font-bold">缩略图目录</Label>
 			</div>
-			<p class="text-xs text-muted-foreground">
-				用于存储缩略图数据库和缓存文件。若未设置，将使用默认目录 {DEFAULT_THUMBNAIL_DIRECTORY}。
-			</p>
 			<div class="flex items-center gap-2">
-				<div class="flex-1 truncate rounded-md border px-2 py-1 text-xs">
+				<div class="flex-1 truncate rounded-md border px-2 py-0.5 text-[10px]">
 					{getThumbnailDirectoryLabel()}
 				</div>
-				<Button variant="outline" size="sm" class="gap-1" onclick={selectThumbnailDirectory}>
-					<FolderOpen class="h-4 w-4" />
-					选择文件夹
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="text-xs text-muted-foreground"
-					onclick={resetThumbnailDirectory}
-				>
-					重置
+				<Button variant="outline" size="sm" class="h-7 gap-1 px-2 text-[10px]" onclick={selectThumbnailDirectory}>
+					<FolderOpen class="h-3.5 w-3.5" />
+					选择
 				</Button>
 			</div>
 		</div>
 
 		<!-- 文件关联 -->
-		<div class="space-y-2">
-			<Label class="text-sm font-semibold">文件关联</Label>
+		<div class="space-y-1.5">
+			<Label class="text-xs font-bold">文件关联</Label>
 			<div class="space-y-1">
 				<label class="flex items-center justify-between gap-2">
-					<span class="text-sm">图像文件 (jpg, png, webp, avif, jxl)</span>
-					<Checkbox checked aria-label="图像文件 (jpg, png, webp, avif, jxl)" />
+					<span class="text-xs">图像文件</span>
+					<Checkbox checked aria-label="图像文件" class="h-4 w-4" />
 				</label>
 				<label class="flex items-center justify-between gap-2">
-					<span class="text-sm">压缩包 (zip, cbz, rar, cbr)</span>
-					<Checkbox checked aria-label="压缩包 (zip, cbz, rar, cbr)" />
+					<span class="text-xs">压缩包</span>
+					<Checkbox checked aria-label="压缩包" class="h-4 w-4" />
 				</label>
 				<label class="flex items-center justify-between gap-2">
-					<span class="text-sm">PDF 文件</span>
-					<Checkbox aria-label="PDF 文件" />
+					<span class="text-xs">PDF 文件</span>
+					<Checkbox aria-label="PDF 文件" class="h-4 w-4" />
 				</label>
 			</div>
 		</div>

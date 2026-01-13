@@ -97,22 +97,54 @@
 	let draggedCardId = $state<string | null>(null);
 	let isPointerDragging = $state(false);
 	let dragPreview = $state<{ x: number; y: number } | null>(null);
+	let dropTargetCardId = $state<string | null>(null);
+	let dragHandleElement = $state<HTMLElement | null>(null);
 
 	// 拖拽处理函数
 	function handlePointerDown(event: PointerEvent, card: CardConfig) {
-		if (!(event.target as HTMLElement).closest('.drag-handle')) return;
+		const handle = (event.target as HTMLElement).closest('.drag-handle') as HTMLElement;
+		if (!handle) return;
 		event.preventDefault();
+		event.stopPropagation();
 		draggedCardId = card.id;
 		isPointerDragging = true;
-		dragPreview = { x: event.clientX + 12, y: event.clientY + 12 };
+		dragPreview = { x: event.clientX, y: event.clientY };
+		dragHandleElement = handle;
+		handle.setPointerCapture(event.pointerId);
+	}
+
+	// 悬停检测 - 设置放置目标
+	function handleDragEnter(cardId: string) {
+		if (isPointerDragging && draggedCardId && cardId !== draggedCardId) {
+			dropTargetCardId = cardId;
+		}
 	}
 
 	$effect(() => {
-		function handleWindowPointerUp() {
+		function handleWindowPointerUp(e: PointerEvent) {
 			if (!isPointerDragging) return;
+
+			// 如果有有效的放置目标，执行顺序交换
+			if (draggedCardId && dropTargetCardId && draggedCardId !== dropTargetCardId) {
+				const draggedCard = filteredCards.find(c => c.id === draggedCardId);
+				const targetCard = filteredCards.find(c => c.id === dropTargetCardId);
+
+				if (draggedCard && targetCard && draggedCard.panelId === targetCard.panelId) {
+					const targetIndex = filteredCards.findIndex(c => c.id === dropTargetCardId);
+					cardConfigStore.moveCard(draggedCard.panelId, draggedCardId, targetIndex);
+				}
+			}
+
+			// 释放指针捕获
+			if (dragHandleElement) {
+				dragHandleElement.releasePointerCapture(e.pointerId);
+			}
+
 			isPointerDragging = false;
 			draggedCardId = null;
 			dragPreview = null;
+			dropTargetCardId = null;
+			dragHandleElement = null;
 		}
 		window.addEventListener('pointerup', handleWindowPointerUp);
 		return () => {
@@ -123,7 +155,7 @@
 	$effect(() => {
 		if (!isPointerDragging) return;
 		function handleWindowPointerMove(e: PointerEvent) {
-			dragPreview = { x: e.clientX + 12, y: e.clientY + 12 };
+			dragPreview = { x: e.clientX, y: e.clientY };
 		}
 		window.addEventListener('pointermove', handleWindowPointerMove);
 		return () => {
@@ -302,9 +334,14 @@
 						</Table.Row>
 					{/if}
 					<Table.Row
+						onpointerenter={() => handleDragEnter(card.id)}
 						class={cn(
 							'group transition-colors',
-							isPointerDragging && draggedCardId === card.id && 'bg-muted/30 opacity-50 grayscale'
+							isPointerDragging && draggedCardId === card.id && 'bg-muted/30 opacity-50 grayscale',
+							isPointerDragging &&
+								dropTargetCardId === card.id &&
+								draggedCardId !== card.id &&
+								'bg-primary/10 ring-primary/50 ring-2'
 						)}
 					>
 						<Table.Cell class="px-2">
@@ -479,7 +516,7 @@
 	{#if card}
 		{@const cardDef = cardRegistry[card.id]}
 		<div
-			class="pointer-events-none fixed z-[100] scale-105"
+			class="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-1/2 scale-105"
 			style="left: {dragPreview.x}px; top: {dragPreview.y}px;"
 		>
 			<div

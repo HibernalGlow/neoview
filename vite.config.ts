@@ -51,6 +51,17 @@ export default defineConfig({
 			'@floating-ui/dom',
 			'@internationalized/date',
 			'@tanstack/table-core',
+			'@tauri-apps/api',
+			'@tauri-apps/plugin-shell',
+			'@tauri-apps/plugin-fs',
+			'@tauri-apps/plugin-dialog',
+			'@lucide/svelte',
+			'clsx',
+			'tailwind-merge',
+			'zod',
+			'idb',
+			'viewerjs',
+			'node-vibrant'
 		],
 		// 强制预构建，避免运行时重复
 		force: false,
@@ -61,7 +72,15 @@ export default defineConfig({
 		host: host || false,
 		hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
 		watch: {
-			ignored: ['**/src-tauri/**']
+			ignored: [
+				'**/src-tauri/**',
+				'**/ref/**',
+				'**/dist/**',
+				'**/cache/**',
+				'**/temp/**',
+				'**/output*/**',
+				'**/.git/**'
+			]
 		}
 	},
 	envPrefix: ['VITE_', 'TAURI_ENV_*'],

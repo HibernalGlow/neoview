@@ -231,68 +231,111 @@
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
-				{#if item.isDir}
-					<!-- 文件夹菜单 -->
+				<!-- Row 1: Common Actions -->
+				<div class="flex flex-row items-center justify-between gap-1 p-1">
 					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleBrowse}
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleCut}
+						title="剪切"
 					>
-						<Folder class="h-4 w-4" />
-						<span>浏览</span>
+						<Scissors class="h-4 w-4" />
 					</button>
 					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleOpenInNewTab}
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleCopy}
+						title="复制"
 					>
-						<PanelRight class="h-4 w-4" />
-						<span>在新标签页打开</span>
+						<Copy class="h-4 w-4" />
 					</button>
 					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleOpenAsBook}
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handlePaste}
+						title="粘贴"
 					>
-						<BookOpen class="h-4 w-4" />
-						<span>作为书籍打开</span>
-					</button>
-				{:else}
-					<!-- 文件菜单 -->
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleOpenAsBook}
-					>
-						<BookOpen class="h-4 w-4" />
-						<span>打开</span>
+						<ClipboardPaste class="h-4 w-4" />
 					</button>
 					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleOpenInNewTab}
+						class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleDelete}
+						title="删除"
+					>
+						<Trash2 class="h-4 w-4" />
+					</button>
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleRename}
+						title="重命名"
+					>
+						<Pencil class="h-4 w-4" />
+					</button>
+				</div>
+
+				<!-- Row 2: Navigation Actions -->
+				<div class="flex flex-row items-center justify-start gap-1 p-1">
+					{#if item.isDir}
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleBrowse}
+							title="浏览"
+						>
+							<Folder class="h-4 w-4" />
+						</button>
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleOpenInNewTab}
+							title="在新标签页打开"
+						>
+							<PanelRight class="h-4 w-4" />
+						</button>
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleOpenAsBook}
+							title="作为书籍打开"
+						>
+							<BookOpen class="h-4 w-4" />
+						</button>
+					{:else}
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleOpenAsBook}
+							title="打开"
+						>
+							<BookOpen class="h-4 w-4" />
+						</button>
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleOpenInNewTab}
+							title="打开所在文件夹"
+						>
+							<FolderOpen class="h-4 w-4" />
+						</button>
+						<button
+							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleOpenWithSystem}
+							title="用默认软件打开"
+						>
+							<Play class="h-4 w-4" />
+						</button>
+					{/if}
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleOpenInExplorer}
+						title="在资源管理器中打开"
 					>
 						<FolderOpen class="h-4 w-4" />
-						<span>打开所在文件夹</span>
 					</button>
 					<button
-						class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleOpenWithSystem}
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleUndoDelete}
+						title="撤回上一次删除"
 					>
-						<Play class="h-4 w-4" />
-						<span>用默认软件打开</span>
+						<Undo2 class="h-4 w-4" />
 					</button>
-				{/if}
+				</div>
 
 				<div class="bg-border my-1 h-px"></div>
 
-				<!-- 在资源管理器中打开（通用） -->
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleOpenInExplorer}
-				>
-					<FolderOpen class="h-4 w-4" />
-					<span>在资源管理器中打开</span>
-				</button>
-
-				<div class="bg-border my-1 h-px"></div>
-
-				<!-- 通用操作 -->
+				<!-- 其他操作 -->
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
 					onclick={handleAddBookmark}
@@ -306,54 +349,6 @@
 				>
 					<Tags class="h-4 w-4" />
 					<span>编辑标签</span>
-				</button>
-
-				<div class="bg-border my-1 h-px"></div>
-
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleCopy}
-				>
-					<Copy class="h-4 w-4" />
-					<span>复制</span>
-				</button>
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleCut}
-				>
-					<Scissors class="h-4 w-4" />
-					<span>剪切</span>
-				</button>
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handlePaste}
-				>
-					<ClipboardPaste class="h-4 w-4" />
-					<span>粘贴</span>
-				</button>
-
-				<div class="bg-border my-1 h-px"></div>
-
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleRename}
-				>
-					<Pencil class="h-4 w-4" />
-					<span>重命名</span>
-				</button>
-				<button
-					class="hover:bg-destructive hover:text-destructive-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleDelete}
-				>
-					<Trash2 class="h-4 w-4" />
-					<span>删除</span>
-				</button>
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleUndoDelete}
-				>
-					<Undo2 class="h-4 w-4" />
-					<span>撤回上一次删除</span>
 				</button>
 
 				<div class="bg-border my-1 h-px"></div>

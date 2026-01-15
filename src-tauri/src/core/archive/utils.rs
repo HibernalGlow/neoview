@@ -1,7 +1,7 @@
 // 压缩包工具函数模块
 // 包含路径规范化、MIME 类型检测、图片处理等工具函数
 
-use super::types::{ArchiveMetadata, ARCHIVE_IMAGE_EXTENSIONS};
+use super::types::{ArchiveMetadata, ARCHIVE_IMAGE_EXTENSIONS, ARCHIVE_VIDEO_EXTENSIONS};
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use image::GenericImageView;
 use std::ffi::OsStr;
@@ -32,6 +32,16 @@ pub fn is_image_file(path: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// 检查是否为视频文件（使用预编译 HashSet，O(1) 查找）
+#[inline]
+pub fn is_video_file(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(|ext| ARCHIVE_VIDEO_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
 /// 检测图片 MIME 类型
 pub fn detect_image_mime_type(path: &str) -> &'static str {
     if let Some(ext) = Path::new(path).extension() {
@@ -53,8 +63,7 @@ pub fn detect_image_mime_type(path: &str) -> &'static str {
 
 /// 获取压缩包元数据
 pub fn get_archive_metadata(archive_path: &Path) -> Result<ArchiveMetadata, String> {
-    let meta =
-        fs::metadata(archive_path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
+    let meta = fs::metadata(archive_path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
 
     let modified = meta
         .modified()
@@ -73,17 +82,13 @@ pub fn get_archive_metadata(archive_path: &Path) -> Result<ArchiveMetadata, Stri
 pub fn zip_datetime_to_unix(dt: Option<zip::DateTime>) -> Option<i64> {
     let dt = dt?;
     let date = NaiveDate::from_ymd_opt(dt.year() as i32, dt.month() as u32, dt.day() as u32)?;
-    let time =
-        NaiveTime::from_hms_opt(dt.hour() as u32, dt.minute() as u32, dt.second() as u32)?;
+    let time = NaiveTime::from_hms_opt(dt.hour() as u32, dt.minute() as u32, dt.second() as u32)?;
     let datetime = NaiveDateTime::new(date, time);
     Some(datetime.and_utc().timestamp())
 }
 
 /// 等比例缩放图片
-pub fn resize_keep_aspect_ratio(
-    img: &image::DynamicImage,
-    max_size: u32,
-) -> image::DynamicImage {
+pub fn resize_keep_aspect_ratio(img: &image::DynamicImage, max_size: u32) -> image::DynamicImage {
     let (width, height) = img.dimensions();
 
     // 如果图片尺寸小于等于最大尺寸，直接返回

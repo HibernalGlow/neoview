@@ -2,7 +2,7 @@
 // 包含 RAR 压缩包的读取、提取等操作
 
 use super::types::ArchiveEntry;
-use super::utils::is_image_file;
+use super::utils::{is_image_file, is_video_file};
 use crate::core::archive_index::{ArchiveIndex, ArchiveIndexCache};
 use crate::core::archive_index_builder::RarIndexBuilder;
 use log::{debug, info};
@@ -14,25 +14,23 @@ use std::time::Instant;
 
 /// 读取 RAR 压缩包内容列表
 pub fn list_rar_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-    println!(
-        "📦 list_rar_contents start: {}",
-        archive_path.display()
-    );
-    
+    println!("📦 list_rar_contents start: {}", archive_path.display());
+
     let archive = unrar::Archive::new(archive_path)
         .open_for_listing()
         .map_err(|e| format!("打开 RAR 压缩包失败: {:?}", e))?;
-    
+
     let mut entries = Vec::new();
     let mut index = 0;
-    
+
     for entry_result in archive {
         let entry = entry_result.map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
         let name = entry.filename.to_string_lossy().to_string();
         let is_dir = entry.is_directory();
         let size = entry.unpacked_size as u64;
         let is_image = !is_dir && is_image_file(&name);
-        
+        let is_video = !is_dir && is_video_file(&name);
+
         // RAR 的修改时间处理 (file_time 是 u32 DOS 时间戳)
         let modified = if entry.file_time > 0 {
             // DOS 时间转 Unix 时间戳（简化处理）
@@ -40,31 +38,29 @@ pub fn list_rar_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, Strin
         } else {
             None
         };
-        
+
         entries.push(ArchiveEntry {
             name: name.clone(),
             path: name,
             size,
             is_dir,
             is_image,
+            is_video,
             entry_index: index,
             modified,
         });
         index += 1;
     }
-    
-    println!(
-        "📦 list_rar_contents end: {} entries",
-        entries.len()
-    );
-    
+
+    println!("📦 list_rar_contents end: {} entries", entries.len());
+
     // 排序：目录优先，然后按自然排序
     entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
         (true, false) => Ordering::Less,
         (false, true) => Ordering::Greater,
         _ => natural_cmp::<str, _>(&a.name, &b.name),
     });
-    
+
     Ok(entries)
 }
 
@@ -79,55 +75,62 @@ pub fn extract_file_from_rar(
         archive_path.display(),
         file_path
     );
-    
+
     let start = Instant::now();
-    
+
     // 尝试使用索引
     let target_index = get_rar_entry_index(index_cache, archive_path, file_path);
-    
+
     // 规范化路径（RAR 可能使用反斜杠）
     let normalized_path = file_path.replace('\\', "/");
-    
+
     // 打开 RAR 并解压指定文件
     let mut archive = unrar::Archive::new(archive_path)
         .open_for_processing()
         .map_err(|e| format!("打开 RAR 压缩包失败: {:?}", e))?;
-    
+
     let mut found_data: Option<Vec<u8>> = None;
     let mut current_index = 0usize;
-    
-    while let Some(header) = archive.read_header()
-        .map_err(|e| format!("读取 RAR 头失败: {:?}", e))? 
+
+    while let Some(header) = archive
+        .read_header()
+        .map_err(|e| format!("读取 RAR 头失败: {:?}", e))?
     {
         let entry_path = header.entry().filename.to_string_lossy().to_string();
         let entry_normalized = entry_path.replace('\\', "/");
-        
+
         // 如果有索引，直接跳到目标位置
         let is_target = if let Some(idx) = target_index {
             current_index == idx
         } else {
             entry_normalized == normalized_path || entry_path == file_path
         };
-        
+
         if is_target {
             // 找到目标文件，读取数据
-            let (data, _next) = header.read()
+            let (data, _next) = header
+                .read()
                 .map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
             found_data = Some(data);
             break;
         } else {
             // 跳过其他文件
-            archive = header.skip()
+            archive = header
+                .skip()
                 .map_err(|e| format!("跳过 RAR 条目失败: {:?}", e))?;
         }
         current_index += 1;
     }
-    
+
     let elapsed = start.elapsed();
-    
+
     match found_data {
         Some(data) => {
-            let indexed = if target_index.is_some() { "indexed" } else { "sequential" };
+            let indexed = if target_index.is_some() {
+                "indexed"
+            } else {
+                "sequential"
+            };
             info!(
                 "📦 extract_file_from_rar end: read_bytes={} elapsed_ms={} mode={} archive={} inner={}",
                 data.len(),
@@ -164,7 +167,7 @@ pub fn build_rar_index(
         debug!("📦 RAR 索引已存在: {}", archive_path.display());
         return Ok(());
     }
-    
+
     let index = RarIndexBuilder::build(archive_path, None)?;
     index_cache.put(archive_path, index);
     Ok(())

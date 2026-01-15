@@ -17,10 +17,20 @@ pub static ARCHIVE_IMAGE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
     .collect()
 });
 
+/// 预编译的视频扩展名集合（压缩包内部使用）
+pub static ARCHIVE_VIDEO_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    ["mp4", "webm", "mkv", "avi", "mov", "wmv", "flv", "m4v"]
+        .into_iter()
+        .collect()
+});
+
 /// 预编译的压缩包扩展名映射
-pub static ZIP_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["zip", "cbz"].into_iter().collect());
-pub static RAR_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["rar", "cbr"].into_iter().collect());
-pub static SEVENZ_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| ["7z", "cb7"].into_iter().collect());
+pub static ZIP_EXTENSIONS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| ["zip", "cbz"].into_iter().collect());
+pub static RAR_EXTENSIONS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| ["rar", "cbr"].into_iter().collect());
+pub static SEVENZ_EXTENSIONS: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| ["7z", "cb7"].into_iter().collect());
 
 /// 图片缓存大小限制
 pub const IMAGE_CACHE_LIMIT: usize = 1024;
@@ -55,10 +65,13 @@ impl ArchiveFormat {
             })
             .unwrap_or(ArchiveFormat::Unknown)
     }
-    
+
     /// 检查格式是否受支持
     pub fn is_supported(&self) -> bool {
-        matches!(self, ArchiveFormat::Zip | ArchiveFormat::Rar | ArchiveFormat::SevenZ)
+        matches!(
+            self,
+            ArchiveFormat::Zip | ArchiveFormat::Rar | ArchiveFormat::SevenZ
+        )
     }
 }
 
@@ -84,6 +97,7 @@ pub struct ArchiveEntry {
     pub size: u64,
     pub is_dir: bool,
     pub is_image: bool,
+    pub is_video: bool,
     pub entry_index: usize,
     pub modified: Option<i64>,
 }

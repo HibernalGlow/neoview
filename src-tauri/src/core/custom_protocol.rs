@@ -5,6 +5,7 @@
 //! - 使用 mini_moka LRU 缓存避免重复的路径查找
 //! - 缓存压缩包条目列表，减少重复解析
 
+use crate::commands::ThumbnailState;
 use crate::core::archive::ArchiveManager;
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
@@ -98,6 +99,8 @@ struct CachedArchiveEntry {
     path: String,
     /// 是否是图片
     is_image: bool,
+    /// 是否是视频
+    is_video: bool,
 }
 
 /// 缓存的压缩包元数据
@@ -157,14 +160,15 @@ impl ProtocolState {
             .list_contents(book_path)
             .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
 
-        // 过滤并缓存图片条目
+        // 过滤并缓存可查看条目（图片和视频）
         let image_entries: Vec<CachedArchiveEntry> = entries
             .iter()
-            .filter(|e| e.is_image)
+            .filter(|e| e.is_image || e.is_video)
             .map(|e| CachedArchiveEntry {
                 name: e.name.clone(),
                 path: e.path.clone(),
-                is_image: true,
+                is_image: e.is_image,
+                is_video: e.is_video,
             })
             .collect();
 
@@ -261,6 +265,11 @@ fn get_mime_type(path: &str) -> &'static str {
         "tiff" | "tif" => "image/tiff",
         "jxl" => "image/jxl",
         "svg" => "image/svg+xml",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        "mkv" => "video/x-matroska",
+        "avi" => "video/x-msvideo",
+        "mov" => "video/quicktime",
         _ => "application/octet-stream",
     }
 }
@@ -362,10 +371,33 @@ fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>
 }
 
 /// 处理缩略图请求
-fn handle_thumbnail(_state: &ProtocolState, key: &str) -> Response<Vec<u8>> {
-    // TODO: 从缩略图数据库加载
-    debug!("🖼️ Protocol: 加载缩略图, key={key}");
-    build_error_response(StatusCode::NOT_IMPLEMENTED, "Thumbnail not implemented yet")
+fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
+    let Some(thumb_state) = app.try_state::<ThumbnailState>() else {
+        warn!("🖼️ Protocol: ThumbnailState 未初始化");
+        return build_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Thumbnail state not initialized",
+        );
+    };
+
+    let db = &thumb_state.db;
+    // 尝试从 'file' 类别加载，失败则尝试 'folder'
+    match db.load_thumbnail_by_key_and_category(key, "file") {
+        Ok(Some(data)) => {
+            debug!("🖼️ Protocol: 加载文件缩略图成功, key={key}");
+            build_response(data, "image/webp")
+        }
+        _ => match db.load_thumbnail_by_key_and_category(key, "folder") {
+            Ok(Some(data)) => {
+                debug!("🖼️ Protocol: 加载文件夹缩略图成功, key={key}");
+                build_response(data, "image/webp")
+            }
+            _ => {
+                debug!("🖼️ Protocol: 未找到缩略图, key={key}");
+                build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found")
+            }
+        },
+    }
 }
 
 /// 处理协议请求
@@ -396,7 +428,7 @@ pub fn handle_protocol_request(
             entry_index,
         } => handle_archive_image(&state, &book_hash, entry_index),
         ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, &path_hash),
-        ProtocolRequest::Thumbnail { key } => handle_thumbnail(&state, &key),
+        ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, &key),
         ProtocolRequest::Unknown => {
             warn!("🌐 Protocol: 未知请求路径: {path}");
             build_error_response(StatusCode::NOT_FOUND, "Unknown request")

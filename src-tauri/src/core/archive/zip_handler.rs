@@ -2,7 +2,9 @@
 // 包含 ZIP 压缩包的读取、提取、删除等操作
 
 use super::types::ArchiveEntry;
-use super::utils::{is_image_file, normalize_archive_key, normalize_inner_path, zip_datetime_to_unix};
+use super::utils::{
+    is_image_file, is_video_file, normalize_archive_key, normalize_inner_path, zip_datetime_to_unix,
+};
 use log::info;
 use natural_sort_rs::natural_cmp;
 use std::cmp::Ordering;
@@ -53,10 +55,7 @@ pub fn get_cached_archive(
 
 /// 读取 ZIP 压缩包内容列表
 pub fn list_zip_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-    println!(
-        "📦 list_zip_contents start: {}",
-        archive_path.display()
-    );
+    println!("📦 list_zip_contents start: {}", archive_path.display());
     let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
     let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
@@ -72,6 +71,7 @@ pub fn list_zip_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, Strin
         let is_dir = file.is_dir();
         let size = file.size();
         let is_image = !is_dir && is_image_file(&name);
+        let is_video = !is_dir && is_video_file(&name);
         let modified = zip_datetime_to_unix(file.last_modified());
 
         entries.push(ArchiveEntry {
@@ -80,15 +80,13 @@ pub fn list_zip_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, Strin
             size,
             is_dir,
             is_image,
+            is_video,
             entry_index: i,
             modified,
         });
     }
 
-    println!(
-        "📦 list_zip_contents end: {} entries",
-        entries.len()
-    );
+    println!("📦 list_zip_contents end: {} entries", entries.len());
 
     // 排序：目录优先，然后按自然排序
     entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
@@ -122,9 +120,9 @@ pub fn extract_file_from_zip(
 
     // 使用缓冲区池，预分配解压后大小
     let uncompressed_size = zip_file.size() as usize;
-    let mut buffer = crate::core::buffer_pool::IMAGE_BUFFER_POOL
-        .acquire_with_capacity(uncompressed_size);
-    
+    let mut buffer =
+        crate::core::buffer_pool::IMAGE_BUFFER_POOL.acquire_with_capacity(uncompressed_size);
+
     let start = Instant::now();
     zip_file
         .read_to_end(&mut buffer)
@@ -179,18 +177,17 @@ pub fn delete_entry_from_zip(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
 
-    let temp_file = NamedTempFile::new_in(&parent_dir)
-        .map_err(|e| format!("创建临时文件失败: {}", e))?;
+    let temp_file =
+        NamedTempFile::new_in(&parent_dir).map_err(|e| format!("创建临时文件失败: {}", e))?;
     let temp_writer = temp_file
         .reopen()
         .map_err(|e| format!("打开临时文件失败: {}", e))?;
     let mut zip_writer = ZipWriter::new(temp_writer);
 
     {
-        let source_file = File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
-        let mut archive = ZipArchive::new(source_file)
-            .map_err(|e| format!("读取压缩包失败: {}", e))?;
+        let source_file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let mut archive =
+            ZipArchive::new(source_file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
         let mut found = false;
         for index in 0..archive.len() {
@@ -205,11 +202,8 @@ pub fn delete_entry_from_zip(
                 continue;
             }
 
-            let last_modified = entry
-                .last_modified()
-                .unwrap_or_else(zip::DateTime::default);
-            let mut options =
-                SimpleFileOptions::default().last_modified_time(last_modified);
+            let last_modified = entry.last_modified().unwrap_or_else(zip::DateTime::default);
+            let mut options = SimpleFileOptions::default().last_modified_time(last_modified);
             if let Some(mode) = entry.unix_mode() {
                 options = options.unix_permissions(mode);
             }
@@ -242,8 +236,7 @@ pub fn delete_entry_from_zip(
     drop(writer);
 
     let temp_path = temp_file.into_temp_path();
-    fs::remove_file(archive_path)
-        .map_err(|e| format!("删除原压缩包失败: {}", e))?;
+    fs::remove_file(archive_path).map_err(|e| format!("删除原压缩包失败: {}", e))?;
     temp_path
         .persist(archive_path)
         .map_err(|e| format!("替换压缩包失败: {}", e.error))?;
@@ -294,7 +287,8 @@ mod tests {
         }
 
         let cache: ZipArchiveCache = Arc::new(Mutex::new(HashMap::new()));
-        let written = extract_file_from_zip_to_path(&cache, &zip_path, "a.bin", &dest_path).unwrap();
+        let written =
+            extract_file_from_zip_to_path(&cache, &zip_path, "a.bin", &dest_path).unwrap();
         assert_eq!(written, payload.len() as u64);
 
         let out = std::fs::read(&dest_path).unwrap();

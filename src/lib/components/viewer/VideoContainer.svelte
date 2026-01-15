@@ -22,6 +22,8 @@
 	import { dirname, join, basename } from '@tauri-apps/api/path';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import type { Page } from '$lib/types';
+	import { getArchiveImageUrl } from '$lib/api/imageProtocol';
+	import { getBookHash } from '$lib/components/viewer/flow/imageReader';
 
 	// 视频操作事件监听器
 	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
@@ -98,25 +100,34 @@
 				videoStartTime = 0;
 			}
 
-			// 加载视频数据 - 统一使用 convertFileSrc 处理
+			// 加载视频数据
 			if (videoPage.data) {
-				// 已有 base64 数据（仍使用 Blob URL）
+				// 【优化】直接使用 base64 数据 (data URL)，避免冗余的 fetch 和 Blob URL
 				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';
-				const blob = await fetch(`data:${mimeType};base64,${videoPage.data}`).then(r => r.blob());
-				if (requestId !== currentVideoRequestId) return;
-				const url = URL.createObjectURL(blob);
-				setVideoUrl(url, true);
+				const url = `data:${mimeType};base64,${videoPage.data}`;
+				setVideoUrl(url, false);
 			} else if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
-				// 从压缩包加载 - 提取到临时文件后使用 convertFileSrc
+				// 【优化】使用 neoview:// 协议直连，避免磁盘解压等待
 				const archivePath = bookStore.currentBook.path;
-				const tempPath: string = await invoke('extract_video_to_temp', {
-					archivePath,
-					filePath: videoPage.innerPath,
-					traceId: `video-${Date.now()}`
-				});
+				const bookHash = await getBookHash(archivePath);
+				
 				if (requestId !== currentVideoRequestId) return;
-				const url = convertFileSrc(tempPath);
-				setVideoUrl(url, false); // 临时文件不需要 revoke
+				
+				// 如果有 entryIndex，使用 protocol 直连
+				if (videoPage.entryIndex != null) {
+					const url = getArchiveImageUrl(bookHash, videoPage.entryIndex);
+					setVideoUrl(url, false);
+				} else {
+					// 回退方案：提取到临时文件
+					const tempPath: string = await invoke('extract_video_to_temp', {
+						archivePath,
+						filePath: videoPage.innerPath,
+						traceId: `video-${Date.now()}`
+					});
+					if (requestId !== currentVideoRequestId) return;
+					const url = convertFileSrc(tempPath);
+					setVideoUrl(url, false);
+				}
 			} else {
 				// 从文件系统加载 - 直接使用 convertFileSrc
 				const url = convertFileSrc(videoPage.path);

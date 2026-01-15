@@ -25,7 +25,8 @@ import { registerBookPath, getArchiveImageUrl, preloadArchiveImages } from '$lib
 
 // Tempfile 模式缓存（URL -> blob）
 const tempfileCache = new Map<string, { url: string; blob: Blob }>();
-const TEMPFILE_CACHE_LIMIT = 100;
+// 预加载状态跟踪
+let lastPreloadedPage = -1;
 
 export interface ReadResult {
 	blob: Blob;
@@ -36,9 +37,6 @@ export type ReadSourceResult =
 	| { kind: 'blob'; blob: Blob; traceId: string }
 	| { kind: 'url'; url: string; traceId: string };
 
-// 预加载状态跟踪
-let lastPreloadedPage = -1;
-const PRELOAD_RANGE = 5; // ±5 页
 
 // PageManager 书籍同步状态（避免重复检查）
 let lastSyncedBookPath: string | null = null;
@@ -50,8 +48,9 @@ let currentBookPathForHash: string | null = null;
 // 是否启用 Custom Protocol 模式
 let useProtocolMode = true;
 
-const DIRECT_URL_THRESHOLD_BYTES = 128 * 1024 * 1024;
-const ARCHIVE_TEMPFILE_THRESHOLD_BYTES = 256 * 1024 * 1024;
+// 预加载策略配置
+const PRELOAD_RANGE = 5; // ±5 页
+const TEMPFILE_CACHE_LIMIT = 100;
 
 // 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -170,7 +169,7 @@ async function readFileUrl(path: string, pageIndex: number, traceId: string): Pr
  * 获取当前书籍的 Protocol 哈希
  * 缓存哈希避免重复 IPC 调用
  */
-async function getBookHash(bookPath: string): Promise<string> {
+export async function getBookHash(bookPath: string): Promise<string> {
 	if (currentBookPathForHash === bookPath && currentBookHash) {
 		return currentBookHash;
 	}
@@ -570,10 +569,11 @@ export async function readPageSourceV2(
 		throw new Error(`页面不存在: ${pageIndex}`);
 	}
 
-	if (currentBook.type !== 'archive' && page.size >= DIRECT_URL_THRESHOLD_BYTES) {
+	// 文件系统：始终使用直连 URL (convertFileSrc)
+	if (currentBook.type !== 'archive') {
 		if (updateLatencyTrace) {
 			infoPanelStore.setLatencyTrace({
-				dataSource: 'tempfile',
+				dataSource: 'file-url',
 				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
 				loadMs: 0,
 				totalMs: 0,
@@ -586,11 +586,12 @@ export async function readPageSourceV2(
 	}
 
 	if (currentBook.type === 'archive' && useProtocolMode && page.entryIndex != null) {
-		if (loadModeStore.isTempfileMode || page.size >= ARCHIVE_TEMPFILE_THRESHOLD_BYTES) {
+		// 优先使用 Tempfile 模式（如果显式启用）
+		if (loadModeStore.isTempfileMode) {
 			const innerPath = page.innerPath ?? page.path;
 			if (updateLatencyTrace) {
 				infoPanelStore.setLatencyTrace({
-					dataSource: 'tempfile',
+					dataSource: 'tempfile-url',
 					renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
 					loadMs: 0,
 					totalMs: 0,
@@ -604,7 +605,7 @@ export async function readPageSourceV2(
 
 		if (updateLatencyTrace) {
 			infoPanelStore.setLatencyTrace({
-				dataSource: 'blob',
+				dataSource: 'protocol',
 				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
 				loadMs: 0,
 				totalMs: 0,

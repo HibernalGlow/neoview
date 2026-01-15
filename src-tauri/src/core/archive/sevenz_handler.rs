@@ -2,7 +2,7 @@
 // 包含 7z 压缩包的读取、提取等操作
 
 use super::types::ArchiveEntry;
-use super::utils::is_image_file;
+use super::utils::{is_image_file, is_video_file};
 use crate::core::archive_index::ArchiveIndexCache;
 use crate::core::archive_index_builder::SevenZIndexBuilder;
 use log::{debug, info};
@@ -16,22 +16,20 @@ use std::time::Instant;
 
 /// 读取 7z 压缩包内容列表
 pub fn list_7z_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-    println!(
-        "📦 list_7z_contents start: {}",
-        archive_path.display()
-    );
-    
+    println!("📦 list_7z_contents start: {}", archive_path.display());
+
     let archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
         .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
-    
+
     let mut entries = Vec::new();
-    
+
     for (index, entry) in archive.archive().files.iter().enumerate() {
         let name = entry.name().to_string();
         let is_dir = entry.is_directory();
         let size = entry.size();
         let is_image = !is_dir && is_image_file(&name);
-        
+        let is_video = !is_dir && is_video_file(&name);
+
         // 7z 的修改时间处理 (FileTime 内部是 u64，转换为 Unix 时间戳)
         let file_time = entry.last_modified_date();
         // Windows FILETIME 是从 1601-01-01 开始的 100 纳秒计数
@@ -45,30 +43,28 @@ pub fn list_7z_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String
                 None
             }
         };
-        
+
         entries.push(ArchiveEntry {
             name: name.clone(),
             path: name,
             size,
             is_dir,
             is_image,
+            is_video,
             entry_index: index,
             modified,
         });
     }
-    
-    println!(
-        "📦 list_7z_contents end: {} entries",
-        entries.len()
-    );
-    
+
+    println!("📦 list_7z_contents end: {} entries", entries.len());
+
     // 排序：目录优先，然后按自然排序
     entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
         (true, false) => Ordering::Less,
         (false, true) => Ordering::Greater,
         _ => natural_cmp::<str, _>(&a.name, &b.name),
     });
-    
+
     Ok(entries)
 }
 
@@ -83,48 +79,57 @@ pub fn extract_file_from_7z(
         archive_path.display(),
         file_path
     );
-    
+
     let start = Instant::now();
-    
+
     // 尝试使用索引
     let target_index = get_7z_entry_index(index_cache, archive_path, file_path);
-    
+
     // 规范化路径
     let normalized_path = file_path.replace('\\', "/");
-    
+
     let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
         .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
-    
+
     // 查找目标文件
     let target_entry = if let Some(idx) = target_index {
         // 使用索引直接定位
         archive.archive().files.get(idx).map(|e| (idx, e))
     } else {
         // 顺序查找
-        archive.archive().files.iter()
+        archive
+            .archive()
+            .files
+            .iter()
             .enumerate()
             .find(|(_, entry)| {
                 let entry_path = entry.name().replace('\\', "/");
                 entry_path == normalized_path || entry.name() == file_path
             })
     };
-    
+
     if let Some((_index, _)) = target_entry {
         let mut data = Vec::new();
         let mut found = false;
-        
-        archive.for_each_entries(|entry, reader| {
-            let entry_path = entry.name().replace('\\', "/");
-            if entry_path == normalized_path || entry.name() == file_path {
-                reader.read_to_end(&mut data)?;
-                found = true;
-                return Ok(false); // 找到后停止遍历
-            }
-            Ok(true)
-        }).map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
-        
+
+        archive
+            .for_each_entries(|entry, reader| {
+                let entry_path = entry.name().replace('\\', "/");
+                if entry_path == normalized_path || entry.name() == file_path {
+                    reader.read_to_end(&mut data)?;
+                    found = true;
+                    return Ok(false); // 找到后停止遍历
+                }
+                Ok(true)
+            })
+            .map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+
         let elapsed = start.elapsed();
-        let indexed = if target_index.is_some() { "indexed" } else { "sequential" };
+        let indexed = if target_index.is_some() {
+            "indexed"
+        } else {
+            "sequential"
+        };
         info!(
             "📦 extract_file_from_7z end: read_bytes={} elapsed_ms={} mode={} archive={} inner={}",
             data.len(),
@@ -133,7 +138,7 @@ pub fn extract_file_from_7z(
             archive_path.display(),
             file_path
         );
-        
+
         if data.is_empty() {
             Err(format!("在 7z 压缩包中找不到文件或文件为空: {}", file_path))
         } else {
@@ -206,7 +211,7 @@ pub fn build_7z_index(
         debug!("📦 7z 索引已存在: {}", archive_path.display());
         return Ok(());
     }
-    
+
     let index = SevenZIndexBuilder::build(archive_path, None)?;
     index_cache.put(archive_path, index);
     Ok(())

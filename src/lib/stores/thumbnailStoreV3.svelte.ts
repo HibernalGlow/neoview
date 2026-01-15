@@ -1,16 +1,8 @@
-/**
- * Thumbnail Store V3
- * 缩略图存储 - 复刻 NeeView 架构
- * 
- * 前端极简设计：
- * 1. 通知后端可见区域
- * 2. 接收 blob 并显示
- */
-
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
+import { getThumbUrl } from '$lib/api/imageProtocol';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();
@@ -44,7 +36,7 @@ const prefetchState = {
 // 缩略图就绪事件 payload
 interface ThumbnailReadyPayload {
   path: string;
-  blob: number[]; // Vec<u8> 转为 number[]
+  blob?: number[]; // Vec<u8> 转为 number[]
 }
 
 // 批量缩略图就绪事件 payload
@@ -79,18 +71,23 @@ export async function initThumbnailServiceV3(
     });
 
     // 处理单个缩略图的公共函数
-    const processThumbnail = (path: string, blob: number[]) => {
-      // 转换为 Blob URL
-      const blobUrl = URL.createObjectURL(
-        new Blob([new Uint8Array(blob)], { type: 'image/webp' })
-      );
+    const processThumbnail = (path: string, blob?: number[]) => {
+      // 优先使用自定义协议 URL，避免 IPC 传输大二进制数据和 Blob URL 内存开销
+      const thumbUrl = getThumbUrl(path);
+      
+      // 如果后端传了 blob（例如为了即时显示或某些特殊情况），可以暂存
+      // 但为了极致内存优化，我们优先鼓励使用协议 URL。
+      // 注意：协议 URL 不需要 revoke，因为它指向后端的统一入口。
+      const finalUrl = (blob && blob.length > 0) 
+        ? URL.createObjectURL(new Blob([new Uint8Array(blob)], { type: 'image/webp' }))
+        : thumbUrl;
 
       // 存储到本地缓存
-      thumbnails.set(path, blobUrl);
+      thumbnails.set(path, finalUrl);
 
       // 同步到 fileBrowserStore（供 FileItemCard 使用）
       const key = toRelativeKey(path);
-      fileBrowserStore.addThumbnail(key, blobUrl);
+      fileBrowserStore.addThumbnail(key, finalUrl);
     };
 
     // 监听批量缩略图就绪事件（优化：一次处理多个）

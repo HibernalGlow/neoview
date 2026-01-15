@@ -4,6 +4,7 @@
  * 支持复制、删除、在资源管理器中显示等操作
  */
 import { invoke } from '@tauri-apps/api/core';
+import * as Tooltip from "$lib/components/ui/tooltip/index.js";
 import {
 	Copy,
 	Trash2,
@@ -243,47 +244,85 @@ function handleDelete() {
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
 				<!-- Row 1: Common Actions -->
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleCopy}
-						title="复制文件"
-					>
-						<Copy class="h-4 w-4" />
-					</button>
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleCopy}
+									{...props}
+								>
+									<Copy class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">复制文件</Tooltip.Content>
+					</Tooltip.Root>
+
 					{#if onDelete}
-						<button
-							class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleDelete}
-							title="删除"
-						>
-							<Trash2 class="h-4 w-4" />
-						</button>
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleDelete}
+										{...props}
+									>
+										<Trash2 class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">删除</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
 				</div>
 
 				<!-- Row 2: Navigation Actions -->
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleGoToPage}
-						title="跳转到此页"
-					>
-						<Play class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleShowInExplorer}
-						title="在资源管理器中显示"
-					>
-						<FolderOpen class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleOpenWithSystem}
-						title="用默认软件打开"
-					>
-						<ExternalLink class="h-4 w-4" />
-					</button>
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleGoToPage}
+									{...props}
+								>
+									<Play class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">跳转到此页</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleShowInExplorer}
+									{...props}
+								>
+									<FolderOpen class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">在资源管理器中显示</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleOpenWithSystem}
+									{...props}
+								>
+									<ExternalLink class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">用默认软件打开</Tooltip.Content>
+					</Tooltip.Root>
 				</div>
 
 				<div class="bg-border my-1 h-px"></div>

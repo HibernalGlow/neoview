@@ -4,6 +4,7 @@
 	 * 参考旧版 FileBrowser 的右键菜单功能
 	 * 使用 Portal 将菜单渲染到 body，避免被父容器的 overflow 裁剪
 	 */
+	import * as Tooltip from "$lib/components/ui/tooltip/index.js";
 	import type { FsItem } from '$lib/types';
 	import {
 		Folder,
@@ -233,104 +234,205 @@
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
 				<!-- Row 1: Common Actions -->
 				<div class="flex flex-row items-center justify-between gap-1 p-1">
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleCut}
-						title="剪切"
-					>
-						<Scissors class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleCopy}
-						title="复制"
-					>
-						<Copy class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handlePaste}
-						title="粘贴"
-					>
-						<ClipboardPaste class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleDelete}
-						title="删除"
-					>
-						<Trash2 class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleRename}
-						title="重命名"
-					>
-						<Pencil class="h-4 w-4" />
-					</button>
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleCut}
+									{...props}
+								>
+									<Scissors class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">剪切</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleCopy}
+									{...props}
+								>
+									<Copy class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">复制</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handlePaste}
+									{...props}
+								>
+									<ClipboardPaste class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">粘贴</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleDelete}
+									{...props}
+								>
+									<Trash2 class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">删除</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleRename}
+									{...props}
+								>
+									<Pencil class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">重命名</Tooltip.Content>
+					</Tooltip.Root>
 				</div>
 
 				<!-- Row 2: Navigation Actions -->
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
 					{#if item.isDir}
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleBrowse}
-							title="浏览"
-						>
-							<Folder class="h-4 w-4" />
-						</button>
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleOpenInNewTab}
-							title="在新标签页打开"
-						>
-							<PanelRight class="h-4 w-4" />
-						</button>
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleOpenAsBook}
-							title="作为书籍打开"
-						>
-							<BookOpen class="h-4 w-4" />
-						</button>
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleBrowse}
+										{...props}
+									>
+										<Folder class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">浏览</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleOpenInNewTab}
+										{...props}
+									>
+										<PanelRight class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">在新标签页打开</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleOpenAsBook}
+										{...props}
+									>
+										<BookOpen class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">作为书籍打开</Tooltip.Content>
+						</Tooltip.Root>
 					{:else}
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleOpenAsBook}
-							title="打开"
-						>
-							<BookOpen class="h-4 w-4" />
-						</button>
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleOpenInNewTab}
-							title="打开所在文件夹"
-						>
-							<FolderOpen class="h-4 w-4" />
-						</button>
-						<button
-							class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-							onclick={handleOpenWithSystem}
-							title="用默认软件打开"
-						>
-							<Play class="h-4 w-4" />
-						</button>
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleOpenAsBook}
+										{...props}
+									>
+										<BookOpen class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">打开</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleOpenInNewTab}
+										{...props}
+									>
+										<FolderOpen class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">打开所在文件夹</Tooltip.Content>
+						</Tooltip.Root>
+
+						<Tooltip.Root delayDuration={400}>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<button
+										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+										onclick={handleOpenWithSystem}
+										{...props}
+									>
+										<Play class="h-4 w-4" />
+									</button>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content side="bottom">用默认软件打开</Tooltip.Content>
+						</Tooltip.Root>
 					{/if}
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleOpenInExplorer}
-						title="在资源管理器中打开"
-					>
-						<FolderOpen class="h-4 w-4" />
-					</button>
-					<button
-						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-						onclick={handleUndoDelete}
-						title="撤回上一次删除"
-					>
-						<Undo2 class="h-4 w-4" />
-					</button>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleOpenInExplorer}
+									{...props}
+								>
+									<FolderOpen class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">在资源管理器中打开</Tooltip.Content>
+					</Tooltip.Root>
+
+					<Tooltip.Root delayDuration={400}>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+									onclick={handleUndoDelete}
+									{...props}
+								>
+									<Undo2 class="h-4 w-4" />
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="bottom">撤回上一次删除</Tooltip.Content>
+					</Tooltip.Root>
 				</div>
 
 				<div class="bg-border my-1 h-px"></div>

@@ -241,55 +241,57 @@ function handleDelete() {
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
-				<!-- 跳转 -->
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleGoToPage}
-				>
-					<Play class="h-4 w-4" />
-					<span>跳转到此页</span>
-				</button>
+				<!-- Row 1: Common Actions -->
+				<div class="flex flex-row items-center justify-start gap-1 p-1">
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleCopy}
+						title="复制文件"
+					>
+						<Copy class="h-4 w-4" />
+					</button>
+					{#if onDelete}
+						<button
+							class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+							onclick={handleDelete}
+							title="删除"
+						>
+							<Trash2 class="h-4 w-4" />
+						</button>
+					{/if}
+				</div>
+
+				<!-- Row 2: Navigation Actions -->
+				<div class="flex flex-row items-center justify-start gap-1 p-1">
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleGoToPage}
+						title="跳转到此页"
+					>
+						<Play class="h-4 w-4" />
+					</button>
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleShowInExplorer}
+						title="在资源管理器中显示"
+					>
+						<FolderOpen class="h-4 w-4" />
+					</button>
+					<button
+						class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
+						onclick={handleOpenWithSystem}
+						title="用默认软件打开"
+					>
+						<ExternalLink class="h-4 w-4" />
+					</button>
+				</div>
 
 				<div class="bg-border my-1 h-px"></div>
-
-				<!-- 复制 -->
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleCopy}
-				>
-					<Copy class="h-4 w-4" />
-					<span>复制文件</span>
-				</button>
-
-				<!-- 用默认软件打开 -->
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleOpenWithSystem}
-				>
-					<ExternalLink class="h-4 w-4" />
-					<span>用默认软件打开</span>
-				</button>
-
-				<!-- 在资源管理器中显示 -->
-				<button
-					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleShowInExplorer}
-				>
-					<FolderOpen class="h-4 w-4" />
-					<span>在资源管理器中显示</span>
-				</button>
-
-				{#if onDelete}
-					<div class="bg-border my-1 h-px"></div>
-
-					<button
-						class="hover:bg-destructive hover:text-destructive-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-						onclick={handleDelete}
-					>
-						<Trash2 class="h-4 w-4" />
-						<span>删除</span>
-					</button>
-				{/if}
+				
+				<!-- 其他操作（如果有的话可以加在这里，目前没有） -->
+				<div class="px-2 py-1 text-xs text-muted-foreground">
+					{item.name}
+				</div>
 			</div>
 		</div>
 	</div>

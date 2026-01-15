@@ -16,7 +16,11 @@
 		Copy as CopyIcon,
 		ClipboardPaste,
 		Pencil,
-		RefreshCw
+		RefreshCw,
+		BookOpen,
+		FolderOpen,
+		Play,
+		Undo2
 	} from '@lucide/svelte';
 
 	type FileContextMenuEvents = {
@@ -30,6 +34,7 @@
 		openInExplorer: { item: FsItem };
 		openWithExternal: { item: FsItem };
 		reloadThumbnail: { item: FsItem };
+		undoDelete: { item: FsItem };
 	};
 
 	const dispatch = createEventDispatcher<FileContextMenuEvents>();
@@ -41,51 +46,49 @@
 	}
 </script>
 
-<ContextMenuItem on:click={() => emit('open')}>
-	<Folder class="mr-2 h-4 w-4" />
-	<span>打开</span>
-</ContextMenuItem>
-
-<ContextMenuSeparator />
-
-<ContextMenuItem on:click={() => emit('addBookmark')}>
-	<Bookmark class="mr-2 h-4 w-4" />
-	<span>添加到书签</span>
-</ContextMenuItem>
-
 <ContextMenuItemRow>
-	<ContextMenuItemIcon label="剪切" on:click={() => emit('cut')}>
+	<ContextMenuItemIcon label="剪切" onclick={() => emit('cut')}>
 		<Scissors />
 	</ContextMenuItemIcon>
-	<ContextMenuItemIcon label="复制" on:click={() => emit('copy')}>
+	<ContextMenuItemIcon label="复制" onclick={() => emit('copy')}>
 		<CopyIcon />
 	</ContextMenuItemIcon>
-	<ContextMenuItemIcon disabled={!canPaste} label="粘贴" on:click={() => emit('paste')}>
+	<ContextMenuItemIcon disabled={!canPaste} label="粘贴" onclick={() => emit('paste')}>
 		<ClipboardPaste />
 	</ContextMenuItemIcon>
-	<ContextMenuItemIcon variant="destructive" label="删除" on:click={() => emit('delete')}>
+	<ContextMenuItemIcon variant="destructive" label="删除" onclick={() => emit('delete')}>
 		<Trash2 />
 	</ContextMenuItemIcon>
-	<ContextMenuItemIcon label="重命名" on:click={() => emit('rename')}>
+	<ContextMenuItemIcon label="重命名" onclick={() => emit('rename')}>
 		<Pencil />
+	</ContextMenuItemIcon>
+</ContextMenuItemRow>
+
+<ContextMenuItemRow>
+	<ContextMenuItemIcon label="打开" onclick={() => emit('open')}>
+		<BookOpen />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon label="在资源管理器中打开" onclick={() => emit('openInExplorer')}>
+		<FolderOpen />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon label="在外部应用中打开" onclick={() => emit('openWithExternal')}>
+		<Play />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon label="撤回上一次删除" onclick={() => emit('undoDelete')}>
+		<Undo2 />
 	</ContextMenuItemIcon>
 </ContextMenuItemRow>
 
 <ContextMenuSeparator />
 
-<ContextMenuItem on:click={() => emit('openInExplorer')}>
-	<ExternalLink class="mr-2 h-4 w-4" />
-	<span>在资源管理器中打开</span>
-</ContextMenuItem>
-
-<ContextMenuItem on:click={() => emit('openWithExternal')}>
-	<ExternalLink class="mr-2 h-4 w-4" />
-	<span>在外部应用中打开</span>
+<ContextMenuItem onclick={() => emit('addBookmark')}>
+	<Bookmark class="mr-2 h-4 w-4" />
+	<span>添加到书签</span>
 </ContextMenuItem>
 
 <ContextMenuSeparator />
 
-<ContextMenuItem on:click={() => emit('reloadThumbnail')}>
+<ContextMenuItem onclick={() => emit('reloadThumbnail')}>
 	<RefreshCw class="mr-2 h-4 w-4" />
 	<span>重载缩略图</span>
 </ContextMenuItem>

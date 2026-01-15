@@ -8,7 +8,30 @@
 		orientation = "horizontal",
 		class: className,
 		...restProps
-	}: WithoutChildrenOrChild<SliderPrimitive.RootProps> = $props();
+	}: WithoutChildrenOrChild<Omit<SliderPrimitive.RootProps, "value">> & { value?: number | number[] } = $props();
+
+	// Svelte 5 内部代理状态，处理 bits-ui 必须使用数组的问题
+	let proxyValue = $state(Array.isArray(value) ? value : [value ?? 0]);
+
+	// 监听外部 prop 变化同步到内部代理
+	$effect(() => {
+		const target = Array.isArray(value) ? value : [value ?? 0];
+		// 仅在值真正不同时更新，避免死循环
+		if (JSON.stringify(proxyValue) !== JSON.stringify(target)) {
+			proxyValue = target;
+		}
+	});
+
+	// 监听内部代理变化同步回外部 prop
+	$effect(() => {
+		if (Array.isArray(value)) {
+			value = proxyValue;
+		} else if (typeof value === "number" || value === undefined) {
+			if (value !== proxyValue[0]) {
+				value = proxyValue[0];
+			}
+		}
+	});
 </script>
 
 <!--

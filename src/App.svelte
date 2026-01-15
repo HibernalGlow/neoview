@@ -63,6 +63,7 @@
 	import { showInfoToast, showErrorToast } from '$lib/utils/toast';
 	import SettingsOverlay from '$lib/components/SettingsOverlay.svelte';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
+	import { vibrancyStore } from '$lib/stores/vibrancy.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { getMatches } from '@tauri-apps/plugin-cli';
 	import { getFileMetadata } from '$lib/api/filesystem';
@@ -256,6 +257,9 @@
 	onMount(async () => {
 		// 加载空页面设置
 		loadEmptySettings();
+
+		// 初始化 Vibrancy 效果
+		vibrancyStore.init();
 
 		// 初始化卡片窗口系统
 		try {

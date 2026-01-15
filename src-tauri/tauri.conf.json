@@ -24,7 +24,8 @@
         "zoomHotkeysEnabled": true,
         "backgroundThrottling": "disabled",
         "useHttpsScheme": false,
-        "visible": true
+        "visible": true,
+        "transparent": true
       }
     ],
     "security": {

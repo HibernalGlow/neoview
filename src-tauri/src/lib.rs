@@ -572,6 +572,8 @@ pub fn run() {
             commands::protocol_commands::clear_mmap_cache,
             commands::protocol_commands::invalidate_mmap_cache,
             commands::protocol_commands::clear_path_registry,
+            // Window commands
+            commands::window_commands::set_sidebar_vibrancy,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

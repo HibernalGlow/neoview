@@ -35,6 +35,19 @@
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
+
+	/* Vibrancy Variables */
+	--vibrancy-bg: rgba(255, 255, 255, 0.5); /* Light mode fallback */
+}
+
+.vibrancy-enabled {
+	background-color: transparent !important;
+}
+
+.vibrancy-enabled .bg-sidebar,
+.vibrancy-enabled [data-vibrancy='true'] {
+	background-color: var(--vibrancy-bg) !important;
+	backdrop-filter: none !important; /* Let the OS blur show through */
 }
 
 .dark {
@@ -63,6 +76,8 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+
+	--vibrancy-bg: rgba(20, 20, 20, 0.6);
 }
 
 @theme inline {

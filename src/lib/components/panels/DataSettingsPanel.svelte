@@ -10,7 +10,10 @@
 		Search,
 		MapPin,
 		FileJson,
-		Settings
+		Settings,
+		ArrowUp,
+		ArrowDown,
+		ArrowUpDown
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
@@ -43,6 +46,9 @@
 	let fileInputEl: HTMLInputElement | null = $state(null);
 	let searchQuery = $state('');
 
+	// Sorting state: Added 'selected' key
+	let sortConfig = $state<{ key: 'name' | 'storage' | 'selected' | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'asc' });
+
 	// Initialize selections
 	function initSelections() {
 		const sel: Record<DataModuleId, boolean> = {} as Record<DataModuleId, boolean>;
@@ -55,6 +61,39 @@
 	}
 
 	initSelections();
+
+	function handleSort(key: 'name' | 'storage' | 'selected') {
+		if (sortConfig.key === key) {
+			if (sortConfig.dir === 'asc') {
+				sortConfig.dir = 'desc';
+			} else {
+				sortConfig.key = null;
+				sortConfig.dir = 'asc';
+			}
+		} else {
+			sortConfig.key = key;
+			// For selection, defaulting to desc (Checked first) often feels more natural? 
+			// But let's stick to asc default, which usually means False -> True.
+			sortConfig.dir = 'asc';
+		}
+	}
+
+	// Selection Helpers (Defined early for usage in filteredRows)
+	function isChecked(id: string, isNative: boolean) {
+		return isNative ? nativeSelected : selections[id as DataModuleId];
+	}
+
+	function anySelected() {
+		return Object.values(selections).some(Boolean) || nativeSelected;
+	}
+
+	function toggleSelection(id: string, isNative: boolean) {
+		if (isNative) {
+			nativeSelected = !nativeSelected;
+		} else {
+			selections[id as DataModuleId] = !selections[id as DataModuleId];
+		}
+	}
 
 	// Derived state for filtering and grouping
 	const filteredRows = $derived.by(() => {
@@ -73,13 +112,41 @@
 			...rows
 		];
 
-		const query = searchQuery.toLowerCase().trim();
-		if (!query) return allRows;
+		let result = allRows;
 
-		return allRows.filter((row) => {
-			const target = `${row.name} ${row.panel} ${row.description}`.toLowerCase();
-			return target.includes(query);
-		});
+		// Filter
+		const query = searchQuery.toLowerCase().trim();
+		if (query) {
+			result = result.filter((row) => {
+				const target = `${row.name} ${row.panel} ${row.description}`.toLowerCase();
+				return target.includes(query);
+			});
+		}
+
+		// Sort
+		if (sortConfig.key) {
+			result = [...result].sort((a, b) => {
+				if (sortConfig.key === 'selected') {
+					const selA = isChecked(a.id, !!a.isNative);
+					const selB = isChecked(b.id, !!b.isNative);
+					if (selA === selB) return 0;
+					// asc: Unchecked (false) -> Checked (true)
+					// desc: Checked (true) -> Unchecked (false)
+					const valA = selA ? 1 : 0;
+					const valB = selB ? 1 : 0;
+					return sortConfig.dir === 'asc' ? valA - valB : valB - valA;
+				}
+
+				const key = sortConfig.key!;
+				const valA = (a[key as keyof typeof a] || '').toString();
+				const valB = (b[key as keyof typeof b] || '').toString();
+				return sortConfig.dir === 'asc' 
+					? valA.localeCompare(valB, 'zh-CN') 
+					: valB.localeCompare(valA, 'zh-CN');
+			});
+		}
+
+		return result;
 	});
 
 	const groupedRows = $derived.by(() => {
@@ -92,23 +159,6 @@
 		}
 		return groups;
 	});
-
-	// Selection Helpers
-	function anySelected() {
-		return Object.values(selections).some(Boolean) || nativeSelected;
-	}
-
-	function toggleSelection(id: string, isNative: boolean) {
-		if (isNative) {
-			nativeSelected = !nativeSelected;
-		} else {
-			selections[id as DataModuleId] = !selections[id as DataModuleId];
-		}
-	}
-
-	function isChecked(id: string, isNative: boolean) {
-		return isNative ? nativeSelected : selections[id as DataModuleId];
-	}
 
 	// Updated build flags based on unified selection
 	function buildModuleFlags(): Parameters<typeof settingsManager['applyFullPayload']>[1]['modules'] {
@@ -248,6 +298,7 @@
 		strategy = 'merge';
 		lastMessage = '';
 		searchQuery = '';
+		sortConfig = { key: null, dir: 'asc' };
 	}
 
 	// Batch selection helpers
@@ -397,16 +448,71 @@
 			<div class="bg-card flex-1 overflow-y-auto rounded-2xl border shadow-sm">
 				<div class="flex flex-col text-sm">
 					<!-- Header Row -->
-					<div class="flex items-center bg-muted/50 backdrop-blur-md sticky top-0 z-10 border-b px-2 py-2 text-xs font-medium text-muted-foreground">
-						<div class="w-10 flex justify-center">
+					<div class="flex items-center bg-muted/50 backdrop-blur-md sticky top-0 z-10 border-b px-2 py-2 text-xs font-medium text-muted-foreground select-none">
+						<!-- Selection Column (Sortable) -->
+						<div 
+							class="w-10 flex justify-center items-center cursor-pointer hover:bg-muted/50 rounded transition-colors group relative"
+							onclick={(e) => {
+								// Prevent sorting when clicking specifically on the valid checkbox area?
+								// Actually, the Checkbox component handles its own events. 
+								// But to be safe, we check target.
+								if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
+								handleSort('selected');
+							}}
+							title="点击排序选中项"
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSort('selected')}
+						>
+							{#if sortConfig.key === 'selected'}
+								<div class="absolute -left-1 text-primary animate-in fade-in zoom-in spin-in-180 duration-300">
+									{#if sortConfig.dir === 'asc'}
+										<ArrowUp class="h-2.5 w-2.5" />
+									{:else}
+										<ArrowDown class="h-2.5 w-2.5" />
+									{/if}
+								</div>
+							{/if}
+							
 							<Checkbox 
 								checked={anySelected()} 
 								indeterminate={anySelected() && Object.values(selections).some(v => !v)}
 								onCheckedChange={(v) => v ? selectAll() : selectNone()}
 							/>
 						</div>
-						<div class="flex-1 px-2">模块名称 / 说明</div>
-						<div class="w-24 text-right pr-4">存储位置</div>
+
+						<div 
+							class="flex-1 px-2 flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group"
+							onclick={() => handleSort('name')}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSort('name')}
+						>
+							模块名称 / 说明
+							{#if sortConfig.key === 'name'}
+								<div class="transition-transform duration-200" class:rotate-180={sortConfig.dir === 'desc'}>
+									<ArrowUp class="h-3 w-3" />
+								</div>
+							{:else}
+								<ArrowUpDown class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+							{/if}
+						</div>
+						<div 
+							class="w-32 text-right pr-4 flex items-center justify-end gap-1 cursor-pointer hover:text-foreground transition-colors group"
+							onclick={() => handleSort('storage')}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSort('storage')}
+						>
+							{#if sortConfig.key === 'storage'}
+								<div class="transition-transform duration-200" class:rotate-180={sortConfig.dir === 'desc'}>
+									<ArrowUp class="h-3 w-3" />
+								</div>
+							{:else}
+								<ArrowUpDown class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+							{/if}
+							存储位置
+						</div>
 					</div>
 
 					{#if Object.keys(groupedRows).length === 0}

@@ -16,17 +16,28 @@ pub async fn read_directory(
     let path = Path::new(&path);
     let excluded = excluded_paths.unwrap_or_default();
 
-    if !path.exists() {
-        return Err(format!("Path does not exist: {}", path.display()));
+    // 解析 .lnk 文件
+    let resolved_path = if path.exists() && path.is_file() {
+        crate::utils::lnk_resolver::resolve_lnk(path).unwrap_or_else(|| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+
+    if !resolved_path.exists() {
+        return Err(format!("Path does not exist: {}", resolved_path.display()));
     }
 
-    if !path.is_dir() {
-        return Err(format!("Path is not a directory: {}", path.display()));
+    if !resolved_path.is_dir() {
+        return Err(format!(
+            "Path is not a directory: {}",
+            resolved_path.display()
+        ));
     }
 
     let mut entries = Vec::new();
 
-    let read_dir = fs::read_dir(path).map_err(|e| format!("Failed to read directory: {}", e))?;
+    let read_dir =
+        fs::read_dir(&resolved_path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     for entry in read_dir {
         // 优雅处理权限错误
@@ -37,22 +48,22 @@ pub async fn read_directory(
                 continue;
             }
         };
-        
+
         let entry_path = entry.path();
         let path_str = entry_path.to_string_lossy().to_string();
-        
+
         // 检查是否在排除列表中（规范化路径进行比较）
         let normalized_path = path_str.replace('/', "\\");
         let is_excluded = excluded.iter().any(|ex| {
             let normalized_ex = ex.replace('/', "\\");
-            normalized_path == normalized_ex 
+            normalized_path == normalized_ex
                 || normalized_path.starts_with(&format!("{}\\", normalized_ex))
         });
-        
+
         if is_excluded {
             continue;
         }
-        
+
         // 优雅处理元数据获取失败
         let metadata = match entry.metadata() {
             Ok(m) => Some(m),
@@ -62,6 +73,23 @@ pub async fn read_directory(
             }
         };
 
+        let mut is_directory = entry_path.is_dir();
+
+        // 尝试解析 .lnk 文件
+        if !is_directory
+            && entry_path
+                .extension()
+                .map_or(false, |e| e.eq_ignore_ascii_case("lnk"))
+        {
+            if let Some(target) = crate::utils::lnk_resolver::resolve_lnk(&entry_path) {
+                if target.is_dir() {
+                    is_directory = true;
+                }
+                // 对于 FileInfo (legacy), 只需要 is_directory 准确即可
+                // 保持原始大小和时间
+            }
+        }
+
         let file_info = FileInfo {
             name: entry_path
                 .file_name()
@@ -69,7 +97,7 @@ pub async fn read_directory(
                 .unwrap_or("Unknown")
                 .to_string(),
             path: path_str,
-            is_directory: entry_path.is_dir(),
+            is_directory,
             size: metadata.as_ref().map(|m| m.len()),
             modified: metadata
                 .and_then(|m| m.modified().ok())
@@ -128,11 +156,11 @@ pub async fn path_exists(path: String) -> Result<bool, String> {
 #[tauri::command]
 pub async fn read_text_file(path: String) -> Result<String, String> {
     let path = Path::new(&path);
-    
+
     if !path.exists() {
         return Err(format!("文件不存在: {}", path.display()));
     }
-    
+
     fs::read_to_string(path).map_err(|e| format!("读取文件失败: {}", e))
 }
 
@@ -142,10 +170,7 @@ pub async fn browse_directory(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.read_directory(&path)
@@ -156,19 +181,17 @@ pub async fn browse_directory(
 #[tauri::command]
 pub async fn list_subfolders(path: String) -> Result<Vec<SubfolderItem>, String> {
     let path_buf = PathBuf::from(&path);
-    
-    spawn_blocking(move || {
-        list_subfolders_sync(&path_buf)
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking error: {e}"))?
+
+    spawn_blocking(move || list_subfolders_sync(&path_buf))
+        .await
+        .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
 
 /// 同步版本的子文件夹列表
 fn list_subfolders_sync(path: &Path) -> Result<Vec<SubfolderItem>, String> {
     use jwalk::WalkDir;
     use rayon::prelude::*;
-    
+
     if !path.is_dir() {
         return Err("路径不是目录".to_string());
     }
@@ -188,10 +211,7 @@ fn list_subfolders_sync(path: &Path) -> Result<Vec<SubfolderItem>, String> {
         .par_iter()
         .map(|entry| {
             let entry_path = entry.path();
-            let name = entry
-                .file_name()
-                .to_string_lossy()
-                .to_string();
+            let name = entry.file_name().to_string_lossy().to_string();
 
             let has_children = has_subdirectory(&entry_path);
 
@@ -236,10 +256,7 @@ pub async fn get_images_in_directory(
     recursive: bool,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     let images = fs_manager.get_images_in_directory(&path, recursive)?;
@@ -256,10 +273,7 @@ pub async fn get_file_metadata(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<crate::core::fs_manager::FsItem, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
 
     let path = PathBuf::from(path);
     fs_manager.get_file_metadata(&path)

@@ -13,7 +13,7 @@ use tauri::{ipc::Channel, State};
 use tokio::sync::mpsc;
 
 /// 流式浏览目录（Spacedrive 风格）
-/// 
+///
 /// 使用 Tauri Channel 实现真正的流式数据推送
 /// 前端可以通过 channel 接收批次数据
 #[tauri::command]
@@ -63,7 +63,7 @@ pub async fn stream_directory_v2(
     tokio::spawn(async move {
         while let Some(output) = rx.recv().await {
             let is_complete = matches!(output, DirectoryStreamOutput::Complete(_));
-            
+
             // 发送到前端
             if let Err(e) = channel.send(output) {
                 log::error!("发送到 channel 失败: {}", e);
@@ -116,7 +116,6 @@ pub async fn get_active_stream_count(
     Ok(state.manager.active_count())
 }
 
-
 // ============================================================================
 // 流式搜索命令
 // ============================================================================
@@ -138,7 +137,7 @@ pub enum SearchStreamOutput {
 }
 
 /// 流式搜索目录
-/// 
+///
 /// 边搜索边返回结果，首批结果 200ms 内显示
 #[tauri::command]
 pub async fn stream_search_v2(
@@ -190,9 +189,7 @@ pub async fn stream_search_v2(
         let mut skipped_count = 0usize;
 
         // 使用 jwalk 递归搜索
-        let walker = WalkDir::new(&path_buf)
-            .skip_hidden(skip_hidden)
-            .into_iter();
+        let walker = WalkDir::new(&path_buf).skip_hidden(skip_hidden).into_iter();
 
         for entry_result in walker {
             // 检查取消
@@ -224,16 +221,21 @@ pub async fn stream_search_v2(
                             is_dir: metadata.is_dir(),
                             is_image: is_image_file(&entry_path),
                             size: metadata.len(),
-                            modified: metadata.modified().ok()
+                            modified: metadata
+                                .modified()
+                                .ok()
                                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                                 .map(|d| d.as_secs()),
-                            created: metadata.created().ok()
+                            created: metadata
+                                .created()
+                                .ok()
                                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                                 .map(|d| d.as_secs()),
                             folder_count: None,
                             image_count: None,
                             archive_count: None,
                             video_count: None,
+                            target_path: None,
                         };
 
                         batch.push(item);

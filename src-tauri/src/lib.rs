@@ -12,6 +12,7 @@ mod commands;
 mod core;
 mod models;
 mod tray;
+mod utils;
 
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;

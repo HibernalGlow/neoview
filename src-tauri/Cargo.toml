@@ -104,6 +104,7 @@ stretto = "0.8"  # TinyLFU 高性能缓存
 mini-moka = "0.10"  # 轻量级 LRU 缓存（参考 Spacedrive）
 mimalloc = { version = "0.1", default-features = false }  # 高性能内存分配器
 bstr = "1.11"  # 高效字节字符串处理
+lnk = "0.5.1"
 # PDF: 前端使用 pdf.js 渲染
 
 [features]

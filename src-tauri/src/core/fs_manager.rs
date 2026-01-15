@@ -50,6 +50,9 @@ pub struct FsItem {
     /// 文件夹内的视频文件数量（仅对文件夹有效，不递归）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_count: Option<u32>,
+    /// 如果是链接文件（如 .lnk），这是解析后的目标路径
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
 }
 
 /// 搜索选项
@@ -138,6 +141,12 @@ impl FsManager {
         self.validate_path(path)?;
 
         if !path.is_dir() {
+            // 检查是否为 .lnk
+            if let Some(target) = crate::utils::lnk_resolver::resolve_lnk(path) {
+                if target.is_dir() {
+                    return self.read_directory_impl(&target, with_stats);
+                }
+            }
             return Err("路径不是目录".to_string());
         }
 
@@ -148,13 +157,13 @@ impl FsManager {
             .filter_map(|entry| {
                 let entry = entry.ok()?;
                 let entry_path = entry.path();
-                
+
                 // 优化：直接检查第一个字节是否为 '.'
                 let name = entry_path.file_name()?;
                 if name.as_encoded_bytes().first() == Some(&b'.') {
                     return None;
                 }
-                
+
                 // 获取元数据
                 let metadata = entry.metadata().ok()?;
                 Some((entry, entry_path, metadata))
@@ -166,7 +175,22 @@ impl FsManager {
             .par_iter()
             .map(|(entry, entry_path, metadata)| {
                 let name = entry.file_name().to_string_lossy().to_string();
-                let is_dir = metadata.is_dir();
+                let mut target_path_str = None;
+                let mut is_dir = metadata.is_dir();
+                // 检查 .lnk
+                // 注意：entry_path 是 PathBuf
+                if !is_dir
+                    && entry_path
+                        .extension()
+                        .map_or(false, |e| e.eq_ignore_ascii_case("lnk"))
+                {
+                    if let Some(target) = crate::utils::lnk_resolver::resolve_lnk(&entry_path) {
+                        target_path_str = Some(target.to_string_lossy().to_string());
+                        if target.is_dir() {
+                            is_dir = true;
+                        }
+                    }
+                }
 
                 // 子目录统计：仅在 with_stats=true 时计算
                 let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
@@ -199,7 +223,12 @@ impl FsManager {
                     .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs());
 
-                let is_image = !is_dir && Self::is_image_file(entry_path);
+                let is_image = !is_dir
+                    && (Self::is_image_file(entry_path)
+                        || target_path_str
+                            .as_ref()
+                            .map(|t| Self::is_image_file(Path::new(t)))
+                            .unwrap_or(false));
 
                 FsItem {
                     name,
@@ -213,6 +242,7 @@ impl FsManager {
                     image_count,
                     archive_count,
                     video_count,
+                    target_path: target_path_str,
                 }
             })
             .collect();
@@ -246,7 +276,7 @@ impl FsManager {
                 }
 
                 stats.total += 1;
-                
+
                 // 优化：使用 file_type() 代替 is_dir()，避免额外的 stat 调用
                 if let Ok(ft) = sub_entry.file_type() {
                     if ft.is_dir() {
@@ -314,7 +344,25 @@ impl FsManager {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let is_dir = metadata.is_dir();
+        let mut is_dir = metadata.is_dir();
+        let mut target_path_str = None;
+
+        // 尝试解析 .lnk
+        if !is_dir
+            && path
+                .extension()
+                .map_or(false, |e| e.eq_ignore_ascii_case("lnk"))
+        {
+            if let Some(target) = crate::utils::lnk_resolver::resolve_lnk(path) {
+                target_path_str = Some(target.to_string_lossy().to_string());
+                if target.is_dir() {
+                    is_dir = true;
+                    // 如果需要，可以在这里更新 size/modified 等为 target 的元数据
+                }
+                // 注意：对于 get_file_metadata，如果是图片链接，我们稍后通过 is_image_file 检查 target
+            }
+        }
+
         let size = if is_dir {
             self.calculate_directory_size(path).unwrap_or(0)
         } else {
@@ -331,7 +379,15 @@ impl FsManager {
             .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
             .map(|d| d.as_secs());
 
-        let is_image = !is_dir && Self::is_image_file(path);
+        let is_image = if !is_dir {
+            Self::is_image_file(path)
+                || target_path_str
+                    .as_ref()
+                    .map(|t| Self::is_image_file(Path::new(t)))
+                    .unwrap_or(false)
+        } else {
+            false
+        };
 
         Ok(FsItem {
             name,
@@ -345,6 +401,7 @@ impl FsManager {
             image_count: None,
             archive_count: None,
             video_count: None,
+            target_path: target_path_str,
         })
     }
 
@@ -706,6 +763,7 @@ impl FsManager {
                     image_count: None,
                     archive_count: None,
                     video_count: None,
+                    target_path: None,
                 });
             }
         }
@@ -816,6 +874,7 @@ impl FsManager {
                     image_count: None,
                     archive_count: None,
                     video_count: None,
+                    target_path: None,
                 });
             }
         }

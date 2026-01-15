@@ -222,14 +222,12 @@
 			const item = items[i];
 			if (!item) continue;
 			// 只处理需要缩略图的项目
+			const effectivePath = item.targetPath || item.path;
 			if (
 				item.isDir ||
 				item.isImage ||
-				isVideoFile(item.path) ||
-				item.name.endsWith('.zip') ||
-				item.name.endsWith('.cbz') ||
-				item.name.endsWith('.rar') ||
-				item.name.endsWith('.cbr')
+				isVideoFile(effectivePath) ||
+				effectivePath.toLowerCase().match(/\.(zip|cbz|rar|cbr|7z|cb7)$/i)
 			) {
 				visiblePaths.push({ path: item.path, dist: Math.abs(i - center) });
 			}

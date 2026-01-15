@@ -31,6 +31,8 @@ historyMetadata ?: {
   videoDuration?: number;
   videoCompleted?: boolean;
 };
+  // 解析后的目标路径（如果是 .lnk 文件）
+  targetPath?: string;
 }
 
 /**

@@ -378,6 +378,7 @@ impl FileIndexer {
                                 image_count: None,
                                 archive_count: None,
                                 video_count: None,
+                                target_path: None,
                             });
                         }
                     }
@@ -407,6 +408,7 @@ impl FileIndexer {
                                             image_count: None,
                                             archive_count: None,
                                             video_count: None,
+                                            target_path: None,
                                         });
                                     }
                                 }

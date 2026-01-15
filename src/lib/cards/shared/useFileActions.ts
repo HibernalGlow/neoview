@@ -182,18 +182,25 @@ export function createItemOpenActions(
 		}
 
 		try {
-			const isArchive = await FileSystemAPI.isSupportedArchive(item.path);
+			// 如果是快捷方式，使用目标路径
+			const effectivePath = item.targetPath || item.path;
+			// 对于 .lnk 文件，文件名可能需要特殊处理，但这里我们主要关心打开行为
+			
+			const isArchive = await FileSystemAPI.isSupportedArchive(effectivePath);
+			
 			if (isArchive) {
-				const historyEntry = unifiedHistoryStore.findByPath(item.path);
+				const historyEntry = unifiedHistoryStore.findByPath(effectivePath);
 				const initialPage = historyEntry?.currentIndex ?? 0;
-				await bookStore.openBook(item.path, { initialPage });
-			} else if (isVideoPath(item.path) || item.isImage || isImagePath(item.path)) {
-				const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
-				const parentPath = lastSep > 0 ? item.path.substring(0, lastSep) : item.path;
+				await bookStore.openBook(effectivePath, { initialPage });
+			} else if (isVideoPath(effectivePath) || item.isImage || isImagePath(effectivePath)) {
+				const lastSep = Math.max(effectivePath.lastIndexOf('/'), effectivePath.lastIndexOf('\\'));
+				const parentPath = lastSep > 0 ? effectivePath.substring(0, lastSep) : effectivePath;
+				
 				await bookStore.openDirectoryAsBook(parentPath, { skipHistory: true });
-				await bookStore.navigateToImage(item.path, { skipHistoryUpdate: true });
-				bookStore.setSingleFileMode(true, item.path);
-				const name = item.name || item.path.split(/[\\/]/).pop() || item.path;
+				await bookStore.navigateToImage(effectivePath, { skipHistoryUpdate: true });
+				bookStore.setSingleFileMode(true, effectivePath);
+				
+				const name = item.name || effectivePath.split(/[\\/]/).pop() || effectivePath;
 				const currentPage = bookStore.currentPageIndex;
 				const totalPages = bookStore.currentBook?.totalPages || 1;
 				// 使用 pathStack 精确记录历史
@@ -201,9 +208,10 @@ export function createItemOpenActions(
 				console.log('📝 [History] Adding video/image history with pathStack:', { pathStack, name, currentPage, totalPages });
 				unifiedHistoryStore.add(pathStack, currentPage, totalPages, { displayName: name });
 			} else {
-				const historyEntry = unifiedHistoryStore.findByPath(item.path);
+				// Fallback for other files
+				const historyEntry = unifiedHistoryStore.findByPath(effectivePath);
 				const initialPage = historyEntry?.currentIndex ?? 0;
-				await bookStore.openBook(item.path, { initialPage });
+				await bookStore.openBook(effectivePath, { initialPage });
 			}
 		} catch (err) {
 			showErrorToast('打开失败', err instanceof Error ? err.message : String(err));

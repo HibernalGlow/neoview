@@ -440,7 +440,7 @@
 
 		<div class="mt-1 flex flex-wrap items-center gap-1.5">
 			<!-- 文件类型 icon -->
-			<FileTypeIcon name={item.name} isDir={item.isDir} size="sm" />
+			<FileTypeIcon name={item.targetPath ?? item.name} isDir={item.isDir} size="sm" />
 			<!-- 视频进度信息（时:分:秒格式） -->
 			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
 				<MetadataBadge

@@ -183,7 +183,8 @@ impl StreamManager {
             started_at: Instant::now(),
         });
 
-        self.active_streams.insert(stream_id.clone(), Arc::clone(&handle));
+        self.active_streams
+            .insert(stream_id.clone(), Arc::clone(&handle));
         self.path_to_stream.insert(path_str, stream_id.clone());
 
         (stream_id, handle, false)
@@ -341,7 +342,10 @@ impl DirectoryScanner {
                         };
                         batch_index += 1;
 
-                        if tx.blocking_send(DirectoryStreamOutput::Batch(batch_data)).is_err() {
+                        if tx
+                            .blocking_send(DirectoryStreamOutput::Batch(batch_data))
+                            .is_err()
+                        {
                             log::debug!("Stream receiver dropped");
                             return;
                         }
@@ -401,9 +405,36 @@ impl DirectoryScanner {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let is_dir = metadata.is_dir();
+        let mut is_dir = metadata.is_dir();
+        let mut is_link_image = false;
+        let mut target_path_str = None;
+
+        // 处理 .lnk 文件
+        if !is_dir
+            && path
+                .extension()
+                .map_or(false, |e| e.eq_ignore_ascii_case("lnk"))
+        {
+            if let Some(target) = crate::utils::lnk_resolver::resolve_lnk(path) {
+                target_path_str = Some(target.to_string_lossy().to_string());
+                if target.is_dir() {
+                    is_dir = true;
+                } else if Self::is_image_file(&target) {
+                    // 如果是图片链接，标记为图片
+                    is_link_image = true;
+                }
+                // 注意：我们保持原始大小/时间（链接文件本身的），或者应该去取目标的？
+                // 为了性能，且避免在此处再次进行 IO (metadata(target))，我们暂时使用链接本身的信息
+                // 或者，对于 is_dir = true，前端可能期望它是目录，行为上需要像目录一样
+            }
+        }
+
         let is_image = if !is_dir {
-            Self::is_image_file(path)
+            if is_link_image {
+                true
+            } else {
+                Self::is_image_file(path)
+            }
         } else {
             false
         };
@@ -432,6 +463,7 @@ impl DirectoryScanner {
             image_count: None,
             archive_count: None,
             video_count: None,
+            target_path: target_path_str,
         }
     }
 

@@ -102,12 +102,7 @@
 
 	// 判断文件类型
 	const isArchive = $derived(
-		item.name.endsWith('.zip') ||
-			item.name.endsWith('.cbz') ||
-			item.name.endsWith('.rar') ||
-			item.name.endsWith('.cbr') ||
-			item.name.endsWith('.7z') ||
-			item.name.endsWith('.cb7')
+		isArchiveFile(item.targetPath ?? item.name)
 	);
 
 	// EMM 元数据

@@ -2,10 +2,12 @@
 //! 缩略图生成器模块 - 支持多线程、压缩包流式处理、webp 格式
 
 use crate::core::archive_manager;
-use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
+use crate::core::image_decoder::{ImageDecoder, UnifiedDecoder};
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::video_exts;
+use crate::utils::lnk_resolver;
 use image::{DynamicImage, GenericImageView, ImageFormat};
+use sevenz_rust;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -13,7 +15,6 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
 use unrar;
-use sevenz_rust;
 
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
@@ -92,12 +93,26 @@ impl ThumbnailGenerator {
         }
     }
 
+    /// 静态方法：解析 LNK 文件
+    fn resolve_real_path(path: &Path) -> PathBuf {
+        if path
+            .extension()
+            .map_or(false, |e| e.to_ascii_lowercase() == "lnk")
+        {
+            lnk_resolver::resolve_lnk(path).unwrap_or(path.to_path_buf())
+        } else {
+            path.to_path_buf()
+        }
+    }
+
     /// 使用 UnifiedDecoder 解码图像
     fn decode_image_unified(image_data: &[u8], ext: &str) -> Result<DynamicImage, String> {
         let decoder = UnifiedDecoder::with_format(ext);
-        let decoded = decoder.decode(image_data)
+        let decoded = decoder
+            .decode(image_data)
             .map_err(|e| format!("解码失败: {e}"))?;
-        decoded.to_dynamic_image()
+        decoded
+            .to_dynamic_image()
             .map_err(|e| format!("转换失败: {e}"))
     }
 
@@ -126,13 +141,19 @@ impl ThumbnailGenerator {
     }
 
     /// 使用 UnifiedDecoder 内置缩放生成 WebP 缩略图（高性能版本）
-    fn generate_webp_with_unified_decoder(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Result<Vec<u8>, String> {
+    fn generate_webp_with_unified_decoder(
+        image_data: &[u8],
+        ext: &str,
+        config: &ThumbnailGeneratorConfig,
+    ) -> Result<Vec<u8>, String> {
         let decoder = UnifiedDecoder::with_format(ext);
-        let decoded = decoder.decode_with_scale(image_data, config.max_width, config.max_height)
+        let decoded = decoder
+            .decode_with_scale(image_data, config.max_width, config.max_height)
             .map_err(|e| format!("解码缩放失败: {e}"))?;
-        let img = decoded.to_dynamic_image()
+        let img = decoded
+            .to_dynamic_image()
             .map_err(|e| format!("转换失败: {e}"))?;
-        
+
         let mut output = Vec::new();
         img.write_to(&mut Cursor::new(&mut output), ImageFormat::WebP)
             .map_err(|e| format!("WebP 编码失败: {e}"))?;
@@ -141,7 +162,11 @@ impl ThumbnailGenerator {
 
     /// 从图像数据生成 WebP 缩略图（统一接口）
     /// 使用 UnifiedDecoder 自动选择最优后端
-    fn generate_webp_from_image_data(image_data: &[u8], ext: &str, config: &ThumbnailGeneratorConfig) -> Option<Vec<u8>> {
+    fn generate_webp_from_image_data(
+        image_data: &[u8],
+        ext: &str,
+        config: &ThumbnailGeneratorConfig,
+    ) -> Option<Vec<u8>> {
         // 使用 UnifiedDecoder 统一处理所有格式
         Self::generate_webp_with_unified_decoder(image_data, ext, config)
             .ok()
@@ -154,17 +179,28 @@ impl ThumbnailGenerator {
     }
 
     /// 使用 archive_manager 从压缩包生成缩略图（统一版本）
-    fn generate_archive_thumbnail_unified(&self, archive_path: &str, path_key: &str, archive_size: i64, ghash: i32) -> Result<Vec<u8>, String> {
+    fn generate_archive_thumbnail_unified(
+        &self,
+        archive_path: &str,
+        path_key: &str,
+        archive_size: i64,
+        ghash: i32,
+    ) -> Result<Vec<u8>, String> {
         let path = Path::new(archive_path);
         let mut handler = archive_manager::open_archive(path)?;
-        
+
         // 获取第一张图片
         if let Some((entry, image_data)) = handler.read_first_image()? {
             let ext = entry.extension().unwrap_or_default();
-            
-            if let Some(webp_data) = Self::generate_webp_from_image_data(&image_data, &ext, &self.config) {
+
+            if let Some(webp_data) =
+                Self::generate_webp_from_image_data(&image_data, &ext, &self.config)
+            {
                 // 保存到数据库
-                if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &webp_data) {
+                if let Err(e) = self
+                    .db
+                    .save_thumbnail(path_key, archive_size, ghash, &webp_data)
+                {
                     eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
                 } else {
                     // 后台更新父文件夹缩略图
@@ -185,7 +221,7 @@ impl ThumbnailGenerator {
                 return Err(format!("生成缩略图失败: {}", entry.name));
             }
         }
-        
+
         Err("压缩包中没有找到图片文件".to_string())
     }
 
@@ -205,7 +241,10 @@ impl ThumbnailGenerator {
     }
 
     /// 仅生成缩略图 blob，不保存到数据库（用于 V3 延迟保存）
-    pub fn generate_file_thumbnail_blob_only(&self, file_path: &str) -> Result<(Vec<u8>, String, i64, i32), String> {
+    pub fn generate_file_thumbnail_blob_only(
+        &self,
+        file_path: &str,
+    ) -> Result<(Vec<u8>, String, i64, i32), String> {
         // 获取文件大小
         let metadata =
             std::fs::metadata(file_path).map_err(|e| format!("获取文件元数据失败: {}", e))?;
@@ -223,20 +262,21 @@ impl ThumbnailGenerator {
         }
 
         let file_path_buf = PathBuf::from(file_path);
+        let real_path = Self::resolve_real_path(&file_path_buf);
 
-        // 检查是否为视频文件
-        if Self::is_video_file(&file_path_buf) {
+        // 检查是否为视频文件 (check on REAL path)
+        if Self::is_video_file(&real_path) {
             // 视频文件：同步生成缩略图
             if let Some(webp_data) =
-                Self::generate_video_thumbnail(&file_path_buf, &self.config, &path_key)
+                Self::generate_video_thumbnail(&real_path, &self.config, &path_key)
             {
                 return Ok((webp_data, path_key, file_size, ghash));
             }
             return Ok((Vec::new(), path_key, file_size, ghash));
         }
 
-        // 从文件加载图像
-        let image_data = match std::fs::read(file_path) {
+        // 从文件加载图像 (read from REAL path)
+        let image_data = match std::fs::read(&real_path) {
             Ok(data) => data,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
@@ -247,8 +287,8 @@ impl ThumbnailGenerator {
             }
         };
 
-        // 检测文件扩展名
-        let ext = file_path_buf
+        // 检测文件扩展名 (from REAL path)
+        let ext = real_path
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase())
@@ -282,15 +322,19 @@ impl ThumbnailGenerator {
         }
 
         let file_path_buf = PathBuf::from(file_path);
+        let real_path = Self::resolve_real_path(&file_path_buf);
 
-        // 检查是否为视频文件
-        if Self::is_video_file(&file_path_buf) {
+        // 检查是否为视频文件 (check on REAL path)
+        if Self::is_video_file(&real_path) {
             // 视频文件：同步生成缩略图
             if let Some(webp_data) =
-                Self::generate_video_thumbnail(&file_path_buf, &self.config, &path_key)
+                Self::generate_video_thumbnail(&real_path, &self.config, &path_key)
             {
                 // 保存到数据库
-                if let Err(e) = self.db.save_thumbnail(&path_key, file_size, ghash, &webp_data) {
+                if let Err(e) = self
+                    .db
+                    .save_thumbnail(&path_key, file_size, ghash, &webp_data)
+                {
                     eprintln!("❌ 保存视频缩略图到数据库失败: {} - {}", path_key, e);
                 } else {
                     // 后台更新父文件夹缩略图
@@ -313,7 +357,7 @@ impl ThumbnailGenerator {
         }
 
         // 从文件加载图像（改进错误处理，记录权限错误但静默处理）
-        let image_data = match std::fs::read(file_path) {
+        let image_data = match std::fs::read(&real_path) {
             Ok(data) => data,
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
@@ -326,7 +370,7 @@ impl ThumbnailGenerator {
         };
 
         // 检测文件扩展名
-        let ext = file_path_buf
+        let ext = real_path
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase())
@@ -740,9 +784,15 @@ impl ThumbnailGenerator {
         }
 
         // 使用统一的 archive_manager 处理
-        self.generate_archive_thumbnail_unified(archive_path, &path_key, archive_size, ghash)
+        let real_path = Self::resolve_real_path(Path::new(archive_path));
+        self.generate_archive_thumbnail_unified(
+            real_path.to_str().unwrap_or(archive_path),
+            &path_key,
+            archive_size,
+            ghash,
+        )
     }
-    
+
     /// 从 RAR 压缩包生成缩略图
     fn generate_rar_archive_thumbnail(
         &self,
@@ -755,28 +805,30 @@ impl ThumbnailGenerator {
         let image_exts = [
             "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
         ];
-        
+
         // 打开 RAR 压缩包
         let mut archive = unrar::Archive::new(archive_path)
             .open_for_processing()
             .map_err(|e| format!("打开 RAR 压缩包失败: {:?}", e))?;
-        
+
         let mut last_error: Option<String> = None;
-        
+
         // 遍历条目，找到第一个图片文件
-        while let Some(header) = archive.read_header()
-            .map_err(|e| format!("读取 RAR 头失败: {:?}", e))? 
+        while let Some(header) = archive
+            .read_header()
+            .map_err(|e| format!("读取 RAR 头失败: {:?}", e))?
         {
             let entry = header.entry();
             let name = entry.filename.to_string_lossy().to_string();
-            
+
             // 跳过目录
             if entry.is_directory() {
-                archive = header.skip()
+                archive = header
+                    .skip()
                     .map_err(|e| format!("跳过 RAR 条目失败: {:?}", e))?;
                 continue;
             }
-            
+
             // 检查是否为图片文件
             if let Some(ext) = Path::new(&name)
                 .extension()
@@ -785,15 +837,18 @@ impl ThumbnailGenerator {
             {
                 if image_exts.contains(&ext.as_str()) {
                     // 读取文件内容
-                    let (image_data, next_archive) = header.read()
+                    let (image_data, next_archive) = header
+                        .read()
                         .map_err(|e| format!("读取 RAR 条目失败: {:?}", e))?;
-                    
+
                     // 使用 UnifiedDecoder 统一处理所有格式
-                    let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
-                    
+                    let webp_data =
+                        Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
+
                     if let Some(data) = webp_data {
                         // 保存到数据库
-                        if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &data) {
+                        if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &data)
+                        {
                             eprintln!("❌ 保存 RAR 缩略图到数据库失败: {} - {}", path_key, e);
                         } else {
                             // 后台更新父文件夹缩略图
@@ -817,19 +872,20 @@ impl ThumbnailGenerator {
                     }
                 }
             }
-            
+
             // 跳过非图片文件
-            archive = header.skip()
+            archive = header
+                .skip()
                 .map_err(|e| format!("跳过 RAR 条目失败: {:?}", e))?;
         }
-        
+
         if let Some(err) = last_error {
             Err(format!("RAR 压缩包缩略图生成失败: {}", err))
         } else {
             Err("RAR 压缩包中没有找到图片文件".to_string())
         }
     }
-    
+
     /// 从 7z 压缩包生成缩略图
     fn generate_7z_archive_thumbnail(
         &self,
@@ -842,16 +898,19 @@ impl ThumbnailGenerator {
         let image_exts = [
             "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
         ];
-        
+
         // 打开 7z 压缩包
         let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
             .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
-        
+
         let mut last_error: Option<String> = None;
         let mut found_image_data: Option<(String, Vec<u8>)> = None;
-        
+
         // 首先找到第一个图片文件的名称
-        let first_image_name = archive.archive().files.iter()
+        let first_image_name = archive
+            .archive()
+            .files
+            .iter()
             .filter(|entry| !entry.is_directory())
             .find_map(|entry| {
                 let name = entry.name();
@@ -866,23 +925,25 @@ impl ThumbnailGenerator {
                 }
                 None
             });
-        
+
         if let Some(target_name) = first_image_name {
             // 遍历并读取目标图片
-            archive.for_each_entries(|entry, reader| {
-                if entry.name() == target_name {
-                    let mut data = Vec::new();
-                    if let Err(e) = reader.read_to_end(&mut data) {
-                        last_error = Some(format!("读取 7z 条目失败: {}", e));
-                    } else {
-                        found_image_data = Some((target_name.clone(), data));
+            archive
+                .for_each_entries(|entry, reader| {
+                    if entry.name() == target_name {
+                        let mut data = Vec::new();
+                        if let Err(e) = reader.read_to_end(&mut data) {
+                            last_error = Some(format!("读取 7z 条目失败: {}", e));
+                        } else {
+                            found_image_data = Some((target_name.clone(), data));
+                        }
+                        return Ok(false); // 停止遍历
                     }
-                    return Ok(false); // 停止遍历
-                }
-                Ok(true)
-            }).map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+                    Ok(true)
+                })
+                .map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
         }
-        
+
         if let Some((name, image_data)) = found_image_data {
             // 获取扩展名
             let ext = Path::new(&name)
@@ -890,10 +951,10 @@ impl ThumbnailGenerator {
                 .and_then(|e| e.to_str())
                 .map(|e| e.to_lowercase())
                 .unwrap_or_default();
-            
+
             // 使用 UnifiedDecoder 统一处理所有格式
             let webp_data = Self::generate_webp_from_image_data(&image_data, &ext, &self.config);
-            
+
             if let Some(data) = webp_data {
                 // 保存到数据库
                 if let Err(e) = self.db.save_thumbnail(path_key, archive_size, ghash, &data) {
@@ -917,7 +978,7 @@ impl ThumbnailGenerator {
                 last_error = Some(format!("生成缩略图失败: {}", name));
             }
         }
-        
+
         if let Some(err) = last_error {
             Err(format!("7z 压缩包缩略图生成失败: {}", err))
         } else {

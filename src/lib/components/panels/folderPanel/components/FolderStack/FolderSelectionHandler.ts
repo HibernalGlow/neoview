@@ -21,7 +21,7 @@ const AUXILIARY_EXTENSIONS = [
 	// 字幕文件
 	'srt', 'ass', 'ssa', 'vtt', 'sub', 'idx',
 	// 信息文件
-	'nfo', 'txt', 'log', 'url', 'lnk',
+	'nfo', 'txt', 'log', 'url',
 	// 元数据
 	'xml', 'json',
 	// 封面图（通常是附属的）

@@ -53,6 +53,7 @@ export interface ExtendedSettingsData {
     searchHistory?: Record<string, unknown>;
     upscalePanelSettings?: unknown;
     insightsCardsSettings?: unknown;
+    insightsCards?: unknown; // Supports neoview-insights-cards
     cardConfigs?: unknown;
     folderPanelSettings?: {
         homePath?: string;
@@ -104,6 +105,8 @@ export interface ImportModules {
     customThemes?: boolean;
     performanceSettings?: boolean;
     folderRatings?: boolean;
+    insightsCards?: boolean;
+    folderPanelSettings?: boolean;
 }
 
 /**

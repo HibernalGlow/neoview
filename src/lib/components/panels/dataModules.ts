@@ -1,7 +1,21 @@
-/**
- * DataSettingsPanel 数据模块定义
- * 从 DataSettingsPanel.svelte 提取的常量和类型
- */
+import {
+	Keyboard,
+	Database,
+	ArrowUpDown,
+	LayoutTemplate,
+	PanelLeft,
+	Bookmark,
+	History,
+	Settings,
+	Search,
+	Sparkles,
+	Lightbulb,
+	FolderCog,
+	Star,
+	Palette,
+	Cpu,
+	Settings2
+} from '@lucide/svelte';
 
 /** 数据模块 ID */
 export type DataModuleId =
@@ -31,6 +45,7 @@ export interface DataModuleRow {
 	description: string;
 	defaultExport: boolean;
 	defaultImport: boolean;
+	icon: any;
 }
 
 /** 默认数据模块列表 */
@@ -42,7 +57,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-keybindings',
 		description: '所有键盘/鼠标/触摸/区域绑定',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Keyboard
 	},
 	{
 		id: 'emmConfig',
@@ -51,7 +67,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-emm-*',
 		description: 'EMM 数据库、翻译字典路径及标签显示模式',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Database
 	},
 	{
 		id: 'fileBrowserSort',
@@ -60,7 +77,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'fileBrowserStore + 本地配置',
 		description: '文件列表的排序字段与顺序',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: ArrowUpDown
 	},
 	{
 		id: 'uiState',
@@ -69,7 +87,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-ui-*',
 		description: '界面状态（工具栏、布局、小部件状态等）',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: LayoutTemplate
 	},
 	{
 		id: 'panelsLayout',
@@ -78,7 +97,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-panels / neoview-sidebars / neoview-sidebar-management',
 		description: '面板开关、位置与边栏布局',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: PanelLeft
 	},
 	{
 		id: 'bookmarks',
@@ -87,7 +107,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-bookmarks',
 		description: '收藏的书籍/文件/文件夹（包含创建时间）',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Bookmark
 	},
 	{
 		id: 'history',
@@ -96,7 +117,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-history',
 		description: '最近阅读记录（默认不导出）',
 		defaultExport: false,
-		defaultImport: false
+		defaultImport: false,
+		icon: History
 	},
 	{
 		id: 'historySettings',
@@ -105,7 +127,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-history-settings',
 		description: '选中历史或书签时是否同步文件树',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Settings
 	},
 	{
 		id: 'searchHistory',
@@ -114,7 +137,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-*-search-history',
 		description: '各列表搜索历史（默认不导出）',
 		defaultExport: false,
-		defaultImport: false
+		defaultImport: false,
+		icon: Search
 	},
 	{
 		id: 'upscaleSettings',
@@ -123,7 +147,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: pyo3_upscale_settings',
 		description: '超分模型、并发、条件规则等',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Sparkles
 	},
 	{
 		id: 'insightsCards',
@@ -132,7 +157,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-insights-cards',
 		description: '洞察面板卡片顺序与折叠状态',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Lightbulb
 	},
 	{
 		id: 'folderPanelSettings',
@@ -141,7 +167,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-homepage-path, neoview-folder-panel',
 		description: '主页路径、视图样式、快速文件夹目标等',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: FolderCog
 	},
 	{
 		id: 'folderRatings',
@@ -150,7 +177,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: neoview-emm-folder-ratings',
 		description: '文件夹平均评分缓存（可重建）',
 		defaultExport: false,
-		defaultImport: false
+		defaultImport: false,
+		icon: Star
 	},
 	{
 		id: 'customThemes',
@@ -159,7 +187,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'localStorage: custom-themes',
 		description: '用户自定义的配色主题列表',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Palette
 	},
 	{
 		id: 'performanceSettings',
@@ -168,6 +197,8 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		storage: 'Tauri 后端配置',
 		description: 'Tauri 性能参数（缓存、预加载、线程等）',
 		defaultExport: true,
-		defaultImport: true
+		defaultImport: true,
+		icon: Cpu
 	}
 ];
+

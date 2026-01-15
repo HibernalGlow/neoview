@@ -34,7 +34,9 @@ export const defaultSettings: NeoViewSettings = {
       dwellTime: 3,
       batchSize: 5,
       maxPages: 50
-    }
+    },
+    archiveTempfileThresholdMB: 500,
+    directUrlThresholdMB: 500
   },
   image: {
     supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],

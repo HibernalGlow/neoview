@@ -10,6 +10,9 @@
 export type DataSource = 'blob' | 'tempfile';
 export type RenderMode = 'img' | 'canvas';
 
+import { settingsManager } from '$lib/settings/settingsManager';
+import { setLargeFileThreshold } from '$lib/api/pageManager';
+
 export interface LoadModeConfig {
 	dataSource: DataSource;
 	renderMode: RenderMode;
@@ -104,6 +107,19 @@ function createLoadModeStore() {
 		return labels[`${config.dataSource}-${config.renderMode}`] || 'Unknown';
 	}
 
+	// 监听设置变更并同步到后端
+	settingsManager.addListener((s) => {
+		const threshold = s.performance.archiveTempfileThresholdMB;
+		setLargeFileThreshold(threshold).catch((err) => {
+			console.error('❌ 同步大文件阈值到后端失败:', err);
+		});
+	});
+
+	// 初始同步
+	setLargeFileThreshold(settingsManager.getSettings().performance.archiveTempfileThresholdMB).catch(
+		() => {}
+	);
+
 	return {
 		get config() { return config; },
 		get dataSource() { return config.dataSource; },
@@ -112,6 +128,14 @@ function createLoadModeStore() {
 		get isTempfileMode() { return config.dataSource === 'tempfile'; },
 		get isImgMode() { return config.renderMode === 'img'; },
 		get isCanvasMode() { return config.renderMode === 'canvas'; },
+		/** 直接从设置获取的直连 URL 阈值 (MB) */
+		get directUrlThresholdMB() {
+			return settingsManager.getSettings().performance.directUrlThresholdMB;
+		},
+		/** 直接从设置获取的压缩包临时文件阈值 (MB) */
+		get archiveTempfileThresholdMB() {
+			return settingsManager.getSettings().performance.archiveTempfileThresholdMB;
+		},
 		// 兼容旧 API
 		get mode() { return config.dataSource === 'blob' ? 'ipc' : 'tempfile' as const; },
 		get isIpcMode() { return config.dataSource === 'blob'; },

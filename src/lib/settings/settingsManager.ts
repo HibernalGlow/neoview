@@ -189,7 +189,11 @@ export class SettingsManager {
       preLoadSize: preLoadSize ?? defaultSettings.performance.preLoadSize,
       multiThreadedRendering:
         multiThreadedRendering ?? defaultSettings.performance.multiThreadedRendering,
-      maxThreads: maxThreads ?? defaultSettings.performance.maxThreads
+      maxThreads: maxThreads ?? defaultSettings.performance.maxThreads,
+      archiveTempfileThresholdMB:
+        perf.archiveTempfileThresholdMB ?? defaultSettings.performance.archiveTempfileThresholdMB,
+      directUrlThresholdMB:
+        perf.directUrlThresholdMB ?? defaultSettings.performance.directUrlThresholdMB
     };
   }
 

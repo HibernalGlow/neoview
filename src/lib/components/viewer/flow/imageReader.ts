@@ -603,18 +603,23 @@ export async function readPageSourceV2(
 			return readArchiveTempfileUrl(currentBook.path, innerPath, pageIndex, traceId);
 		}
 
-		if (updateLatencyTrace) {
-			infoPanelStore.setLatencyTrace({
-				dataSource: 'protocol',
-				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs: 0,
-				totalMs: 0,
-				cacheHit: false,
-				dataSize: page.size,
-				traceId
-			});
+		// 【性能优化】仅对超过阈值的文件使用协议直连，其余走传统的 Blob -> ObjectURL 流程
+		// 这兼顾了小文件的缓存一致性和大文件的内存压力
+		const sizeMB = (page.size || 0) / 1024 / 1024;
+		if (sizeMB > loadModeStore.directUrlThresholdMB) {
+			if (updateLatencyTrace) {
+				infoPanelStore.setLatencyTrace({
+					dataSource: 'protocol',
+					renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+					loadMs: 0,
+					totalMs: 0,
+					cacheHit: false,
+					dataSize: page.size,
+					traceId
+				});
+			}
+			return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
 		}
-		return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
 	}
 
 	const { blob } = await readPageBlobV2(pageIndex, options);

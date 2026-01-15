@@ -56,6 +56,10 @@ export interface NeoViewSettings {
       batchSize: number;
       maxPages: number;
     };
+    /** 压缩包提取到临时文件的阈值 (MB) - 用于后端 */
+    archiveTempfileThresholdMB: number;
+    /** 启用协议直连 URL 的阈值 (MB) - 用于前端 imageReader */
+    directUrlThresholdMB: number;
   };
   image: {
     supportedFormats: string[];

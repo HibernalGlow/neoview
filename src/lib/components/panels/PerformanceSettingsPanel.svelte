@@ -15,6 +15,10 @@
 	let activeTab = $state('cache');
 
 	// 使用独立字段，避免直接在对象属性上双向绑定造成复杂副作用
+	// 初始化时直接读取当前设置，避免 $effect 在 mount 时使用默认值覆盖已保存的设置
+	// Get current settings first
+	const currentSettings = settingsManager.getSettings();
+
 	let cacheMemorySize = $state(512);
 	let preloadEnabled = $state(true);
 	let preloadSize = $state(3);
@@ -26,8 +30,8 @@
 	let thumbnailConcurrentVideo = $state(2);
 	let enableVideoThumbnail = $state(false);
 
-	let archiveTempfileThresholdMB = $state(500);
-	let directUrlThresholdMB = $state(500);
+	let archiveTempfileThresholdMB = $state(currentSettings.performance.archiveTempfileThresholdMB ?? 500);
+	let directUrlThresholdMB = $state(currentSettings.performance.directUrlThresholdMB ?? 500);
 
 	// 同步逻辑：当数值变化时保存到全局设置
 	$effect(() => { 

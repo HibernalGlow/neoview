@@ -9,6 +9,11 @@ pub struct PerformanceSettings {
     pub gpu_acceleration: bool,         // GPU rendering
     pub multi_threaded_rendering: bool, // multi-threaded decoding
     pub decoding_threads: usize,        // number of threads for decoding
+    // 缩略图设置
+    pub thumbnail_concurrent_local: Option<usize>,
+    pub thumbnail_concurrent_archive: Option<usize>,
+    pub thumbnail_concurrent_video: Option<usize>,
+    pub enable_video_thumbnail: Option<bool>,
 }
 
 impl Default for PerformanceSettings {
@@ -20,6 +25,10 @@ impl Default for PerformanceSettings {
             gpu_acceleration: true,
             multi_threaded_rendering: true,
             decoding_threads: 4,
+            thumbnail_concurrent_local: Some(6),
+            thumbnail_concurrent_archive: Some(3),
+            thumbnail_concurrent_video: Some(2),
+            enable_video_thumbnail: Some(false),
         }
     }
 }

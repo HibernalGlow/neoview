@@ -285,7 +285,6 @@
 					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
 					gradientSize={80}
 					gradientOpacity={0.4}
-					data-vibrancy="true"
 				>
 					<Sidebar.Root
 						collapsible="none"
@@ -360,7 +359,6 @@
 					collapsible="none"
 					class="flex flex-1"
 					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
-					data-vibrancy="true"
 				>
 					<Sidebar.Content class="h-full">
 						<Sidebar.Group class="h-full flex-1 p-0">

@@ -29,8 +29,7 @@
 				splitHorizontalPages: false,
 				treatHorizontalAsDoublePage: false,
 				singleFirstPageMode: 'restoreOrDefault',
-				singleLastPageMode: 'restoreOrDefault',
-				widePageStretch: 'uniformHeight'
+				singleLastPageMode: 'restoreOrDefault'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -53,8 +52,7 @@
 				splitHorizontalPages: false,
 				treatHorizontalAsDoublePage: false,
 				singleFirstPageMode: 'restoreOrDefault',
-				singleLastPageMode: 'restoreOrDefault',
-				widePageStretch: 'uniformHeight'
+				singleLastPageMode: 'restoreOrDefault'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -172,23 +170,6 @@
 			{#if currentSettings.view.backgroundMode === 'ambient'}
 				<p class="text-xs text-muted-foreground">✨ 从图片中提取主色调，生成类似苹果灵动岛的流动渐变效果。详细设置请使用「流光溢彩」卡片。</p>
 			{/if}
-		</div>
-
-		<!-- Vibrancy Effect -->
-		<div class="space-y-2">
-			<div class="flex items-center justify-between gap-2">
-				<Label class="text-sm">窗口透视效果 (Vibrancy)</Label>
-				<Switch
-					checked={currentSettings.view.vibrancyEnabled}
-					onCheckedChange={(checked) =>
-						settingsManager.updateNestedSettings('view', {
-							vibrancyEnabled: checked
-						})}
-				/>
-			</div>
-			<p class="text-muted-foreground text-xs">
-				启用 Windows 云母/亚克力效果，使侧边栏背景呈现磨砂透明质感。
-			</p>
 		</div>
 		</Tabs.Content>
 

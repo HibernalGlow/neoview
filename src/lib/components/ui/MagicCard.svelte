@@ -15,7 +15,6 @@
     /** 自定义样式 */
     style?: string;
     children?: import('svelte').Snippet;
-    [key: string]: any;
   }
 
   let {
@@ -23,8 +22,7 @@
     gradientOpacity = 0.5,
     class: className = "",
     style = "",
-    children,
-    ...restProps
+    children
   }: Props = $props();
 
   let containerRef = $state<HTMLDivElement | null>(null);
@@ -59,7 +57,6 @@
   onmouseleave={handleMouseLeave}
   class={cn("group relative overflow-hidden", className)}
   {style}
-  {...restProps}
 >
   <!-- 内容区 -->
   <div class="relative z-10 w-full h-full flex flex-col">

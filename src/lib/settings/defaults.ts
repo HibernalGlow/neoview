@@ -74,7 +74,6 @@ export const defaultSettings: NeoViewSettings = {
     showBookSwitchToast: false,
     backgroundColor: '#000000',
     backgroundMode: 'solid',
-    vibrancyEnabled: false,
     ambient: {
       speed: 8,
       blur: 80,

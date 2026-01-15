@@ -12,6 +12,7 @@
 		icon?: any;
 		disabled?: boolean;
 		separator?: boolean;
+		quickAction?: boolean;
 	};
 
 	let {
@@ -27,6 +28,9 @@
 		customItems?: import('svelte').Snippet;
 		position?: 'trigger' | 'mouse';
 	} = $props();
+
+	let quickActions = $derived(items.filter(item => item.quickAction && !item.separator));
+	let regularItems = $derived(items.filter(item => !item.quickAction));
 
 	let open = $state(false);
 	let contextMenuElement: HTMLElement | null = $state(null);
@@ -89,11 +93,26 @@
 		bind:ref={contextMenuElement}
 		class="min-w-[180px]"
 		style="z-index: {zIndex}; {position === 'mouse' && mousePosition ? `position: fixed; left: ${mousePosition.x}px; top: ${mousePosition.y}px;` : ''}"
-		onpointerleave={() => {
-			// 悬停时不消失，只在点击外部时关闭
-		}}
 	>
-		{#each items as item (item.label)}
+		{#if quickActions.length > 0}
+			<ContextMenu.ItemRow>
+				{#each quickActions as item (item.label)}
+					<ContextMenu.ItemIcon
+						label={item.label}
+						disabled={item.disabled}
+						onclick={() => handleItemClick(item)}
+					>
+						{#if item.icon}
+							{@const IconComponent = item.icon}
+							<IconComponent />
+						{/if}
+					</ContextMenu.ItemIcon>
+				{/each}
+			</ContextMenu.ItemRow>
+			<ContextMenu.Separator />
+		{/if}
+
+		{#each regularItems as item (item.label)}
 			{#if item.separator}
 				<ContextMenu.Separator />
 			{:else}

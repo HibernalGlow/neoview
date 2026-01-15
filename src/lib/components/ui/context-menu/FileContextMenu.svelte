@@ -3,7 +3,9 @@
 	import type { FsItem } from '$lib/types';
 	import {
 		ContextMenuItem,
-		ContextMenuSeparator
+		ContextMenuSeparator,
+		ContextMenuItemRow,
+		ContextMenuItemIcon
 	} from '$lib/components/ui/context-menu';
 	import {
 		Folder,
@@ -51,34 +53,23 @@
 	<span>添加到书签</span>
 </ContextMenuItem>
 
-<ContextMenuSeparator />
-
-<ContextMenuItem on:click={() => emit('cut')}>
-	<Scissors class="mr-2 h-4 w-4" />
-	<span>剪切</span>
-</ContextMenuItem>
-
-<ContextMenuItem on:click={() => emit('copy')}>
-	<CopyIcon class="mr-2 h-4 w-4" />
-	<span>复制</span>
-</ContextMenuItem>
-
-<ContextMenuItem disabled={!canPaste} on:click={() => emit('paste')}>
-	<ClipboardPaste class="mr-2 h-4 w-4" />
-	<span>粘贴</span>
-</ContextMenuItem>
-
-<ContextMenuSeparator />
-
-<ContextMenuItem variant="destructive" on:click={() => emit('delete')}>
-	<Trash2 class="mr-2 h-4 w-4" />
-	<span>删除</span>
-</ContextMenuItem>
-
-<ContextMenuItem on:click={() => emit('rename')}>
-	<Pencil class="mr-2 h-4 w-4" />
-	<span>重命名</span>
-</ContextMenuItem>
+<ContextMenuItemRow>
+	<ContextMenuItemIcon label="剪切" on:click={() => emit('cut')}>
+		<Scissors />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon label="复制" on:click={() => emit('copy')}>
+		<CopyIcon />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon disabled={!canPaste} label="粘贴" on:click={() => emit('paste')}>
+		<ClipboardPaste />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon variant="destructive" label="删除" on:click={() => emit('delete')}>
+		<Trash2 />
+	</ContextMenuItemIcon>
+	<ContextMenuItemIcon label="重命名" on:click={() => emit('rename')}>
+		<Pencil />
+	</ContextMenuItemIcon>
+</ContextMenuItemRow>
 
 <ContextMenuSeparator />
 

@@ -13,6 +13,8 @@ import SubContent from "./context-menu-sub-content.svelte";
 import SubTrigger from "./context-menu-sub-trigger.svelte";
 import CheckboxItem from "./context-menu-checkbox-item.svelte";
 import Label from "./context-menu-label.svelte";
+import ItemRow from "./context-menu-item-row.svelte";
+import ItemIcon from "./context-menu-item-icon.svelte";
 const Sub = ContextMenuPrimitive.Sub;
 const Root = ContextMenuPrimitive.Root;
 
@@ -48,4 +50,6 @@ export {
 	SubTrigger as ContextMenuSubTrigger,
 	CheckboxItem as ContextMenuCheckboxItem,
 	Label as ContextMenuLabel,
+	ItemRow as ContextMenuItemRow,
+	ItemIcon as ContextMenuItemIcon,
 };

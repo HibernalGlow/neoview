@@ -9,6 +9,19 @@ import { invoke } from '@tauri-apps/api/core';
 /** 协议名称 */
 const PROTOCOL_NAME = 'neoview';
 
+/** 
+ * 获取基础协议 URL
+ * 
+ * 【性能与平台适配关键】
+ * - Windows (WebView2): 自定义协议会映射到 Hostname。由于 tauri.conf.json 设置了 useHttpsScheme: false，
+ *   必须使用 http://neoview.localhost 格式，否则会被浏览器拦截 (ERR_UNKNOWN_URL_SCHEME)。
+ * - macOS/Linux: 保持传统的 neoview://localhost 格式。
+ */
+const getBaseUrl = () => {
+	const isWindows = typeof navigator !== 'undefined' && /windows/i.test(navigator.userAgent);
+	return isWindows ? `http://${PROTOCOL_NAME}.localhost` : `${PROTOCOL_NAME}://localhost`;
+};
+
 /** 路径注册表缓存（前端侧） */
 const pathHashCache = new Map<string, string>();
 
@@ -37,7 +50,7 @@ export async function registerBookPath(bookPath: string): Promise<string> {
  * @returns Custom Protocol URL
  */
 export function getArchiveImageUrl(bookHash: string, entryIndex: number): string {
-	return `${PROTOCOL_NAME}://localhost/image/${bookHash}/${entryIndex}`;
+	return `${getBaseUrl()}/image/${bookHash}/${entryIndex}`;
 }
 
 /**
@@ -46,7 +59,7 @@ export function getArchiveImageUrl(bookHash: string, entryIndex: number): string
  * @returns Custom Protocol URL
  */
 export function getFileImageUrl(pathHash: string): string {
-	return `${PROTOCOL_NAME}://localhost/file/${pathHash}`;
+	return `${getBaseUrl()}/file/${pathHash}`;
 }
 
 /**
@@ -55,7 +68,7 @@ export function getFileImageUrl(pathHash: string): string {
  * @returns Custom Protocol URL
  */
 export function getThumbUrl(key: string): string {
-	return `${PROTOCOL_NAME}://localhost/thumb/${encodeURIComponent(key)}`;
+	return `${getBaseUrl()}/thumb/${encodeURIComponent(key)}`;
 }
 
 /**
@@ -109,7 +122,7 @@ export function preloadArchiveImages(bookHash: string, startIndex: number, count
 export async function isProtocolAvailable(): Promise<boolean> {
 	try {
 		// 尝试一个简单的请求
-		const response = await fetch(`${PROTOCOL_NAME}://localhost/health`);
+		const response = await fetch(`${getBaseUrl()}/health`);
 		return response.ok;
 	} catch {
 		// 协议不可用时会抛出错误

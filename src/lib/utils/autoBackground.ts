@@ -135,11 +135,11 @@ function extractDominantColor(
 
   // 找到最大的 bin
   let bestBin: Bin | null = null;
-  bins.forEach((bin) => {
+  for (const bin of bins.values()) {
     if (!bestBin || bin.count > bestBin.count) {
       bestBin = bin;
     }
-  });
+  }
 
   if (!bestBin || bestBin.count === 0) {
     return null;

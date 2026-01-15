@@ -110,97 +110,103 @@
 	body {
 		@apply bg-background;
 	}
-	
+
+	::selection {
+		background-color: var(--primary);
+		color: var(--primary-foreground);
+	}
+
 	/* 自定义字体应用（当 data-custom-font="enabled" 时生效） */
-	html[data-custom-font="enabled"] {
+	html[data-custom-font='enabled'] {
 		font-family: var(--font-custom-sans, inherit);
 	}
-	
-	html[data-custom-font="enabled"] code,
-	html[data-custom-font="enabled"] pre,
-	html[data-custom-font="enabled"] .font-mono {
+
+	html[data-custom-font='enabled'] code,
+	html[data-custom-font='enabled'] pre,
+	html[data-custom-font='enabled'] .font-mono {
 		font-family: var(--font-custom-mono, monospace);
 	}
-	
+
 	/* 隐藏所有滚动条 */
 	* {
 		scrollbar-width: none; /* Firefox */
 		-ms-overflow-style: none; /* IE and Edge */
 	}
-	
+
 	*::-webkit-scrollbar {
 		display: none; /* Chrome, Safari, Opera */
 	}
-	
+
 	/* 确保主窗口不显示滚动条 */
-	html, body {
+	html,
+	body {
 		overflow: hidden;
 	}
-	
+
 	/* 右键菜单专用滚动条样式 */
 	.context-menu::-webkit-scrollbar {
 		width: 6px;
 		display: block;
 	}
-	
+
 	.context-menu::-webkit-scrollbar-track {
 		background: transparent;
 	}
-	
+
 	.context-menu::-webkit-scrollbar-thumb {
 		background-color: rgba(156, 163, 175, 0.5);
 		border-radius: 3px;
 	}
-	
+
 	.context-menu::-webkit-scrollbar-thumb:hover {
 		background-color: rgba(156, 163, 175, 0.7);
 	}
-	
+
 	/* Firefox 滚动条样式 */
 	.context-menu {
 		scrollbar-width: thin;
 		scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
 	}
-	
+
 	/* Breadcrumb 样式修复 */
-	[data-slot="breadcrumb-link"] {
+	[data-slot='breadcrumb-link'] {
 		transition: color 0.2s ease;
 	}
-	
-	[data-slot="breadcrumb-link"]:hover {
+
+	[data-slot='breadcrumb-link']:hover {
 	}
-	
+
 	/* 确保 PathBar 中的链接样式正确 */
-	.flex.cursor-text [data-slot="breadcrumb-link"] {
+	.flex.cursor-text [data-slot='breadcrumb-link'] {
 	}
-	
-	.flex.cursor-text [data-slot="breadcrumb-link"]:hover {
+
+	.flex.cursor-text [data-slot='breadcrumb-link']:hover {
 	}
-	
+
 	/* PathBar 当前页 breadcrumb 文本和编辑输入框文本显式指定前景色 */
-	.flex.cursor-text [data-slot="breadcrumb-page"] {
+	.flex.cursor-text [data-slot='breadcrumb-page'] {
 	}
-	
-	.flex.cursor-text [data-slot="breadcrumb-edit"] {
+
+	.flex.cursor-text [data-slot='breadcrumb-edit'] {
 	}
-	
+
 	/* ContextMenu 内的链接样式 */
-	[data-state="open"] [data-slot="breadcrumb-link"],
-	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"] {
+	[data-state='open'] [data-slot='breadcrumb-link'],
+	[data-radix-context-menu-trigger] [data-slot='breadcrumb-link'] {
 		color: var(--muted-foreground) !important;
 	}
-	
-	[data-state="open"] [data-slot="breadcrumb-link"]:hover,
-	[data-radix-context-menu-trigger] [data-slot="breadcrumb-link"]:hover {
+
+	[data-state='open'] [data-slot='breadcrumb-link']:hover,
+	[data-radix-context-menu-trigger] [data-slot='breadcrumb-link']:hover {
 		color: var(--foreground) !important;
 	}
-	
+
 	/* 所有 a 标签的通用样式 */
-	a[data-slot="breadcrumb-link"] {
+	a[data-slot='breadcrumb-link'] {
 		color: var(--muted-foreground) !important;
 	}
-	
-	a[data-slot="breadcrumb-link"]:hover {
+
+	a[data-slot='breadcrumb-link']:hover {
 		color: var(--foreground) !important;
 	}
 }

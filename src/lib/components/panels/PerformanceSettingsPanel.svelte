@@ -179,7 +179,7 @@
 						<span class="text-muted-foreground text-[10px]">{archiveTempfileThresholdMB} MB</span>
 					</div>
 					<Slider
-						min={100}
+						min={0}
 						max={2000}
 						step={100}
 						type="single"
@@ -198,7 +198,7 @@
 						<span class="text-muted-foreground text-[10px]">{directUrlThresholdMB} MB</span>
 					</div>
 					<Slider
-						min={100}
+						min={0}
 						max={2000}
 						step={100}
 						type="single"

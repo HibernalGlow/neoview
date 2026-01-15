@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { showErrorToast } from '$lib/utils/toast';
+	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let activeTab = $state('cache');
 
@@ -25,20 +26,40 @@
 	let thumbnailConcurrentVideo = $state(2);
 	let enableVideoThumbnail = $state(false);
 
+	let archiveTempfileThresholdMB = $state(500);
+	let directUrlThresholdMB = $state(500);
+
+	// 同步逻辑：当数值变化时保存到全局设置
+	$effect(() => { 
+		settingsManager.updateNestedSettings('performance', {
+			archiveTempfileThresholdMB: archiveTempfileThresholdMB
+		});
+	});
+	$effect(() => { 
+		settingsManager.updateNestedSettings('performance', {
+			directUrlThresholdMB: directUrlThresholdMB
+		});
+	});
+
 	// 从后端加载性能设置
 	async function loadPerformanceSettings() {
 		try {
 			const loaded = await getPerformanceSettings();
-			cacheMemorySize = loaded.cache_memory_size;
 			preloadEnabled = loaded.preload_enabled;
-			preloadSize = loaded.preload_size;
 			gpuAcceleration = loaded.gpu_acceleration;
 			multiThreadedRendering = loaded.multi_threaded_rendering;
+			enableVideoThumbnail = loaded.enable_video_thumbnail ?? false;
+
+			cacheMemorySize = loaded.cache_memory_size;
+			preloadSize = loaded.preload_size;
 			decodingThreads = loaded.decoding_threads;
 			thumbnailConcurrentLocal = loaded.thumbnail_concurrent_local ?? 6;
 			thumbnailConcurrentArchive = loaded.thumbnail_concurrent_archive ?? 3;
 			thumbnailConcurrentVideo = loaded.thumbnail_concurrent_video ?? 2;
-			enableVideoThumbnail = loaded.enable_video_thumbnail ?? false;
+
+			const s = settingsManager.getSettings();
+			archiveTempfileThresholdMB = s.performance.archiveTempfileThresholdMB;
+			directUrlThresholdMB = s.performance.directUrlThresholdMB;
 		} catch (err) {
 			console.error('Failed to load performance settings:', err);
 		}
@@ -107,11 +128,7 @@
 					max={2048}
 					step={128}
 					type="single"
-					value={[cacheMemorySize]}
-					onValueChange={(vals) => {
-						const v = vals[0];
-						if (typeof v === 'number') cacheMemorySize = v;
-					}}
+					bind:value={cacheMemorySize}
 					class="w-full py-2"
 				/>
 			</div>
@@ -135,15 +152,60 @@
 						max={20}
 						step={1}
 						type="single"
-						value={[preloadSize]}
-						onValueChange={(vals) => {
-							const v = vals[0];
-							if (typeof v === 'number') preloadSize = Math.round(v);
-						}}
+						bind:value={preloadSize}
 						class="w-full py-2"
 					/>
 				</div>
 			{/if}
+		</div>
+
+		<!-- 资源加载阈值 -->
+		<div class="space-y-1.5 pt-2 border-t border-border/40">
+			<h3 class="text-xs font-bold flex items-center gap-1.5">
+				<Zap class="h-3 w-3 text-yellow-500" />
+				加载策略
+			</h3>
+			<p class="text-muted-foreground text-[10px]">控制内存占用与加载速度的平衡</p>
+			
+			<div class="space-y-3 mt-2">
+				<!-- 后端解压阈值 -->
+				<div class="space-y-1.5">
+					<div class="flex items-center justify-between">
+						<span class="text-xs">压缩包提取阈值</span>
+						<span class="text-muted-foreground text-[10px]">{archiveTempfileThresholdMB} MB</span>
+					</div>
+					<Slider
+						min={100}
+						max={2000}
+						step={100}
+						type="single"
+						bind:value={archiveTempfileThresholdMB}
+						class="w-full py-2"
+					/>
+					<p class="text-[9px] text-muted-foreground leading-tight italic opacity-70">
+						超过此大小的压缩包内容将提取为临时文件而非驻留内存。
+					</p>
+				</div>
+
+				<!-- 前端直连阈值 -->
+				<div class="space-y-1.5">
+					<div class="flex items-center justify-between">
+						<span class="text-xs">协议直连触发阈值</span>
+						<span class="text-muted-foreground text-[10px]">{directUrlThresholdMB} MB</span>
+					</div>
+					<Slider
+						min={100}
+						max={2000}
+						step={100}
+						type="single"
+						bind:value={directUrlThresholdMB}
+						class="w-full py-2"
+					/>
+					<p class="text-[9px] text-muted-foreground leading-tight italic opacity-70">
+						超过此大小时强制启用直连模式，绕过 Blob 转换以降低 IPC 内存消耗。
+					</p>
+				</div>
+			</div>
 		</div>
 
 		</Tabs.Content>
@@ -175,11 +237,7 @@
 					max={16}
 					step={1}
 					type="single"
-					value={[decodingThreads]}
-					onValueChange={(vals) => {
-						const v = vals[0];
-						if (typeof v === 'number') decodingThreads = Math.round(v);
-					}}
+					bind:value={decodingThreads}
 					class="w-full py-2"
 				/>
 			</div>
@@ -202,11 +260,7 @@
 						max={16}
 						step={1}
 						type="single"
-						value={[thumbnailConcurrentLocal]}
-						onValueChange={(vals) => {
-							const v = vals[0];
-							if (typeof v === 'number') thumbnailConcurrentLocal = Math.round(v);
-						}}
+						bind:value={thumbnailConcurrentLocal}
 						class="w-full py-2"
 					/>
 				</div>
@@ -220,11 +274,7 @@
 						max={8}
 						step={1}
 						type="single"
-						value={[thumbnailConcurrentArchive]}
-						onValueChange={(vals) => {
-							const v = vals[0];
-							if (typeof v === 'number') thumbnailConcurrentArchive = Math.round(v);
-						}}
+						bind:value={thumbnailConcurrentArchive}
 						class="w-full py-2"
 					/>
 				</div>
@@ -238,11 +288,7 @@
 						max={4}
 						step={1}
 						type="single"
-						value={[thumbnailConcurrentVideo]}
-						onValueChange={(vals) => {
-							const v = vals[0];
-							if (typeof v === 'number') thumbnailConcurrentVideo = Math.round(v);
-						}}
+						bind:value={thumbnailConcurrentVideo}
 						class="w-full py-2"
 					/>
 				</div>

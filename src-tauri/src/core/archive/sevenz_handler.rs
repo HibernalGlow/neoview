@@ -9,6 +9,7 @@ use log::{debug, info};
 use natural_sort_rs::natural_cmp;
 use std::cmp::Ordering;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -141,6 +142,47 @@ pub fn extract_file_from_7z(
     } else {
         Err(format!("在 7z 压缩包中找不到文件: {}", file_path))
     }
+}
+
+pub fn extract_file_from_7z_to_path(
+    index_cache: &Arc<ArchiveIndexCache>,
+    archive_path: &Path,
+    file_path: &str,
+    dest_path: &Path,
+) -> Result<u64, String> {
+    let _ = index_cache;
+    let normalized_path = file_path.replace('\\', "/");
+
+    if let Some(parent) = dest_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+    let mut out = std::fs::File::create(dest_path).map_err(|e| format!("创建文件失败: {}", e))?;
+
+    let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
+        .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
+
+    let mut written: u64 = 0;
+    let mut found = false;
+
+    archive
+        .for_each_entries(|entry, reader| {
+            let entry_path = entry.name().replace('\\', "/");
+            if entry_path == normalized_path || entry.name() == file_path {
+                written = std::io::copy(reader, &mut out)?;
+                found = true;
+                return Ok(false);
+            }
+            Ok(true)
+        })
+        .map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+
+    out.flush().map_err(|e| format!("刷新文件失败: {}", e))?;
+
+    if !found {
+        return Err(format!("在 7z 压缩包中找不到文件: {}", file_path));
+    }
+
+    Ok(written)
 }
 
 /// 获取 7z 条目索引（如果有缓存）

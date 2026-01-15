@@ -32,6 +32,10 @@ export interface ReadResult {
 	traceId: string;
 }
 
+export type ReadSourceResult =
+	| { kind: 'blob'; blob: Blob; traceId: string }
+	| { kind: 'url'; url: string; traceId: string };
+
 // 预加载状态跟踪
 let lastPreloadedPage = -1;
 const PRELOAD_RANGE = 5; // ±5 页
@@ -45,6 +49,9 @@ let currentBookPathForHash: string | null = null;
 
 // 是否启用 Custom Protocol 模式
 let useProtocolMode = true;
+
+const DIRECT_URL_THRESHOLD_BYTES = 128 * 1024 * 1024;
+const ARCHIVE_TEMPFILE_THRESHOLD_BYTES = 256 * 1024 * 1024;
 
 // 预解压相关（可选优化，保留接口兼容）
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -68,6 +75,95 @@ export function clearExtractCache(): void {
  */
 export function setProtocolMode(enabled: boolean): void {
 	useProtocolMode = enabled;
+}
+
+async function readArchiveUrl(
+	bookPath: string,
+	entryIndex: number,
+	pageIndex: number,
+	traceId: string
+): Promise<ReadSourceResult> {
+	const startTime = performance.now();
+
+	const bookHash = await getBookHash(bookPath);
+	const url = getArchiveImageUrl(bookHash, entryIndex);
+	const totalMs = performance.now() - startTime;
+
+	pipelineLatencyStore.record({
+		timestamp: Date.now(),
+		pageIndex,
+		traceId,
+		bookSyncMs: 0,
+		backendLoadMs: totalMs,
+		ipcTransferMs: 0,
+		blobCreateMs: 0,
+		totalMs,
+		dataSize: 0,
+		cacheHit: false,
+		isCurrentPage: true,
+		source: 'protocol-url'
+	});
+
+	return { kind: 'url', url, traceId };
+}
+
+async function readArchiveTempfileUrl(
+	archivePath: string,
+	innerPath: string,
+	pageIndex: number,
+	traceId: string
+): Promise<ReadSourceResult> {
+	const startTime = performance.now();
+
+	const tempPath = await invoke<string>('extract_image_to_temp', {
+		archivePath,
+		filePath: innerPath,
+		traceId,
+		pageIndex
+	});
+
+	const url = convertFileSrc(tempPath);
+	const totalMs = performance.now() - startTime;
+
+	pipelineLatencyStore.record({
+		timestamp: Date.now(),
+		pageIndex,
+		traceId,
+		bookSyncMs: 0,
+		backendLoadMs: totalMs,
+		ipcTransferMs: 0,
+		blobCreateMs: 0,
+		totalMs,
+		dataSize: 0,
+		cacheHit: false,
+		isCurrentPage: true,
+		source: 'tempfile-url'
+	});
+
+	return { kind: 'url', url, traceId };
+}
+
+async function readFileUrl(path: string, pageIndex: number, traceId: string): Promise<ReadSourceResult> {
+	const startTime = performance.now();
+	const url = convertFileSrc(path);
+	const totalMs = performance.now() - startTime;
+
+	pipelineLatencyStore.record({
+		timestamp: Date.now(),
+		pageIndex,
+		traceId,
+		bookSyncMs: 0,
+		backendLoadMs: totalMs,
+		ipcTransferMs: 0,
+		blobCreateMs: 0,
+		totalMs,
+		dataSize: 0,
+		cacheHit: true,
+		isCurrentPage: true,
+		source: 'file-url'
+	});
+
+	return { kind: 'url', url, traceId };
 }
 
 /**
@@ -346,6 +442,15 @@ export async function preDecodeImage(blob: Blob): Promise<ImageBitmap | null> {
 	}
 }
 
+export async function getImageDimensionsFromUrl(url: string): Promise<{ width: number; height: number } | null> {
+	return new Promise((resolve) => {
+		const img = new Image();
+		img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+		img.onerror = () => resolve(null);
+		img.src = url;
+	});
+}
+
 /**
  * 【新系统】使用 PageManager 读取页面
  * 后端自动处理缓存和预加载，减少 IPC 调用
@@ -444,6 +549,75 @@ export async function readPageBlobV2(
 		logImageTrace(traceId, 'readPageBlobV2 error', { error: String(error) });
 		throw error;
 	}
+}
+
+export async function readPageSourceV2(
+	pageIndex: number,
+	options: ReadPageOptions & { isCurrentPage?: boolean } = {}
+): Promise<ReadSourceResult> {
+	const { updateLatencyTrace = true, isCurrentPage = true } = options;
+	const traceId = createImageTraceId('pm', pageIndex);
+
+	logImageTrace(traceId, 'readPageSourceV2 start', { pageIndex, isCurrentPage });
+
+	const currentBook = bookStore.currentBook;
+	if (!currentBook) {
+		throw new Error('没有打开的书籍');
+	}
+
+	const page = currentBook.pages?.[pageIndex];
+	if (!page) {
+		throw new Error(`页面不存在: ${pageIndex}`);
+	}
+
+	if (currentBook.type !== 'archive' && page.size >= DIRECT_URL_THRESHOLD_BYTES) {
+		if (updateLatencyTrace) {
+			infoPanelStore.setLatencyTrace({
+				dataSource: 'tempfile',
+				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+				loadMs: 0,
+				totalMs: 0,
+				cacheHit: true,
+				dataSize: page.size,
+				traceId
+			});
+		}
+		return readFileUrl(page.path, pageIndex, traceId);
+	}
+
+	if (currentBook.type === 'archive' && useProtocolMode && page.entryIndex != null) {
+		if (loadModeStore.isTempfileMode || page.size >= ARCHIVE_TEMPFILE_THRESHOLD_BYTES) {
+			const innerPath = page.innerPath ?? page.path;
+			if (updateLatencyTrace) {
+				infoPanelStore.setLatencyTrace({
+					dataSource: 'tempfile',
+					renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+					loadMs: 0,
+					totalMs: 0,
+					cacheHit: false,
+					dataSize: page.size,
+					traceId
+				});
+			}
+			return readArchiveTempfileUrl(currentBook.path, innerPath, pageIndex, traceId);
+		}
+
+		if (updateLatencyTrace) {
+			infoPanelStore.setLatencyTrace({
+				dataSource: 'blob',
+				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+				loadMs: 0,
+				totalMs: 0,
+				cacheHit: false,
+				dataSize: page.size,
+				traceId
+			});
+		}
+		return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
+	}
+
+	const { blob } = await readPageBlobV2(pageIndex, options);
+	return { kind: 'blob', blob, traceId };
 }
 
 /**

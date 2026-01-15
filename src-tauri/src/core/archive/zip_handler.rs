@@ -143,6 +143,29 @@ pub fn extract_file_from_zip(
     Ok(buffer)
 }
 
+pub fn extract_file_from_zip_to_path(
+    archive_cache: &ZipArchiveCache,
+    archive_path: &Path,
+    file_path: &str,
+    dest_path: &Path,
+) -> Result<u64, String> {
+    let cached_archive = get_cached_archive(archive_cache, archive_path)?;
+    let mut archive = cached_archive.lock().unwrap();
+
+    let mut zip_file = archive
+        .by_name(file_path)
+        .map_err(|e| format!("在压缩包中找不到文件: {}", e))?;
+
+    if let Some(parent) = dest_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    let mut out = File::create(dest_path).map_err(|e| format!("创建文件失败: {}", e))?;
+    let written = io::copy(&mut zip_file, &mut out).map_err(|e| format!("写入文件失败: {}", e))?;
+    out.flush().map_err(|e| format!("刷新文件失败: {}", e))?;
+    Ok(written)
+}
+
 /// 从 ZIP 压缩包中删除条目
 pub fn delete_entry_from_zip(
     archive_cache: &ZipArchiveCache,
@@ -246,5 +269,35 @@ pub fn is_supported_archive(path: &Path) -> bool {
         matches!(ext.as_str(), "zip" | "cbz")
     } else {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_extract_file_from_zip_to_path_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("test.zip");
+        let dest_path = dir.path().join("out.bin");
+
+        let payload: Vec<u8> = (0..1024 * 1024).map(|i| (i % 251) as u8).collect();
+
+        {
+            let file = File::create(&zip_path).unwrap();
+            let mut w = ZipWriter::new(file);
+            w.start_file("a.bin", SimpleFileOptions::default()).unwrap();
+            w.write_all(&payload).unwrap();
+            w.finish().unwrap();
+        }
+
+        let cache: ZipArchiveCache = Arc::new(Mutex::new(HashMap::new()));
+        let written = extract_file_from_zip_to_path(&cache, &zip_path, "a.bin", &dest_path).unwrap();
+        assert_eq!(written, payload.len() as u64);
+
+        let out = std::fs::read(&dest_path).unwrap();
+        assert_eq!(out, payload);
     }
 }

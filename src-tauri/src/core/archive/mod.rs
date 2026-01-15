@@ -170,6 +170,37 @@ impl ArchiveManager {
     pub fn extract_file(&self, archive_path: &Path, file_path: &str) -> Result<Vec<u8>, String> {
         image_ops::extract_file(&self.archive_cache, &self.index_cache, archive_path, file_path)
     }
+
+    pub fn extract_file_to_path(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+        dest_path: &Path,
+    ) -> Result<u64, String> {
+        match types::ArchiveFormat::from_extension(archive_path) {
+            types::ArchiveFormat::Zip => zip_handler::extract_file_from_zip_to_path(
+                &self.archive_cache,
+                archive_path,
+                file_path,
+                dest_path,
+            ),
+            types::ArchiveFormat::SevenZ => sevenz_handler::extract_file_from_7z_to_path(
+                &self.index_cache,
+                archive_path,
+                file_path,
+                dest_path,
+            ),
+            types::ArchiveFormat::Rar => {
+                let bytes = rar_handler::extract_file_from_rar(&self.index_cache, archive_path, file_path)?;
+                if let Some(parent) = dest_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+                }
+                std::fs::write(dest_path, &bytes).map_err(|e| format!("写入文件失败: {}", e))?;
+                Ok(bytes.len() as u64)
+            }
+            types::ArchiveFormat::Unknown => Err("不支持的压缩包格式".to_string()),
+        }
+    }
     
     /// 从 RAR 压缩包中提取文件内容
     pub fn extract_file_from_rar(

@@ -489,6 +489,8 @@ mod tests {
             size: 9,
             is_file_url: false,
             created_at: 1234567890,
+            page_index: None,
+            locked: false,
         };
 
         let json = serde_json::to_string(&entry).unwrap();

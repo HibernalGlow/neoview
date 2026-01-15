@@ -9,7 +9,7 @@
  */
 
 import { getImageLoaderCore, type ImageLoaderCore } from '$lib/components/viewer/flow/imageLoaderCore';
-import { getImageDimensions } from '$lib/components/viewer/flow/imageReader';
+import { getImageDimensions, getImageDimensionsFromUrl } from '$lib/components/viewer/flow/imageReader';
 import { bookStore } from '$lib/stores/book.svelte';
 import { computeAutoBackgroundColor } from '$lib/utils/autoBackground';
 import { preDecodeCache } from '../stores/preDecodeCache.svelte';
@@ -21,7 +21,7 @@ import { renderQueue } from '../stores/renderQueue';
 
 export interface LoadResult {
   url: string;
-  blob: Blob;
+  blob?: Blob;
   dimensions: { width: number; height: number } | null;
   fromCache: boolean;
 }
@@ -242,6 +242,10 @@ export class StackImageLoader {
     // 如果没有尺寸，从 Blob 获取
     if (!dimensions && result.blob) {
       dimensions = await getImageDimensions(result.blob);
+    }
+
+    if (!dimensions && result.url && !result.blob) {
+      dimensions = await getImageDimensionsFromUrl(result.url);
     }
     
     // 缓存尺寸

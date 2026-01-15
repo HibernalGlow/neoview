@@ -215,7 +215,9 @@ export function createImageStore() {
       state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
       state.loading = false;
       // 更新延迟追踪（缓存命中）
-      updateCacheHitLatencyTrace(cached.blob, currentIndex);
+      if (cached.blob) {
+        updateCacheHitLatencyTrace(cached.blob, currentIndex);
+      }
       // 【关键】通知缩略图服务主图已就绪
       thumbnailService.notifyMainImageReady();
       // 【翻页优化】触发分层预加载

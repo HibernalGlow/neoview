@@ -11,7 +11,7 @@ import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';
 import { BlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
-import { readPageBlobV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
+import { readPageSourceV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
 import { thumbnailService } from '$lib/services/thumbnailService';
@@ -35,14 +35,14 @@ function updateCacheHitLatencyTrace(blob: Blob, pageIndex: number): void {
 export interface ImageLoaderCoreOptions {
 	maxConcurrentLoads?: number;
 	maxCacheSizeMB?: number;
-	onImageReady?: (pageIndex: number, url: string, blob: Blob) => void;
+	onImageReady?: (pageIndex: number, url: string, blob?: Blob) => void;
 	onDimensionsReady?: (pageIndex: number, dimensions: { width: number; height: number } | null) => void;
 	onError?: (pageIndex: number, error: Error) => void;
 }
 
 export interface LoadResult {
 	url: string;
-	blob: Blob;
+	blob?: Blob;
 	dimensions: { width: number; height: number } | null;
 	fromCache: boolean;
 }
@@ -55,6 +55,7 @@ export class ImageLoaderCore {
 	private loadQueue: LoadQueueManager;
 	private pendingLoads = new Map<number, Promise<LoadResult>>();
 	private thumbnailCache = new Map<number, string>();
+	private directUrlCache = new Map<number, string>();
 	private options: ImageLoaderCoreOptions;
 	// 【架构优化】标记实例是否已失效（切书后旧实例失效）
 	private invalidated = false;
@@ -122,6 +123,12 @@ export class ImageLoaderCore {
 				dimensions: dimensions ?? null,
 				fromCache: true
 			};
+		}
+
+		if (this.directUrlCache.has(pageIndex)) {
+			const url = this.directUrlCache.get(pageIndex)!;
+			this.options.onDimensionsReady?.(pageIndex, null);
+			return { url, blob: undefined, dimensions: null, fromCache: true };
 		}
 
 		// 2. 检查是否正在加载
@@ -222,7 +229,7 @@ export class ImageLoaderCore {
 
 					// 读取图片（使用 PageManager，后端自动缓存和预加载）
 					const isCurrentPage = priority === LoadPriority.CRITICAL;
-					const { blob, traceId } = await readPageBlobV2(pageIndex, { 
+					const source = await readPageSourceV2(pageIndex, { 
 						updateLatencyTrace: isCurrentPage,
 						isCurrentPage  // 当前页触发后端预加载
 					});
@@ -233,26 +240,35 @@ export class ImageLoaderCore {
 						return;
 					}
 					
-					// 缓存
-					const url = this.blobCache.set(pageIndex, blob);
-					logImageTrace(traceId, 'blob cached', { pageIndex, size: blob.size, priority });
+					if (source.kind === 'url') {
+						this.directUrlCache.set(pageIndex, source.url);
+						logImageTrace(source.traceId, 'url cached', { pageIndex, priority });
+						this.options.onImageReady?.(pageIndex, source.url);
+						resolve({
+							url: source.url,
+							blob: undefined,
+							dimensions: null,
+							fromCache: false
+						});
+						this.options.onDimensionsReady?.(pageIndex, null);
+						return;
+					}
 
-					// 通知回调（立即显示）
-					this.options.onImageReady?.(pageIndex, url, blob);
+					const url = this.blobCache.set(pageIndex, source.blob);
+					logImageTrace(source.traceId, 'blob cached', { pageIndex, size: source.blob.size, priority });
 
-					// 先返回，异步获取尺寸
+					this.options.onImageReady?.(pageIndex, url, source.blob);
+
 					resolve({
 						url,
-						blob,
-						dimensions: null, // 先返回 null，异步获取
+						blob: source.blob,
+						dimensions: null,
 						fromCache: false
 					});
 
-					// 异步获取尺寸并缓存（不阻塞）
 					if (!this.invalidated) {
-						getImageDimensions(blob).then(dimensions => {
+						getImageDimensions(source.blob).then(dimensions => {
 							if (!this.invalidated) {
-								// 【性能优化】缓存尺寸
 								this.blobCache.setDimensions(pageIndex, dimensions);
 								this.options.onDimensionsReady?.(pageIndex, dimensions);
 							}
@@ -498,14 +514,14 @@ export class ImageLoaderCore {
 	 * 检查是否有缓存
 	 */
 	hasCache(pageIndex: number): boolean {
-		return this.blobCache.has(pageIndex);
+		return this.blobCache.has(pageIndex) || this.directUrlCache.has(pageIndex);
 	}
 
 	/**
 	 * 获取缓存的 URL（如果有）
 	 */
 	getCachedUrl(pageIndex: number): string | undefined {
-		return this.blobCache.getUrl(pageIndex);
+		return this.blobCache.getUrl(pageIndex) ?? this.directUrlCache.get(pageIndex);
 	}
 
 	/**
@@ -542,7 +558,7 @@ export class ImageLoaderCore {
 	 * 【性能优化】获取缓存数量（O(1)）
 	 */
 	getCacheSize(): number {
-		return this.blobCache.getStats().count;
+		return this.blobCache.getStats().count + this.directUrlCache.size;
 	}
 
 	/**
@@ -558,6 +574,7 @@ export class ImageLoaderCore {
 	clearCache(): void {
 		this.blobCache.clear();
 		this.thumbnailCache.clear();
+		this.directUrlCache.clear();
 	}
 
 	/**

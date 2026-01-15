@@ -263,6 +263,7 @@ mod tests {
     #[tokio::test]
     async fn test_engine_creation() {
         let engine = JobEngine::with_defaults();
+        engine.ensure_started();
         assert!(engine.is_running());
 
         let stats = engine.stats().await;

@@ -85,17 +85,17 @@
 				}
 
 				// 3. 动态物理红线判定：
-				// 左侧边栏红线：取 容器宽度 + 150px 或 屏幕宽度的 40% 中的较大者
-				// 右侧边栏红线：取 容器左沿 - 150px 或 屏幕宽度的 60% 中的较小者
+				// 左侧边栏红线：取 容器宽度 + 10px
+				// 右侧边栏红线：取 容器左沿 - 10px
 				if (isLeftSide) {
-					const retractLine = Math.max(rect.right + 150, window.innerWidth * 0.4);
+					const retractLine = rect.right + 10;
 					if (clientX > retractLine) {
 						performHide();
 					} else {
 						resetHideTimer();
 					}
 				} else {
-					const retractLine = Math.min(rect.left - 150, window.innerWidth * 0.6);
+					const retractLine = rect.left - 10;
 					if (clientX < retractLine) {
 						performHide();
 					} else {

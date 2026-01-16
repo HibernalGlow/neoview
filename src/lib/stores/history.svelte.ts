@@ -5,6 +5,7 @@
 
 import { writable } from 'svelte/store';
 import { pathExists } from '$lib/api/filesystem';
+import { historySettingsStore } from './historySettings.svelte';
 
 /**
  * 内容引用（用于路径栈）
@@ -30,7 +31,6 @@ export interface HistoryEntry {
 }
 
 const STORAGE_KEY = 'neoview-history';
-const MAX_HISTORY_SIZE = 100; // 最多保存 100 条历史记录
 
 // 从 localStorage 加载历史记录
 function loadHistory(): HistoryEntry[] {
@@ -55,8 +55,8 @@ const { subscribe, set, update } = writable<HistoryEntry[]>(loadHistory());
 // 保存历史记录到 localStorage
 function saveToStorage(history: HistoryEntry[]) {
   try {
-    // 只保存最近的 MAX_HISTORY_SIZE 条
-    const toSave = history.slice(0, MAX_HISTORY_SIZE);
+    const limit = historySettingsStore.maxHistorySize;
+    const toSave = limit > 0 ? history.slice(0, limit) : history;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (err) {
     console.error('Failed to save history:', err);

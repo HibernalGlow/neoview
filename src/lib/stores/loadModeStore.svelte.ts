@@ -108,8 +108,12 @@ function createLoadModeStore() {
 	}
 
 	// 监听设置变更并同步到后端
+	let lastThreshold = settingsManager.getSettings().performance.archiveTempfileThresholdMB;
 	settingsManager.addListener((s) => {
 		const threshold = s.performance.archiveTempfileThresholdMB;
+		if (threshold === lastThreshold) return;
+		
+		lastThreshold = threshold;
 		setLargeFileThreshold(threshold).catch((err) => {
 			console.error('❌ 同步大文件阈值到后端失败:', err);
 		});

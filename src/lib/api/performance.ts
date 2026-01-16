@@ -18,6 +18,8 @@ export interface PerformanceSettings {
   thumbnail_concurrent_archive?: number;  // 压缩包并发数
   thumbnail_concurrent_video?: number;    // 视频处理并发数
   enable_video_thumbnail?: boolean;       // 启用视频缩略图
+  archive_tempfile_threshold_mb?: number; // 压缩包提取阈值 (后端)
+  direct_url_threshold_mb?: number;       // 协议直连触发阈值
 }
 
 /**

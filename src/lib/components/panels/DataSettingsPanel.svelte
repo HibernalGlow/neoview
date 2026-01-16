@@ -10,9 +10,6 @@
 		Search,
 		MapPin,
 		FileJson,
-		Settings,
-		ArrowUp,
-		ArrowDown,
 		ArrowUpDown
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -33,11 +30,11 @@
 	let activeTab = $state('modules');
 
 	let rows = $state<DataModuleRow[]>([...DEFAULT_DATA_MODULES]);
-	
+
 	// Refactored unified selection state
 	let selections = $state<Record<DataModuleId, boolean>>({} as Record<DataModuleId, boolean>);
 	let nativeSelected = $state(true);
-	
+
 	let strategy: 'merge' | 'overwrite' = $state('merge');
 	let isExporting = $state(false);
 	let isImporting = $state(false);
@@ -47,7 +44,10 @@
 	let searchQuery = $state('');
 
 	// Sorting state: Added 'selected' key
-	let sortConfig = $state<{ key: 'name' | 'storage' | 'selected' | null; dir: 'asc' | 'desc' }>({ key: null, dir: 'asc' });
+	let sortConfig = $state<{ key: 'name' | 'storage' | 'selected' | null; dir: 'asc' | 'desc' }>({
+		key: null,
+		dir: 'asc'
+	});
 
 	// Initialize selections
 	function initSelections() {
@@ -72,7 +72,7 @@
 			}
 		} else {
 			sortConfig.key = key;
-			// For selection, defaulting to desc (Checked first) often feels more natural? 
+			// For selection, defaulting to desc (Checked first) often feels more natural?
 			// But let's stick to asc default, which usually means False -> True.
 			sortConfig.dir = 'asc';
 		}
@@ -140,8 +140,8 @@
 				const key = sortConfig.key!;
 				const valA = (a[key as keyof typeof a] || '').toString();
 				const valB = (b[key as keyof typeof b] || '').toString();
-				return sortConfig.dir === 'asc' 
-					? valA.localeCompare(valB, 'zh-CN') 
+				return sortConfig.dir === 'asc'
+					? valA.localeCompare(valB, 'zh-CN')
 					: valB.localeCompare(valA, 'zh-CN');
 			});
 		}
@@ -161,7 +161,9 @@
 	});
 
 	// Updated build flags based on unified selection
-	function buildModuleFlags(): Parameters<typeof settingsManager['applyFullPayload']>[1]['modules'] {
+	function buildModuleFlags(): Parameters<
+		(typeof settingsManager)['applyFullPayload']
+	>[1]['modules'] {
 		return {
 			nativeSettings: nativeSelected,
 			keybindings: selections.keybindings,
@@ -208,7 +210,7 @@
 					console.error('导出性能设置失败:', error);
 				}
 			}
-			
+
 			// Clip payload based on unified selection
 			if (!modules.nativeSettings) {
 				delete payload.nativeSettings;
@@ -277,7 +279,7 @@
 			const text = await importFile.text();
 			const payload = JSON.parse(text) as FullExportPayload;
 			const modules = buildModuleFlags();
-			
+
 			// Reuse nativeSelected for importNativeSettings
 			await settingsManager.applyFullPayload(payload, {
 				importNativeSettings: nativeSelected,
@@ -304,28 +306,26 @@
 	// Batch selection helpers
 	function selectAll() {
 		nativeSelected = true;
-		Object.keys(selections).forEach(k => selections[k as DataModuleId] = true);
+		Object.keys(selections).forEach((k) => (selections[k as DataModuleId] = true));
 	}
 
 	function selectNone() {
 		nativeSelected = false;
-		Object.keys(selections).forEach(k => selections[k as DataModuleId] = false);
+		Object.keys(selections).forEach((k) => (selections[k as DataModuleId] = false));
 	}
 </script>
 
-<div class="h-full flex flex-col p-1 gap-6 overflow-hidden">
+<div class="flex h-full flex-col gap-6 overflow-hidden p-1">
 	<div class="flex flex-col gap-1.5 px-1">
 		<h3 class="flex items-center gap-2 text-xl font-bold tracking-tight">
 			<Database class="h-5 w-5" />
 			数据与备份
 		</h3>
-		<p class="text-muted-foreground text-sm">
-			管理应用数据的导入导出、自动备份和云同步。
-		</p>
+		<p class="text-muted-foreground text-sm">管理应用数据的导入导出、自动备份和云同步。</p>
 	</div>
 
-	<Tabs.Root bind:value={activeTab} class="flex-1 flex flex-col overflow-hidden">
-		<Tabs.List class="grid w-full grid-cols-4 shrink-0 mb-4">
+	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
+		<Tabs.List class="mb-4 grid w-full shrink-0 grid-cols-4">
 			<Tabs.Trigger value="modules" class="gap-1.5 text-xs">
 				<Database class="h-3.5 w-3.5" />
 				数据模块
@@ -344,9 +344,9 @@
 			</Tabs.Trigger>
 		</Tabs.List>
 
-		<Tabs.Content value="modules" class="flex-1 flex flex-col min-h-0">
+		<Tabs.Content value="modules" class="flex min-h-0 flex-1 flex-col">
 			<!-- Toolbar: Search & Main Actions -->
-			<div class="flex flex-wrap items-center justify-between gap-4 px-1 pb-4 shrink-0">
+			<div class="flex shrink-0 flex-wrap items-center justify-between gap-4 px-1 pb-4">
 				<!-- Left: Search -->
 				<div class="relative w-full max-w-[240px]">
 					<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -360,15 +360,22 @@
 				<!-- Right: Actions -->
 				<div class="flex items-center gap-2">
 					<!-- File Select for Import -->
-					<div class="flex items-center gap-2 mr-2">
+					<div class="mr-2 flex items-center gap-2">
 						<Tooltip.Provider>
 							<Tooltip.Root>
 								<Tooltip.Trigger>
-									<Button variant="outline" size="icon" class="h-9 w-9 rounded-xl" onclick={() => fileInputEl?.click()}>
+									<Button
+										variant="outline"
+										size="icon"
+										class="h-9 w-9 rounded-xl"
+										onclick={() => fileInputEl?.click()}
+									>
 										<FileJson class="h-4 w-4" />
 									</Button>
 								</Tooltip.Trigger>
-								<Tooltip.Content>选择导入文件: {importFile ? importFile.name : '未选择'}</Tooltip.Content>
+								<Tooltip.Content
+									>选择导入文件: {importFile ? importFile.name : '未选择'}</Tooltip.Content
+								>
 							</Tooltip.Root>
 						</Tooltip.Provider>
 						<input
@@ -376,38 +383,49 @@
 							type="file"
 							class="hidden"
 							accept="application/json"
-							onchange={(e) => (importFile = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)}
+							onchange={(e) =>
+								(importFile = (e.currentTarget as HTMLInputElement).files?.[0] ?? null)}
 						/>
 					</div>
 
 					<!-- Import Strategy -->
-					<div class="flex bg-muted rounded-lg p-0.5 h-9 mr-2">
-						<button 
-							class={cn("px-3 text-[10px] rounded-md transition-all font-medium flex items-center gap-1", strategy === 'merge' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
-							onclick={() => strategy = 'merge'}
+					<div class="bg-muted mr-2 flex h-9 rounded-lg p-0.5">
+						<button
+							class={cn(
+								'flex items-center gap-1 rounded-md px-3 text-[10px] font-medium transition-all',
+								strategy === 'merge'
+									? 'bg-background text-foreground shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => (strategy = 'merge')}
 							title="合并策略: 追加/更新已有数据"
 						>
 							合并
 						</button>
-						<button 
-							class={cn("px-3 text-[10px] rounded-md transition-all font-medium flex items-center gap-1", strategy === 'overwrite' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
-							onclick={() => strategy = 'overwrite'}
+						<button
+							class={cn(
+								'flex items-center gap-1 rounded-md px-3 text-[10px] font-medium transition-all',
+								strategy === 'overwrite'
+									? 'bg-background text-foreground shadow-sm'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => (strategy = 'overwrite')}
 							title="覆盖策略: 清空原有数据后导入"
 						>
 							覆盖
 						</button>
 					</div>
 
-					<div class="w-px h-6 bg-border mx-1"></div>
+					<div class="bg-border mx-1 h-6 w-px"></div>
 
 					<!-- Export Button -->
 					<Tooltip.Provider>
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<Button 
-									variant="default" 
-									size="icon" 
-									class="h-9 w-9 rounded-xl bg-blue-600 hover:bg-blue-700" 
+								<Button
+									variant="default"
+									size="icon"
+									class="h-9 w-9 rounded-xl bg-blue-600 hover:bg-blue-700"
 									disabled={isExporting || !anySelected()}
 									onclick={handleExportSelected}
 								>
@@ -422,9 +440,9 @@
 					<Tooltip.Provider>
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<Button 
-									variant="default" 
-									size="icon" 
+								<Button
+									variant="default"
+									size="icon"
 									class="h-9 w-9 rounded-xl bg-green-600 hover:bg-green-700"
 									disabled={isImporting || !anySelected()}
 									onclick={handleImportSelected}
@@ -435,10 +453,16 @@
 							<Tooltip.Content>导入 ({importFile?.name ?? '需先选择文件'})</Tooltip.Content>
 						</Tooltip.Root>
 					</Tooltip.Provider>
-					
-					<div class="w-px h-6 bg-border mx-1"></div>
 
-					<Button variant="ghost" size="icon" class="h-9 w-9 rounded-xl" onclick={resetSelections} title="重置">
+					<div class="bg-border mx-1 h-6 w-px"></div>
+
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-9 w-9 rounded-xl"
+						onclick={resetSelections}
+						title="重置"
+					>
 						<RefreshCcw class="h-4 w-4" />
 					</Button>
 				</div>
@@ -448,13 +472,15 @@
 			<div class="bg-card flex-1 overflow-y-auto rounded-2xl border shadow-sm">
 				<div class="flex flex-col text-sm">
 					<!-- Header Row -->
-					<div class="flex items-center bg-muted/50 backdrop-blur-md sticky top-0 z-10 border-b px-2 py-2 text-xs font-medium text-muted-foreground select-none">
+					<div
+						class="bg-muted/50 text-muted-foreground sticky top-0 z-10 flex items-center border-b px-2 py-2 text-xs font-medium backdrop-blur-md select-none"
+					>
 						<!-- Selection Column (Sortable) -->
-						<div 
-							class="w-10 flex justify-center items-center cursor-pointer hover:bg-muted/50 rounded transition-colors group relative"
+						<div
+							class="hover:bg-muted/50 group relative flex w-10 cursor-pointer items-center justify-center rounded transition-colors"
 							onclick={(e) => {
 								// Prevent sorting when clicking specifically on the valid checkbox area?
-								// Actually, the Checkbox component handles its own events. 
+								// Actually, the Checkbox component handles its own events.
 								// But to be safe, we check target.
 								if ((e.target as HTMLElement).closest('[role="checkbox"]')) return;
 								handleSort('selected');
@@ -465,7 +491,9 @@
 							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSort('selected')}
 						>
 							{#if sortConfig.key === 'selected'}
-								<div class="absolute -left-1 text-primary animate-in fade-in zoom-in spin-in-180 duration-300">
+								<div
+									class="text-primary animate-in fade-in zoom-in spin-in-180 absolute -left-1 duration-300"
+								>
 									{#if sortConfig.dir === 'asc'}
 										<ArrowUp class="h-2.5 w-2.5" />
 									{:else}
@@ -473,16 +501,16 @@
 									{/if}
 								</div>
 							{/if}
-							
-							<Checkbox 
-								checked={anySelected()} 
-								indeterminate={anySelected() && Object.values(selections).some(v => !v)}
-								onCheckedChange={(v) => v ? selectAll() : selectNone()}
+
+							<Checkbox
+								checked={anySelected()}
+								indeterminate={anySelected() && Object.values(selections).some((v) => !v)}
+								onCheckedChange={(v) => (v ? selectAll() : selectNone())}
 							/>
 						</div>
 
-						<div 
-							class="flex-1 px-2 flex items-center gap-1 cursor-pointer hover:text-foreground transition-colors group"
+						<div
+							class="hover:text-foreground group flex flex-1 cursor-pointer items-center gap-1 px-2 transition-colors"
 							onclick={() => handleSort('name')}
 							role="button"
 							tabindex="0"
@@ -490,68 +518,79 @@
 						>
 							模块名称 / 说明
 							{#if sortConfig.key === 'name'}
-								<div class="transition-transform duration-200" class:rotate-180={sortConfig.dir === 'desc'}>
+								<div
+									class="transition-transform duration-200"
+									class:rotate-180={sortConfig.dir === 'desc'}
+								>
 									<ArrowUp class="h-3 w-3" />
 								</div>
 							{:else}
-								<ArrowUpDown class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<ArrowUpDown class="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50" />
 							{/if}
 						</div>
-						<div 
-							class="w-32 text-right pr-4 flex items-center justify-end gap-1 cursor-pointer hover:text-foreground transition-colors group"
+						<div
+							class="hover:text-foreground group flex w-32 cursor-pointer items-center justify-end gap-1 pr-4 text-right transition-colors"
 							onclick={() => handleSort('storage')}
 							role="button"
 							tabindex="0"
 							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSort('storage')}
 						>
 							{#if sortConfig.key === 'storage'}
-								<div class="transition-transform duration-200" class:rotate-180={sortConfig.dir === 'desc'}>
+								<div
+									class="transition-transform duration-200"
+									class:rotate-180={sortConfig.dir === 'desc'}
+								>
 									<ArrowUp class="h-3 w-3" />
 								</div>
 							{:else}
-								<ArrowUpDown class="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+								<ArrowUpDown class="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50" />
 							{/if}
 							存储位置
 						</div>
 					</div>
 
 					{#if Object.keys(groupedRows).length === 0}
-						<div class="flex flex-col items-center justify-center py-20 text-muted-foreground">
+						<div class="text-muted-foreground flex flex-col items-center justify-center py-20">
 							<Database class="mb-4 h-12 w-12 opacity-10" />
 							<p class="text-sm">未找到匹配的模块</p>
 						</div>
 					{:else}
 						{#each Object.entries(groupedRows) as [panelName, groupRows]}
 							<!-- Group Header -->
-							<div class="bg-muted/20 px-4 py-1.5 border-b sticky top-[33px] z-0 backdrop-blur-sm">
-								<div class="text-muted-foreground/60 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase">
+							<div class="bg-muted/20 sticky top-[33px] z-0 border-b px-4 py-1.5 backdrop-blur-sm">
+								<div
+									class="text-muted-foreground/60 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase"
+								>
 									<MapPin class="h-3 w-3" />
 									{panelName}
 								</div>
 							</div>
 
 							{#each groupRows as row (row.id)}
-								<div 
+								<div
 									class={cn(
-										"flex items-center py-2 px-2 border-b last:border-b-0 hover:bg-muted/40 transition-colors cursor-pointer group select-none",
-										isChecked(row.id, !!row.isNative) && "bg-primary/5"
+										'hover:bg-muted/40 group flex cursor-pointer items-center border-b px-2 py-2 transition-colors select-none last:border-b-0',
+										isChecked(row.id, !!row.isNative) && 'bg-primary/5'
 									)}
 									onclick={() => toggleSelection(row.id, !!row.isNative)}
 									role="button"
 									tabindex="0"
-									onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleSelection(row.id, !!row.isNative)}
+									onkeydown={(e) =>
+										(e.key === 'Enter' || e.key === ' ') && toggleSelection(row.id, !!row.isNative)}
 								>
 									<!-- Checkbox -->
-									<div class="w-10 flex justify-center shrink-0">
-										<Checkbox 
-											checked={isChecked(row.id, !!row.isNative)} 
+									<div class="flex w-10 shrink-0 justify-center">
+										<Checkbox
+											checked={isChecked(row.id, !!row.isNative)}
 											class="pointer-events-none"
 										/>
 									</div>
 
 									<!-- Icon & Info -->
-									<div class="flex-1 min-w-0 pr-4 flex items-center gap-3">
-										<div class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-all duration-300">
+									<div class="flex min-w-0 flex-1 items-center gap-3 pr-4">
+										<div
+											class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
+										>
 											{#if row.icon}
 												{@const Icon = row.icon}
 												<Icon class="h-4.5 w-4.5" />
@@ -559,20 +598,29 @@
 												<Database class="h-4.5 w-4.5" />
 											{/if}
 										</div>
-										<div class="flex flex-col min-w-0">
+										<div class="flex min-w-0 flex-col">
 											<div class="flex items-baseline gap-2">
-												<span class="font-medium truncate text-sm">{row.name}</span>
-												<span class="text-[9px] text-muted-foreground font-mono opacity-50 uppercase">{row.id}</span>
+												<span class="truncate text-sm font-medium">{row.name}</span>
+												<span
+													class="text-muted-foreground font-mono text-[9px] uppercase opacity-50"
+													>{row.id}</span
+												>
 											</div>
-											<p class="text-[11px] text-muted-foreground truncate opacity-80" title={row.description}>
+											<p
+												class="text-muted-foreground truncate text-[11px] opacity-80"
+												title={row.description}
+											>
 												{row.description}
 											</p>
 										</div>
 									</div>
 
 									<!-- Storage Info (Right Aligned) -->
-									<div class="w-32 text-right pr-4 shrink-0">
-										<Badge variant="outline" class="text-[9px] font-mono text-muted-foreground/60 max-w-full truncate inline-block">
+									<div class="w-32 shrink-0 pr-4 text-right">
+										<Badge
+											variant="outline"
+											class="text-muted-foreground/60 inline-block max-w-full truncate font-mono text-[9px]"
+										>
 											{row.storage.split(':')[0]}
 										</Badge>
 									</div>
@@ -584,7 +632,7 @@
 			</div>
 
 			{#if lastMessage}
-				<div class="mt-2 px-1 text-xs text-center text-muted-foreground animate-pulse">
+				<div class="text-muted-foreground mt-2 animate-pulse px-1 text-center text-xs">
 					{lastMessage}
 				</div>
 			{/if}
@@ -601,5 +649,6 @@
 		<Tabs.Content value="startup" class="mt-4">
 			<StartupConfigPanel />
 		</Tabs.Content>
+
 	</Tabs.Root>
 </div>

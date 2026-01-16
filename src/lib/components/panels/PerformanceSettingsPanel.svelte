@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Zap, HardDrive, Cpu, Image } from '@lucide/svelte';
+	import { Zap, HardDrive, Cpu, Image, Save } from '@lucide/svelte';
 	import {
 		getPerformanceSettings,
 		savePerformanceSettings,
@@ -11,6 +11,9 @@
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { showErrorToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
+	import { Label } from '$lib/components/ui/label';
+	import { Input } from '$lib/components/ui/input';
 
 	let activeTab = $state('cache');
 
@@ -33,17 +36,6 @@
 	let archiveTempfileThresholdMB = $state(currentSettings.performance.archiveTempfileThresholdMB ?? 500);
 	let directUrlThresholdMB = $state(currentSettings.performance.directUrlThresholdMB ?? 500);
 
-	// 同步逻辑：当数值变化时保存到全局设置
-	$effect(() => { 
-		settingsManager.updateNestedSettings('performance', {
-			archiveTempfileThresholdMB: archiveTempfileThresholdMB
-		});
-	});
-	$effect(() => { 
-		settingsManager.updateNestedSettings('performance', {
-			directUrlThresholdMB: directUrlThresholdMB
-		});
-	});
 
 	// 从后端加载性能设置
 	async function loadPerformanceSettings() {
@@ -62,8 +54,8 @@
 			thumbnailConcurrentVideo = loaded.thumbnail_concurrent_video ?? 2;
 
 			const s = settingsManager.getSettings();
-			archiveTempfileThresholdMB = s.performance.archiveTempfileThresholdMB;
-			directUrlThresholdMB = s.performance.directUrlThresholdMB;
+			archiveTempfileThresholdMB = s.performance.archiveTempfileThresholdMB ?? loaded.archive_tempfile_threshold_mb ?? 500;
+			directUrlThresholdMB = s.performance.directUrlThresholdMB ?? loaded.direct_url_threshold_mb ?? 500;
 		} catch (err) {
 			console.error('Failed to load performance settings:', err);
 		}
@@ -83,9 +75,17 @@
 				thumbnail_concurrent_local: thumbnailConcurrentLocal ?? 6,
 				thumbnail_concurrent_archive: thumbnailConcurrentArchive ?? 3,
 				thumbnail_concurrent_video: thumbnailConcurrentVideo ?? 2,
-				enable_video_thumbnail: enableVideoThumbnail
+				enable_video_thumbnail: enableVideoThumbnail,
+				archive_tempfile_threshold_mb: archiveTempfileThresholdMB,
+				direct_url_threshold_mb: directUrlThresholdMB
 			};
 			await savePerformanceSettings(settings);
+
+			// 显式同步到全局设置管理器，触发监听器（如 loadModeStore）更新后端阈值
+			settingsManager.updateNestedSettings('performance', {
+				archiveTempfileThresholdMB: archiveTempfileThresholdMB,
+				directUrlThresholdMB: directUrlThresholdMB
+			});
 		} catch (err) {
 			console.error('Failed to save performance settings:', err);
 			showErrorToast('保存性能设置失败');
@@ -103,7 +103,7 @@
 	</div>
 
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="grid h-8 w-full grid-cols-3 p-1">
+		<Tabs.List class="grid h-8 w-full grid-cols-4 p-1">
 			<Tabs.Trigger value="cache" class="gap-1.5 text-[10px] py-1">
 				<HardDrive class="h-3 w-3" />
 				缓存
@@ -115,6 +115,10 @@
 			<Tabs.Trigger value="thumbnail" class="gap-1.5 text-[10px] py-1">
 				<Image class="h-3 w-3" />
 				缩略图
+			</Tabs.Trigger>
+			<Tabs.Trigger value="storage" class="gap-1.5 text-[10px] py-1">
+				<Save class="h-3 w-3" />
+				存储
 			</Tabs.Trigger>
 		</Tabs.List>
 
@@ -303,6 +307,64 @@
 			</div>
 		</div>
 
+		</Tabs.Content>
+		
+		<Tabs.Content value="storage" class="mt-3 space-y-4">
+			<div class="space-y-4 border-t border-border/40 pt-2">
+				<div class="flex flex-col gap-1 px-1">
+					<h4 class="text-xs font-bold flex items-center gap-2">
+						<Save class="h-3.5 w-3.5" />
+						数据保存限制
+					</h4>
+					<p class="text-[10px] text-muted-foreground">控制历史记录和书签的最大保存数量。</p>
+				</div>
+
+				<div class="grid gap-4 px-1">
+					<div class="space-y-1.5">
+						<Label class="text-[11px]">历史记录保存上限</Label>
+						<div class="flex items-center gap-3">
+							<Input 
+								type="number" 
+								min="0" 
+								class="h-8 w-28 rounded-lg text-[11px]" 
+								value={historySettingsStore.maxHistorySize}
+								oninput={(e) => historySettingsStore.setMaxHistorySize(parseInt(e.currentTarget.value) || 0)}
+							/>
+							<span class="text-[10px] text-muted-foreground">
+								设为 <code class="bg-muted px-1 rounded text-primary">0</code> 无限制
+							</span>
+						</div>
+					</div>
+
+					<div class="space-y-1.5">
+						<Label class="text-[11px]">书签保存上限</Label>
+						<div class="flex items-center gap-3">
+							<Input 
+								type="number" 
+								min="0" 
+								class="h-8 w-28 rounded-lg text-[11px]" 
+								value={historySettingsStore.maxBookmarkSize}
+								oninput={(e) => historySettingsStore.setMaxBookmarkSize(parseInt(e.currentTarget.value) || 0)}
+							/>
+							<span class="text-[10px] text-muted-foreground">
+								设为 <code class="bg-muted px-1 rounded text-primary">0</code> 无限制
+							</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="bg-blue-500/5 border border-blue-500/20 rounded-lg p-2.5 flex gap-2.5 mt-2">
+					<div class="bg-blue-500/10 text-blue-500 p-1 rounded-md h-fit">
+						<Save class="h-3.5 w-3.5" />
+					</div>
+					<div class="space-y-0.5">
+						<h5 class="text-[10px] font-bold text-blue-500 uppercase tracking-wider">提示</h5>
+						<p class="text-[9px] text-muted-foreground leading-relaxed">
+							当新条目超过限制时，旧的记录将被自动清理。
+						</p>
+					</div>
+				</div>
+			</div>
 		</Tabs.Content>
 	</Tabs.Root>
 

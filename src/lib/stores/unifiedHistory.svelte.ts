@@ -11,12 +11,12 @@ import type {
   ContentType,
 } from '$lib/types/content';
 import { extractName, refToString } from '$lib/types/content';
+import { historySettingsStore } from './historySettings.svelte';
 
 // ==================== 常量 ====================
 
 const STORAGE_KEY = 'neoview-unified-history';
 const OLD_STORAGE_KEY = 'neoview-history';
-const MAX_HISTORY_SIZE = 100;
 
 // ==================== 旧格式迁移 ====================
 
@@ -88,7 +88,8 @@ function loadHistory(): UnifiedHistoryEntry[] {
 
 function saveToStorage(history: UnifiedHistoryEntry[]) {
   try {
-    const toSave = history.slice(0, MAX_HISTORY_SIZE);
+    const limit = historySettingsStore.maxHistorySize;
+    const toSave = limit > 0 ? history.slice(0, limit) : history;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     console.log('💾 [UnifiedHistory] Saved', toSave.length, 'entries to localStorage');
   } catch (err) {

@@ -7,6 +7,10 @@ interface HistorySettings {
     syncFileTreeOnHistorySelect: boolean;
     /** 选中书签后是否同步切换文件树 */
     syncFileTreeOnBookmarkSelect: boolean;
+    /** 历史记录保存数量（0 为无限） */
+    maxHistorySize: number;
+    /** 书签保存数量（0 为无限） */
+    maxBookmarkSize: number;
 }
 
 const STORAGE_KEY = 'neoview-history-settings';
@@ -20,7 +24,9 @@ function loadSettings(): HistorySettings {
             // 确保新字段有默认值
             return {
                 syncFileTreeOnHistorySelect: parsed.syncFileTreeOnHistorySelect ?? false,
-                syncFileTreeOnBookmarkSelect: parsed.syncFileTreeOnBookmarkSelect ?? false
+                syncFileTreeOnBookmarkSelect: parsed.syncFileTreeOnBookmarkSelect ?? false,
+                maxHistorySize: parsed.maxHistorySize ?? 0,
+                maxBookmarkSize: parsed.maxBookmarkSize ?? 0
             };
         }
     } catch (err) {
@@ -29,7 +35,9 @@ function loadSettings(): HistorySettings {
     // 默认值：不同步文件树（参考 NeeView 默认行为）
     return {
         syncFileTreeOnHistorySelect: false,
-        syncFileTreeOnBookmarkSelect: false
+        syncFileTreeOnBookmarkSelect: false,
+        maxHistorySize: 0,
+        maxBookmarkSize: 0
     };
 }
 
@@ -53,6 +61,24 @@ class HistorySettingsStore {
         return this.settings.syncFileTreeOnBookmarkSelect;
     }
 
+    get maxHistorySize() {
+        return this.settings.maxHistorySize;
+    }
+
+    get maxBookmarkSize() {
+        return this.settings.maxBookmarkSize;
+    }
+
+    setMaxHistorySize(value: number) {
+        this.settings.maxHistorySize = value;
+        saveSettings(this.settings);
+    }
+
+    setMaxBookmarkSize(value: number) {
+        this.settings.maxBookmarkSize = value;
+        saveSettings(this.settings);
+    }
+
     setSyncFileTreeOnHistorySelect(value: boolean) {
         this.settings.syncFileTreeOnHistorySelect = value;
         saveSettings(this.settings);
@@ -70,7 +96,9 @@ class HistorySettingsStore {
     reset() {
         this.settings = {
             syncFileTreeOnHistorySelect: false,
-            syncFileTreeOnBookmarkSelect: false
+            syncFileTreeOnBookmarkSelect: false,
+            maxHistorySize: 0,
+            maxBookmarkSize: 0
         };
         saveSettings(this.settings);
     }

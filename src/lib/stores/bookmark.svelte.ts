@@ -5,6 +5,7 @@
 import { writable } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 import { pathExists } from '$lib/api/filesystem';
+import { historySettingsStore } from './historySettings.svelte';
 
 interface Bookmark {
   id: string;
@@ -64,7 +65,15 @@ export const bookmarkStore = {
       // 检查是否已存在相同路径的书签
       const exists = bookmarks.some(b => b.path === item.path);
       if (!exists) {
-        const newBookmarks = [...bookmarks, bookmark];
+        let newBookmarks = [...bookmarks, bookmark];
+        
+        // 限制数量
+        const limit = historySettingsStore.maxBookmarkSize;
+        if (limit > 0 && newBookmarks.length > limit) {
+          // 移除最早的书签（从头部开始，假设新书签添加到尾部）
+          newBookmarks = newBookmarks.slice(newBookmarks.length - limit);
+        }
+        
         saveToStorage(newBookmarks);
         return newBookmarks;
       }

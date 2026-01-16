@@ -75,24 +75,11 @@ $effect(() => {
 			finalX = Math.max(padding, viewportWidth - menuWidth - padding);
 		}
 
-		const availableHeight = viewportHeight - y - padding;
-		const maxAllowedHeight = Math.min(availableHeight, viewportHeight * 0.8);
-
-		let finalY = y;
-		if (maxAllowedHeight < 200) {
-			const topSpace = y - padding;
-			if (topSpace > availableHeight) {
-				maxHeight = Math.min(topSpace, viewportHeight * 0.8);
-				finalY = Math.max(padding, y - maxHeight);
-			} else {
-				maxHeight = maxAllowedHeight;
-			}
-		} else {
-			maxHeight = maxAllowedHeight;
-		}
+		// 总是向下显示，计算下方可用空间作为最大高度
+		maxHeight = Math.max(100, viewportHeight - y - padding);
 
 		menuX = finalX;
-		menuY = finalY;
+		menuY = y;
 	}
 });
 

@@ -109,31 +109,12 @@
 				finalX = Math.max(padding, viewportWidth - menuWidth - padding);
 			}
 
-			// 计算可用的垂直空间
-			const availableHeight = viewportHeight - y - padding;
-			const maxAllowedHeight = Math.min(availableHeight, viewportHeight * 0.8); // 最多占屏幕80%
-
-			// 计算垂直位置
-			let finalY = y;
-			if (maxAllowedHeight < 200) {
-				// 下方空间不足，尝试向上显示
-				const topSpace = y - padding;
-				if (topSpace > availableHeight) {
-					// 上方空间更大，向上显示
-					maxHeight = Math.min(topSpace, viewportHeight * 0.8);
-					finalY = Math.max(padding, y - maxHeight);
-				} else {
-					// 下方空间稍好，继续向下但限制高度
-					maxHeight = maxAllowedHeight;
-					finalY = y;
-				}
-			} else {
-				maxHeight = maxAllowedHeight;
-				finalY = y;
-			}
+			// 总是向下显示，计算下方可用空间作为最大高度
+			// 如果下方空间太小，允许溢出屏幕或通过内部滚动处理
+			maxHeight = Math.max(100, viewportHeight - y - padding);
 
 			menuX = finalX;
-			menuY = finalY;
+			menuY = y;
 		}
 	});
 

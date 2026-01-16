@@ -4,6 +4,7 @@
 	 * 参考旧版 FileBrowser 的右键菜单功能
 	 * 使用 Portal 将菜单渲染到 body，避免被父容器的 overflow 裁剪
 	 */
+	import { mergeProps } from "bits-ui";
 	import * as Tooltip from "$lib/components/ui/tooltip/index.js";
 	import type { FsItem } from '$lib/types';
 	import {
@@ -236,11 +237,15 @@
 				<div class="flex flex-row items-center justify-between gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleCut}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleCut
+										},
+										tooltipProps
+									)}
 								>
 									<Scissors class="h-4 w-4" />
 								</button>
@@ -251,11 +256,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleCopy}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleCopy
+										},
+										tooltipProps
+									)}
 								>
 									<Copy class="h-4 w-4" />
 								</button>
@@ -266,11 +275,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handlePaste}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handlePaste
+										},
+										tooltipProps
+									)}
 								>
 									<ClipboardPaste class="h-4 w-4" />
 								</button>
@@ -281,11 +294,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleDelete}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleDelete
+										},
+										tooltipProps
+									)}
 								>
 									<Trash2 class="h-4 w-4" />
 								</button>
@@ -296,11 +313,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleRename}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleRename
+										},
+										tooltipProps
+									)}
 								>
 									<Pencil class="h-4 w-4" />
 								</button>
@@ -315,11 +336,15 @@
 					{#if item.isDir}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleBrowse}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleBrowse
+											},
+											tooltipProps
+										)}
 									>
 										<Folder class="h-4 w-4" />
 									</button>
@@ -330,11 +355,15 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleOpenInNewTab}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleOpenInNewTab
+											},
+											tooltipProps
+										)}
 									>
 										<PanelRight class="h-4 w-4" />
 									</button>
@@ -345,11 +374,15 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleOpenAsBook}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleOpenAsBook
+											},
+											tooltipProps
+										)}
 									>
 										<BookOpen class="h-4 w-4" />
 									</button>
@@ -360,11 +393,15 @@
 					{:else}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleOpenAsBook}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleOpenAsBook
+											},
+											tooltipProps
+										)}
 									>
 										<BookOpen class="h-4 w-4" />
 									</button>
@@ -375,11 +412,15 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleOpenInNewTab}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleOpenInNewTab
+											},
+											tooltipProps
+										)}
 									>
 										<FolderOpen class="h-4 w-4" />
 									</button>
@@ -390,11 +431,15 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleOpenWithSystem}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleOpenWithSystem
+											},
+											tooltipProps
+										)}
 									>
 										<Play class="h-4 w-4" />
 									</button>
@@ -406,11 +451,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleOpenInExplorer}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleOpenInExplorer
+										},
+										tooltipProps
+									)}
 								>
 									<FolderOpen class="h-4 w-4" />
 								</button>
@@ -421,11 +470,15 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleUndoDelete}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleUndoDelete
+										},
+										tooltipProps
+									)}
 								>
 									<Undo2 class="h-4 w-4" />
 								</button>

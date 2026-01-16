@@ -4,6 +4,7 @@
  * 支持复制、删除、在资源管理器中显示等操作
  */
 import { invoke } from '@tauri-apps/api/core';
+import { mergeProps } from "bits-ui";
 import * as Tooltip from "$lib/components/ui/tooltip/index.js";
 import {
 	Copy,
@@ -246,11 +247,15 @@ function handleDelete() {
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleCopy}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleCopy
+										},
+										tooltipProps
+									)}
 								>
 									<Copy class="h-4 w-4" />
 								</button>
@@ -262,11 +267,15 @@ function handleDelete() {
 					{#if onDelete}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props })}
+								{#snippet child({ props: tooltipProps })}
 									<button
-										class="hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-										onclick={handleDelete}
-										{...props}
+										{...mergeProps(
+											{
+												class: 'hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												onclick: handleDelete
+											},
+											tooltipProps
+										)}
 									>
 										<Trash2 class="h-4 w-4" />
 									</button>
@@ -281,11 +290,15 @@ function handleDelete() {
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleGoToPage}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleGoToPage
+										},
+										tooltipProps
+									)}
 								>
 									<Play class="h-4 w-4" />
 								</button>
@@ -296,11 +309,15 @@ function handleDelete() {
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleShowInExplorer}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleShowInExplorer
+										},
+										tooltipProps
+									)}
 								>
 									<FolderOpen class="h-4 w-4" />
 								</button>
@@ -311,11 +328,15 @@ function handleDelete() {
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props })}
+							{#snippet child({ props: tooltipProps })}
 								<button
-									class="hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors"
-									onclick={handleOpenWithSystem}
-									{...props}
+									{...mergeProps(
+										{
+											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											onclick: handleOpenWithSystem
+										},
+										tooltipProps
+									)}
 								>
 									<ExternalLink class="h-4 w-4" />
 								</button>

@@ -38,6 +38,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { cn } from '$lib/utils';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	// 获取所有支持卡片的面板 ID
 	const allPanelIds = getCardSupportingPanels();
@@ -185,7 +186,7 @@
 			variant: 'warning'
 		});
 		if (confirmed) {
-			cardConfigStore.reset();
+			cardConfigStore.resetAll();
 			saveMessage = '✓ 已恢复默认';
 			setTimeout(() => {
 				saveMessage = null;
@@ -295,11 +296,7 @@
 										value={panelId}
 										class="data-[state=active]:bg-background data-[state=active]:text-primary flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs transition-all data-[state=active]:shadow-sm"
 									>
-										{#if panelDef?.icon}
-											<svelte:component this={panelDef.icon} class="h-4 w-4" />
-										{:else}
-											<MapPin class="h-4 w-4" />
-										{/if}
+										<Icon name={panelId} fallback={panelDef?.icon} class="h-4 w-4" />
 										<Badge
 											variant="secondary"
 											class="h-4.5 min-w-4.5 justify-center px-1 text-[9px] opacity-70"
@@ -368,11 +365,7 @@
 								<div
 									class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
 								>
-									{#if cardDef?.icon}
-										<svelte:component this={cardDef.icon} class="h-4.5 w-4.5" />
-									{:else}
-										<LayoutGrid class="h-4.5 w-4.5" />
-									{/if}
+									<Icon name={card.id} fallback={cardDef?.icon} class="h-4.5 w-4.5" />
 								</div>
 							</div>
 						</Table.Cell>

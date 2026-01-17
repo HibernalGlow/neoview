@@ -1,4 +1,5 @@
 import { type Component } from 'svelte';
+import { iconMap } from '$lib/utils/iconMap';
 
 /**
  * Icon Registry Store (Runes Version)
@@ -9,7 +10,11 @@ export type CustomIconType = 'image' | 'emoji' | 'lucide';
 
 export interface IconConfig {
     id: string;
+    title?: string;
     defaultIcon: Component;
+    defaultType?: CustomIconType;
+    defaultValue?: string;
+    
     // 旧版兼容
     customIcon?: string | null; 
     
@@ -72,10 +77,27 @@ class IconRegistry {
         }
     }
 
-    register(id: string, component: Component) {
-        // If already registered and same default, skip to avoid reactivity loop?
-        // But we might need to load custom val.
-        if (this.icons[id]) return;
+    register(id: string, icon: Component | string, title?: string, type: CustomIconType = 'lucide', explicitValue?: string) {
+        let component: Component;
+        let iconValue: string | undefined = explicitValue;
+        let iconType: CustomIconType = type;
+
+        if (typeof icon === 'string') {
+            iconValue = icon;
+            iconType = 'lucide';
+            component = iconMap[icon] || iconMap['HelpCircle']; // Fallback
+        } else {
+            component = icon;
+        }
+
+        // If already registered, only update missing info
+        if (this.icons[id]) {
+            if (title && !this.icons[id].title) this.icons[id].title = title;
+            if (iconType && !this.icons[id].defaultType) this.icons[id].defaultType = iconType;
+            if (iconValue && !this.icons[id].defaultValue) this.icons[id].defaultValue = iconValue;
+            if (component && !this.icons[id].defaultIcon) this.icons[id].defaultIcon = component;
+            return;
+        }
 
         const savedMap = this.getSavedCustomIcons();
         const saved = savedMap[id];
@@ -90,7 +112,10 @@ class IconRegistry {
 
         this.icons[id] = {
             id,
+            title,
             defaultIcon: component,
+            defaultType: iconType,
+            defaultValue: iconValue,
             customValue,
             customType,
             customIcon: customType === 'image' ? customValue : null 
@@ -136,14 +161,17 @@ class IconRegistry {
 
     exportCustomIcons(): string {
         const custom: Record<string, StoredIconData> = {};
-        const defaults: Record<string, string> = {}; // Descriptive for others
+        const defaults: Record<string, any> = {};
 
         for (const [id, config] of Object.entries(this.icons)) {
             if (config.customValue && config.customType) {
                 custom[id] = { type: config.customType, value: config.customValue };
             } else {
-                // For non-modified ones, we just list their ID for visibility/reference
-                defaults[id] = "default"; 
+                defaults[id] = {
+                    title: config.title || id,
+                    type: config.defaultType || 'unknown',
+                    value: config.defaultValue || 'default'
+                }; 
             }
         }
         

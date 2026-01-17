@@ -7,8 +7,10 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer, Bot, Tag, Settings2 } from '@lucide/svelte';
+import type { Component } from 'svelte';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { iconRegistry } from './iconRegistry.svelte';
+import type { IconName } from '$lib/utils/iconMap';
 
 // 面板位置
 export type PanelPosition = 'left' | 'right' | 'bottom' | 'floating';
@@ -19,6 +21,36 @@ export type SidebarHeightPreset = 'full' | '2/3' | 'half' | '1/3' | 'custom';
 // 侧边栏垂直对齐
 export type SidebarVerticalAlign = number; // 0 (top) to 100 (bottom)
 
+// 面板 ID 类型
+export type PanelId =
+	| 'folder'
+	| 'history'
+	| 'bookmark'
+	| 'pageList'
+	| 'playlist'
+	| 'info'
+	| 'properties'
+	| 'upscale'
+	| 'insights'
+	| 'settings'
+	| 'benchmark'
+	| 'ai'
+	| 'control'
+	| 'cardwindow';
+
+// 面板定义接口
+export interface PanelDefinition {
+	title: string;
+	icon: IconName | Component; // 支持直接传名字字符串或组件
+	emoji: string;
+	defaultPosition: PanelPosition;
+	defaultVisible: boolean;
+	defaultOrder: number;
+	canMove: boolean;
+	canHide: boolean;
+	supportsCards: boolean;
+}
+
 /**
  * 面板定义 - 添加新面板只需在这里添加一条记录
  * 系统会自动处理类型、图标、emoji、默认配置等
@@ -27,7 +59,7 @@ export const PANEL_DEFINITIONS = {
 	// 左侧边栏面板
 	folder: {
 		title: '文件夹',
-		icon: Folder,
+		icon: 'Folder',
 		emoji: '📁',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
@@ -38,7 +70,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	history: {
 		title: '历史记录',
-		icon: History,
+		icon: 'History',
 		emoji: '📚',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
@@ -49,7 +81,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	bookmark: {
 		title: '书签',
-		icon: Bookmark,
+		icon: 'Bookmark',
 		emoji: '🔖',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
@@ -60,7 +92,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	pageList: {
 		title: '页面列表',
-		icon: FileText,
+		icon: 'FileText',
 		emoji: '📄',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
@@ -71,7 +103,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	playlist: {
 		title: '播放列表',
-		icon: ListMusic,
+		icon: 'ListMusic',
 		emoji: '📝',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: false,
@@ -83,7 +115,7 @@ export const PANEL_DEFINITIONS = {
 	// 右侧边栏面板
 	info: {
 		title: '信息',
-		icon: Info,
+		icon: 'Info',
 		emoji: '📋',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -94,7 +126,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	properties: {
 		title: '属性',
-		icon: Tag,
+		icon: 'Tag',
 		emoji: '📑',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -105,7 +137,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	upscale: {
 		title: '超分',
-		icon: Sparkles,
+		icon: 'Sparkles',
 		emoji: '✨',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -116,7 +148,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	insights: {
 		title: '洞察',
-		icon: BarChart3,
+		icon: 'BarChart3',
 		emoji: '📊',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -128,7 +160,7 @@ export const PANEL_DEFINITIONS = {
 	// 设置面板（特殊）
 	settings: {
 		title: '设置',
-		icon: Settings,
+		icon: 'Settings',
 		emoji: '⚙️',
 		defaultPosition: 'left' as PanelPosition,
 		defaultVisible: true,
@@ -140,7 +172,7 @@ export const PANEL_DEFINITIONS = {
 	// 开发/测试面板
 	benchmark: {
 		title: '基准测试',
-		icon: Timer,
+		icon: 'Timer',
 		emoji: '⏱️',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: false,
@@ -152,7 +184,7 @@ export const PANEL_DEFINITIONS = {
 	// AI 面板
 	ai: {
 		title: 'AI',
-		icon: Bot,
+		icon: 'Bot',
 		emoji: '🤖',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -164,7 +196,7 @@ export const PANEL_DEFINITIONS = {
 	// 控制面板
 	control: {
 		title: '控制',
-		icon: Settings2,
+		icon: 'Settings2',
 		emoji: '🎛️',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,
@@ -176,7 +208,7 @@ export const PANEL_DEFINITIONS = {
 	// 卡片窗口（独立窗口使用）
 	cardwindow: {
 		title: '卡片窗口',
-		icon: File,
+		icon: 'File',
 		emoji: '🪟',
 		defaultPosition: 'floating' as PanelPosition,
 		defaultVisible: false,
@@ -187,14 +219,24 @@ export const PANEL_DEFINITIONS = {
 	}
 } as const;
 
+// 自动注册图标到全局注册表
+if (typeof window !== 'undefined') {
+    Object.entries(PANEL_DEFINITIONS).forEach(([id, def]) => {
+        if (def.icon) {
+            // 现在直接支持传入名字字符串，内部会自动查找组件
+            iconRegistry.register(id, def.icon, def.title);
+        }
+    });
+}
+
 // 从定义中自动生成面板 ID 类型
-export type PanelId = keyof typeof PANEL_DEFINITIONS;
+// export type PanelId = keyof typeof PANEL_DEFINITIONS; // Replaced by explicit union type
 
 // 获取所有面板 ID 列表
 export const ALL_PANEL_IDS = Object.keys(PANEL_DEFINITIONS) as PanelId[];
 
 // 获取面板定义
-export function getPanelDefinition(id: PanelId) {
+export function getPanelDefinition(id: PanelId): PanelDefinition {
 	return PANEL_DEFINITIONS[id];
 }
 
@@ -205,7 +247,7 @@ export function getPanelEmoji(id: PanelId): string {
 
 // 获取面板图标
 export function getPanelIcon(id: PanelId) {
-	return PANEL_DEFINITIONS[id]?.icon || File;
+	return PANEL_DEFINITIONS[id]?.icon || 'File';
 }
 
 // 获取面板标题
@@ -223,11 +265,10 @@ export function panelSupportsCards(id: PanelId): boolean {
 	return PANEL_DEFINITIONS[id]?.supportsCards ?? false;
 }
 
-// 面板配置（运行时状态）
 export interface PanelConfig {
 	id: PanelId;
 	title: string;
-	icon: typeof Folder;
+	icon: IconName | Component;
 	emoji: string;
 	visible: boolean;
 	order: number;
@@ -654,13 +695,4 @@ export function getVerticalAlignStyle(align: SidebarVerticalAlign, heightPercent
 	return `top: ${topPercent}%;`;
 }
 
-// 初始化默认图标到注册表
-import { iconRegistry } from './iconRegistry.svelte';
-// 避免 SSR 问题? Tauri app usually CSR. but good to be safe if strictly checking.
-if (typeof window !== 'undefined') {
-    Object.entries(PANEL_DEFINITIONS).forEach(([id, def]) => {
-        if (def.icon) {
-            iconRegistry.register(id, def.icon);
-        }
-    });
-}
+

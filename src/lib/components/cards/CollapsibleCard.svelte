@@ -11,17 +11,19 @@ import { cardRegistry } from '$lib/cards/registry';
 import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowUp, ArrowDown, RotateCcw, EyeOff, ExternalLink } from '@lucide/svelte';
 import { slide } from 'svelte/transition';
 import { openCardInNewWindow } from '$lib/core/windows/cardWindowManager';
+import type { IconName } from '$lib/utils/iconMap';
+import type { Component } from 'svelte';
 import MagicCard from '$lib/components/ui/MagicCard.svelte';
 import GenericIcon from '$lib/components/ui/Icon.svelte';
 
-interface Props {
-	id: string;
-	panelId: PanelId;
-	title: string;
-	icon?: typeof ChevronDown;
-	defaultExpanded?: boolean;
-	showDragHandle?: boolean;
-	showMoveButtons?: boolean;
+	interface Props {
+		id: string;
+		panelId: PanelId;
+		title: string;
+		icon?: IconName | Component; // 支持 Lucide 图标名或 Svelte 组件
+		defaultExpanded?: boolean;
+		showDragHandle?: boolean;
+		showMoveButtons?: boolean;
 	height?: number; // 自定义高度
 	onHeightChange?: (height: number | undefined) => void;
 	fullHeight?: boolean; // 是否占满剩余高度（用于虚拟列表等）
@@ -31,29 +33,31 @@ interface Props {
 	hideHeader?: boolean; // 完全隐藏头部（用于紧凑布局）
 	compact?: boolean; // 紧凑模式（更小的 padding）
 	orientation?: 'vertical' | 'horizontal'; // 展开方向
-	class?: string;
+	className?: string;
+	canHide?: boolean;
 	children?: import('svelte').Snippet;
 }
 
-let {
-	id,
-	panelId,
-	title,
-	icon: Icon,
-	defaultExpanded = true,
-	showDragHandle = false,
-	showMoveButtons = true,
-	height,
-	onHeightChange,
-	fullHeight = false,
-	hideIcon = false,
-	hideTitle = false,
-	hideHeader = false,
-	compact = false,
-	orientation = 'vertical',
-	class: className = '',
-	children
-}: Props = $props();
+	let { 
+		id, 
+		panelId, 
+		title, 
+		icon: Icon,
+		defaultExpanded = true,
+		showDragHandle = false,
+		showMoveButtons = true,
+		height = $bindable(), 
+		onHeightChange, 
+		fullHeight = false,
+		hideIcon = false,
+		hideTitle = false,
+		hideHeader = false,
+		compact = false,
+		className = '',
+		orientation = 'vertical',
+		canHide = true,
+		children
+	}: Props = $props();
 
 // 拖拽调整高度相关
 let isResizing = $state(false);
@@ -73,7 +77,8 @@ const isExpanded = $derived(cardConfig?.expanded ?? defaultExpanded);
 const cardOrder = $derived(cardConfig?.order ?? 0);
 const canMoveUp = $derived(cardOrder > 0);
 const canMoveDown = $derived(cardOrder < panelCards.length - 1);
-const canHide = $derived(cardRegistry[id]?.canHide ?? true);
+// canHide is already in props, but we can override it with registry if needed
+const canHideActual = $derived(canHide && (cardRegistry[id]?.canHide ?? true));
 
 function toggleExpanded() {
 	cardConfigStore.setCardExpanded(panelId, id, !isExpanded);
@@ -121,7 +126,7 @@ function resetHeight(e: MouseEvent) {
 
 function hideCard(e: MouseEvent) {
 	e.stopPropagation();
-	if (canHide) cardConfigStore.setCardVisible(panelId, id, false);
+	if (canHideActual) cardConfigStore.setCardVisible(panelId, id, false);
 }
 
 // 在新窗口打开卡片
@@ -134,7 +139,7 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 $effect(() => {
 	if (id && Icon) {
 		import('$lib/stores/iconRegistry.svelte').then(({ iconRegistry }) => {
-			iconRegistry.register(id, Icon);
+			iconRegistry.register(id, Icon, title);
 		});
 	}
 });
@@ -160,7 +165,11 @@ $effect(() => {
 				{/if}
 				
 				{#if !hideIcon}
-					<GenericIcon name={id} fallback={Icon} class="h-3.5 w-3.5" />
+					<GenericIcon 
+						name={id} 
+						fallback={typeof Icon === 'string' ? undefined : Icon} 
+						class="h-3.5 w-3.5" 
+					/>
 				{/if}
 				
 				{#if !hideTitle}
@@ -179,7 +188,7 @@ $effect(() => {
 					<ExternalLink class="h-3 w-3" />
 				</button>
 				<!-- 隐藏卡片按钮（悬停按钮区域显示） -->
-				{#if canHide}
+				{#if canHideActual}
 					<button
 						type="button"
 						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/buttons:opacity-100 hover:bg-destructive/20 hover:text-destructive transition-opacity"

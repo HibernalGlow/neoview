@@ -7,6 +7,7 @@
 import type { Component } from 'svelte';
 import { getCardSupportingPanels, getPanelTitle, type PanelId } from './sidebarConfig.svelte';
 import { cardRegistry, getDefaultCardsForPanel } from '$lib/cards/registry';
+import type { IconName } from '$lib/utils/iconMap';
 
 // 重新导出类型和函数
 export type { PanelId };
@@ -17,7 +18,7 @@ export interface CardConfig {
 	id: string;
 	panelId: PanelId;
 	title: string;
-	icon?: Component;
+	icon?: IconName | Component;
 	order: number;
 	visible: boolean;
 	expanded: boolean;
@@ -195,7 +196,7 @@ function createCardConfigStore() {
 	function resetPanel(panelId: PanelId) {
 		configs = {
 			...configs,
-			[panelId]: defaultCardConfigs[panelId].map(c => ({ ...c, panelId }))
+			[panelId]: (defaultCardConfigs[panelId] || []).map(c => ({ ...c, panelId }))
 		};
 		saveConfigs(configs);
 	}
@@ -204,7 +205,7 @@ function createCardConfigStore() {
 	function resetAll() {
 		const result: Record<PanelId, CardConfig[]> = {} as Record<PanelId, CardConfig[]>;
 		for (const panelId of Object.keys(defaultCardConfigs) as PanelId[]) {
-			result[panelId] = defaultCardConfigs[panelId].map(c => ({ ...c, panelId }));
+			result[panelId] = (defaultCardConfigs[panelId] || []).map(c => ({ ...c, panelId }));
 		}
 		configs = result;
 		saveConfigs(configs);

@@ -1,12 +1,12 @@
 <script lang="ts">
     import { iconRegistry } from '$lib/stores/iconRegistry.svelte';
-    import { iconMap } from '$lib/utils/iconMap';
+    import { iconMap, type IconName } from '$lib/utils/iconMap';
     import type { Component } from 'svelte';
     import { cn } from '$lib/utils';
     
     interface Props {
         name: string;
-        fallback?: Component;
+        fallback?: IconName | Component;
         class?: string;
         [key: string]: any;
     }
@@ -18,7 +18,15 @@
     
     // Resolve dynamic icon
     const resolvedIcon = $derived.by(() => {
-        if (!iconConfig) return null;
+        if (!iconConfig) {
+            // If no config found in registry, try using fallback
+            if (typeof fallback === 'string') {
+                return { type: 'component', value: iconMap[fallback] };
+            } else if (fallback) {
+                return { type: 'component', value: fallback };
+            }
+            return null;
+        }
         
         if (iconConfig.customType === 'emoji' && iconConfig.customValue) {
             return { type: 'emoji', value: iconConfig.customValue };
@@ -36,6 +44,10 @@
         // Default
         if (iconConfig.defaultIcon) {
             return { type: 'component', value: iconConfig.defaultIcon };
+        } else if (typeof fallback === 'string') {
+            return { type: 'component', value: iconMap[fallback] };
+        } else if (fallback) {
+            return { type: 'component', value: fallback };
         }
         
         return null;

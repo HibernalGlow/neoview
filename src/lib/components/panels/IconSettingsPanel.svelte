@@ -24,6 +24,25 @@
 	let searchQuery = $state('');
 	let iconSearchQuery = $state('');
 	let activeCategory = $state('all');
+	let selectedGroup = $state('all');
+
+	// Extract unique groups for Cards
+	const cardGroups = $derived.by(() => {
+		const groups = new Set<string>();
+		allIcons.forEach((icon) => {
+			if (icon.category === 'card' && icon.group) {
+				groups.add(icon.group);
+			}
+		});
+		return Array.from(groups).sort();
+	});
+
+	// Reset selected group when category changes
+	$effect(() => {
+		if (activeCategory !== 'card') {
+			selectedGroup = 'all';
+		}
+	});
 
 	// Performance optimization: Limit displayed icons
 	const filteredIconNames = $derived.by(() => {
@@ -43,6 +62,11 @@
 			activeCategory === 'all'
 				? allIcons
 				: allIcons.filter((icon) => icon.category === activeCategory);
+
+		// Filter by group (Tabs)
+		if (activeCategory === 'card' && selectedGroup !== 'all') {
+			list = list.filter((icon) => icon.group === selectedGroup);
+		}
 
 		// Filter by search
 		if (query) {
@@ -108,6 +132,29 @@
 				</Tabs.Trigger>
 			</Tabs.List>
 		</Tabs.Root>
+
+		{#if activeCategory === 'card'}
+			<div class="scrollbar-none -mb-2 flex items-center gap-2 overflow-x-auto pb-2">
+				<Button
+					variant={selectedGroup === 'all' ? 'default' : 'outline'}
+					size="sm"
+					class="h-7 rounded-full text-xs whitespace-nowrap"
+					onclick={() => (selectedGroup = 'all')}
+				>
+					全部
+				</Button>
+				{#each cardGroups as group}
+					<Button
+						variant={selectedGroup === group ? 'default' : 'outline'}
+						size="sm"
+						class="h-7 rounded-full text-xs whitespace-nowrap"
+						onclick={() => (selectedGroup = group)}
+					>
+						{group}
+					</Button>
+				{/each}
+			</div>
+		{/if}
 
 		<div class="relative w-full">
 			<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />

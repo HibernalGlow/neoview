@@ -58,9 +58,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
-	import { ImageIcon } from '@lucide/svelte';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import IconSettingsPanel from './IconSettingsPanel.svelte';
 	import { cn } from '$lib/utils';
 	import {
 		folderTabBarLayout,
@@ -83,6 +81,14 @@
 	let searchQuery = $state('');
 	// 分组标签页：默认加载左侧栏
 	let activeLayoutGroup = $state<'all' | 'left' | 'right' | 'hidden'>('left');
+	// 从 store 动态获取面板列表
+	let leftPanels = $derived($sidebarLeftPanels);
+	let rightPanels = $derived($sidebarRightPanels);
+	let hiddenPanels = $derived($sidebarHiddenPanels);
+
+	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
+	let hoverAreas = $derived(settings.panels.hoverAreas);
+	let autoHideTiming = $derived(settings.panels.autoHideTiming);
 
 	// 动态分组列表
 	const layoutGroups = $derived([
@@ -91,15 +97,6 @@
 		{ id: 'right' as const, title: '右侧栏', icon: PanelRight, count: rightPanels.length },
 		{ id: 'hidden' as const, title: '已隐藏', icon: EyeOff, count: hiddenPanels.length }
 	]);
-
-	let settings = $state<NeoViewSettings>(settingsManager.getSettings());
-	let hoverAreas = $derived(settings.panels.hoverAreas);
-	let autoHideTiming = $derived(settings.panels.autoHideTiming);
-
-	// 从 store 动态获取面板列表
-	let leftPanels = $derived($sidebarLeftPanels);
-	let rightPanels = $derived($sidebarRightPanels);
-	let hiddenPanels = $derived($sidebarHiddenPanels);
 
 	// --- 自定义指针拖拽逻辑 (Pointer-based DnD) ---
 	let dragId = $state<string | null>(null);
@@ -395,13 +392,6 @@
 					<Settings2 class="h-4 w-4" />
 					高级设置
 				</Tabs.Trigger>
-				<Tabs.Trigger
-					value="icons"
-					class="data-[state=active]:bg-background gap-2 rounded-xl data-[state=active]:shadow-sm"
-				>
-					<ImageIcon class="h-4 w-4" />
-					图标设置
-				</Tabs.Trigger>
 			</Tabs.List>
 		</div>
 
@@ -673,10 +663,6 @@
 					</div>
 				{/if}
 			</div>
-		</Tabs.Content>
-
-		<Tabs.Content value="icons" class="mt-0 flex-1 overflow-auto p-6 focus-visible:outline-none">
-			<IconSettingsPanel />
 		</Tabs.Content>
 
 		<Tabs.Content value="settings" class="mt-0 flex-1 overflow-auto p-6 focus-visible:outline-none">

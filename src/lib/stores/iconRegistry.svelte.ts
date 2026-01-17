@@ -135,20 +135,42 @@ class IconRegistry {
     }
 
     exportCustomIcons(): string {
-        const exportObj: Record<string, StoredIconData> = {};
+        const custom: Record<string, StoredIconData> = {};
+        const defaults: Record<string, string> = {}; // Descriptive for others
+
         for (const [id, config] of Object.entries(this.icons)) {
             if (config.customValue && config.customType) {
-                exportObj[id] = { type: config.customType, value: config.customValue };
-            } else if (config.customIcon) {
-                exportObj[id] = { type: 'image', value: config.customIcon };
+                custom[id] = { type: config.customType, value: config.customValue };
+            } else {
+                // For non-modified ones, we just list their ID for visibility/reference
+                defaults[id] = "default"; 
             }
         }
-        return JSON.stringify(exportObj, null, 2);
+        
+        return JSON.stringify({
+            format: 'NeoView Icons v2',
+            timestamp: new Date().toISOString(),
+            custom,
+            defaults
+        }, null, 2);
     }
 
     importCustomIcons(json: string) {
         try {
             const data = JSON.parse(json);
+            
+            // Handle v2 format
+            if (data.format === 'NeoView Icons v2' && data.custom) {
+                for (const key in data.custom) {
+                    const val = data.custom[key];
+                    if (val && typeof val === 'object' && val.type && val.value) {
+                        this.setCustomIcon(key, val.type, val.value);
+                    }
+                }
+                return;
+            }
+
+            // Handle v1 (flat) format
             for (const key in data) {
                 const val = data[key];
                 if (val && typeof val === 'object' && val.type && val.value) {

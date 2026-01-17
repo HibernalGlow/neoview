@@ -3,7 +3,7 @@
 	 * NeoView - Control Panel Component
 	 * 控制面板 - 渲染控制相关的卡片
 	 */
-	import { Sliders } from '@lucide/svelte';
+	import { Settings2 } from '@lucide/svelte';
 	import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 	import CardRenderer from '$lib/cards/CardRenderer.svelte';
 
@@ -19,7 +19,6 @@
 	<!-- 标题栏 -->
 	<div class="px-4 py-3">
 		<div class="flex items-center gap-2">
-			<Sliders class="h-5 w-5" />
 			<h3 class="font-semibold">控制</h3>
 		</div>
 	</div>
@@ -36,7 +35,7 @@
 				<!-- 空状态 -->
 				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
 					<div class="relative mb-4">
-						<Sliders class="h-16 w-16 opacity-20" />
+						<Settings2 class="h-16 w-16 opacity-20" />
 					</div>
 					<div class="text-center space-y-2">
 						<p class="text-lg font-medium">暂无控制内容</p>

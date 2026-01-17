@@ -7,7 +7,7 @@
  */
 
 import { writable, derived, get } from 'svelte/store';
-import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer, Bot, Tag, Sliders } from '@lucide/svelte';
+import { Folder, History, Bookmark, Info, FileText, File, Sparkles, BarChart3, Settings, ListMusic, Timer, Bot, Tag, Settings2 } from '@lucide/svelte';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 // 面板位置
@@ -164,7 +164,7 @@ export const PANEL_DEFINITIONS = {
 	// 控制面板
 	control: {
 		title: '控制',
-		icon: Sliders,
+		icon: Settings2,
 		emoji: '🎛️',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,

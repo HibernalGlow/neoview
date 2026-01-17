@@ -148,7 +148,7 @@ export const PANEL_DEFINITIONS = {
 	},
 	insights: {
 		title: '洞察',
-		icon: 'BarChart3',
+		icon: 'ChartNoAxesGantt',
 		emoji: '📊',
 		defaultPosition: 'right' as PanelPosition,
 		defaultVisible: true,

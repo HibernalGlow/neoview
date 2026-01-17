@@ -90,12 +90,12 @@ class IconRegistry {
             component = icon;
         }
 
-        // If already registered, only update missing info
+        // If already registered, update default info
         if (this.icons[id]) {
-            if (title && !this.icons[id].title) this.icons[id].title = title;
-            if (iconType && !this.icons[id].defaultType) this.icons[id].defaultType = iconType;
-            if (iconValue && !this.icons[id].defaultValue) this.icons[id].defaultValue = iconValue;
-            if (component && !this.icons[id].defaultIcon) this.icons[id].defaultIcon = component;
+            if (title) this.icons[id].title = title;
+            if (iconType) this.icons[id].defaultType = iconType;
+            if (iconValue) this.icons[id].defaultValue = iconValue;
+            if (component) this.icons[id].defaultIcon = component;
             return;
         }
 
@@ -164,14 +164,18 @@ class IconRegistry {
         const defaults: Record<string, any> = {};
 
         for (const [id, config] of Object.entries(this.icons)) {
-            if (config.customValue && config.customType) {
-                custom[id] = { type: config.customType, value: config.customValue };
-            } else {
+            // Always add to defaults if possible
+            if (config.defaultIcon || config.defaultValue) {
                 defaults[id] = {
                     title: config.title || id,
                     type: config.defaultType || 'unknown',
                     value: config.defaultValue || 'default'
-                }; 
+                };
+            }
+            
+            // Add to custom if it has a custom value
+            if (config.customValue && config.customType) {
+                custom[id] = { type: config.customType, value: config.customValue };
             }
         }
         

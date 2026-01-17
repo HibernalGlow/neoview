@@ -1,36 +1,63 @@
 <script lang="ts">
     import { iconRegistry } from '$lib/stores/iconRegistry.svelte';
+    import { iconMap } from '$lib/utils/iconMap';
     import type { Component } from 'svelte';
     import { cn } from '$lib/utils';
     
     interface Props {
-        name: string; // The ID of the registered icon (e.g., 'folder', 'settings')
-        fallback?: Component; // Fallback icon if not found in registry
+        name: string;
+        fallback?: Component;
         class?: string;
         [key: string]: any;
     }
 
     let { name, fallback, class: className, ...rest }: Props = $props();
 
-    // Subscribe to the store to react to changes
-    // Using $derived to reactivity access the store value if name changes
-    // But direct store subscription via $iconRegistry is needed.
-    // However, since we are in Svelte 5 (implied by file extension), let's use runes effectively.
-    
-    // Actually, `iconRegistry` is a store, so we access it with `$iconRegistry`.
     const iconConfig = $derived($iconRegistry.icons[name]);
+    
+    // Resolve dynamic icon
+    const resolvedIcon = $derived.by(() => {
+        if (!iconConfig) return null;
+        
+        if (iconConfig.customType === 'emoji' && iconConfig.customValue) {
+            return { type: 'emoji', value: iconConfig.customValue };
+        }
+        
+        if (iconConfig.customType === 'lucide' && iconConfig.customValue) {
+            const Comp = iconMap[iconConfig.customValue];
+            if (Comp) return { type: 'component', value: Comp };
+        }
+        
+        if (iconConfig.customType === 'image' && iconConfig.customValue) {
+            return { type: 'image', value: iconConfig.customValue };
+        }
+        
+        // Default
+        if (iconConfig.defaultIcon) {
+            return { type: 'component', value: iconConfig.defaultIcon };
+        }
+        
+        return null;
+    });
 </script>
 
-{#if iconConfig?.customIcon}
+{#if resolvedIcon?.type === 'image'}
     <img 
-        src={iconConfig.customIcon} 
+        src={resolvedIcon.value as string} 
         alt={name} 
         class={cn("object-contain", className)} 
         {...rest} 
     />
-{:else if iconConfig?.defaultIcon}
+{:else if resolvedIcon?.type === 'emoji'}
+    <span 
+        class={cn("flex items-center justify-center text-lg leading-none select-none", className)} 
+        {...rest}
+    >
+        {resolvedIcon.value}
+    </span>
+{:else if resolvedIcon?.type === 'component'}
     <svelte:component 
-        this={iconConfig.defaultIcon} 
+        this={resolvedIcon.value as Component} 
         class={className} 
         {...rest} 
     />
@@ -41,6 +68,5 @@
         {...rest} 
     />
 {:else}
-    <!-- Empty placeholder or warning if debugging -->
     <span class={cn("inline-block", className)} {...rest}></span>
 {/if}

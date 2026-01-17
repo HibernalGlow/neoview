@@ -94,6 +94,11 @@
   dependencies:
     tslib "^2.4.0"
 
+"@emoji-mart/data@^1.2.1":
+  version "1.2.1"
+  resolved "https://registry.npmmirror.com/@emoji-mart/data/-/data-1.2.1.tgz#0ad70c662e3bc603e23e7d98413bd1e64c4fcb6c"
+  integrity sha512-no2pQMWiBy6gpBEiqGeU77/bFejDqUTRY7KX+0+iur13op3bqUsXdnwoZs6Xb1zbv0gAj5VvS1PWoUUckSr5Dw==
+
 "@epic-web/invariant@^1.0.0":
   version "1.0.0"
   resolved "https://registry.npmmirror.com/@epic-web/invariant/-/invariant-1.0.0.tgz#1073e5dee6dd540410784990eb73e4acd25c9813"
@@ -509,10 +514,10 @@
   resolved "https://registry.npmmirror.com/@humanwhocodes/retry/-/retry-0.4.3.tgz#c2b9d2e374ee62c586d3adbea87199b1d7a7a6ba"
   integrity sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==
 
-"@internationalized/date@^3.8.1":
-  version "3.10.0"
-  resolved "https://registry.npmmirror.com/@internationalized/date/-/date-3.10.0.tgz#056db64a4facdf48c6937ad498a882a8151d640a"
-  integrity sha512-oxDR/NTEJ1k+UFVQElaNIk65E/Z83HK1z1WI3lQyhTtnNg4R5oVXaPzK3jcpKG8UHKDVuDQHzn+wsxSz8RP3aw==
+"@internationalized/date@^3.10.0":
+  version "3.10.1"
+  resolved "https://registry.npmmirror.com/@internationalized/date/-/date-3.10.1.tgz#ca63817feadeffe97f710289b00af229cd8af15c"
+  integrity sha512-oJrXtQiAXLvT9clCf1K4kxp3eKsQhIaZqxEyowkBcsvZDdZkbWrVmnGknxs5flTD0VGsxrxKgBCZty1EzoiMzA==
   dependencies:
     "@swc/helpers" "^0.5.0"
 
@@ -684,10 +689,10 @@
     d3-time-format "^4.1.0"
     lodash-es "^4.17.21"
 
-"@lucide/svelte@^0.554.0":
-  version "0.554.0"
-  resolved "https://registry.npmmirror.com/@lucide/svelte/-/svelte-0.554.0.tgz#a27aa2fd957cc3806a3526ce2896b0b27e4d847f"
-  integrity sha512-CM6wLEH8uk3WBpC42t8R0hF7SlQrsYEL6qGuXdB99xKZwKglpWmX5XgYu7FIYOCBYOyC1rm4dNhIe6uF9pOXqw==
+"@lucide/svelte@^0.562.0":
+  version "0.562.0"
+  resolved "https://registry.npmmirror.com/@lucide/svelte/-/svelte-0.562.0.tgz#c478bd2198bab23b0143a96bcd0c52d47deb2341"
+  integrity sha512-wDMULwtTFN2Sc/TFBm6gfuVCNb4Y5P9LDrwxNnUbV52+IEU7NXZmvxwXoz+vrrpad6Xupq+Hw5eUlqIHEGhouw==
 
 "@napi-rs/wasm-runtime@^1.0.7":
   version "1.0.7"
@@ -1649,10 +1654,10 @@ base64-js@^1.3.1:
   resolved "https://registry.npmmirror.com/base64-js/-/base64-js-1.5.1.tgz#1b1b440160a5bf7ad40b650f095963481903930a"
   integrity sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==
 
-bits-ui@^2.14.4:
-  version "2.14.4"
-  resolved "https://registry.npmmirror.com/bits-ui/-/bits-ui-2.14.4.tgz#4137da42fb5eed1df18477b1c4c0469470e1956c"
-  integrity sha512-W6kenhnbd/YVvur+DKkaVJ6GldE53eLewur5AhUCqslYQ0vjZr8eWlOfwZnMiPB+PF5HMVqf61vXBvmyrAmPWg==
+bits-ui@^2.15.4:
+  version "2.15.4"
+  resolved "https://registry.npmmirror.com/bits-ui/-/bits-ui-2.15.4.tgz#89014d342679a6b2c6bd68e2a14043c4fee56f1a"
+  integrity sha512-7H9YUfp03KOk1LVDh8wPYSRPxlZgG/GRWLNSA8QC73/8Z8ytun+DWJhIuibyFyz7A0cP/RANVcB4iDrbY8q+Og==
   dependencies:
     "@floating-ui/core" "^1.7.1"
     "@floating-ui/dom" "^1.7.1"
@@ -3248,10 +3253,10 @@ runed@^0.35.1:
     esm-env "^1.0.0"
     lz-string "^1.5.0"
 
-runed@^0.36.0:
-  version "0.36.0"
-  resolved "https://registry.npmmirror.com/runed/-/runed-0.36.0.tgz#26917149c9a9a6ce792af0fea09949f6f589cf2c"
-  integrity sha512-CK84KPwAausPQEyWF9t6miCuNW5isAKPMswDsz7jhdueiZZ9du/UrgWc/aggLts8QuppT8KucryrHDFBAqk9Ww==
+runed@^0.37.1:
+  version "0.37.1"
+  resolved "https://registry.npmmirror.com/runed/-/runed-0.37.1.tgz#03643ad49087bc696ced848de77932bf471f4a1e"
+  integrity sha512-MeFY73xBW8IueWBm012nNFIGy19WUGPLtknavyUPMpnyt350M47PhGSGrGoSLbidwn+Zlt/O0cp8/OZE3LASWA==
   dependencies:
     dequal "^2.0.3"
     esm-env "^1.0.0"

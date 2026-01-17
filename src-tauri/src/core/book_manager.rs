@@ -314,11 +314,6 @@ impl BookManager {
 
         // 执行加载
         let result = self.open_book(path);
-        
-        // 成功打开书本后，重置缩略图服务会话
-        // 注意：这里需要能访问到 ThumbnailServiceV3，或者通过事件通知
-        // 鉴于目前逻辑主要在 ThumbnailServiceV3::request_visible_thumbnails 自动处理 session 增加（当目录变化时）
-        // 我们只需确保 BookManager 切换目录被 ThumbnailServiceV3 感知
 
         // 记录性能指标
         let total_ms = start.elapsed().as_millis() as u64;

@@ -11,7 +11,6 @@ use sevenz_rust;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
@@ -55,8 +54,6 @@ pub struct ThumbnailGenerator {
     db: Arc<ThumbnailDb>,
     config: ThumbnailGeneratorConfig,
     thread_pool: Arc<ThreadPool>,
-    /// 当前会话 ID
-    session_id: Arc<AtomicUsize>,
 }
 
 impl ThumbnailGenerator {
@@ -68,23 +65,7 @@ impl ThumbnailGenerator {
             db,
             config,
             thread_pool,
-            session_id: Arc::new(AtomicUsize::new(0)),
         }
-    }
-
-    /// 获取当前会话 ID
-    pub fn get_session_id(&self) -> usize {
-        self.session_id.load(Ordering::SeqCst)
-    }
-
-    /// 开启新会话（取消旧会话的所有任务）
-    pub fn increment_session(&self) -> usize {
-        self.session_id.fetch_add(1, Ordering::SeqCst) + 1
-    }
-
-    /// 检查特定会话是否已取消
-    pub fn is_session_cancelled(&self, task_session_id: usize) -> bool {
-        task_session_id != self.get_session_id()
     }
 
     /// 生成缩略图的哈希值（用于验证）
@@ -204,13 +185,7 @@ impl ThumbnailGenerator {
         path_key: &str,
         archive_size: i64,
         ghash: i32,
-        task_session_id: Option<usize>,
     ) -> Result<Vec<u8>, String> {
-        if let Some(sid) = task_session_id {
-            if self.is_session_cancelled(sid) {
-                return Err("会话已取消".to_string());
-            }
-        }
         let path = Path::new(archive_path);
         let mut handler = archive_manager::open_archive(path)?;
 
@@ -815,39 +790,6 @@ impl ThumbnailGenerator {
             &path_key,
             archive_size,
             ghash,
-            None, // Internal call might not have session
-        )
-    }
-
-    /// 从压缩包生成缩略图（带会话取消检查）
-    pub fn generate_archive_thumbnail_with_session(
-        &self,
-        archive_path: &str,
-        session_id: usize,
-    ) -> Result<Vec<u8>, String> {
-        // 获取压缩包大小
-        let metadata =
-            std::fs::metadata(archive_path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
-        let archive_size = metadata.len() as i64;
-
-        // 构建路径键
-        let path_key = self.build_path_key(archive_path, None);
-        let ghash = Self::generate_hash(&path_key, archive_size);
-
-        // 检查数据库缓存
-        if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, archive_size, ghash) {
-            let _ = self.db.update_access_time(&path_key);
-            return Ok(cached);
-        }
-
-        // 使用统一的 archive_manager 处理
-        let real_path = Self::resolve_real_path(Path::new(archive_path));
-        self.generate_archive_thumbnail_unified(
-            real_path.to_str().unwrap_or(archive_path),
-            &path_key,
-            archive_size,
-            ghash,
-            Some(session_id),
         )
     }
 
@@ -1083,9 +1025,13 @@ impl Clone for ThumbnailGenerator {
     fn clone(&self) -> Self {
         Self {
             db: Arc::clone(&self.db),
-            config: self.config.clone(),
+            config: ThumbnailGeneratorConfig {
+                max_width: self.config.max_width,
+                max_height: self.config.max_height,
+                thread_pool_size: self.config.thread_pool_size,
+                archive_concurrency: self.config.archive_concurrency,
+            },
             thread_pool: Arc::clone(&self.thread_pool),
-            session_id: Arc::clone(&self.session_id),
         }
     }
 }

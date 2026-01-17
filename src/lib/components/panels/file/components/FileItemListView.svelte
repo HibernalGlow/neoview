@@ -212,7 +212,7 @@
 					{:else if item.isImage}
 						<Image class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
 					{:else}
-						<File class="relative h-8 w-8 text-gray-400/50 transition-colors group-hover/item:text-gray-500" />
+						<File class="relative h-8 w-8 text-muted-foreground/50 transition-colors group-hover/item:text-muted-foreground" />
 					{/if}
 				{/if}
 
@@ -390,7 +390,7 @@
 								{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
 									<FileArchive class="h-3 w-3 shrink-0 text-purple-500" />
 								{:else}
-									<File class="h-3 w-3 shrink-0 text-gray-400" />
+									<File class="h-3 w-3 shrink-0 text-muted-foreground" />
 								{/if}
 								<span class="text-foreground truncate">{previewItem.name}</span>
 							</div>

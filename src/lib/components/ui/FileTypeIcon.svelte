@@ -61,5 +61,5 @@
 {:else if fileType === 'document'}
 	<FileText class="{sizeClass} shrink-0 text-orange-500" />
 {:else}
-	<File class="{sizeClass} shrink-0 text-gray-500" />
+	<File class="{sizeClass} shrink-0 text-muted-foreground" />
 {/if}

@@ -130,7 +130,7 @@
 <div class="bookmark-sort-panel relative">
   <!-- 排序按钮 -->
   <button
-    class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 rounded transition-colors"
+    class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent rounded transition-colors"
     onclick={() => showSortMenu = !showSortMenu}
     title="排序书签"
   >
@@ -140,30 +140,30 @@
 
   <!-- 排序菜单 -->
   {#if showSortMenu}
-    <div class="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[180px] py-1">
+    <div class="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[180px] py-1">
       {#each sortOptions as option}
         {@const IconComponent = option.icon}
         {@const SortIconComponent = getSortIcon(option.field)}
         <button
-          class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 flex items-center justify-between group"
+          class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between group"
           onclick={() => setSortField(option.field)}
         >
           <div class="flex items-center gap-2">
-            <IconComponent class="h-4 w-4 text-gray-500" />
+            <IconComponent class="h-4 w-4 text-muted-foreground" />
             <span>{option.label}</span>
           </div>
-          <SortIconComponent class="h-4 w-4 text-gray-400 {sortField === option.field ? 'text-blue-500' : ''}" />
+          <SortIconComponent class="h-4 w-4 text-muted-foreground {sortField === option.field ? 'text-primary' : ''}" />
         </button>
       {/each}
       
-      <div class="border-t border-gray-200 my-1"></div>
+      <div class="border-t border-border my-1"></div>
       
       <!-- 排序顺序 -->
       <div class="px-3 py-2">
-        <div class="text-xs text-gray-500 mb-2">排序顺序</div>
+        <div class="text-xs text-muted-foreground mb-2">排序顺序</div>
         <div class="flex gap-2">
           <button
-            class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
+            class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} rounded transition-colors"
             onclick={() => {
               sortOrder = 'asc';
               performSort();
@@ -172,7 +172,7 @@
             升序
           </button>
           <button
-            class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'} rounded transition-colors"
+            class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} rounded transition-colors"
             onclick={() => {
               sortOrder = 'desc';
               performSort();

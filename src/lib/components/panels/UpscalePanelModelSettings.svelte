@@ -37,7 +37,7 @@
 				step="0.5"
 				class="input-number"
 			/>
-			<span class="text-sm text-gray-500">x</span>
+			<span class="text-sm text-muted-foreground">x</span>
 		</div>
 	</div>
 

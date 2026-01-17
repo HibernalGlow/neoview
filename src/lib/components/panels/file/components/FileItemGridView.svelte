@@ -141,7 +141,7 @@
 				</div>
 			{:else}
 				<div class="relative flex h-full w-full items-center justify-center">
-					<File class="h-16 w-16 text-gray-400/50" />
+					<File class="h-16 w-16 text-muted-foreground/50" />
 				</div>
 			{/if}
 		{/if}

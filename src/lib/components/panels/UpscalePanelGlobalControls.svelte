@@ -42,7 +42,7 @@
 				/>
 				<Label>开启预超分</Label>
 			</div>
-			<div class="flex gap-4 pl-6 text-sm text-gray-500">
+			<div class="flex gap-4 pl-6 text-sm text-muted-foreground">
 				<label class="flex items-center gap-2">
 					<span>预超分页数</span>
 					<input
@@ -80,7 +80,7 @@
 				/>
 				<Label>满足条件才自动超分</Label>
 			</div>
-			<div class="flex gap-4 pl-6 text-sm text-gray-500">
+			<div class="flex gap-4 pl-6 text-sm text-muted-foreground">
 				<label class="flex items-center gap-2">
 					<span>最小宽度</span>
 					<input

@@ -4,14 +4,16 @@
   import { enqueueVisible, bumpPriority } from '$lib/utils/thumbnailManager';
   import { Folder, File, Image, FileArchive } from '@lucide/svelte';
 
-  export let items: FsItem[] = [];
-  export let currentPath = '';
-  export let thumbnails: Map<string, string> = new Map();
-  export let selectedIndex = -1;
-  export let isCheckMode = false;
-  export let isDeleteMode = false;
-  export let selectedItems: Set<string> = new Set();
-  export let viewMode: 'list' | 'thumbnails' = 'list';
+  let {
+    items = [],
+    currentPath = '',
+    thumbnails = new Map(),
+    selectedIndex = -1,
+    isCheckMode = false,
+    isDeleteMode = false,
+    selectedItems = $bindable(new Set()),
+    viewMode = 'list'
+  } = $props();
 
   const dispatch = createEventDispatcher();
   
@@ -45,7 +47,7 @@
     
     // 过滤需要缩略图的项目
     const thumbnailItems = visibleItems.filter(item => 
-      item.is_dir || item.isImage || 
+      item.isDir || item.isImage || 
       item.name.endsWith('.zip') || 
       item.name.endsWith('.cbz') || 
       item.name.endsWith('.rar') || 
@@ -60,7 +62,8 @@
     
     if (needThumbnails.length > 0) {
       console.log(`👁️ 可见范围更新: ${visibleRange.start}-${visibleRange.end}, 需要缩略图: ${needThumbnails.length}`);
-      enqueueVisible(currentPath, needThumbnails, { priority: 'immediate' });
+      // 过滤出路径字符串数组
+      enqueueVisible(needThumbnails.map(t => t.path), currentPath);
     }
   }
 
@@ -142,7 +145,7 @@
         {#if index >= visibleRange.start - 5 && index <= visibleRange.end + 5}
           <!-- 渲染可见项目及少量额外项目 -->
           <div
-            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-gray-50 border-gray-200'}"
+            class="group flex items-center gap-3 rounded border p-2 cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-accent/50 border-border'}"
             style="height: {itemHeight}px;"
             onclick={() => handleItemClick(item, index)}
             oncontextmenu={(e) => handleItemContextMenu(e, item)}
@@ -150,13 +153,13 @@
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   toggleItemSelection(item.path);
                 }}
               >
-                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}">
+                <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-input hover:border-primary'}">
                   {#if selectedItems.has(item.path)}
                     <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -169,7 +172,7 @@
             <!-- 删除按钮（删除模式） -->
             {#if isDeleteMode}
               <button
-                class="flex-shrink-0"
+                class="shrink-0"
                 onclick={(e) => {
                   e.stopPropagation();
                   dispatch('deleteItem', { item });
@@ -185,7 +188,7 @@
             {/if}
 
             <!-- 图标或缩略图 -->
-            <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded">
               {#if thumbnails.has(getThumbnailKey(item))}
                 <!-- 显示缩略图 -->
                 <img 
@@ -200,15 +203,15 @@
               {:else if item.isImage}
                 <Image class="h-8 w-8 text-primary transition-colors group-hover:text-primary" />
               {:else}
-                <File class="h-8 w-8 text-gray-400 transition-colors group-hover:text-gray-500" />
+                <File class="h-8 w-8 text-muted-foreground transition-colors group-hover:text-muted-foreground/80" />
               {/if}
             </div>
 
             <!-- 信息 -->
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium">{item.name}</div>
-              <div class="text-xs text-gray-500">
-                {formatSize(item.size, item.is_dir)} · {formatDate(item.modified)}
+              <div class="text-xs text-muted-foreground">
+                {formatSize(item.size, item.isDir)} · {formatDate(item.modified)}
               </div>
             </div>
           </div>
@@ -223,7 +226,7 @@
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
       {#each items as item, index (item.path)}
         <div
-          class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-gray-50 border-gray-200'}"
+          class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-accent/50 border-border'}"
           onclick={() => handleItemClick(item, index)}
           oncontextmenu={(e) => handleItemContextMenu(e, item)}
         >
@@ -236,7 +239,7 @@
                 toggleItemSelection(item.path);
               }}
             >
-              <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-gray-300 hover:border-primary'}">
+              <div class="h-5 w-5 rounded border-2 flex items-center justify-center transition-colors {selectedItems.has(item.path) ? 'bg-primary border-primary' : 'border-input hover:border-primary'}">
                 {#if selectedItems.has(item.path)}
                   <svg class="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
@@ -247,7 +250,7 @@
           {/if}
 
           <!-- 缩略图容器 -->
-          <div class="w-full aspect-square flex items-center justify-center overflow-hidden rounded bg-gray-100">
+          <div class="w-full aspect-square flex items-center justify-center overflow-hidden rounded bg-muted">
             {#if thumbnails.has(getThumbnailKey(item))}
               <!-- 显示缩略图 -->
               <img 
@@ -255,22 +258,22 @@
                 alt={item.name}
                 class="w-full h-full object-cover transition-transform group-hover:scale-105"
               />
-            {:else if item.is_dir}
+            {:else if item.isDir}
               <Folder class="h-12 w-12 text-primary" />
             {:else if item.name.endsWith('.zip') || item.name.endsWith('.cbz')}
               <FileArchive class="h-12 w-12 text-primary" />
             {:else if item.isImage}
               <Image class="h-12 w-12 text-primary" />
             {:else}
-              <File class="h-12 w-12 text-gray-400" />
+              <File class="h-12 w-12 text-muted-foreground" />
             {/if}
           </div>
 
           <!-- 文件名 -->
           <div class="w-full text-center">
             <div class="truncate text-sm font-medium">{item.name}</div>
-            <div class="text-xs text-gray-500">
-              {formatSize(item.size, item.is_dir)}
+            <div class="text-xs text-muted-foreground">
+              {formatSize(item.size, item.isDir)}
             </div>
           </div>
         </div>

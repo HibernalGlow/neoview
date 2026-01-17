@@ -67,7 +67,7 @@
 <div class="sort-panel relative">
   <!-- 排序按钮 -->
   <button
-    class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 rounded transition-colors"
+    class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent rounded transition-colors"
     onclick={() => showSortMenu = !showSortMenu}
     title="排序选项"
   >

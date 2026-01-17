@@ -374,8 +374,8 @@
 	}
 </script>
 
-<div class="bg-background flex h-full flex-col overflow-hidden">
-	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
+<div class="bg-background flex flex-col gap-6 p-1">
+	<Tabs.Root bind:value={activeTab} class="flex flex-col gap-6">
 		<div class="bg-background/80 z-10 border-b px-6 pt-6 pb-4 backdrop-blur-md">
 			<Tabs.List class="bg-muted/30 grid h-12 w-full grid-cols-2 rounded-2xl p-1">
 				<Tabs.Trigger
@@ -397,7 +397,7 @@
 
 		<Tabs.Content
 			value="layout"
-			class="mt-0 flex flex-1 flex-col gap-6 overflow-hidden p-6 focus-visible:outline-none"
+			class="mt-0 flex flex-col gap-6 focus-visible:outline-none"
 		>
 			<div class="flex flex-col gap-1.5">
 				<h3 class="text-xl font-bold tracking-tight">边栏布局</h3>
@@ -462,9 +462,9 @@
 				</Tabs.Root>
 			</div>
 
-			<div class="bg-card flex-1 overflow-auto rounded-2xl border shadow-sm">
+			<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
 				<Table.Root class="table-fixed">
-					<Table.Header class="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
+					<Table.Header class="bg-muted/50">
 						<Table.Row>
 							<Table.Head class="w-10 px-2"></Table.Head>
 							<Table.Head class="w-12 px-0 text-center">图标</Table.Head>

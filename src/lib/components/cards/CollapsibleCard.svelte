@@ -12,6 +12,7 @@ import { ChevronDown, ChevronRight, ChevronUp, ChevronLeft, GripVertical, ArrowU
 import { slide } from 'svelte/transition';
 import { openCardInNewWindow } from '$lib/core/windows/cardWindowManager';
 import MagicCard from '$lib/components/ui/MagicCard.svelte';
+import GenericIcon from '$lib/components/ui/Icon.svelte';
 
 interface Props {
 	id: string;
@@ -149,8 +150,8 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 					<GripVertical class="h-3.5 w-3.5 cursor-grab text-muted-foreground" />
 				{/if}
 				
-				{#if Icon && !hideIcon}
-					<Icon class="h-3.5 w-3.5" />
+				{#if !hideIcon}
+					<GenericIcon name={id} fallback={Icon} class="h-3.5 w-3.5" />
 				{/if}
 				
 				{#if !hideTitle}

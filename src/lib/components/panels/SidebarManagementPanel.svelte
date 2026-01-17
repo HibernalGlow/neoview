@@ -397,7 +397,7 @@
 
 		<Tabs.Content
 			value="layout"
-			class="mt-0 flex flex-1 flex-col gap-6 overflow-auto p-6 focus-visible:outline-none"
+			class="mt-0 flex flex-1 flex-col gap-6 overflow-hidden p-6 focus-visible:outline-none"
 		>
 			<div class="flex flex-col gap-1.5">
 				<h3 class="text-xl font-bold tracking-tight">边栏布局</h3>
@@ -462,9 +462,9 @@
 				</Tabs.Root>
 			</div>
 
-			<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
+			<div class="bg-card flex-1 overflow-auto rounded-2xl border shadow-sm">
 				<Table.Root class="table-fixed">
-					<Table.Header class="bg-muted/50">
+					<Table.Header class="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
 						<Table.Row>
 							<Table.Head class="w-10 px-2"></Table.Head>
 							<Table.Head class="w-12 px-0 text-center">图标</Table.Head>

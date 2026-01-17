@@ -37,6 +37,7 @@ const prefetchState = {
 interface ThumbnailReadyPayload {
   path: string;
   blob?: number[]; // Vec<u8> 转为 number[]
+  session_id: number;
 }
 
 // 批量缩略图就绪事件 payload

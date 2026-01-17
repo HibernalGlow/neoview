@@ -41,7 +41,7 @@ pub fn generate_archive_thumbnail_static(
     let ghash = ThumbnailGenerator::generate_hash(&path_key, archive_size);
 
     // 生成缩略图
-    let blob = gen.generate_archive_thumbnail(path)?;
+    let blob = gen.generate_archive_thumbnail_with_session(path, 0)?; // session_id is handled in worker now
 
     Ok((blob, path_key, archive_size, ghash))
 }

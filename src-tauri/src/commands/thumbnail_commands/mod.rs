@@ -74,7 +74,7 @@ use tauri::Manager;
 /// 缩略图管理器状态
 pub struct ThumbnailState {
     pub db: Arc<ThumbnailDb>,
-    pub generator: Arc<Mutex<ThumbnailGenerator>>,
+    pub generator: Arc<ThumbnailGenerator>,
     pub blob_registry: Arc<BlobRegistry>,
 }
 
@@ -142,7 +142,7 @@ pub async fn init_thumbnail_manager(
     };
 
     // 创建生成器（已解耦，不依赖 ImageLoader 和 ArchiveManager）
-    let generator = Arc::new(Mutex::new(ThumbnailGenerator::new(Arc::clone(&db), config)));
+    let generator = Arc::new(ThumbnailGenerator::new(Arc::clone(&db), config));
 
     // 创建 BlobRegistry（用于管理 blob URL）
     let blob_registry = Arc::new(BlobRegistry::new(1000));

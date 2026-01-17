@@ -13,35 +13,28 @@ use super::log_debug;
 /// 生成文件缩略图（静态方法，用于工作线程）
 /// 返回 (blob, path_key, size, ghash) 用于延迟保存
 pub fn generate_file_thumbnail_static(
-    generator: &Arc<Mutex<ThumbnailGenerator>>,
+    generator: &Arc<ThumbnailGenerator>,
     path: &str,
 ) -> Result<(Vec<u8>, String, i64, i32), String> {
-    let gen = generator
-        .lock()
-        .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-    gen.generate_file_thumbnail_blob_only(path)
+    generator.generate_file_thumbnail_blob_only(path)
 }
 
 /// 生成压缩包缩略图（静态方法，用于工作线程）
 /// 返回 (blob, path_key, size, ghash) 用于延迟保存
 pub fn generate_archive_thumbnail_static(
-    generator: &Arc<Mutex<ThumbnailGenerator>>,
+    generator: &Arc<ThumbnailGenerator>,
     path: &str,
 ) -> Result<(Vec<u8>, String, i64, i32), String> {
-    let gen = generator
-        .lock()
-        .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-
     // 获取压缩包大小
     let metadata = std::fs::metadata(path).map_err(|e| format!("获取压缩包元数据失败: {}", e))?;
     let archive_size = metadata.len() as i64;
 
     // 构建路径键
-    let path_key = gen.build_path_key(path, None);
+    let path_key = generator.build_path_key(path, None);
     let ghash = ThumbnailGenerator::generate_hash(&path_key, archive_size);
 
     // 生成缩略图
-    let blob = gen.generate_archive_thumbnail(path)?;
+    let blob = generator.generate_archive_thumbnail(path)?;
 
     Ok((blob, path_key, archive_size, ghash))
 }
@@ -49,21 +42,18 @@ pub fn generate_archive_thumbnail_static(
 /// 生成视频缩略图（静态方法，用于工作线程）
 /// 返回 (blob, path_key, size, ghash) 用于延迟保存
 pub fn generate_video_thumbnail_static(
-    generator: &Arc<Mutex<ThumbnailGenerator>>,
+    generator: &Arc<ThumbnailGenerator>,
     path: &str,
 ) -> Result<(Vec<u8>, String, i64, i32), String> {
     // 视频缩略图直接使用 generate_file_thumbnail_blob_only
     // 因为它内部会检测视频文件并调用 ffmpeg
-    let gen = generator
-        .lock()
-        .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-    gen.generate_file_thumbnail_blob_only(path)
+    generator.generate_file_thumbnail_blob_only(path)
 }
 
 /// 生成文件夹缩略图（复刻 NeeView 策略）
 /// 优化：优先使用已缓存的子文件缩略图绑定，避免文件系统扫描
 pub fn generate_folder_thumbnail_static(
-    generator: &Arc<Mutex<ThumbnailGenerator>>,
+    generator: &Arc<ThumbnailGenerator>,
     db: &Arc<ThumbnailDb>,
     folder_path: &str,
     max_depth: u32,
@@ -102,10 +92,7 @@ pub fn generate_folder_thumbnail_static(
 
     // 3. 查找封面图片（cover.*, folder.*, thumb.*）- 带权限错误处理
     if let Some(cover) = find_cover_image(folder_path)? {
-        let gen = generator
-            .lock()
-            .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-        match gen.generate_file_thumbnail(&cover) {
+        match generator.generate_file_thumbnail(&cover) {
             Ok(blob) if !blob.is_empty() => {
                 // 保存到数据库
                 let _ = db.save_thumbnail_with_category(folder_path, 0, 0, &blob, Some("folder"));
@@ -146,16 +133,12 @@ pub fn generate_folder_thumbnail_static(
             || first_lower.ends_with(".flv")
             || first_lower.ends_with(".m4v");
 
-        let gen = generator
-            .lock()
-            .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-
         let result = if is_archive {
-            gen.generate_archive_thumbnail(&first)
+            generator.generate_archive_thumbnail(&first)
         } else if is_video {
-            gen.generate_file_thumbnail(&first)
+            generator.generate_file_thumbnail(&first)
         } else {
-            gen.generate_file_thumbnail(&first)
+            generator.generate_file_thumbnail(&first)
         };
 
         // 如果成功生成，保存并返回

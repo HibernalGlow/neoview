@@ -3,7 +3,9 @@
 
 use super::super::fs_commands::{CacheIndexState, FsState};
 use super::super::task_queue_commands::BackgroundSchedulerState;
-use super::types::{FolderMatchKind, FolderScanResult, ThumbnailIndexRequest, ThumbnailIndexResult};
+use super::types::{
+    FolderMatchKind, FolderScanResult, ThumbnailIndexRequest, ThumbnailIndexResult,
+};
 use super::{infer_category, ThumbnailState};
 use crate::core::cache_index_db::{CacheIndexDb, ThumbnailCacheUpsert};
 use crate::core::fs_manager::{FsItem, FsManager};
@@ -44,9 +46,6 @@ pub async fn batch_preload_thumbnails(
                 batch_paths.len()
             ),
             move || -> Result<HashMap<String, Result<Vec<u8>, String>>, String> {
-                let generator = generator
-                    .lock()
-                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                 Ok(generator.batch_generate_thumbnails(batch_paths, is_archive))
             },
         )
@@ -273,7 +272,7 @@ pub async fn scan_folder_thumbnails(
     }
 
     let fs_manager = Arc::clone(&fs_state.fs_manager);
-    let generator: Arc<Mutex<ThumbnailGenerator>> = Arc::clone(&thumb_state.generator);
+    let generator = Arc::clone(&thumb_state.generator);
     let thumb_db: Arc<ThumbnailDb> = Arc::clone(&thumb_state.db);
     let cache_db: Arc<CacheIndexDb> = Arc::clone(&cache_index.db);
 
@@ -302,15 +301,12 @@ pub async fn scan_folder_thumbnails(
                         }),
                         Some((target_path, match_kind)) => {
                             let thumbnail_data = {
-                                let guard = generator
-                                    .lock()
-                                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                                 match match_kind {
                                     FolderMatchKind::Image => {
-                                        guard.generate_file_thumbnail(&target_path)
+                                        generator.generate_file_thumbnail(&target_path)
                                     }
                                     FolderMatchKind::Archive => {
-                                        guard.generate_archive_thumbnail(&target_path)
+                                        generator.generate_archive_thumbnail(&target_path)
                                     }
                                 }
                             }?;

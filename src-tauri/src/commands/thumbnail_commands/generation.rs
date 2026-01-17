@@ -41,12 +41,7 @@ pub async fn generate_file_thumbnail_new(
         .enqueue_blocking(
             "thumbnail-generate",
             job_source,
-            move || -> Result<Vec<u8>, String> {
-                let generator = generator
-                    .lock()
-                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
-                generator.generate_file_thumbnail(&path_for_job)
-            },
+            move || -> Result<Vec<u8>, String> { generator.generate_file_thumbnail(&path_for_job) },
         )
         .await?;
 
@@ -102,9 +97,6 @@ pub async fn generate_archive_thumbnail_new(
             "thumbnail-generate",
             format!("archive:{}", archive_path),
             move || -> Result<Vec<u8>, String> {
-                let generator = generator
-                    .lock()
-                    .map_err(|e| format!("获取缩略图生成器锁失败: {}", e))?;
                 generator.generate_archive_thumbnail(&path_for_job)
             },
         )

@@ -258,10 +258,7 @@ pub async fn get_thumbnail_blob_data(
 //             }
 //             _ => {
 //                 // 数据库没有缓存，需要生成
-//                 let gen = state.generator.lock()
-//                     .map_err(|e| format!("获取生成器锁失败: {}", e))?;
-//
-//                 match gen.generate_file_thumbnail(&path) {
+//                 match state.generator.generate_file_thumbnail(&path) {
 //                     Ok(data) => {
 //                         if !data.is_empty() {
 //                             // 保存到数据库

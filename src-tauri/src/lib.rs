@@ -232,10 +232,10 @@ pub fn run() {
                 thread_pool_size: thumb_thread_pool_size,
                 archive_concurrency: thumb_archive_concurrency,
             };
-            let thumbnail_generator = Arc::new(Mutex::new(ThumbnailGenerator::new(
+            let thumbnail_generator = Arc::new(ThumbnailGenerator::new(
                 Arc::clone(&thumbnail_db),
                 thumb_config,
-            )));
+            ));
             let blob_registry = Arc::new(BlobRegistry::new(1000));
 
             app.manage(ThumbnailState {

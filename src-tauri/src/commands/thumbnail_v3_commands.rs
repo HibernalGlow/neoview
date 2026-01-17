@@ -1,21 +1,21 @@
 //! Thumbnail V3 Commands
 //! 缩略图服务 V3 的 Tauri 命令
-//! 
+//!
 //! 核心命令：
 //! 1. request_visible_thumbnails - 请求可见区域缩略图
 //! 2. cancel_thumbnail_requests - 取消指定目录的请求
 //! 3. get_cached_thumbnails - 直接从缓存获取
-//! 
+//!
 //! 辅助命令：
 //! 4. preload_directory_thumbnails - 预加载目录
 //! 5. clear_thumbnail_cache - 清除缓存
 //! 6. get_thumbnail_cache_stats - 获取缓存统计
 
-use crate::core::thumbnail_service_v3::{CacheStats, ThumbnailServiceV3, ThumbnailServiceConfig};
+use super::thumbnail_commands::ThumbnailState;
+use crate::core::blob_registry::BlobRegistry;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
-use crate::core::blob_registry::BlobRegistry;
-use super::thumbnail_commands::ThumbnailState;
+use crate::core::thumbnail_service_v3::{CacheStats, ThumbnailServiceConfig, ThumbnailServiceV3};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
@@ -40,7 +40,7 @@ pub async fn init_thumbnail_service_v3(
     size: u32,
 ) -> Result<(), String> {
     use std::path::{Path, PathBuf};
-    
+
     // 路径处理
     let raw = thumbnail_path.trim();
     let db_dir = if raw.is_empty() || !Path::new(raw).is_absolute() {
@@ -48,18 +48,18 @@ pub async fn init_thumbnail_service_v3(
     } else {
         PathBuf::from(raw)
     };
-    
+
     // 确保目录存在
     if let Err(e) = std::fs::create_dir_all(&db_dir) {
         return Err(format!("创建数据库目录失败: {}", e));
     }
-    
+
     let db_path = db_dir.join("thumbnails.db");
     log_info!("📁 ThumbnailServiceV3 数据库路径: {}", db_path.display());
-    
+
     // 创建数据库
     let db = Arc::new(ThumbnailDb::new(db_path));
-    
+
     // 创建生成器配置
     let gen_config = ThumbnailGeneratorConfig {
         max_width: size,
@@ -67,8 +67,8 @@ pub async fn init_thumbnail_service_v3(
         thread_pool_size: 8,
         archive_concurrency: 4,
     };
-    let generator = Arc::new(Mutex::new(ThumbnailGenerator::new(Arc::clone(&db), gen_config)));
-    
+    let generator = Arc::new(ThumbnailGenerator::new(Arc::clone(&db), gen_config));
+
     // 创建服务配置
     let service_config = ThumbnailServiceConfig {
         folder_search_depth: 2,
@@ -77,19 +77,23 @@ pub async fn init_thumbnail_service_v3(
         thumbnail_size: size,
         db_save_delay_ms: 2000,
     };
-    
+
     // 创建服务
-    let service = Arc::new(ThumbnailServiceV3::new(Arc::clone(&db), Arc::clone(&generator), service_config));
-    
+    let service = Arc::new(ThumbnailServiceV3::new(
+        Arc::clone(&db),
+        Arc::clone(&generator),
+        service_config,
+    ));
+
     // 启动工作线程
     service.start(app.clone());
-    
+
     // 保存到应用状态
     app.manage(ThumbnailServiceV3State { service });
-    
+
     // ThumbnailState 已在 lib.rs 启动时初始化，这里不再重复注册
     // 如果需要更新配置，可以通过其他方式实现
-    
+
     log_info!("✅ ThumbnailServiceV3 初始化完成 (ThumbnailState 已在启动时初始化)");
     Ok(())
 }
@@ -112,16 +116,15 @@ pub async fn request_visible_thumbnails_v3(
         }
     };
     // 不阻塞，直接返回，传递中心索引用于优先级排序
-    state.service.request_visible_thumbnails(&app, paths, current_dir, center_index);
+    state
+        .service
+        .request_visible_thumbnails(&app, paths, current_dir, center_index);
     Ok(())
 }
 
 /// 取消指定目录的请求
 #[tauri::command]
-pub async fn cancel_thumbnail_requests_v3(
-    app: AppHandle,
-    dir: String,
-) -> Result<(), String> {
+pub async fn cancel_thumbnail_requests_v3(app: AppHandle, dir: String) -> Result<(), String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state.service.cancel_requests(&dir);
     }
@@ -143,7 +146,10 @@ pub async fn get_cached_thumbnails_v3(
 ) -> Result<Vec<CachedThumbnailResult>, String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         let results = state.service.get_cached_thumbnails(paths);
-        Ok(results.into_iter().map(|(path, blob)| CachedThumbnailResult { path, blob }).collect())
+        Ok(results
+            .into_iter()
+            .map(|(path, blob)| CachedThumbnailResult { path, blob })
+            .collect())
     } else {
         Ok(vec![])
     }
@@ -157,44 +163,43 @@ pub async fn preload_directory_thumbnails_v3(
     depth: Option<u32>,
 ) -> Result<(), String> {
     use std::path::Path;
-    
+
     let max_depth = depth.unwrap_or(1);
-    
+
     // 收集目录下的所有文件
     fn collect_paths(dir: &str, depth: u32, max_depth: u32, paths: &mut Vec<String>) {
         if depth > max_depth {
             return;
         }
-        
+
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 paths.push(path.to_string_lossy().to_string());
-                
+
                 if path.is_dir() && depth < max_depth {
                     collect_paths(&path.to_string_lossy(), depth + 1, max_depth, paths);
                 }
             }
         }
     }
-    
+
     let mut paths = Vec::new();
     collect_paths(&dir, 0, max_depth, &mut paths);
-    
+
     // 请求预加载（无中心索引，使用默认顺序）
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
-        state.service.request_visible_thumbnails(&app, paths, dir, None);
+        state
+            .service
+            .request_visible_thumbnails(&app, paths, dir, None);
     }
-    
+
     Ok(())
 }
 
 /// 清除缓存
 #[tauri::command]
-pub async fn clear_thumbnail_cache_v3(
-    app: AppHandle,
-    scope: String,
-) -> Result<(), String> {
+pub async fn clear_thumbnail_cache_v3(app: AppHandle, scope: String) -> Result<(), String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state.service.clear_cache(&scope);
     }
@@ -203,9 +208,7 @@ pub async fn clear_thumbnail_cache_v3(
 
 /// 获取缓存统计
 #[tauri::command]
-pub async fn get_thumbnail_cache_stats_v3(
-    app: AppHandle,
-) -> Result<CacheStats, String> {
+pub async fn get_thumbnail_cache_stats_v3(app: AppHandle) -> Result<CacheStats, String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         Ok(state.service.get_cache_stats())
     } else {
@@ -233,12 +236,10 @@ pub struct MaintenanceStats {
 
 /// 获取数据库维护统计
 #[tauri::command]
-pub async fn get_thumbnail_db_stats_v3(
-    app: AppHandle,
-) -> Result<MaintenanceStats, String> {
+pub async fn get_thumbnail_db_stats_v3(app: AppHandle) -> Result<MaintenanceStats, String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         let (total, folders, size) = state.service.get_db_stats()?;
-        
+
         Ok(MaintenanceStats {
             total_entries: total,
             folder_entries: folders,
@@ -252,9 +253,7 @@ pub async fn get_thumbnail_db_stats_v3(
 
 /// 清理无效路径（文件不存在）
 #[tauri::command]
-pub async fn cleanup_invalid_paths_v3(
-    app: AppHandle,
-) -> Result<usize, String> {
+pub async fn cleanup_invalid_paths_v3(app: AppHandle) -> Result<usize, String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state.service.cleanup_invalid_paths()
     } else {
@@ -293,9 +292,7 @@ pub async fn cleanup_by_path_prefix_v3(
 
 /// 执行数据库压缩（VACUUM）
 #[tauri::command]
-pub async fn vacuum_thumbnail_db_v3(
-    app: AppHandle,
-) -> Result<(), String> {
+pub async fn vacuum_thumbnail_db_v3(app: AppHandle) -> Result<(), String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state.service.vacuum_db()
     } else {
@@ -314,11 +311,11 @@ pub async fn reload_thumbnail_v3(
         // 1. 删除内存缓存和数据库记录
         state.service.remove_thumbnail(&path)?;
         log_info!("🔄 Removed thumbnail cache for: {}", path);
-        
+
         // 2. 立即触发重新生成（使用提供的当前目录或空字符串）
         let dir = current_dir.unwrap_or_default();
         state.service.regenerate_thumbnail(&app, &path, &dir);
-        
+
         Ok(())
     } else {
         Err("缩略图服务未初始化".to_string())

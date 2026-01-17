@@ -58,6 +58,9 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { ImageIcon } from '@lucide/svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
+	import IconSettingsPanel from './IconSettingsPanel.svelte';
 	import { cn } from '$lib/utils';
 	import {
 		folderTabBarLayout,
@@ -392,6 +395,13 @@
 					<Settings2 class="h-4 w-4" />
 					高级设置
 				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="icons"
+					class="data-[state=active]:bg-background gap-2 rounded-xl data-[state=active]:shadow-sm"
+				>
+					<ImageIcon class="h-4 w-4" />
+					图标设置
+				</Tabs.Trigger>
 			</Tabs.List>
 		</div>
 
@@ -520,11 +530,7 @@
 										<div
 											class="bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all duration-300"
 										>
-											{#if panel.icon}
-												<svelte:component this={panel.icon} class="h-4.5 w-4.5" />
-											{:else}
-												<LayoutGrid class="h-4.5 w-4.5" />
-											{/if}
+											<Icon name={panel.id} fallback={panel.icon} class="h-4.5 w-4.5" />
 										</div>
 									</div>
 								</Table.Cell>
@@ -667,6 +673,10 @@
 					</div>
 				{/if}
 			</div>
+		</Tabs.Content>
+
+		<Tabs.Content value="icons" class="mt-0 flex-1 overflow-auto p-6 focus-visible:outline-none">
+			<IconSettingsPanel />
 		</Tabs.Content>
 
 		<Tabs.Content value="settings" class="mt-0 flex-1 overflow-auto p-6 focus-visible:outline-none">

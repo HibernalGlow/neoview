@@ -653,3 +653,14 @@ export function getVerticalAlignStyle(align: SidebarVerticalAlign, heightPercent
 	const topPercent = (100 - heightPercent) * (align / 100);
 	return `top: ${topPercent}%;`;
 }
+
+// 初始化默认图标到注册表
+import { iconRegistry } from './iconRegistry.svelte';
+// 避免 SSR 问题? Tauri app usually CSR. but good to be safe if strictly checking.
+if (typeof window !== 'undefined') {
+    Object.entries(PANEL_DEFINITIONS).forEach(([id, def]) => {
+        if (def.icon) {
+            iconRegistry.register(id, def.icon);
+        }
+    });
+}

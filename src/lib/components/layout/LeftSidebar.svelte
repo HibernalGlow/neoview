@@ -31,6 +31,7 @@
 	import HoverWrapper from './HoverWrapper.svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -346,7 +347,6 @@
 								<Sidebar.GroupContent class="px-0">
 									<Sidebar.Menu>
 										{#each leftPanels as panel (panel.id)}
-											{@const Icon = panel.icon}
 											<Sidebar.MenuItem>
 												<Sidebar.MenuButton
 													tooltipContentProps={{
@@ -359,7 +359,7 @@
 													{#snippet tooltipContent()}
 														{panel.title}
 													{/snippet}
-													<Icon />
+													<Icon name={panel.id} fallback={panel.icon} class="h-4 w-4" />
 													<span>{panel.title}</span>
 												</Sidebar.MenuButton>
 											</Sidebar.MenuItem>

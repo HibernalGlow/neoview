@@ -109,6 +109,40 @@
 	function handleLucideSelect(id: string, iconName: string) {
 		iconRegistry.setCustomIcon(id, 'lucide', iconName);
 	}
+
+	import { save, open } from '@tauri-apps/plugin-dialog';
+	import { invoke } from '@tauri-apps/api/core';
+	import { FileDown, FileUp } from '@lucide/svelte';
+
+	async function handleExport() {
+		try {
+			const data = iconRegistry.exportCustomIcons();
+			const path = await save({
+				filters: [{ name: 'JSON', extensions: ['json'] }],
+				defaultPath: 'neoview-icons.json'
+			});
+			if (path) {
+				await invoke('write_text_file', { path, content: data });
+			}
+		} catch (e) {
+			console.error('Export failed', e);
+		}
+	}
+
+	async function handleImport() {
+		try {
+			const path = await open({
+				filters: [{ name: 'JSON', extensions: ['json'] }],
+				multiple: false
+			});
+			if (path) {
+				const data = await invoke('read_text_file', { path: path as string });
+				iconRegistry.importCustomIcons(data as string);
+			}
+		} catch (e) {
+			console.error('Import failed', e);
+		}
+	}
 </script>
 
 <div class="flex h-full flex-col gap-6 p-1">
@@ -156,9 +190,17 @@
 			</div>
 		{/if}
 
-		<div class="relative w-full">
-			<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-			<Input bind:value={searchQuery} placeholder="搜索图标..." class="h-10 rounded-xl pl-9" />
+		<div class="flex items-center gap-2">
+			<div class="relative w-full flex-1">
+				<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+				<Input bind:value={searchQuery} placeholder="搜索图标..." class="h-10 rounded-xl pl-9" />
+			</div>
+			<Button variant="outline" size="icon" class="h-10 w-10 shrink-0 rounded-xl" title="导出设置" onclick={handleExport}>
+				<FileUp class="h-4 w-4" />
+			</Button>
+			<Button variant="outline" size="icon" class="h-10 w-10 shrink-0 rounded-xl" title="导入设置" onclick={handleImport}>
+				<FileDown class="h-4 w-4" />
+			</Button>
 		</div>
 	</div>
 

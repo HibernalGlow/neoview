@@ -133,6 +133,33 @@ class IconRegistry {
     getIcon(id: string) {
         return this.icons[id];
     }
+
+    exportCustomIcons(): string {
+        const exportObj: Record<string, StoredIconData> = {};
+        for (const [id, config] of Object.entries(this.icons)) {
+            if (config.customValue && config.customType) {
+                exportObj[id] = { type: config.customType, value: config.customValue };
+            } else if (config.customIcon) {
+                exportObj[id] = { type: 'image', value: config.customIcon };
+            }
+        }
+        return JSON.stringify(exportObj, null, 2);
+    }
+
+    importCustomIcons(json: string) {
+        try {
+            const data = JSON.parse(json);
+            for (const key in data) {
+                const val = data[key];
+                if (val && typeof val === 'object' && val.type && val.value) {
+                    this.setCustomIcon(key, val.type, val.value);
+                }
+            }
+        } catch (e) {
+            console.error('Import failed', e);
+            throw e;
+        }
+    }
 }
 
 export const iconRegistry = new IconRegistry();

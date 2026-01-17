@@ -129,6 +129,15 @@ async function handleOpenInNewWindow(e: MouseEvent) {
 	e.stopPropagation();
 	await openCardInNewWindow(id);
 }
+
+// 注册图标到全局注册表
+$effect(() => {
+	if (id && Icon) {
+		import('$lib/stores/iconRegistry.svelte').then(({ iconRegistry }) => {
+			iconRegistry.register(id, Icon);
+		});
+	}
+});
 </script>
 
 <MagicCard 

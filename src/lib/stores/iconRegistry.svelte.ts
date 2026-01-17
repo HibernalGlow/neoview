@@ -98,14 +98,23 @@ class IconRegistry {
     }
 
     setCustomIcon(id: string, type: CustomIconType, value: string) {
-        if (!this.icons[id]) return;
-        
-        this.icons[id] = {
-            ...this.icons[id],
-            customType: type,
-            customValue: value,
-            customIcon: type === 'image' ? value : null
-        };
+        if (!this.icons[id]) {
+             // Lazy create if not exists
+             this.icons[id] = {
+                 id,
+                 defaultIcon: null as any, // Unknown default, verified via fallback anyway
+                 customType: type,
+                 customValue: value,
+                 customIcon: type === 'image' ? value : null
+             };
+        } else {
+            this.icons[id] = {
+                ...this.icons[id],
+                customType: type,
+                customValue: value,
+                customIcon: type === 'image' ? value : null
+            };
+        }
         this.saveToStorage();
     }
 

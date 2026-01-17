@@ -3,7 +3,7 @@
  * 统一定义所有卡片的元数据，支持动态发现和跨面板移动
  */
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
-import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Search, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette, Play, LayoutGrid } from '@lucide/svelte';
+import { Eye, Timer, Layers, FolderOpen, FileText, Image, Cpu, History, Tags, Activity, Gauge, Archive, Globe, ListChecks, BarChart3, Languages, Settings, Mic, Bot, ScanSearch, Clock, Monitor, Bell, Star, Zap, Loader, Sparkles, Bookmark, TrendingUp, Flame, Calendar, FastForward, BookOpen, Settings2, Database, List, Info, PanelLeft, HardDrive, Network, Sliders, Tag, Images, Boxes, TestTube, RefreshCw, Heart, PieChart, Palette, Play, LayoutGrid } from '@lucide/svelte';
 
 // 卡片定义
 export interface CardDefinition {
@@ -179,7 +179,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'switchToast',
 		title: '切换提示',
 		icon: Bell,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'imageInfo': {
@@ -207,35 +207,35 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'sidebarControl',
 		title: '边栏控制',
 		icon: PanelLeft,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'colorFilter': {
 		id: 'colorFilter',
 		title: '颜色滤镜',
 		icon: Palette,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'pageTransition': {
 		id: 'pageTransition',
 		title: '翻页动画',
 		icon: Play,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'ambientBackground': {
 		id: 'ambientBackground',
 		title: '动态背景',
 		icon: Sparkles,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'sidebarHeight': {
 		id: 'sidebarHeight',
 		title: '侧边栏高度',
 		icon: PanelLeft,
-		defaultPanel: 'info',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 
@@ -279,7 +279,7 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		id: 'thumbnailMaintenance',
 		title: '缩略图维护',
 		icon: Images,
-		defaultPanel: 'properties',
+		defaultPanel: 'control',
 		canHide: true,
 	},
 	'emmRawData': {

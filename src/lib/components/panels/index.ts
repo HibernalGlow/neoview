@@ -32,6 +32,7 @@ import DataInsightsPanel from './DataInsightsPanel.svelte';
 import BenchmarkPanel from './BenchmarkPanel.svelte';
 import AiPanel from './AiPanel.svelte';
 import SettingsCardPanel from './SettingsCardPanel.svelte';
+import ControlPanel from './ControlPanel.svelte';
 
 import type { PanelId } from '$lib/stores/sidebarConfig.svelte';
 
@@ -52,12 +53,15 @@ export const PANEL_COMPONENTS: Record<PanelId, any> = {
 	properties: ImagePropertiesPanel,
 	upscale: UpscalePanel,
 	insights: DataInsightsPanel,
+	control: ControlPanel,
 	// 设置面板（卡片模式）
 	settings: SettingsCardPanel,
 	// 开发/测试面板
 	benchmark: BenchmarkPanel,
 	// AI 面板
-	ai: AiPanel
+	ai: AiPanel,
+	// 卡片窗口
+	cardwindow: SettingsCardPanel
 };
 
 /**

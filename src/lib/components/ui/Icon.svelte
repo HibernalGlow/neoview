@@ -13,7 +13,8 @@
 
     let { name, fallback, class: className, ...rest }: Props = $props();
 
-    const iconConfig = $derived($iconRegistry.icons[name]);
+    // Use derived for reactivity with new rune-based registry
+    const iconConfig = $derived(iconRegistry.icons[name]);
     
     // Resolve dynamic icon
     const resolvedIcon = $derived.by(() => {
@@ -56,14 +57,14 @@
         {resolvedIcon.value}
     </span>
 {:else if resolvedIcon?.type === 'component'}
-    <svelte:component 
-        this={resolvedIcon.value as Component} 
+    {@const ResolvedComp = resolvedIcon.value as Component}
+    <ResolvedComp 
         class={className} 
         {...rest} 
     />
 {:else if fallback}
-    <svelte:component 
-        this={fallback} 
+    {@const FallbackComp = fallback}
+    <FallbackComp 
         class={className} 
         {...rest} 
     />

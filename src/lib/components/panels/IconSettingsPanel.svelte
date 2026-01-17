@@ -54,7 +54,7 @@
 	const allIcons = getAllCustomizableIcons();
 
 	const iconList = $derived.by(() => {
-		const registry = $iconRegistry.icons;
+		const registry = iconRegistry.icons;
 		const query = searchQuery.toLowerCase().trim();
 
 		// Filter by category

@@ -165,7 +165,7 @@ class IconRegistry {
 
         for (const [id, config] of Object.entries(this.icons)) {
             // Always add to defaults if possible
-            if (config.defaultIcon || config.defaultValue) {
+            if (config.defaultValue || (config.defaultIcon as any) !== null) {
                 defaults[id] = {
                     title: config.title || id,
                     type: config.defaultType || 'unknown',

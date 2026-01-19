@@ -545,6 +545,56 @@ export async function requestVisibleThumbnailsWithPrefetch(
 }
 
 /**
+ * 预加载整本书的所有缩略图（顺序批量发送，避免队列上限丢弃）
+ * @param paths 书籍内所有页面的完整路径
+ * @param currentDir 当前书籍路径（作为优先级上下文）
+ * @param centerIndex 当前页面索引，用于优先级排序
+ */
+export async function requestAllThumbnails(
+  paths: string[],
+  currentDir: string,
+  centerIndex?: number
+): Promise<void> {
+  if (!initialized) {
+    console.warn('⚠️ ThumbnailStoreV3 not initialized');
+    return;
+  }
+
+  // 去重并过滤已缓存的路径
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const p of paths) {
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    if (thumbnails.has(p)) continue;
+    deduped.push(p);
+  }
+
+  if (deduped.length === 0) return;
+
+  const effectiveCenter = centerIndex ?? Math.floor(deduped.length / 2);
+
+  for (let i = 0; i < deduped.length; i += MAX_BATCH_SIZE) {
+    const batch = deduped.slice(i, i + MAX_BATCH_SIZE);
+    try {
+      await invoke('request_visible_thumbnails_v3', {
+        paths: batch,
+        currentDir,
+        centerIndex: effectiveCenter,
+      });
+    } catch (error) {
+      console.error('❌ requestAllThumbnails failed:', error);
+      break;
+    }
+
+    // 分帧发送，避免一次性塞满事件循环
+    if (i + MAX_BATCH_SIZE < deduped.length) {
+      await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS));
+    }
+  }
+}
+
+/**
  * 获取当前预取状态（用于调试）
  */
 export function getPrefetchStats() {

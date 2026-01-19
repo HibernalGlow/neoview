@@ -7,7 +7,7 @@ import { onMount, onDestroy } from 'svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import { Slider } from '$lib/components/ui/slider';
-import { Search, Grid3x3, List, Image as ImageIcon, Navigation } from '@lucide/svelte';
+import { Search, Grid3x3, List, Image as ImageIcon, Navigation, Sparkles } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 import { thumbnailManager } from '$lib/utils/thumbnailManager';
@@ -15,6 +15,7 @@ import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import type { Page } from '$lib/types';
+import { requestAllThumbnails } from '$lib/stores/thumbnailStoreV3.svelte';
 import PageContextMenu from './PageContextMenu.svelte';
 import PageIndexBadge from './PageIndexBadge.svelte';
 
@@ -32,6 +33,9 @@ let unsubscribeThumbnailCache: (() => void) | null = null;
 let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
 let scrollContainer: HTMLDivElement | undefined;
+let prefetching = $state(false);
+let prefetchDone = $state(false);
+let prefetchError = $state<string | null>(null);
 
 // 跟随进度条跳转设置
 let followProgress = $state(settingsManager.getSettings().panels?.pageListFollowProgress ?? true);
@@ -124,6 +128,8 @@ $effect(() => {
 			path: page.path || '',
 			innerPath: page.innerPath
 		}));
+		prefetchDone = false;
+		prefetchError = null;
 	} else {
 		items = [];
 	}
@@ -169,6 +175,27 @@ async function requestThumbnail(pageIndex: number) {
 		}
 	} catch {
 		thumbnailCacheStore.setFailed(pageIndex);
+	}
+}
+
+async function prefetchAllThumbnails() {
+	const book = bookStore.currentBook;
+	if (!book?.pages?.length) return;
+	if (prefetching) return;
+
+	const paths = book.pages.map((p) => p.path).filter(Boolean);
+	if (paths.length === 0) return;
+
+	prefetching = true;
+	prefetchError = null;
+
+	try {
+		await requestAllThumbnails(paths, book.path, book.currentPage);
+		prefetchDone = true;
+	} catch (err) {
+		prefetchError = err instanceof Error ? err.message : String(err);
+	} finally {
+		prefetching = false;
 	}
 }
 </script>
@@ -221,12 +248,28 @@ async function requestThumbnail(pageIndex: number) {
 				<ImageIcon class="h-3 w-3" />
 			</Button>
 		</div>
+		<Button
+			variant="secondary"
+			size="sm"
+			class="h-7 px-2"
+			disabled={prefetching || items.length === 0}
+			on:click={() => void prefetchAllThumbnails()}
+		>
+			<Sparkles class="h-3 w-3" />
+		</Button>
 	</div>
 
 	<!-- 页面统计 -->
 	<div class="text-[10px] text-muted-foreground">
 		共 {items.length} 页 {searchQuery ? `(显示 ${filteredItems.length})` : ''}
 	</div>
+	{#if prefetching}
+		<div class="text-[10px] text-muted-foreground">正在预加载全部缩略图...</div>
+	{:else if prefetchDone}
+		<div class="text-[10px] text-muted-foreground">全部缩略图已预加载</div>
+	{:else if prefetchError}
+		<div class="text-[10px] text-destructive">预加载失败: {prefetchError}</div>
+	{/if}
 
 	<!-- 页面列表 -->
 	<div class="flex-1 min-h-0 overflow-y-auto" bind:this={scrollContainer}>

@@ -555,7 +555,8 @@ mod property_tests {
             // 验证：最近访问的索引应该仍在缓存中
             // 由于缓存容量为 0，可能所有都被淘汰，但访问顺序应该正确
             let stats = cache.stats();
-            prop_assert!(stats.evictions >= 0);
+            // 驱逐数应在本次插入的上限内（最多 10 个条目）
+            prop_assert!(stats.evictions <= 10);
         }
 
         /// 测试索引查找一致性

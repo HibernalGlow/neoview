@@ -389,11 +389,11 @@ mod property_tests {
             
             let last = monitor.get_last_metrics().unwrap();
             
-            // 验证所有计时值非负
-            prop_assert!(last.index_load_ms >= 0);
-            prop_assert!(last.first_page_ms >= 0);
-            prop_assert!(last.full_list_ms >= 0);
-            prop_assert!(last.total_ms >= 0);
+            // 验证记录值与输入一致（u64 本身保证非负）
+            prop_assert_eq!(last.index_load_ms, index_ms);
+            prop_assert_eq!(last.first_page_ms, first_page_ms);
+            prop_assert_eq!(last.full_list_ms, full_list_ms);
+            prop_assert_eq!(last.total_ms, index_ms + first_page_ms + full_list_ms);
         }
     }
 }

@@ -29,6 +29,8 @@ const INITIAL_PRELOAD_RANGE = 10;
 const BACKGROUND_BATCH_SIZE = 20;
 // 后台加载间隔：200ms（更快的后台加载）
 const BACKGROUND_LOAD_INTERVAL_MS = 200;
+// 后台加载最大半径：避免整本无界扩散（以页为单位）
+const MAX_BACKGROUND_RADIUS = 80;
 // 缩略图最大尺寸
 const THUMBNAIL_MAX_SIZE = 256;
 // 防抖时间：50ms（更快响应翻页）
@@ -264,18 +266,23 @@ function startBackgroundLoad(): void {
 			return;
 		}
 
-		// 扩大加载范围
-		backgroundLoadRadius += BACKGROUND_BATCH_SIZE;
+		// 扩大加载范围，但有上限，防止整本无界扩散
+		backgroundLoadRadius = Math.min(
+			backgroundLoadRadius + BACKGROUND_BATCH_SIZE,
+			MAX_BACKGROUND_RADIUS
+		);
 
 		// 收集需要加载的索引
 		const needLoad = collectIndicesToLoad(backgroundLoadCenter, backgroundLoadRadius, BACKGROUND_BATCH_SIZE);
 
-		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖全部）
+		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖全部或达到上限）
 		if (needLoad.length === 0) {
-			// 检查是否真的全部加载完成（范围已覆盖所有页面）
-			const maxRadius = Math.max(backgroundLoadCenter, totalPages - 1 - backgroundLoadCenter);
+			const maxRadius = Math.min(
+				MAX_BACKGROUND_RADIUS,
+				Math.max(backgroundLoadCenter, totalPages - 1 - backgroundLoadCenter)
+			);
 			if (backgroundLoadRadius >= maxRadius) {
-				console.debug(`🖼️ ThumbnailService: Background load complete (all ${totalPages} pages covered)`);
+				console.debug(`🖼️ ThumbnailService: Background load complete (radius cap ${backgroundLoadRadius})`);
 				backgroundLoadTimer = null;
 				return;
 			}

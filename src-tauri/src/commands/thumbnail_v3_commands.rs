@@ -43,11 +43,15 @@ pub async fn init_thumbnail_service_v3(
 
     // 路径处理
     let raw = thumbnail_path.trim();
-    let db_dir = if raw.is_empty() || !Path::new(raw).is_absolute() {
-        PathBuf::from("D:\\temp\\neoview")
+    let base_dir = if raw.is_empty() || !Path::new(raw).is_absolute() {
+        app.path()
+            .app_data_dir()
+            .unwrap_or_else(|_| std::env::temp_dir().join("neoview"))
     } else {
         PathBuf::from(raw)
     };
+
+    let db_dir = base_dir.join("thumbnails");
 
     // 确保目录存在
     if let Err(e) = std::fs::create_dir_all(&db_dir) {
@@ -60,23 +64,21 @@ pub async fn init_thumbnail_service_v3(
     // 创建数据库
     let db = Arc::new(ThumbnailDb::new(db_path));
 
-    // 创建生成器配置
+    // 创建生成器配置（线程数基于核心数动态调整）
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
     let gen_config = ThumbnailGeneratorConfig {
         max_width: size,
         max_height: size,
-        thread_pool_size: 8,
-        archive_concurrency: 4,
+        thread_pool_size: cores.clamp(4, 16),
+        archive_concurrency: (cores / 2).max(2).min(8),
     };
     let generator = Arc::new(ThumbnailGenerator::new(Arc::clone(&db), gen_config));
 
-    // 创建服务配置
-    let service_config = ThumbnailServiceConfig {
-        folder_search_depth: 2,
-        memory_cache_size: 1024,
-        worker_threads: 8,
-        thumbnail_size: size,
-        db_save_delay_ms: 2000,
-    };
+    // 创建服务配置：使用默认（基于核心数的动态 LRU / 线程数）并覆盖尺寸
+    let mut service_config = ThumbnailServiceConfig::default();
+    service_config.thumbnail_size = size;
 
     // 创建服务
     let service = Arc::new(ThumbnailServiceV3::new(

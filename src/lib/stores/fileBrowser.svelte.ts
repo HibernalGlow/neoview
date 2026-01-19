@@ -7,6 +7,7 @@ import { writable } from 'svelte/store';
 import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
+import type { StreamHandle } from '$lib/api/filesystem';
 import { isVideoFile } from '$lib/utils/videoUtils';
 import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
@@ -346,6 +347,8 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder, p
 function createFileBrowserStore() {
   const { subscribe, set, update } = writable<FileBrowserState>(initialState);
   let currentState = initialState;
+  let activeStream: StreamHandle | null = null;
+  let streamVersion = 0;
 
   subscribe(state => {
     currentState = state;
@@ -499,6 +502,19 @@ function createFileBrowserStore() {
       const task = (async () => {
         const parentPath = getParentDirectory(targetPath) ?? targetPath;
 
+        // 取消旧流，重置状态
+        if (activeStream) {
+          try {
+            await activeStream.cancel();
+          } catch (err) {
+            console.warn('cancel stream failed:', err);
+          }
+          activeStream = null;
+        }
+
+        const version = ++streamVersion;
+        let collected: FsItem[] = [];
+
         update(state => ({
           ...state,
           loading: true,
@@ -506,14 +522,15 @@ function createFileBrowserStore() {
           isArchiveView: false,
           currentArchivePath: '',
           currentPath: parentPath,
-          selectedIndex: -1
+          selectedIndex: -1,
+          items: [],
+          visibleItems: [],
+          useVisibleItemsOverride: false
         }));
 
-        try {
-          const snapshot = await FileSystemAPI.loadDirectorySnapshot(parentPath);
-          // 传入 parentPath 以支持随机排序种子记忆
+        const applyItems = (items: FsItem[]) => {
           const sortedItems = sortItems(
-            snapshot.items,
+            items,
             currentState.sortField,
             currentState.sortOrder,
             parentPath
@@ -522,28 +539,48 @@ function createFileBrowserStore() {
           update(state => ({
             ...state,
             items: sortedItems,
-            thumbnails: new Map(),
+            visibleItems: state.useVisibleItemsOverride ? state.visibleItems : sortedItems,
+            thumbnails: version === streamVersion ? state.thumbnails : new Map(),
             loading: false
           }));
 
           const normalizedTarget = normalizePath(targetPath);
           const targetIndex = sortedItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
-          if (targetIndex >= 0) {
+          const finalSelectIndex = targetIndex >= 0 ? targetIndex : selectIndex;
+          if (finalSelectIndex !== undefined && finalSelectIndex >= 0 && finalSelectIndex < sortedItems.length) {
             update(state => ({
               ...state,
-              selectedIndex: targetIndex,
-              scrollTargetIndex: targetIndex,
+              selectedIndex: finalSelectIndex,
+              scrollTargetIndex: finalSelectIndex,
               scrollToSelectedToken: state.scrollToSelectedToken + 1
             }));
           }
-          if (selectIndex !== undefined) {
-            update(state => ({
-              ...state,
-              selectedIndex: selectIndex,
-              scrollTargetIndex: selectIndex,
-              scrollToSelectedToken: state.scrollToSelectedToken + 1
-            }));
-          }
+        };
+
+        try {
+          activeStream = await FileSystemAPI.streamDirectory(
+            parentPath,
+            {
+              onBatch: (batch) => {
+                if (version !== streamVersion) return;
+                collected = collected.concat(batch.items);
+                applyItems(collected);
+              },
+              onError: (err) => {
+                if (version !== streamVersion) return;
+                update(state => ({ ...state, error: err.message, loading: false }));
+              },
+              onComplete: () => {
+                if (version !== streamVersion) return;
+                applyItems(collected);
+              }
+            },
+            {
+              batchSize: 256,
+              sortBy: currentState.sortField,
+              sortOrder: currentState.sortOrder
+            }
+          );
         } catch (err) {
           console.error('navigateToPath failed:', err);
           update(state => ({ ...state, error: String(err), loading: false }));

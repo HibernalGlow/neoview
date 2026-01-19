@@ -6,6 +6,34 @@ import { getThumbUrl } from '$lib/api/imageProtocol';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();
+const THUMBNAIL_CACHE_LIMIT = 512; // 内存 LRU 上限，防止无限增长
+
+function revokeIfObjectUrl(url: string) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function setThumbnailWithEviction(path: string, url: string) {
+  const existing = thumbnails.get(path);
+  if (existing && existing !== url) {
+    revokeIfObjectUrl(existing);
+  }
+
+  // 通过重新 set 维持 LRU 顺序
+  thumbnails.delete(path);
+  thumbnails.set(path, url);
+
+  // 超过容量则淘汰最早的条目
+  while (thumbnails.size > THUMBNAIL_CACHE_LIMIT) {
+    const first = thumbnails.keys().next().value as string | undefined;
+    if (!first) break;
+    const oldUrl = thumbnails.get(first);
+    if (oldUrl) revokeIfObjectUrl(oldUrl);
+    thumbnails.delete(first);
+    fileBrowserStore.removeThumbnail(toRelativeKey(first));
+  }
+}
 
 // 路径转换：统一使用正斜杠作为 key
 function toRelativeKey(path: string): string {
@@ -25,6 +53,8 @@ const pendingPathsSet = new Set<string>();
 const pendingPathsOrder: string[] = []; // 保持顺序
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
 const THROTTLE_MS = 8; // 8ms 节流（更快响应）
+const MAX_BATCH_SIZE = 64; // 单次发送上限，避免一次塞入过多路径
+const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
 
 // 动态预加载相关（根据停留时间指数扩展）
 const prefetchState = {
@@ -82,8 +112,8 @@ export async function initThumbnailServiceV3(
         ? URL.createObjectURL(new Blob([new Uint8Array(blob)], { type: 'image/webp' }))
         : thumbUrl;
 
-      // 存储到本地缓存
-      thumbnails.set(path, finalUrl);
+      // 存储到本地缓存（带 LRU + revoke）
+      setThumbnailWithEviction(path, finalUrl);
 
       // 同步到 fileBrowserStore（供 FileItemCard 使用）
       const key = toRelativeKey(path);
@@ -144,11 +174,16 @@ export async function requestVisibleThumbnails(
     throttleState.dir = currentDir;
   }
 
-  // 合并到待处理列表（使用 Set O(1) 去重）
+  // 合并到待处理列表（使用 Set O(1) 去重），并控制队列长度
   for (const p of uncachedPaths) {
-    if (!pendingPathsSet.has(p)) {
-      pendingPathsSet.add(p);
-      pendingPathsOrder.push(p);
+    if (pendingPathsSet.has(p)) continue;
+    pendingPathsSet.add(p);
+    pendingPathsOrder.push(p);
+
+    // 超过上限则丢弃最早的低优先级项，避免滚动时队列爆炸
+    while (pendingPathsOrder.length > MAX_QUEUE_SIZE) {
+      const dropped = pendingPathsOrder.shift();
+      if (dropped) pendingPathsSet.delete(dropped);
     }
   }
 
@@ -162,22 +197,34 @@ export async function requestVisibleThumbnails(
   const sendRequest = async () => {
     if (pendingPathsSet.size === 0) return;
 
-    // 复制并清空待处理列表
-    const pathsToRequest = [...pendingPathsOrder];
-    pendingPathsSet.clear();
-    pendingPathsOrder.length = 0;
+    // 一次仅发送一个批次，其余留在队列里分批发送，防止单次 IPC 过大
+    const batch: string[] = [];
+    while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
+      const p = pendingPathsOrder.shift();
+      if (!p) break;
+      if (!pendingPathsSet.has(p)) continue;
+      batch.push(p);
+      pendingPathsSet.delete(p);
+    }
+
+    if (batch.length === 0) return;
 
     try {
-      // 计算中心索引（如果未提供，使用列表中间位置）
-      const center = centerIndex ?? Math.floor(pathsToRequest.length / 2);
+      // 计算中心索引（如果未提供，使用可见列表中心）
+      const center = centerIndex ?? Math.floor(batch.length / 2);
       
       await invoke('request_visible_thumbnails_v3', {
-        paths: pathsToRequest,
+        paths: batch,
         currentDir: throttleState.dir,
         centerIndex: center,
       });
     } catch (error) {
       console.error('❌ requestVisibleThumbnails failed:', error);
+    }
+
+    // 如果还有剩余队列，继续调度下一批
+    if (pendingPathsOrder.length > 0) {
+      throttleState.timer = setTimeout(sendRequest, THROTTLE_MS);
     }
   };
 

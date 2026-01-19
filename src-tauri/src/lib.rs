@@ -14,6 +14,11 @@ mod models;
 mod tray;
 mod utils;
 
+// Test-only exports for integration tests (kept public to allow integration tests to import)
+pub mod test_exports {
+    pub use crate::core::directory_stream::{DirectoryScanner, DirectoryStreamOutput, StreamManager};
+}
+
 use commands::fs_commands::{CacheIndexState, DirectoryCacheState, FsState};
 use commands::generic_upscale_commands::GenericUpscalerState;
 use commands::page_commands::PageManagerState;

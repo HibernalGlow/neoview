@@ -55,6 +55,9 @@ const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | 
 const THROTTLE_MS = 8; // 8ms 节流（更快响应）
 const MAX_BATCH_SIZE = 64; // 单次发送上限，避免一次塞入过多路径
 const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
+// 单次调度内发送批次数上限（0 表示不限，直到队列清空）。
+// 为避免卡住 UI，我们仍按批次顺序发送，每批 await invoke，剩余批次继续循环。
+const MAX_SYNC_DISPATCHES = 0;
 
 // 动态预加载相关（根据停留时间指数扩展）
 const prefetchState = {
@@ -187,56 +190,58 @@ export async function requestVisibleThumbnails(
     }
   }
 
-  // 节流：清除之前的定时器，设置新的
-  // 但如果是第一次请求（无定时器），立即发送
-  if (throttleState.timer) {
-    clearTimeout(throttleState.timer);
-  }
-
-  // 定义发送请求的函数
+  // 定义发送请求的函数（一次可连续发送多个批次，剩余的下个 tick 再发）
   const sendRequest = async () => {
-    if (pendingPathsSet.size === 0) return;
-
-    // 一次仅发送一个批次，其余留在队列里分批发送，防止单次 IPC 过大
-    const batch: string[] = [];
-    while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
-      const p = pendingPathsOrder.shift();
-      if (!p) break;
-      if (!pendingPathsSet.has(p)) continue;
-      batch.push(p);
-      pendingPathsSet.delete(p);
+    if (pendingPathsSet.size === 0) {
+      throttleState.timer = null;
+      return;
     }
 
-    if (batch.length === 0) return;
+    let dispatches = 0;
+    while (pendingPathsOrder.length > 0 && (MAX_SYNC_DISPATCHES === 0 || dispatches < MAX_SYNC_DISPATCHES)) {
+      const batch: string[] = [];
+      while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
+        const p = pendingPathsOrder.shift();
+        if (!p) break;
+        if (!pendingPathsSet.has(p)) continue;
+        batch.push(p);
+        pendingPathsSet.delete(p);
+      }
 
-    try {
-      // 计算中心索引（如果未提供，使用可见列表中心）
-      const center = centerIndex ?? Math.floor(batch.length / 2);
-      
-      await invoke('request_visible_thumbnails_v3', {
-        paths: batch,
-        currentDir: throttleState.dir,
-        centerIndex: center,
-      });
-    } catch (error) {
-      console.error('❌ requestVisibleThumbnails failed:', error);
+      if (batch.length === 0) continue;
+      dispatches += 1;
+
+      try {
+        // 计算中心索引（如果未提供，使用可见列表中心）
+        const center = centerIndex ?? Math.floor(batch.length / 2);
+
+        await invoke('request_visible_thumbnails_v3', {
+          paths: batch,
+          currentDir: throttleState.dir,
+          centerIndex: center,
+        });
+      } catch (error) {
+        console.error('❌ requestVisibleThumbnails failed:', error);
+      }
     }
 
-    // 如果还有剩余队列，继续调度下一批
+    // 还有待发送的队列，下一帧继续
     if (pendingPathsOrder.length > 0) {
-      throttleState.timer = setTimeout(sendRequest, THROTTLE_MS);
+      throttleState.timer = setTimeout(() => {
+        throttleState.timer = null;
+        void sendRequest();
+      }, THROTTLE_MS);
+    } else {
+      throttleState.timer = null;
     }
   };
 
-  // 如果是目录变化或首次请求，立即发送
-  if (!throttleState.timer || throttleState.dir !== currentDir) {
+  // 若当前没有定时器，则启动调度（立即排队，下个 tick 开始发送）
+  if (!throttleState.timer) {
     throttleState.timer = setTimeout(() => {
       throttleState.timer = null;
+      void sendRequest();
     }, THROTTLE_MS);
-    sendRequest();
-  } else {
-    // 否则节流
-    throttleState.timer = setTimeout(sendRequest, THROTTLE_MS);
   }
 }
 

@@ -643,6 +643,36 @@
 							</Tooltip.Content>
 						</Tooltip.Root>
 
+						<Separator.Root orientation="vertical" class="mx-1 h-6" />
+
+						<!-- 放大镜 -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button
+									variant={$viewerState.magnifier.enabled ? 'default' : 'ghost'}
+									size="icon"
+									class="h-8 w-8"
+									onclick={() => {
+										const current = $viewerState.magnifier;
+										appState.update({
+											viewer: {
+												...$viewerState,
+												magnifier: {
+													...current,
+													enabled: !current.enabled
+												}
+											}
+										});
+									}}
+								>
+									<ZoomIn class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								<p>{$viewerState.magnifier.enabled ? '放大镜：开' : '放大镜：关'}</p>
+							</Tooltip.Content>
+						</Tooltip.Root>
+
 						<!-- 悬停滚动 -->
 						<Tooltip.Root>
 							<Tooltip.Trigger>

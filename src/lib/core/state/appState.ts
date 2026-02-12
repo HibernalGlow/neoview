@@ -49,6 +49,11 @@ export interface ViewerSlice {
 	pageWindow: PageWindowState;
 	jumpHistory: JumpHistoryEntry[];
 	taskCursor: TaskCursorState;
+	magnifier: {
+		enabled: boolean;
+		zoom: number;
+		size: number;
+	};
 }
 
 export interface AppStateSnapshot {
@@ -252,6 +257,11 @@ export function createDefaultAppState(): AppStateSnapshot {
 				running: 0,
 				concurrency: 2,
 				updatedAt: Date.now()
+			},
+			magnifier: {
+				enabled: false,
+				zoom: 2.0,
+				size: 200
 			}
 		},
 		lastUpdated: Date.now()

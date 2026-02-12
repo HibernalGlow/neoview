@@ -238,10 +238,10 @@
 				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width * splitFactor}px; height: ${height}px;`;
+					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
 				} else {
 					const width = vp.height * imgAspect;
-					return `width: ${width * splitFactor}px; height: ${vp.height}px;`;
+					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 				}
 			}
 			

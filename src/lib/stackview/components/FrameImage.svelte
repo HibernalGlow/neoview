@@ -120,7 +120,8 @@
     {transform}
     {clipPath}
     style={combinedStyle}
-    class={className}
+    class="{className}"
+    class:is-split={!!clipPath}
     {onload}
   />
 {:else}
@@ -129,6 +130,7 @@
     src={displayUrl}
     {alt}
     class="frame-image {className}"
+    class:is-split={!!clipPath}
     style:transform={transform || undefined}
     style:clip-path={clipPath || undefined}
     style:filter={filterCss || undefined}
@@ -152,5 +154,10 @@
     /* 使用高质量渲染，避免锯齿 */
     image-rendering: auto;
     content-visibility: visible;
+  }
+
+  .frame-image.is-split {
+    max-width: 200%;
+    width: 200%;
   }
 </style>

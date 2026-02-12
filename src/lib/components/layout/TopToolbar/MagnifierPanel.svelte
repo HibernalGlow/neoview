@@ -30,11 +30,15 @@
 
 	// 更新放大镜设置
 	function updateMagnifierSettings(changes: Partial<{ zoom: number; size: number }>) {
+        const current = settings.view.magnifier ?? { zoom: 2.0, size: 200 };
+        const newMagnifier = {
+            zoom: current.zoom ?? 2.0,
+            size: current.size ?? 200,
+            ...changes
+        };
+        console.log('🔍 [Magnifier] Updating settings:', newMagnifier);
         settingsManager.updateNestedSettings('view', {
-            magnifier: {
-                ...settings.view.magnifier,
-                ...changes
-            }
+            magnifier: newMagnifier
         });
 	}
 

@@ -245,7 +245,9 @@ searchResults: [],
 loading: false,
 error: null,
 selectedItems: Array.from(tab.selectedItems),
-expandedFolders: Array.from(tab.expandedFolders)
+expandedFolders: Array.from(tab.expandedFolders),
+thumbnailWidthPercent: tab.thumbnailWidthPercent,
+bannerWidthPercent: tab.bannerWidthPercent
 }))
 };
 localStorage.setItem(STORAGE_KEYS.TABS, JSON.stringify(toSave));

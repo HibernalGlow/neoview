@@ -144,18 +144,28 @@
 	}
 
     function toggleMagnifier() {
+        // Toggle the panel if it's already enabled, or enable it and open panel if disabled
         const snapshot = appState.getSnapshot();
         const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false, zoom: 2.0, size: 200 };
-        
+        const newState = !currentMagnifier.enabled;
+
         appState.update({
             viewer: {
                 ...snapshot.viewer,
                 magnifier: {
                     ...currentMagnifier,
-                    enabled: !currentMagnifier.enabled
+                    enabled: newState
                 }
             }
         });
+
+        // Automatically manage panel visibility
+        if (newState) {
+            closePanels();
+            magnifierPanelExpanded = true;
+        } else {
+             magnifierPanelExpanded = false;
+        }
     }
 
 	// 可见性和悬停状态
@@ -167,12 +177,19 @@
 	let resizeStartHeight = 0;
 	let hoverCount = $state(0);
 
+    import MagnifierPanel from './MagnifierPanel.svelte';
+
+	// ... (existing imports)
+
+    // ... (existing code)
+
 	// 展开面板状态
 	let sortPanelExpanded = $state(false);
 	let zoomPanelExpanded = $state(false);
 	let rotatePanelExpanded = $state(false);
 	let slideshowPanelExpanded = $state(false);
 	let hoverScrollPanelExpanded = $state(false);
+    let magnifierPanelExpanded = $state(false);
 
 	function closePanels() {
 		sortPanelExpanded = false;
@@ -180,7 +197,18 @@
 		rotatePanelExpanded = false;
 		slideshowPanelExpanded = false;
 		hoverScrollPanelExpanded = false;
+        magnifierPanelExpanded = false;
 	}
+
+    // ... (existing toggle functions)
+
+	function toggleMagnifierPanel() {
+		const wasExpanded = magnifierPanelExpanded;
+		closePanels();
+		magnifierPanelExpanded = !wasExpanded;
+	}
+
+    // ... (existing code)
 
 	function toggleSortPanel() {
 		const wasExpanded = sortPanelExpanded;
@@ -475,20 +503,7 @@
 							<Tooltip.Content><p>放大</p></Tooltip.Content>
 						</Tooltip.Root>
 
-                        <!-- 放大镜开关 -->
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<Button 
-                                    variant={($viewerState.magnifier?.enabled ?? false) ? 'default' : 'ghost'} 
-                                    size="icon" 
-                                    class="h-8 w-8" 
-                                    onclick={toggleMagnifier}
-                                >
-									<Search class="h-4 w-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content><p>放大镜 / Magnifier</p></Tooltip.Content>
-						</Tooltip.Root>
+
 
 						<!-- 缩放模式切换 -->
 						<Tooltip.Root>
@@ -715,6 +730,24 @@
 								<p>{slideshowStore.isPlaying ? '幻灯片播放中' : '幻灯片设置'}</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
+						<!-- 放大镜开关 -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button 
+                                    variant={magnifierPanelExpanded || ($viewerState.magnifier?.enabled ?? false) ? 'default' : 'ghost'} 
+                                    size="icon" 
+                                    class="h-8 w-8" 
+                                    onclick={toggleMagnifier}
+                                    oncontextmenu={(e) => {
+                                        e.preventDefault();
+                                        toggleMagnifierPanel();
+                                    }}
+                                >
+									<Search class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>放大镜 / Magnifier</p></Tooltip.Content>
+						</Tooltip.Root>
 					</div>
 				{/if}
 
@@ -724,6 +757,7 @@
 				<RotatePanel expanded={rotatePanelExpanded} />
 				<HoverScrollPanel expanded={hoverScrollPanelExpanded} />
 				<SlideshowPanel expanded={slideshowPanelExpanded} />
+                <MagnifierPanel expanded={magnifierPanelExpanded} />
 			</div>
 
 			<!-- 拖拽手柄 -->

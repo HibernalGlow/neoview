@@ -133,7 +133,7 @@
 <style>
 	.magnifier-lens {
 		position: fixed;
-		z-index: 9999;
+		z-index: 50;
 		border-radius: 50%;
 		border: 2px solid rgba(255, 255, 255, 0.5);
 		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), inset 0 0 20px rgba(0,0,0,0.1);

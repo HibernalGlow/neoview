@@ -9,6 +9,13 @@ use mimalloc::MiMalloc;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
+    // 🚀 启用 JXL 硬件解码支持 (Chromium 145+)
+    // 为了提升内存安全性，谷歌采用了基于 Rust 编写的 jxl-rs 解码器
+    std::env::set_var(
+        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+        "--enable-jxl-image-format",
+    );
+
     // 使用 base64 模式处理 IPC 数据传输问题，无需强制 postMessage
     app_lib::run();
 }

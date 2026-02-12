@@ -114,7 +114,11 @@ impl ImageLoader {
             // 大文件使用 mmap
             match self.load_with_mmap(path) {
                 Ok(data) => {
-                    log::debug!("使用 mmap 加载大文件: {} ({} bytes)", path.display(), metadata.len());
+                    log::debug!(
+                        "使用 mmap 加载大文件: {} ({} bytes)",
+                        path.display(),
+                        metadata.len()
+                    );
                     Ok(data)
                 }
                 Err(e) => {
@@ -141,21 +145,8 @@ impl ImageLoader {
         let image_data =
             fs::read(path_obj).map_err(|e| format!("Failed to read image file: {}", e))?;
 
-        // 检查是否为 JXL 文件 - 需要解码为 PNG
-        if let Some(ext) = path_obj.extension().and_then(|e| e.to_str()) {
-            let ext_lower = ext.to_lowercase();
-            if ext_lower == "jxl" {
-                // JXL 解码图像（浏览器不原生支持，需要转换）
-                let img = self.decode_image_unified(&image_data, &ext_lower)?;
-
-                // 编码为 PNG
-                let mut png_data = Vec::new();
-                img.write_to(&mut Cursor::new(&mut png_data), ImageFormat::Png)
-                    .map_err(|e| format!("Failed to encode PNG: {e}"))?;
-
-                return Ok(png_data);
-            }
-        }
+        // 如果是压缩包或文件系统的 JXL 文件，现在可以直接返回原始二进制数据
+        // 因为我们已经启用了 WebView2 的原生 JXL 支持
 
         // 直接返回原始二进制数据
         Ok(image_data)
@@ -186,8 +177,14 @@ impl ImageLoader {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let ext_lower = ext.to_lowercase();
             if ext_lower == "jxl" {
-                let image = self.decode_image_unified(&image_data, &ext_lower)?;
-                return Ok(image.dimensions());
+                // 如果是 JXL，我们仍然可以尝试获取尺寸，或者让 image crate 尝试
+                // 注意：image crate 0.25+ 可能支持 JXL 嗅探，但如果不支持，我们回退到 unified decoder
+                match self.decode_image_unified(&image_data, &ext_lower) {
+                    Ok(image) => return Ok(image.dimensions()),
+                    Err(e) => {
+                        log::warn!("JXL dimensions detection via unified decoder failed: {e}")
+                    }
+                }
             }
         }
 
@@ -283,11 +280,17 @@ impl ImageLoader {
     }
 
     /// 使用 UnifiedDecoder 解码图像
-    fn decode_image_unified(&self, image_data: &[u8], ext: &str) -> Result<image::DynamicImage, String> {
+    fn decode_image_unified(
+        &self,
+        image_data: &[u8],
+        ext: &str,
+    ) -> Result<image::DynamicImage, String> {
         let decoder = UnifiedDecoder::with_format(ext);
-        let decoded = decoder.decode(image_data)
+        let decoded = decoder
+            .decode(image_data)
             .map_err(|e| format!("解码失败: {e}"))?;
-        decoded.to_dynamic_image()
+        decoded
+            .to_dynamic_image()
             .map_err(|e| format!("转换失败: {e}"))
     }
 
@@ -366,7 +369,10 @@ mod tests {
         let loader = ImageLoader::default();
 
         // 默认阈值
-        assert_eq!(loader.get_large_file_threshold(), DEFAULT_LARGE_FILE_THRESHOLD);
+        assert_eq!(
+            loader.get_large_file_threshold(),
+            DEFAULT_LARGE_FILE_THRESHOLD
+        );
 
         // 更新阈值
         loader.set_large_file_threshold(20);

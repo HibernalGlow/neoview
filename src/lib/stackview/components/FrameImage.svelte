@@ -120,8 +120,7 @@
     {transform}
     {clipPath}
     style={combinedStyle}
-    class="{className}"
-    class:is-split={!!clipPath}
+    class="{className} {clipPath ? 'is-split' : ''}"
     {onload}
   />
 {:else}

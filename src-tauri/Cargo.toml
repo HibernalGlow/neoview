@@ -1,6 +1,6 @@
 [package]
 name = "neoview"
-version = "5.7.0"
+version = "5.7.8"
 description = "A simple desktop application template combining Tauri 2 with Svelte 5 and shadcn-svelte with a basic ci/cd implemented."
 authors = ["HibernalGlow Veras Vieira"]
 license = "MIT"

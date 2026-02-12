@@ -59,6 +59,15 @@ export async function preExtractArchive(_archivePath: string): Promise<string | 
 	return null;
 }
 
+/**
+ * 清空临时文件缓存中的所有 Blob 引用
+ * 注意：tempfileCache 中存储的 url 是 convertFileSrc 生成的 asset:// URL，不是 blob: URL，
+ * 不需要 revokeObjectURL，但需要释放 Blob 引用以允许 GC 回收内存
+ */
+export function clearTempfileCache(): void {
+	tempfileCache.clear();
+}
+
 export function clearExtractCache(): void {
 	// 重置预加载状态
 	lastPreloadedPage = -1;
@@ -67,6 +76,8 @@ export function clearExtractCache(): void {
 	// 重置 Custom Protocol 缓存
 	currentBookHash = null;
 	currentBookPathForHash = null;
+	// 清空临时文件缓存
+	clearTempfileCache();
 }
 
 /**

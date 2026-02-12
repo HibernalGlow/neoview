@@ -86,6 +86,9 @@ class ThumbnailCacheStore {
 	setBook(bookPath: string | null): void {
 		if (this.state.bookPath === bookPath) return;
 
+		// 释放旧书籍的 blob: Object URLs，防止内存泄漏
+		this.revokeAllBlobUrls();
+
 		this.state = {
 			bookPath,
 			thumbnails: new Map(),
@@ -146,6 +149,12 @@ class ThumbnailCacheStore {
 	 * 设置缩略图
 	 */
 	setThumbnail(pageIndex: number, url: string, width: number, height: number): void {
+		// 释放旧的 blob: URL（如果存在且不同）
+		const existing = this.state.thumbnails.get(pageIndex);
+		if (existing && existing.url !== url && existing.url.startsWith('blob:')) {
+			URL.revokeObjectURL(existing.url);
+		}
+
 		const entry: ThumbnailEntry = {
 			url,
 			width,
@@ -256,6 +265,9 @@ class ThumbnailCacheStore {
 	 * 清空所有缓存
 	 */
 	clear(): void {
+		// 释放所有 blob: Object URLs，防止内存泄漏
+		this.revokeAllBlobUrls();
+
 		this.state = {
 			bookPath: this.state.bookPath,
 			thumbnails: new Map(),
@@ -302,6 +314,22 @@ class ThumbnailCacheStore {
 	hasPersistedThumbnail(pageIndex: number): boolean {
 		if (!this.state.bookPath) return false;
 		return thumbnailPersistence.hasThumbnail(this.state.bookPath, pageIndex);
+	}
+	/**
+	 * 释放所有 blob: Object URLs
+	 * 只释放 blob: 协议的 URL，data: URL 和其他 URL 无需释放
+	 */
+	private revokeAllBlobUrls(): void {
+		let revoked = 0;
+		for (const [, entry] of this.state.thumbnails) {
+			if (entry.url.startsWith('blob:')) {
+				URL.revokeObjectURL(entry.url);
+				revoked++;
+			}
+		}
+		if (revoked > 0) {
+			console.log(`🧹 [ThumbnailCache] 释放了 ${revoked} 个 blob URL`);
+		}
 	}
 }
 

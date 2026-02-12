@@ -35,6 +35,7 @@ import type {
 import { isArchivePath } from './streamingLoader.svelte';
 import { renderSwitchToastTemplate } from './toast';
 import { pageFrameStore } from '../pageFrame.svelte';
+import { cleanupBookResources } from '$lib/core/bookCleanup';
 
 export type { SwitchToastContext };
 
@@ -157,6 +158,9 @@ class BookStore {
       this.state.pathStack = [{ path }];
       infoPanelStore.resetAll();
 
+      // 【内存泄漏修复】清理上一本书的所有缓存资源
+      cleanupBookResources();
+
       await this.openBookNormal(path, options);
     } catch (err) {
       console.error('❌ Error opening book:', err);
@@ -262,6 +266,9 @@ class BookStore {
   }
 
   closeViewer() {
+    // 【内存泄漏修复】清理所有缓存资源
+    cleanupBookResources();
+
     this.state.viewerOpen = false;
     this.state.currentBook = null;
     this.syncAppStateBookSlice();

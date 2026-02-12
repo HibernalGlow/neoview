@@ -49,6 +49,11 @@ export interface ViewerSlice {
 	pageWindow: PageWindowState;
 	jumpHistory: JumpHistoryEntry[];
 	taskCursor: TaskCursorState;
+    magnifier: {
+        enabled: boolean;
+        zoom: number;
+        size: number;
+    };
 }
 
 export interface AppStateSnapshot {
@@ -97,7 +102,9 @@ export function createDefaultAppState(): AppStateSnapshot {
 				cacheMemorySize: 512,
 				preLoadSize: 3,
 				multiThreadedRendering: true,
-				maxThreads: 2
+				maxThreads: 2,
+                archiveTempfileThresholdMB: 100,
+                directUrlThresholdMB: 50
 			},
 			image: {
 				supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],
@@ -108,6 +115,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				autoPlayAnimatedImages: true,
 				longImageScrollMode: 'continuous',
 				hoverScrollEnabled: true,
+                hoverScrollSpeed: 1.0,
 				videoMinPlaybackRate: 0.25,
 				videoMaxPlaybackRate: 16,
 				videoPlaybackRateStep: 0.25,
@@ -136,7 +144,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 					splitHorizontalPages: false,
 					treatHorizontalAsDoublePage: false,
 					singleFirstPageMode: 'restoreOrDefault',
-					singleLastPageMode: 'restoreOrDefault'
+					singleLastPageMode: 'restoreOrDefault',
+                    widePageStretch: 'none'
 				},
 				autoRotate: {
 					mode: 'none'
@@ -154,6 +163,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				switchToast: {
 					enableBook: false,
 					enablePage: false,
+                    enableBoundaryToast: true,
 					showBookPath: true,
 					showBookPageProgress: true,
 					showBookType: false,
@@ -177,13 +187,29 @@ export function createDefaultAppState(): AppStateSnapshot {
 			theme: {
 				theme: 'system',
 				fontSize: 'medium',
-				uiScale: 1.0
+				uiScale: 1.0,
+                customFont: {
+                    enabled: false,
+                    fontFamilies: [],
+                    uiFontFamilies: [],
+                    monoFontFamilies: []
+                }
 			},
 			panels: {
 				leftSidebarVisible: true,
 				rightSidebarVisible: false,
 				bottomPanelVisible: false,
 				autoHideToolbar: true,
+                sidebarOpacity: 90,
+                topToolbarOpacity: 90,
+                bottomBarOpacity: 90,
+                sidebarBlur: 10,
+                topToolbarBlur: 10,
+                bottomBarBlur: 10,
+                progressBarGlow: true,
+                settingsOpacity: 95,
+                settingsBlur: 10,
+                pageListFollowProgress: true,
 				hoverAreas: {
 					topTriggerHeight: 32,
 					bottomTriggerHeight: 32,
@@ -252,7 +278,12 @@ export function createDefaultAppState(): AppStateSnapshot {
 				running: 0,
 				concurrency: 2,
 				updatedAt: Date.now()
-			}
+			},
+            magnifier: {
+                enabled: false,
+                zoom: 2.0,
+                size: 200
+            }
 		},
 		lastUpdated: Date.now()
 	};

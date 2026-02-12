@@ -58,6 +58,18 @@
 	import SlideshowControl from '$lib/components/viewer/SlideshowControl.svelte';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import { showInfoToast } from '$lib/utils/toast';
+	import Magnifier from '$lib/components/viewer/Magnifier.svelte';
+	import { appState } from '$lib/core/state/appState';
+	import { readable } from 'svelte/store';
+	import type { StateSelector } from '$lib/core/state/appState';
+
+	// Helper for appState subscription
+	function createAppStateStore<T>(selector: StateSelector<T>) {
+		const initial = selector(appState.getSnapshot());
+		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
+	}
+
+	const viewerState = createAppStateStore((state) => state.viewer);
 
 	// ============================================================================
 	// Props
@@ -85,6 +97,7 @@
 
 	let containerRef: HTMLDivElement | null = $state(null);
 	let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
+	let containerRect = $state<DOMRect | null>(null);
 	let cursorAutoHide: CursorAutoHideController | null = null;
 
 	// 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 DOM
@@ -318,7 +331,7 @@
 	let videoCacheKey = $derived(bookStore.currentPage?.path ?? '');
 
 	// 视频容器引用
-	let videoContainerRef: any = null;
+	let videoContainerRef: any = $state(null);
 
 	// 幻灯片模式
 	let slideshowVisible = $state(false);
@@ -770,6 +783,7 @@
 	function updateViewportSize() {
 		if (containerRef) {
 			const rect = containerRef.getBoundingClientRect();
+			containerRect = rect;
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
 				// 【新增】同步视口尺寸到 imageStore，用于预计算缩放
@@ -1026,6 +1040,19 @@
 		}}
 	/>
 </div>
+
+	<!-- 放大镜层 (Simple Implementation) -->
+	{#if currentFrameData && currentFrameData.images.length > 0}
+		<Magnifier
+			imageUrl={currentFrameData.images[0].url}
+			{containerRect}
+            imageWidth={currentFrameData.images[0].width}
+            imageHeight={currentFrameData.images[0].height}
+			zoom={$viewerState.magnifier.enabled ? $viewerState.magnifier.zoom : 2.0}
+			size={$viewerState.magnifier.enabled ? $viewerState.magnifier.size : 200}
+			enabled={$viewerState.magnifier.enabled}
+		/>
+	{/if}
 
 <style>
 	.stack-view {

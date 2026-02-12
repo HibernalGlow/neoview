@@ -54,7 +54,8 @@
 		ArrowRight,
 		ArrowLeft,
 		Play,
-		Pause
+		Pause,
+        Search
 	} from '@lucide/svelte';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -141,6 +142,21 @@
 		const next = !(settings.image.hoverScrollEnabled ?? true);
 		settingsManager.updateNestedSettings('image', { hoverScrollEnabled: next });
 	}
+
+    function toggleMagnifier() {
+        const snapshot = appState.getSnapshot();
+        const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false, zoom: 2.0, size: 200 };
+        
+        appState.update({
+            viewer: {
+                ...snapshot.viewer,
+                magnifier: {
+                    ...currentMagnifier,
+                    enabled: !currentMagnifier.enabled
+                }
+            }
+        });
+    }
 
 	// 可见性和悬停状态
 	let isVisible = $state(false);
@@ -457,6 +473,21 @@
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content><p>放大</p></Tooltip.Content>
+						</Tooltip.Root>
+
+                        <!-- 放大镜开关 -->
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<Button 
+                                    variant={($viewerState.magnifier?.enabled ?? false) ? 'default' : 'ghost'} 
+                                    size="icon" 
+                                    class="h-8 w-8" 
+                                    onclick={toggleMagnifier}
+                                >
+									<Search class="h-4 w-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>放大镜 / Magnifier</p></Tooltip.Content>
 						</Tooltip.Root>
 
 						<!-- 缩放模式切换 -->

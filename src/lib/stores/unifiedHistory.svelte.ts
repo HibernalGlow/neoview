@@ -284,6 +284,54 @@ export const unifiedHistoryStore = {
   },
 
   /**
+   * 按数量清理最旧的记录
+   */
+  clearOldest(count: number) {
+    update(history => {
+      if (history.length <= count) {
+        saveToStorage([]);
+        return [];
+      }
+      const newHistory = history.slice(0, history.length - count);
+      saveToStorage(newHistory);
+      return newHistory;
+    });
+  },
+
+  /**
+   * 按天数清理记录
+   */
+  clearByDate(days: number) {
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    update(history => {
+      const newHistory = history.filter(h => h.timestamp >= cutoff);
+      if (newHistory.length !== history.length) {
+        saveToStorage(newHistory);
+      }
+      return newHistory;
+    });
+  },
+
+  /**
+   * 按文件夹路径清理记录
+   */
+  clearByFolder(folderPath: string) {
+    const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+    const normalizedTarget = normalizePath(folderPath);
+    update(history => {
+      const newHistory = history.filter(h => {
+        const firstPath = h.pathStack[0]?.path;
+        if (!firstPath) return true;
+        return !normalizePath(firstPath).startsWith(normalizedTarget);
+      });
+      if (newHistory.length !== history.length) {
+        saveToStorage(newHistory);
+      }
+      return newHistory;
+    });
+  },
+
+  /**
    * 获取所有
    */
   getAll(): UnifiedHistoryEntry[] {

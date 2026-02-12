@@ -257,6 +257,17 @@
 			<!-- 文件夹统计信息 -->
 			{#if item.isDir}
 				<div class="flex items-center gap-1.5 text-xs">
+					{#if item.imageCount !== undefined && item.imageCount > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+									<Image class="h-3.3 w-3.2" />
+									<span class="font-medium">{item.imageCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>图片数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
 					{#if item.folderCount !== undefined && item.folderCount > 0}
 						<Tooltip.Root>
 							<Tooltip.Trigger>

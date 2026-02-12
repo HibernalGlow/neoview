@@ -17,6 +17,8 @@ import * as Tooltip from '$lib/components/ui/tooltip';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
+import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import CleanupOptionsDialog from './CleanupOptionsDialog.svelte';
 import type { VirtualMode } from './types';
 
 interface Props {
@@ -87,6 +89,9 @@ async function handleCleanupInvalid() {
 		isCleaningInvalid = false;
 	}
 }
+
+// 高级清理对话框状态
+let cleanupDialogOpen = $state(false);
 </script>
 
 <div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
@@ -204,24 +209,55 @@ async function handleCleanupInvalid() {
 	</Tooltip.Root>
 
 	<!-- 清理失效条目按钮 -->
-	<Tooltip.Root disabled={!showToolbarTooltip}>
-		<Tooltip.Trigger>
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
-				onclick={handleCleanupInvalid}
-				disabled={isCleaningInvalid}
-			>
-				<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />
-			</Button>
-		</Tooltip.Trigger>
-		<Tooltip.Content>
-			<p>清理失效{virtualMode === 'history' ? '历史' : '书签'}</p>
-			<p class="text-muted-foreground text-xs">移除已不存在的文件和文件夹</p>
-			{#if cleanupResult}
-				<p class="text-green-500 text-xs">已清理 {cleanupResult.removed} 条</p>
-			{/if}
-		</Tooltip.Content>
-	</Tooltip.Root>
+	<DropdownMenu.Root>
+		<Tooltip.Root disabled={!showToolbarTooltip}>
+			<Tooltip.Trigger>
+				<DropdownMenu.Trigger asChild>
+					{#snippet children({ props })}
+						<Button
+							variant="ghost"
+							size="icon"
+							class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
+							disabled={isCleaningInvalid}
+							{...props}
+						>
+							<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>清理{virtualMode === 'history' ? '历史' : '书签'}选项</p>
+				<p class="text-muted-foreground text-xs">点击展开更多清理功能</p>
+				{#if cleanupResult}
+					<p class="text-green-500 text-xs">最近清理了 {cleanupResult.removed} 条</p>
+				{/if}
+			</Tooltip.Content>
+		</Tooltip.Root>
+		<DropdownMenu.Content align="end">
+			<DropdownMenu.Item onclick={handleCleanupInvalid}>
+				清理失效记录
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onclick={() => cleanupDialogOpen = true}>
+				高级清理选项...
+			</DropdownMenu.Item>
+			<DropdownMenu.Separator />
+			<DropdownMenu.Item class="text-destructive" onclick={() => {
+				if (confirm(`确定要清空所有${virtualMode === 'history' ? '历史记录' : '书签'}吗？`)) {
+					if (virtualMode === 'history') unifiedHistoryStore.clear();
+					else bookmarkStore.clear();
+					onRefresh?.();
+				}
+			}}>
+				一键清除全部
+			</DropdownMenu.Item>
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+
+	<!-- 高级对话框 -->
+	<CleanupOptionsDialog 
+		bind:open={cleanupDialogOpen} 
+		virtualMode={virtualMode as 'history' | 'bookmark'} 
+		{onRefresh} 
+	/>
 {/if}

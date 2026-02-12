@@ -111,6 +111,53 @@ export const bookmarkStore = {
   },
 
   /**
+   * 按数量清理最旧的书签
+   */
+  clearOldest(count: number) {
+    update(bookmarks => {
+      if (bookmarks.length <= count) {
+        saveToStorage([]);
+        return [];
+      }
+      // 书签通常是按创建时间排序的（旧的在前或是新的在前取决于 add 方法）
+      // add 方法中使用 newBookmarks = [...bookmarks, bookmark]
+      // 所以最早的在数组头部
+      const newBookmarks = bookmarks.slice(count);
+      saveToStorage(newBookmarks);
+      return newBookmarks;
+    });
+  },
+
+  /**
+   * 按天数清理书签
+   */
+  clearByDate(days: number) {
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    update(bookmarks => {
+      const newBookmarks = bookmarks.filter(b => b.createdAt.getTime() >= cutoff);
+      if (newBookmarks.length !== bookmarks.length) {
+        saveToStorage(newBookmarks);
+      }
+      return newBookmarks;
+    });
+  },
+
+  /**
+   * 按文件夹路径清理书签
+   */
+  clearByFolder(folderPath: string) {
+    const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+    const normalizedTarget = normalizePath(folderPath);
+    update(bookmarks => {
+      const newHistory = bookmarks.filter(b => !normalizePath(b.path).startsWith(normalizedTarget));
+      if (newHistory.length !== bookmarks.length) {
+        saveToStorage(newHistory);
+      }
+      return newHistory;
+    });
+  },
+
+  /**
    * 清理失效的书签（文件/文件夹不存在）
    * 返回清理的条目数量
    */

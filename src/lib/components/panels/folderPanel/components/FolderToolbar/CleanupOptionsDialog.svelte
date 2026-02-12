@@ -12,6 +12,7 @@
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import { showSuccessToast } from '$lib/utils/toast';
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 
 	interface Props {
 		open: boolean;
@@ -25,6 +26,9 @@
 	let clearCount = $state(10);
 	let clearDays = $state(30);
 	let clearFolderPath = $state('');
+
+	// 确认对话框状态
+	let confirmClearAllOpen = $state(false);
 
 	async function selectFolder() {
 		try {
@@ -76,16 +80,18 @@
 	}
 
 	function handleClearAll() {
-		if (confirm(`确定要清空所有${virtualMode === 'history' ? '历史记录' : '书签'}吗？此操作不可撤销。`)) {
-			if (virtualMode === 'history') {
-				unifiedHistoryStore.clear();
-			} else {
-				bookmarkStore.clear();
-			}
-			showSuccessToast('清理完成', `已清空所有${virtualMode === 'history' ? '历史' : '书签'}`);
-			onRefresh?.();
-			open = false;
+		confirmClearAllOpen = true;
+	}
+
+	function executeClearAll() {
+		if (virtualMode === 'history') {
+			unifiedHistoryStore.clear();
+		} else {
+			bookmarkStore.clear();
 		}
+		showSuccessToast('清理完成', `已清空所有${virtualMode === 'history' ? '历史' : '书签'}`);
+		onRefresh?.();
+		open = false;
 	}
 </script>
 
@@ -147,3 +153,13 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<!-- 确认对话框 -->
+<ConfirmDialog
+	bind:open={confirmClearAllOpen}
+	title="确认清空全部"
+	description="确定要清空所有{virtualMode === 'history' ? '历史记录' : '书签'}吗？此操作不可撤销。"
+	confirmText="清空"
+	variant="destructive"
+	onConfirm={executeClearAll}
+/>

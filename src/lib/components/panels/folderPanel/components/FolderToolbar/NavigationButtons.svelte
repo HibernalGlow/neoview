@@ -18,6 +18,7 @@ import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 import CleanupOptionsDialog from './CleanupOptionsDialog.svelte';
 import type { VirtualMode } from './types';
 
@@ -92,6 +93,15 @@ async function handleCleanupInvalid() {
 
 // 高级清理对话框状态
 let cleanupDialogOpen = $state(false);
+
+// 确认对话框状态
+let confirmClearAllOpen = $state(false);
+
+function executeClearAll() {
+	if (virtualMode === 'history') unifiedHistoryStore.clear();
+	else bookmarkStore.clear();
+	onRefresh?.();
+}
 </script>
 
 <div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
@@ -242,13 +252,7 @@ let cleanupDialogOpen = $state(false);
 				高级清理选项...
 			</DropdownMenu.Item>
 			<DropdownMenu.Separator />
-			<DropdownMenu.Item class="text-destructive" onclick={() => {
-				if (confirm(`确定要清空所有${virtualMode === 'history' ? '历史记录' : '书签'}吗？`)) {
-					if (virtualMode === 'history') unifiedHistoryStore.clear();
-					else bookmarkStore.clear();
-					onRefresh?.();
-				}
-			}}>
+			<DropdownMenu.Item class="text-destructive" onclick={() => confirmClearAllOpen = true}>
 				一键清除全部
 			</DropdownMenu.Item>
 		</DropdownMenu.Content>
@@ -259,5 +263,15 @@ let cleanupDialogOpen = $state(false);
 		bind:open={cleanupDialogOpen} 
 		virtualMode={virtualMode as 'history' | 'bookmark'} 
 		{onRefresh} 
+	/>
+
+	<!-- 确认对话框 -->
+	<ConfirmDialog
+		bind:open={confirmClearAllOpen}
+		title="确认清空全部"
+		description="确定要清空所有{virtualMode === 'history' ? '历史记录' : '书签'}吗？此操作不可撤销。"
+		confirmText="清空"
+		variant="destructive"
+		onConfirm={executeClearAll}
 	/>
 {/if}

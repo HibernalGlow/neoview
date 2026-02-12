@@ -1,7 +1,7 @@
 //! Rkyv 零拷贝索引模块
 //! 使用 rkyv 实现零拷贝反序列化，大幅提升索引加载速度
 
-use rkyv::{Archive, Deserialize, Serialize, rancor::Error as RkyvError};
+use rkyv::{rancor::Error as RkyvError, Archive, Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -28,6 +28,8 @@ pub struct RkyvIndexEntry {
     pub compressed_size: u64,
     /// 是否为图片
     pub is_image: bool,
+    /// 是否为视频
+    pub is_video: bool,
     /// 条目索引
     pub entry_index: u32,
     /// 修改时间（Unix 时间戳）
@@ -64,8 +66,8 @@ impl RkyvArchiveIndex {
 
     /// 添加条目
     pub fn add_entry(&mut self, entry: RkyvIndexEntry) {
-        if entry.is_image {
-            self.image_count += 1;
+        if entry.is_image || entry.is_video {
+            self.image_count += 1; // 这里 image_count 实际上代表 viewable_count，保持字段名兼容
         }
         self.entries.push(entry);
     }
@@ -79,8 +81,7 @@ impl RkyvArchiveIndex {
 
     /// 从字节反序列化（完整反序列化，用于修改）
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        rkyv::from_bytes::<Self, RkyvError>(bytes)
-            .map_err(|e| format!("反序列化失败: {e}"))
+        rkyv::from_bytes::<Self, RkyvError>(bytes).map_err(|e| format!("反序列化失败: {e}"))
     }
 
     /// 零拷贝访问归档数据（只读，无需反序列化）
@@ -95,6 +96,14 @@ impl RkyvArchiveIndex {
         self.entries.iter().filter(|e| e.is_image).collect()
     }
 
+    /// 获取可查看条目（图片和视频）
+    pub fn viewable_entries(&self) -> Vec<&RkyvIndexEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.is_image || e.is_video)
+            .collect()
+    }
+
     /// 按名称查找条目
     pub fn find_by_name(&self, name: &str) -> Option<&RkyvIndexEntry> {
         self.entries.iter().find(|e| e.name == name)
@@ -103,9 +112,9 @@ impl RkyvArchiveIndex {
     /// 按路径查找条目
     pub fn find_by_path(&self, path: &str) -> Option<&RkyvIndexEntry> {
         let normalized = path.replace('\\', "/");
-        self.entries.iter().find(|e| {
-            e.path == path || e.path.replace('\\', "/") == normalized
-        })
+        self.entries
+            .iter()
+            .find(|e| e.path == path || e.path.replace('\\', "/") == normalized)
     }
 }
 
@@ -150,8 +159,7 @@ impl RkyvIndexManager {
         file_data.extend_from_slice(&data);
 
         // 写入文件
-        let mut file = File::create(&index_path)
-            .map_err(|e| format!("创建索引文件失败: {e}"))?;
+        let mut file = File::create(&index_path).map_err(|e| format!("创建索引文件失败: {e}"))?;
         file.write_all(&file_data)
             .map_err(|e| format!("写入索引文件失败: {e}"))?;
 
@@ -177,8 +185,7 @@ impl RkyvIndexManager {
         }
 
         // 读取文件
-        let mut file = File::open(&index_path)
-            .map_err(|e| format!("打开索引文件失败: {e}"))?;
+        let mut file = File::open(&index_path).map_err(|e| format!("打开索引文件失败: {e}"))?;
         let mut file_data = Vec::new();
         file.read_to_end(&mut file_data)
             .map_err(|e| format!("读取索引文件失败: {e}"))?;
@@ -190,9 +197,7 @@ impl RkyvIndexManager {
         if &file_data[0..4] != MAGIC {
             return Err("索引文件魔数错误".to_string());
         }
-        let version = u32::from_le_bytes([
-            file_data[4], file_data[5], file_data[6], file_data[7]
-        ]);
+        let version = u32::from_le_bytes([file_data[4], file_data[5], file_data[6], file_data[7]]);
         if version != VERSION {
             return Err(format!("索引文件版本不匹配: {} != {}", version, VERSION));
         }
@@ -240,8 +245,7 @@ impl RkyvIndexManager {
     pub fn remove(&self, archive_path: &Path) -> Result<(), String> {
         let index_path = self.get_index_path(archive_path);
         if index_path.exists() {
-            fs::remove_file(&index_path)
-                .map_err(|e| format!("删除索引文件失败: {e}"))?;
+            fs::remove_file(&index_path).map_err(|e| format!("删除索引文件失败: {e}"))?;
         }
         Ok(())
     }
@@ -305,11 +309,8 @@ mod tests {
 
     #[test]
     fn test_rkyv_index_serialization() {
-        let mut index = RkyvArchiveIndex::new(
-            "/test/archive.zip".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
+        let mut index =
+            RkyvArchiveIndex::new("/test/archive.zip".to_string(), 1234567890, 1024 * 1024);
 
         index.add_entry(RkyvIndexEntry {
             path: "images/001.jpg".to_string(),
@@ -318,6 +319,7 @@ mod tests {
             offset: 0,
             compressed_size: 45000,
             is_image: true,
+            is_video: false,
             entry_index: 0,
             modified: Some(1234567890),
         });
@@ -329,6 +331,7 @@ mod tests {
             offset: 45000,
             compressed_size: 75000,
             is_image: true,
+            is_video: false,
             entry_index: 1,
             modified: None,
         });
@@ -346,11 +349,8 @@ mod tests {
 
     #[test]
     fn test_rkyv_zero_copy_access() {
-        let mut index = RkyvArchiveIndex::new(
-            "/test/archive.zip".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
+        let mut index =
+            RkyvArchiveIndex::new("/test/archive.zip".to_string(), 1234567890, 1024 * 1024);
 
         index.add_entry(RkyvIndexEntry {
             path: "test.jpg".to_string(),
@@ -359,6 +359,7 @@ mod tests {
             offset: 0,
             compressed_size: 900,
             is_image: true,
+            is_video: false,
             entry_index: 0,
             modified: Some(1234567890),
         });
@@ -392,6 +393,7 @@ mod tests {
             offset: 0,
             compressed_size: 900,
             is_image: true,
+            is_video: false,
             entry_index: 0,
             modified: None,
         });
@@ -419,11 +421,8 @@ mod tests {
 
     #[test]
     fn test_find_entry() {
-        let mut index = RkyvArchiveIndex::new(
-            "/test/archive.zip".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
+        let mut index =
+            RkyvArchiveIndex::new("/test/archive.zip".to_string(), 1234567890, 1024 * 1024);
 
         index.add_entry(RkyvIndexEntry {
             path: "folder/image.jpg".to_string(),
@@ -432,6 +431,7 @@ mod tests {
             offset: 0,
             compressed_size: 900,
             is_image: true,
+            is_video: false,
             entry_index: 0,
             modified: None,
         });

@@ -28,6 +28,8 @@ pub struct ArchiveIndexEntry {
     pub is_dir: bool,
     /// 是否为图片
     pub is_image: bool,
+    /// 是否为视频
+    pub is_video: bool,
 }
 
 /// 压缩包索引
@@ -111,6 +113,15 @@ impl ArchiveIndex {
         self.last_accessed = Instant::now();
     }
 
+    /// 获取所有可查看条目（图片和视频）
+    pub fn get_viewable_entries(&self) -> Vec<&ArchiveIndexEntry> {
+        self.ordered_entries
+            .iter()
+            .filter_map(|name| self.entries.get(name))
+            .filter(|e| e.is_image || e.is_video)
+            .collect()
+    }
+
     /// 获取所有图片条目
     pub fn get_images(&self) -> Vec<&ArchiveIndexEntry> {
         self.ordered_entries
@@ -160,7 +171,7 @@ pub struct ArchiveIndexCache {
 
 impl ArchiveIndexCache {
     /// 创建缓存管理器
-    /// 
+    ///
     /// # Arguments
     /// * `max_size_mb` - 最大缓存大小（MB）
     pub fn new(max_size_mb: usize) -> Self {
@@ -178,7 +189,7 @@ impl ArchiveIndexCache {
     /// 获取索引（如果存在且有效）
     pub fn get(&self, archive_path: &Path) -> Option<Arc<RwLock<ArchiveIndex>>> {
         let key = Self::normalize_key(archive_path);
-        
+
         // 检查缓存
         let cache = self.cache.read().ok()?;
         let index = cache.get(&key)?.clone();
@@ -192,7 +203,7 @@ impl ArchiveIndexCache {
 
         // 更新访问顺序
         self.update_access_order(&key);
-        
+
         // 更新访问时间
         if let Ok(mut idx) = index.write() {
             idx.touch();
@@ -211,13 +222,14 @@ impl ArchiveIndexCache {
         self.ensure_capacity(size);
 
         let index = Arc::new(RwLock::new(index));
-        
+
         // 插入缓存
         if let Ok(mut cache) = self.cache.write() {
             // 如果已存在，先减去旧大小
             if let Some(old) = cache.get(&key) {
                 if let Ok(old_idx) = old.read() {
-                    self.current_size.fetch_sub(old_idx.estimated_size, Ordering::Relaxed);
+                    self.current_size
+                        .fetch_sub(old_idx.estimated_size, Ordering::Relaxed);
                 }
             }
             cache.insert(key.clone(), index.clone());
@@ -253,7 +265,7 @@ impl ArchiveIndexCache {
     /// 检查索引是否存在且有效
     pub fn is_valid(&self, archive_path: &Path) -> bool {
         let key = Self::normalize_key(archive_path);
-        
+
         let cache = match self.cache.read() {
             Ok(c) => c,
             Err(_) => return false,
@@ -269,11 +281,12 @@ impl ArchiveIndexCache {
     /// 清除指定压缩包的索引
     pub fn invalidate(&self, archive_path: &Path) {
         let key = Self::normalize_key(archive_path);
-        
+
         if let Ok(mut cache) = self.cache.write() {
             if let Some(old) = cache.remove(&key) {
                 if let Ok(idx) = old.read() {
-                    self.current_size.fetch_sub(idx.estimated_size, Ordering::Relaxed);
+                    self.current_size
+                        .fetch_sub(idx.estimated_size, Ordering::Relaxed);
                 }
             }
         }
@@ -302,7 +315,11 @@ impl ArchiveIndexCache {
         let hits = self.hits.load(Ordering::Relaxed) as u64;
         let misses = self.misses.load(Ordering::Relaxed) as u64;
         let total = hits + misses;
-        let hit_rate = if total > 0 { hits as f64 / total as f64 } else { 0.0 };
+        let hit_rate = if total > 0 {
+            hits as f64 / total as f64
+        } else {
+            0.0
+        };
 
         IndexCacheStats {
             index_count,
@@ -338,7 +355,8 @@ impl ArchiveIndexCache {
             if let Ok(mut cache) = self.cache.write() {
                 if let Some(old) = cache.remove(&key) {
                     if let Ok(idx) = old.read() {
-                        self.current_size.fetch_sub(idx.estimated_size, Ordering::Relaxed);
+                        self.current_size
+                            .fetch_sub(idx.estimated_size, Ordering::Relaxed);
                         self.evictions.fetch_add(1, Ordering::Relaxed);
                         debug!("🗑️ 淘汰索引缓存: {}", key);
                         return true;
@@ -366,18 +384,17 @@ impl ArchiveIndexCache {
 
     /// 获取文件信息（mtime, size）
     pub fn get_file_info(path: &Path) -> Result<(u64, u64), String> {
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| format!("获取文件信息失败: {}", e))?;
-        
+        let metadata = std::fs::metadata(path).map_err(|e| format!("获取文件信息失败: {}", e))?;
+
         let mtime = metadata
             .modified()
             .map_err(|e| format!("获取修改时间失败: {}", e))?
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("时间转换失败: {}", e))?
             .as_secs();
-        
+
         let size = metadata.len();
-        
+
         Ok((mtime, size))
     }
 }
@@ -395,7 +412,7 @@ pub fn is_image_file(path: &str) -> bool {
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
-    
+
     matches!(
         ext.as_str(),
         "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
@@ -416,6 +433,7 @@ mod tests {
             modified: Some(1234567890),
             is_dir: false,
             is_image: true,
+            is_video: false,
         };
         assert_eq!(entry.name, "test.jpg");
         assert!(entry.is_image);
@@ -423,11 +441,7 @@ mod tests {
 
     #[test]
     fn test_archive_index() {
-        let mut index = ArchiveIndex::new(
-            "/test/archive.rar".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
+        let mut index = ArchiveIndex::new("/test/archive.rar".to_string(), 1234567890, 1024 * 1024);
 
         let entry = ArchiveIndexEntry {
             name: "image/test.jpg".to_string(),
@@ -437,6 +451,7 @@ mod tests {
             modified: Some(1234567890),
             is_dir: false,
             is_image: true,
+            is_video: false,
         };
 
         index.add_entry(entry);
@@ -455,7 +470,6 @@ mod tests {
     }
 }
 
-
 // ============================================================================
 // Property-Based Tests
 // ============================================================================
@@ -468,13 +482,13 @@ mod property_tests {
     // 生成随机索引条目
     fn arb_index_entry() -> impl Strategy<Value = ArchiveIndexEntry> {
         (
-            "[a-z]{1,20}\\.(jpg|png|gif|txt)",  // name
-            0usize..1000,                        // entry_index
-            0u64..10_000_000,                    // size
-            0u64..5_000_000,                     // compressed_size
+            "[a-z]{1,20}\\.(jpg|png|gif|txt)", // name
+            0usize..1000,                      // entry_index
+            0u64..10_000_000,                  // size
+            0u64..5_000_000,                   // compressed_size
         )
-            .prop_map(|(name, entry_index, size, compressed_size)| {
-                ArchiveIndexEntry {
+            .prop_map(
+                |(name, entry_index, size, compressed_size)| ArchiveIndexEntry {
                     name: name.clone(),
                     entry_index,
                     size,
@@ -482,18 +496,16 @@ mod property_tests {
                     modified: Some(1234567890),
                     is_dir: false,
                     is_image: is_image_file(&name),
-                }
-            })
+                    is_video: false,
+                },
+            )
     }
 
     // 生成随机索引
     fn arb_archive_index(entry_count: usize) -> impl Strategy<Value = ArchiveIndex> {
         prop::collection::vec(arb_index_entry(), 1..=entry_count).prop_map(|entries| {
-            let mut index = ArchiveIndex::new(
-                "/test/archive.rar".to_string(),
-                1234567890,
-                1024 * 1024,
-            );
+            let mut index =
+                ArchiveIndex::new("/test/archive.rar".to_string(), 1234567890, 1024 * 1024);
             for entry in entries {
                 index.add_entry(entry);
             }
@@ -512,19 +524,19 @@ mod property_tests {
         ) {
             // 创建小容量缓存（1KB）以便触发淘汰
             let cache = ArchiveIndexCache::new(0); // 0MB = 强制淘汰
-            
+
             // 创建多个索引
             let paths: Vec<String> = (0..5)
                 .map(|i| format!("/test/archive_{}.rar", i))
                 .collect();
-            
+
             // 按访问序列访问索引
             let mut last_accessed: Vec<String> = Vec::new();
-            
+
             for &idx in &access_sequence {
                 let path = &paths[idx % paths.len()];
                 let path_obj = Path::new(path);
-                
+
                 // 如果不存在，创建新索引
                 if cache.get(path_obj).is_none() {
                     let mut index = ArchiveIndex::new(
@@ -542,16 +554,17 @@ mod property_tests {
                             modified: Some(1234567890),
                             is_dir: false,
                             is_image: true,
+                            is_video: false,
                         });
                     }
                     cache.put(path_obj, index);
                 }
-                
+
                 // 更新访问顺序
                 last_accessed.retain(|p| p != path);
                 last_accessed.push(path.clone());
             }
-            
+
             // 验证：最近访问的索引应该仍在缓存中
             // 由于缓存容量为 0，可能所有都被淘汰，但访问顺序应该正确
             let stats = cache.stats();
@@ -571,7 +584,7 @@ mod property_tests {
                 1_234_567_890,
                 1024 * 1024,
             );
-            
+
             // 生成唯一名称的条目
             let entries: Vec<ArchiveIndexEntry> = (0..entry_count)
                 .map(|i| ArchiveIndexEntry {
@@ -582,14 +595,15 @@ mod property_tests {
                     modified: Some(1_234_567_890),
                     is_dir: false,
                     is_image: true,
+                    is_video: false,
                 })
                 .collect();
-            
+
             // 添加所有条目
             for entry in &entries {
                 index.add_entry(entry.clone());
             }
-            
+
             // 验证所有条目都可以查找到
             for entry in &entries {
                 let found = index.get(&entry.name);
@@ -600,76 +614,69 @@ mod property_tests {
     }
 }
 
+/// **Feature: archive-ipc-optimization, Property 2: Index cache validity**
+/// *For any* archive that has not been modified since indexing, the cached
+/// index SHALL be reused without rebuilding.
+/// **Validates: Requirements 1.4**
+#[test]
+fn prop_index_cache_validity() {
+    let cache = ArchiveIndexCache::new(100);
 
-    /// **Feature: archive-ipc-optimization, Property 2: Index cache validity**
-    /// *For any* archive that has not been modified since indexing, the cached
-    /// index SHALL be reused without rebuilding.
-    /// **Validates: Requirements 1.4**
-    #[test]
-    fn prop_index_cache_validity() {
-        let cache = ArchiveIndexCache::new(100);
-        
-        // 创建一个模拟索引
-        let mut index = ArchiveIndex::new(
-            "/test/archive.rar".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
-        
-        for i in 0..10 {
-            index.add_entry(ArchiveIndexEntry {
-                name: format!("file_{}.jpg", i),
-                entry_index: i,
-                size: 1024,
-                compressed_size: 512,
-                modified: Some(1234567890),
-                is_dir: false,
-                is_image: true,
-            });
-        }
-        
-        // 存入缓存
-        let path = std::path::Path::new("/test/archive.rar");
-        cache.put(path, index);
-        
-        // 验证统计
-        let stats = cache.stats();
-        assert_eq!(stats.index_count, 1);
-        assert!(stats.total_size > 0);
-    }
+    // 创建一个模拟索引
+    let mut index = ArchiveIndex::new("/test/archive.rar".to_string(), 1234567890, 1024 * 1024);
 
-    /// **Feature: archive-ipc-optimization, Property 3: Index invalidation on modification**
-    /// *For any* archive that has been modified after indexing, accessing the
-    /// archive SHALL trigger index rebuild.
-    /// **Validates: Requirements 1.5**
-    #[test]
-    fn prop_index_invalidation() {
-        let cache = ArchiveIndexCache::new(100);
-        
-        // 创建索引
-        let mut index = ArchiveIndex::new(
-            "/test/archive.rar".to_string(),
-            1234567890,
-            1024 * 1024,
-        );
-        
+    for i in 0..10 {
         index.add_entry(ArchiveIndexEntry {
-            name: "test.jpg".to_string(),
-            entry_index: 0,
+            name: format!("file_{}.jpg", i),
+            entry_index: i,
             size: 1024,
             compressed_size: 512,
             modified: Some(1234567890),
             is_dir: false,
             is_image: true,
+            is_video: false,
         });
-        
-        let path = std::path::Path::new("/test/archive.rar");
-        cache.put(path, index);
-        
-        // 手动失效
-        cache.invalidate(path);
-        
-        // 验证已被移除
-        let stats = cache.stats();
-        assert_eq!(stats.index_count, 0);
     }
+
+    // 存入缓存
+    let path = std::path::Path::new("/test/archive.rar");
+    cache.put(path, index);
+
+    // 验证统计
+    let stats = cache.stats();
+    assert_eq!(stats.index_count, 1);
+    assert!(stats.total_size > 0);
+}
+
+/// **Feature: archive-ipc-optimization, Property 3: Index invalidation on modification**
+/// *For any* archive that has been modified after indexing, accessing the
+/// archive SHALL trigger index rebuild.
+/// **Validates: Requirements 1.5**
+#[test]
+fn prop_index_invalidation() {
+    let cache = ArchiveIndexCache::new(100);
+
+    // 创建索引
+    let mut index = ArchiveIndex::new("/test/archive.rar".to_string(), 1234567890, 1024 * 1024);
+
+    index.add_entry(ArchiveIndexEntry {
+        name: "test.jpg".to_string(),
+        entry_index: 0,
+        size: 1024,
+        compressed_size: 512,
+        modified: Some(1234567890),
+        is_dir: false,
+        is_image: true,
+        is_video: false,
+    });
+
+    let path = std::path::Path::new("/test/archive.rar");
+    cache.put(path, index);
+
+    // 手动失效
+    cache.invalidate(path);
+
+    // 验证已被移除
+    let stats = cache.stats();
+    assert_eq!(stats.index_count, 0);
+}

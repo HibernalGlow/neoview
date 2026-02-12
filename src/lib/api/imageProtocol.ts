@@ -104,14 +104,10 @@ export function preloadImages(urls: string[]): void {
 /**
  * 批量预加载压缩包图片
  * @param bookHash 书籍哈希
- * @param startIndex 起始索引
- * @param count 预加载数量
+ * @param entryIndices 图片 entryIndex 列表
  */
-export function preloadArchiveImages(bookHash: string, startIndex: number, count: number): void {
-	const urls: string[] = [];
-	for (let i = 0; i < count; i++) {
-		urls.push(getArchiveImageUrl(bookHash, startIndex + i));
-	}
+export function preloadArchiveImages(bookHash: string, entryIndices: number[]): void {
+	const urls = entryIndices.map((idx) => getArchiveImageUrl(bookHash, idx));
 	preloadImages(urls);
 }
 

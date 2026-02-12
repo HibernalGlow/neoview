@@ -18,6 +18,7 @@ pub struct IndexEntry {
     pub size: u64,
     pub modified: u64,
     pub is_image: bool,
+    pub is_video: bool,
     pub parent_path: String,
     pub keywords: Vec<String>, // 用于搜索的关键词
 }
@@ -28,6 +29,7 @@ pub struct IndexStats {
     pub total_files: usize,
     pub total_dirs: usize,
     pub total_images: usize,
+    pub total_videos: usize,
     pub last_updated: u64,
     pub indexed_paths: Vec<String>,
 }
@@ -74,6 +76,7 @@ impl FileIndexer {
                 total_files: 0,
                 total_dirs: 0,
                 total_images: 0,
+                total_videos: 0,
                 last_updated: 0,
                 indexed_paths: Vec::new(),
             })),
@@ -184,6 +187,7 @@ impl FileIndexer {
             total_files: 0,
             total_dirs: 0,
             total_images: 0,
+            total_videos: 0,
             last_updated: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -284,6 +288,7 @@ impl FileIndexer {
                 .unwrap_or(0);
 
             let is_image = !is_dir && Self::is_image_file(&entry_path);
+            let is_video = !is_dir && crate::core::video_exts::is_video_path(&entry_path);
 
             // 创建索引项
             let index_entry = IndexEntry {
@@ -293,6 +298,7 @@ impl FileIndexer {
                 size,
                 modified,
                 is_image,
+                is_video,
                 parent_path: path.to_string_lossy().to_string(),
                 keywords: Self::generate_keywords(&name),
             };
@@ -318,6 +324,8 @@ impl FileIndexer {
                 stats.total_files += 1;
                 if is_image {
                     stats.total_images += 1;
+                } else if is_video {
+                    stats.total_videos += 1;
                 }
             }
 
@@ -377,7 +385,7 @@ impl FileIndexer {
                                 folder_count: None,
                                 image_count: None,
                                 archive_count: None,
-                                video_count: None,
+                                video_count: if entry.is_video { Some(1) } else { None },
                                 target_path: None,
                             });
                         }
@@ -407,7 +415,11 @@ impl FileIndexer {
                                             folder_count: None,
                                             image_count: None,
                                             archive_count: None,
-                                            video_count: None,
+                                            video_count: if entry.is_video {
+                                                Some(1)
+                                            } else {
+                                                None
+                                            },
                                             target_path: None,
                                         });
                                     }
@@ -571,6 +583,7 @@ impl FileIndexer {
                 total_files: 0,
                 total_dirs: 0,
                 total_images: 0,
+                total_videos: 0,
                 last_updated: 0,
                 indexed_paths: Vec::new(),
             };

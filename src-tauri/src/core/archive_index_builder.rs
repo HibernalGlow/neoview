@@ -18,10 +18,7 @@ impl RarIndexBuilder {
     /// # Arguments
     /// * `archive_path` - 压缩包路径
     /// * `progress` - 进度回调 (current, total)
-    pub fn build(
-        archive_path: &Path,
-        progress: ProgressCallback,
-    ) -> Result<ArchiveIndex, String> {
+    pub fn build(archive_path: &Path, progress: ProgressCallback) -> Result<ArchiveIndex, String> {
         info!("📦 开始构建 RAR 索引: {}", archive_path.display());
 
         let (mtime, size) = ArchiveIndexCache::get_file_info(archive_path)?;
@@ -30,11 +27,7 @@ impl RarIndexBuilder {
             .open_for_listing()
             .map_err(|e| format!("打开 RAR 失败: {:?}", e))?;
 
-        let mut index = ArchiveIndex::new(
-            archive_path.to_string_lossy().to_string(),
-            mtime,
-            size,
-        );
+        let mut index = ArchiveIndex::new(archive_path.to_string_lossy().to_string(), mtime, size);
 
         let mut entry_index = 0;
 
@@ -59,6 +52,10 @@ impl RarIndexBuilder {
                 },
                 is_dir: entry.is_directory(),
                 is_image: !entry.is_directory() && is_image_file(&name),
+                is_video: !entry.is_directory()
+                    && crate::core::video_exts::is_video_extension(
+                        &name.split('.').last().unwrap_or("").to_lowercase(),
+                    ),
             };
 
             index.add_entry(index_entry);
@@ -84,10 +81,7 @@ impl SevenZIndexBuilder {
     /// # Arguments
     /// * `archive_path` - 压缩包路径
     /// * `progress` - 进度回调 (current, total)
-    pub fn build(
-        archive_path: &Path,
-        progress: ProgressCallback,
-    ) -> Result<ArchiveIndex, String> {
+    pub fn build(archive_path: &Path, progress: ProgressCallback) -> Result<ArchiveIndex, String> {
         info!("📦 开始构建 7z 索引: {}", archive_path.display());
 
         let (mtime, size) = ArchiveIndexCache::get_file_info(archive_path)?;
@@ -95,11 +89,7 @@ impl SevenZIndexBuilder {
         let archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
             .map_err(|e| format!("打开 7z 失败: {}", e))?;
 
-        let mut index = ArchiveIndex::new(
-            archive_path.to_string_lossy().to_string(),
-            mtime,
-            size,
-        );
+        let mut index = ArchiveIndex::new(archive_path.to_string_lossy().to_string(), mtime, size);
 
         let files = &archive.archive().files;
         let total = files.len();
@@ -132,6 +122,10 @@ impl SevenZIndexBuilder {
                 modified,
                 is_dir: entry.is_directory(),
                 is_image: !entry.is_directory() && is_image_file(&name),
+                is_video: !entry.is_directory()
+                    && crate::core::video_exts::is_video_extension(
+                        &name.split('.').last().unwrap_or("").to_lowercase(),
+                    ),
             };
 
             index.add_entry(index_entry);
@@ -167,7 +161,6 @@ mod tests {
     }
 }
 
-
 // ============================================================================
 // Property-Based Tests
 // ============================================================================
@@ -181,7 +174,7 @@ mod property_tests {
     /// *For any* RAR archive and any file path within it, looking up the file through
     /// the index SHALL return the same entry index as sequential scanning would find.
     /// **Validates: Requirements 1.1, 1.2**
-    /// 
+    ///
     /// 注意：此测试需要实际的 RAR 文件，在 CI 中可能需要跳过
     #[test]
     #[ignore] // 需要实际 RAR 文件
@@ -194,7 +187,7 @@ mod property_tests {
     /// *For any* 7z archive and any file path within it, looking up the file through
     /// the index SHALL return the same entry index as sequential scanning would find.
     /// **Validates: Requirements 1.1, 1.2**
-    /// 
+    ///
     /// 注意：此测试需要实际的 7z 文件，在 CI 中可能需要跳过
     #[test]
     #[ignore] // 需要实际 7z 文件
@@ -213,9 +206,9 @@ mod property_tests {
             compressed_size in 0u64..5_000_000,
         ) {
             use crate::core::archive_index::{ArchiveIndexEntry, is_image_file};
-            
+
             let is_img = name.ends_with(".jpg") || name.ends_with(".png");
-            
+
             let entry = ArchiveIndexEntry {
                 name: name.clone(),
                 entry_index,
@@ -224,14 +217,15 @@ mod property_tests {
                 modified: Some(1_234_567_890),
                 is_dir: false,
                 is_image: is_image_file(&name),
+                is_video: false,
             };
-            
+
             // 验证字段正确设置
             prop_assert_eq!(entry.name, name);
             prop_assert_eq!(entry.entry_index, entry_index);
             prop_assert_eq!(entry.size, size);
             prop_assert_eq!(entry.compressed_size, compressed_size);
-            
+
             // 验证图片检测
             prop_assert_eq!(entry.is_image, is_img);
         }

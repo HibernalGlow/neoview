@@ -1,10 +1,10 @@
 //! 压缩包索引持久化缓存模块
 //!
 //! 提供压缩包文件列表的持久化缓存功能，避免重复扫描压缩包。
-//! 
+//!
 //! 【优化】使用 Stretto `TinyLFU` 缓存替代 LRU，提升缓存命中率
 //! 【优化】支持 Rkyv 零拷贝序列化（可选）
-//! 
+//!
 //! 文件格式：
 //! ```text
 //! +------------------+
@@ -35,8 +35,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 缓存文件魔数
 const CACHE_MAGIC: &[u8; 4] = b"NIDX";
-/// 当前缓存版本
-const CACHE_VERSION: u32 = 1;
+/// 当前缓存版本 (从 1 更新为 2 以触发索引重建)
+const CACHE_VERSION: u32 = 2;
 /// 默认最大缓存大小 (100MB)
 const DEFAULT_MAX_SIZE: u64 = 100 * 1024 * 1024;
 
@@ -53,6 +53,8 @@ pub struct IndexEntry {
     pub entry_index: usize,
     /// 是否为图片
     pub is_image: bool,
+    /// 是否为视频
+    pub is_video: bool,
     /// 修改时间（Unix 时间戳）
     pub modified: Option<i64>,
 }
@@ -83,7 +85,7 @@ impl ArchiveIndex {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
-        
+
         Self {
             version: CACHE_VERSION,
             archive_path,
@@ -127,7 +129,11 @@ impl ArchiveIndex {
     pub fn estimated_size(&self) -> usize {
         // 基础结构大小 + 每个条目的估算大小
         std::mem::size_of::<Self>()
-            + self.entries.iter().map(|e| e.path.len() + e.name.len() + 64).sum::<usize>()
+            + self
+                .entries
+                .iter()
+                .map(|e| e.path.len() + e.name.len() + 64)
+                .sum::<usize>()
     }
 }
 
@@ -204,13 +210,13 @@ impl IndexCache {
     }
 
     /// 获取或创建索引
-    /// 
+    ///
     /// 1. 先检查内存缓存（Stretto TinyLFU）
     /// 2. 再检查磁盘缓存
     /// 3. 验证缓存有效性（修改时间、文件大小）
     pub fn get(&self, archive_path: &Path) -> Option<Arc<ArchiveIndex>> {
         let key = Self::path_to_key(archive_path);
-        
+
         // 1. 检查内存缓存（Stretto）
         if let Some(ref cache) = self.memory_cache {
             if let Some(index_arc) = cache.get(&key) {
@@ -345,7 +351,7 @@ impl IndexCache {
 
     /// 路径转缓存键
     fn path_to_key(path: &Path) -> String {
-        use sha1::{Sha1, Digest};
+        use sha1::{Digest, Sha1};
         let path_str = path.to_string_lossy();
         let mut hasher = Sha1::new();
         hasher.update(path_str.as_bytes());
@@ -374,17 +380,19 @@ impl IndexCache {
     /// 从磁盘加载索引（实现）
     fn load_from_disk_impl(path: &Path) -> Result<ArchiveIndex, String> {
         let mut file = File::open(path).map_err(|e| format!("打开缓存文件失败: {e}"))?;
-        
+
         // 读取魔数
         let mut magic = [0u8; 4];
-        file.read_exact(&mut magic).map_err(|e| format!("读取魔数失败: {e}"))?;
+        file.read_exact(&mut magic)
+            .map_err(|e| format!("读取魔数失败: {e}"))?;
         if &magic != CACHE_MAGIC {
             return Err("无效的缓存文件魔数".to_string());
         }
 
         // 读取版本
         let mut version_bytes = [0u8; 4];
-        file.read_exact(&mut version_bytes).map_err(|e| format!("读取版本失败: {e}"))?;
+        file.read_exact(&mut version_bytes)
+            .map_err(|e| format!("读取版本失败: {e}"))?;
         let version = u32::from_le_bytes(version_bytes);
         if version != CACHE_VERSION {
             return Err(format!("不兼容的缓存版本: {version}"));
@@ -392,16 +400,19 @@ impl IndexCache {
 
         // 读取数据长度
         let mut len_bytes = [0u8; 8];
-        file.read_exact(&mut len_bytes).map_err(|e| format!("读取长度失败: {e}"))?;
+        file.read_exact(&mut len_bytes)
+            .map_err(|e| format!("读取长度失败: {e}"))?;
         let data_len = u64::from_le_bytes(len_bytes) as usize;
 
         // 读取压缩数据
         let mut compressed = vec![0u8; data_len];
-        file.read_exact(&mut compressed).map_err(|e| format!("读取数据失败: {e}"))?;
+        file.read_exact(&mut compressed)
+            .map_err(|e| format!("读取数据失败: {e}"))?;
 
         // 读取 CRC32
         let mut crc_bytes = [0u8; 4];
-        file.read_exact(&mut crc_bytes).map_err(|e| format!("读取 CRC 失败: {e}"))?;
+        file.read_exact(&mut crc_bytes)
+            .map_err(|e| format!("读取 CRC 失败: {e}"))?;
         let stored_crc = u32::from_le_bytes(crc_bytes);
 
         // 验证 CRC32
@@ -421,24 +432,29 @@ impl IndexCache {
     /// 保存索引到磁盘（实现）
     fn save_to_disk_impl(cache_dir: &Path, key: &str, index: &ArchiveIndex) -> Result<(), String> {
         let path = cache_dir.join(format!("{key}.idx"));
-        
+
         // 序列化
         let data = bincode::serialize(index).map_err(|e| format!("序列化失败: {e}"))?;
-        
+
         // 压缩
         let compressed = lz4_flex::compress_prepend_size(&data);
-        
+
         // 计算 CRC32
         let crc = crc32fast::hash(&compressed);
 
         // 写入文件
         let mut file = File::create(&path).map_err(|e| format!("创建缓存文件失败: {e}"))?;
-        
-        file.write_all(CACHE_MAGIC).map_err(|e| format!("写入魔数失败: {e}"))?;
-        file.write_all(&CACHE_VERSION.to_le_bytes()).map_err(|e| format!("写入版本失败: {e}"))?;
-        file.write_all(&(compressed.len() as u64).to_le_bytes()).map_err(|e| format!("写入长度失败: {e}"))?;
-        file.write_all(&compressed).map_err(|e| format!("写入数据失败: {e}"))?;
-        file.write_all(&crc.to_le_bytes()).map_err(|e| format!("写入 CRC 失败: {e}"))?;
+
+        file.write_all(CACHE_MAGIC)
+            .map_err(|e| format!("写入魔数失败: {e}"))?;
+        file.write_all(&CACHE_VERSION.to_le_bytes())
+            .map_err(|e| format!("写入版本失败: {e}"))?;
+        file.write_all(&(compressed.len() as u64).to_le_bytes())
+            .map_err(|e| format!("写入长度失败: {e}"))?;
+        file.write_all(&compressed)
+            .map_err(|e| format!("写入数据失败: {e}"))?;
+        file.write_all(&crc.to_le_bytes())
+            .map_err(|e| format!("写入 CRC 失败: {e}"))?;
 
         debug!("保存索引到磁盘: {}", path.display());
         Ok(())
@@ -498,13 +514,12 @@ pub fn is_image_file(path: &str) -> bool {
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_lowercase();
-    
+
     matches!(
         ext.as_str(),
         "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
     )
 }
-
 
 // ============================================================================
 // 单元测试
@@ -516,11 +531,8 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_index() -> ArchiveIndex {
-        let mut index = ArchiveIndex::new(
-            "/test/archive.zip".to_string(),
-            1_700_000_000,
-            1024 * 1024,
-        );
+        let mut index =
+            ArchiveIndex::new("/test/archive.zip".to_string(), 1_700_000_000, 1024 * 1024);
         for i in 0..10 {
             index.add_entry(IndexEntry {
                 path: format!("images/image_{i:03}.jpg"),
@@ -528,6 +540,7 @@ mod tests {
                 size: 1024 * (i as u64 + 1),
                 entry_index: i,
                 is_image: true,
+                is_video: false,
                 modified: Some(1_700_000_000),
             });
         }
@@ -542,6 +555,7 @@ mod tests {
             size: 1024,
             entry_index: 0,
             is_image: true,
+            is_video: false,
             modified: Some(1_700_000_000),
         };
         assert_eq!(entry.name, "image.jpg");
@@ -560,13 +574,13 @@ mod tests {
     fn test_index_cache_memory() {
         let temp_dir = TempDir::new().unwrap();
         let cache = IndexCache::new(temp_dir.path().to_path_buf(), 100);
-        
+
         let index = create_test_index();
         let path = Path::new("/test/archive.zip");
-        
+
         // 存入缓存
         cache.put(path, index.clone());
-        
+
         // 由于文件不存在，get 会返回 None（验证失败）
         // 这里只测试内存缓存的基本功能
         let stats = cache.stats();
@@ -597,11 +611,11 @@ mod property_tests {
     // 生成随机索引条目
     fn arb_index_entry() -> impl Strategy<Value = IndexEntry> {
         (
-            "[a-z]{1,20}",           // path prefix
-            "[a-z]{1,10}",           // name prefix
-            any::<u64>(),            // size
-            0usize..1000,            // entry_index
-            any::<bool>(),           // is_image
+            "[a-z]{1,20}", // path prefix
+            "[a-z]{1,10}", // name prefix
+            any::<u64>(),  // size
+            0usize..1000,  // entry_index
+            any::<bool>(), // is_image
         )
             .prop_map(|(path_prefix, name_prefix, size, entry_index, is_image)| {
                 let ext = if is_image { ".jpg" } else { ".txt" };
@@ -611,6 +625,7 @@ mod property_tests {
                     size,
                     entry_index,
                     is_image,
+                    is_video: false,
                     modified: Some(1_700_000_000),
                 }
             })
@@ -619,9 +634,9 @@ mod property_tests {
     // 生成随机索引
     fn arb_archive_index() -> impl Strategy<Value = ArchiveIndex> {
         (
-            "[a-z/]{5,30}\\.zip",     // archive_path
-            1_600_000_000i64..1_800_000_000i64, // archive_mtime
-            1024u64..1_000_000_000u64, // archive_size
+            "[a-z/]{5,30}\\.zip",                             // archive_path
+            1_600_000_000i64..1_800_000_000i64,               // archive_mtime
+            1024u64..1_000_000_000u64,                        // archive_size
             prop::collection::vec(arb_index_entry(), 0..100), // entries
         )
             .prop_map(|(archive_path, archive_mtime, archive_size, entries)| {
@@ -642,21 +657,21 @@ mod property_tests {
         fn prop_index_round_trip(index in arb_archive_index()) {
             let temp_dir = TempDir::new().unwrap();
             let key = "test_key";
-            
+
             // 序列化到磁盘
             IndexCache::save_to_disk_impl(temp_dir.path(), key, &index).unwrap();
-            
+
             // 从磁盘加载
             let path = temp_dir.path().join(format!("{key}.idx"));
             let loaded = IndexCache::load_from_disk_impl(&path).unwrap();
-            
+
             // 验证等价性
             prop_assert_eq!(index.version, loaded.version);
             prop_assert_eq!(index.archive_path, loaded.archive_path);
             prop_assert_eq!(index.archive_mtime, loaded.archive_mtime);
             prop_assert_eq!(index.archive_size, loaded.archive_size);
             prop_assert_eq!(index.entries.len(), loaded.entries.len());
-            
+
             for (orig, load) in index.entries.iter().zip(loaded.entries.iter()) {
                 prop_assert_eq!(orig, load);
             }
@@ -671,23 +686,23 @@ mod property_tests {
             let temp_dir = TempDir::new().unwrap();
             let key = "test_version";
             let path = temp_dir.path().join(format!("{key}.idx"));
-            
+
             // 创建一个带有错误版本的缓存文件
             let mut bad_index = index.clone();
             bad_index.version = 999; // 不兼容的版本
-            
+
             // 手动写入带有错误版本的文件
             let data = bincode::serialize(&bad_index).unwrap();
             let compressed = lz4_flex::compress_prepend_size(&data);
             let crc = crc32fast::hash(&compressed);
-            
+
             let mut file = File::create(&path).unwrap();
             file.write_all(CACHE_MAGIC).unwrap();
             file.write_all(&999u32.to_le_bytes()).unwrap(); // 错误版本
             file.write_all(&(compressed.len() as u64).to_le_bytes()).unwrap();
             file.write_all(&compressed).unwrap();
             file.write_all(&crc.to_le_bytes()).unwrap();
-            
+
             // 加载应该失败（版本不兼容）
             let result = IndexCache::load_from_disk_impl(&path);
             prop_assert!(result.is_err());
@@ -705,17 +720,17 @@ mod property_tests {
         ) {
             let temp_dir = TempDir::new().unwrap();
             let cache = IndexCache::new(temp_dir.path().to_path_buf(), 100);
-            
+
             // 创建多个索引
             let paths: Vec<String> = (0..5)
                 .map(|i| format!("/test/archive_{i}.zip"))
                 .collect();
-            
+
             // 按访问序列访问索引
             for &idx in &access_sequence {
                 let path_str = &paths[idx % paths.len()];
                 let path = Path::new(path_str);
-                
+
                 // 创建并存入索引
                 let index = ArchiveIndex::new(
                     path_str.clone(),
@@ -724,7 +739,7 @@ mod property_tests {
                 );
                 cache.put(path, index);
             }
-            
+
             // 验证缓存状态（Stretto 自动管理容量）
             let stats = cache.stats();
             // Stretto 使用 `TinyLFU` 自动驱逐，验证统计正常
@@ -754,7 +769,7 @@ mod property_tests {
             // 如果 mtime 或 size 不同，缓存应该失效
             let mtime_changed = original_mtime != new_mtime;
             let size_changed = original_size != new_size;
-            
+
             // 验证：如果任一属性变化，缓存应该失效
             if mtime_changed || size_changed {
                 // 模拟验证逻辑

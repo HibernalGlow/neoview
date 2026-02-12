@@ -44,13 +44,13 @@ impl PreheatSystem {
     }
 
     /// 触发预热
-    /// 
+    ///
     /// 识别当前压缩包的相邻压缩包，并将它们加入预热队列。
     pub fn trigger(&self, current_archive: &Path) {
         let (prev, next) = self.get_adjacent_archives(current_archive);
-        
+
         let mut queue = self.queue.lock();
-        
+
         // 添加相邻压缩包到队列
         if let Some(prev_path) = prev {
             if !queue.contains(&prev_path) {
@@ -58,14 +58,14 @@ impl PreheatSystem {
                 queue.push_back(prev_path);
             }
         }
-        
+
         if let Some(next_path) = next {
             if !queue.contains(&next_path) {
                 debug!("添加预热: {}", next_path.display());
                 queue.push_back(next_path);
             }
         }
-        
+
         // 限制队列大小
         while queue.len() > self.max_queue_size {
             if let Some(removed) = queue.pop_front() {
@@ -75,7 +75,7 @@ impl PreheatSystem {
     }
 
     /// 获取相邻压缩包
-    /// 
+    ///
     /// 返回 (前一个, 后一个) 压缩包路径。
     pub fn get_adjacent_archives(&self, path: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
         let parent = match path.parent() {
@@ -100,8 +100,14 @@ impl PreheatSystem {
 
         // 自然排序
         archives.sort_by(|a, b| {
-            let a_name = a.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            let b_name = b.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let a_name = a
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let b_name = b
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
             natural_cmp::<str, _>(&a_name, &b_name)
         });
 
@@ -155,7 +161,7 @@ impl PreheatSystem {
     }
 
     /// 执行预热任务（同步版本）
-    /// 
+    ///
     /// 从队列中取出任务并预热索引。
     pub fn execute_preheat(&self, index_cache: &IndexCache) {
         while let Some(path) = self.pop_next() {
@@ -182,7 +188,7 @@ impl PreheatSystem {
     /// 为预热构建索引
     fn build_index_for_preheat(&self, path: &Path, index_cache: &IndexCache) -> Result<(), String> {
         use crate::core::archive::ArchiveManager;
-        use crate::core::archive_index_cache::{ArchiveIndex, IndexEntry, is_image_file};
+        use crate::core::archive_index_cache::{is_image_file, ArchiveIndex, IndexEntry};
 
         let archive_manager = ArchiveManager::new();
         let items = archive_manager.list_contents(path)?;
@@ -208,7 +214,8 @@ impl PreheatSystem {
                 name: item.name.clone(),
                 size: item.size,
                 entry_index: item.entry_index,
-                is_image: is_image_file(&item.name),
+                is_image: item.is_image,
+                is_video: item.is_video,
                 modified: item.modified,
             });
         }
@@ -268,32 +275,44 @@ mod tests {
     #[test]
     fn test_get_adjacent_archives() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // 创建多个压缩包
         create_test_zip(temp_dir.path(), "archive_01.zip");
         let current = create_test_zip(temp_dir.path(), "archive_02.zip");
         create_test_zip(temp_dir.path(), "archive_03.zip");
-        
+
         let system = PreheatSystem::new(5);
         let (prev, next) = system.get_adjacent_archives(&current);
-        
+
         assert!(prev.is_some());
         assert!(next.is_some());
-        assert!(prev.unwrap().file_name().unwrap().to_str().unwrap().contains("01"));
-        assert!(next.unwrap().file_name().unwrap().to_str().unwrap().contains("03"));
+        assert!(prev
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("01"));
+        assert!(next
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("03"));
     }
 
     #[test]
     fn test_trigger_preheat() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         create_test_zip(temp_dir.path(), "archive_01.zip");
         let current = create_test_zip(temp_dir.path(), "archive_02.zip");
         create_test_zip(temp_dir.path(), "archive_03.zip");
-        
+
         let system = PreheatSystem::new(5);
         system.trigger(&current);
-        
+
         // 应该有 2 个预热任务（前一个和后一个）
         assert_eq!(system.queue_size(), 2);
     }
@@ -301,20 +320,20 @@ mod tests {
     #[test]
     fn test_queue_limit() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // 创建多个压缩包
         for i in 0..10 {
             create_test_zip(temp_dir.path(), &format!("archive_{i:02}.zip"));
         }
-        
+
         let system = PreheatSystem::new(3); // 限制队列大小为 3
-        
+
         // 多次触发预热
         for i in 1..9 {
             let path = temp_dir.path().join(format!("archive_{i:02}.zip"));
             system.trigger(&path);
         }
-        
+
         // 队列大小不应超过限制
         assert!(system.queue_size() <= 3);
     }
@@ -355,20 +374,20 @@ mod property_tests {
         ) {
             let temp_dir = TempDir::new().unwrap();
             let system = PreheatSystem::new(5);
-            
+
             // 创建多个压缩包
             let mut paths = Vec::new();
             for i in 0..archive_count {
                 let path = create_test_zip_file(temp_dir.path(), &format!("archive_{i:02}.zip"));
                 paths.push(path);
             }
-            
+
             // 选择一个中间的压缩包
             let idx = current_idx.min(archive_count - 2).max(1);
             let current = &paths[idx];
-            
+
             let (prev, next) = system.get_adjacent_archives(current);
-            
+
             // 验证相邻识别
             if idx > 0 {
                 prop_assert!(prev.is_some());
@@ -376,7 +395,7 @@ mod property_tests {
                 let expected_prev = format!("archive_{:02}.zip", idx - 1);
                 prop_assert_eq!(prev_name, expected_prev);
             }
-            
+
             if idx + 1 < archive_count {
                 prop_assert!(next.is_some());
                 let next_name = next.unwrap().file_name().unwrap().to_string_lossy().to_string();
@@ -396,7 +415,7 @@ mod property_tests {
         ) {
             let temp_dir = TempDir::new().unwrap();
             let system = PreheatSystem::new(max_queue_size);
-            
+
             // 创建足够多的压缩包
             let archive_count = trigger_count + 2;
             let mut paths = Vec::new();
@@ -404,11 +423,11 @@ mod property_tests {
                 let path = create_test_zip_file(temp_dir.path(), &format!("archive_{i:02}.zip"));
                 paths.push(path);
             }
-            
+
             // 多次触发预热
             for i in 1..trigger_count.min(archive_count - 1) {
                 system.trigger(&paths[i]);
-                
+
                 // 验证队列大小不超过限制
                 prop_assert!(
                     system.queue_size() <= max_queue_size,

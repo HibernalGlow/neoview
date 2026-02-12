@@ -211,8 +211,16 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	if (useProtocolMode) {
 		try {
 			const bookHash = await getBookHash(currentBook.path);
-			const preloadCount = endPage - startPage;
-			preloadArchiveImages(bookHash, startPage, preloadCount);
+			const entryIndices: number[] = [];
+			for (let i = startPage; i <= endPage; i++) {
+				const page = currentBook.pages[i];
+				if (page && page.entryIndex != null) {
+					entryIndices.push(page.entryIndex);
+				}
+			}
+			if (entryIndices.length > 0) {
+				preloadArchiveImages(bookHash, entryIndices);
+			}
 		} catch (err) {
 			console.warn('Protocol 预加载失败:', err);
 		}
@@ -294,8 +302,9 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 			
 			try {
 				const bookHash = await getBookHash(currentBook.path);
-				const protocolUrl = getArchiveImageUrl(bookHash, pageIndex);
-				logImageTrace(traceId, 'protocol url', { protocolUrl });
+				const entryIndex = pageInfo.entryIndex ?? pageIndex;
+				const protocolUrl = getArchiveImageUrl(bookHash, entryIndex);
+				logImageTrace(traceId, 'protocol url', { protocolUrl, entryIndex });
 				
 				const response = await fetch(protocolUrl);
 				if (!response.ok) {

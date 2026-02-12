@@ -21,6 +21,11 @@ pub struct IndexEntry {
     pub is_video: bool,
     pub parent_path: String,
     pub keywords: Vec<String>, // 用于搜索的关键词
+    // 文件夹统计信息（可选）
+    pub folder_count: Option<u32>,
+    pub image_count: Option<u32>,
+    pub archive_count: Option<u32>,
+    pub video_count: Option<u32>,
 }
 
 /// 索引统计信息
@@ -273,10 +278,47 @@ impl FileIndexer {
 
             let name = entry.file_name().to_string_lossy().to_string();
             let is_dir = metadata.is_dir();
+            let mut folder_count = None;
+            let mut image_count = None;
+            let mut archive_count = None;
+            let mut video_count = None;
+
             let size = if is_dir {
-                fs::read_dir(&entry_path)
-                    .map(|entries| entries.count() as u64)
-                    .unwrap_or(0)
+                // 如果是目录，统计直接子项
+                let mut f_cnt = 0;
+                let mut i_cnt = 0;
+                let mut a_cnt = 0;
+                let mut v_cnt = 0;
+                let mut total_cnt = 0;
+
+                if let Ok(sub_entries) = fs::read_dir(&entry_path) {
+                    for sub_entry in sub_entries.flatten() {
+                        let sub_name = sub_entry.file_name();
+                        if sub_name.as_encoded_bytes().first() == Some(&b'.') {
+                            continue;
+                        }
+                        total_cnt += 1;
+                        if let Ok(ft) = sub_entry.file_type() {
+                            if ft.is_dir() {
+                                f_cnt += 1;
+                            } else {
+                                let p = sub_entry.path();
+                                if crate::core::fs_manager::FsManager::is_image_file(&p) {
+                                    i_cnt += 1;
+                                } else if crate::core::fs_manager::FsManager::is_archive_file(&p) {
+                                    a_cnt += 1;
+                                } else if crate::core::video_exts::is_video_path(&p) {
+                                    v_cnt += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                folder_count = Some(f_cnt);
+                image_count = Some(i_cnt);
+                archive_count = Some(a_cnt);
+                video_count = Some(v_cnt);
+                total_cnt as u64 // 复用 size 存储总项数
             } else {
                 metadata.len()
             };
@@ -301,6 +343,10 @@ impl FileIndexer {
                 is_video,
                 parent_path: path.to_string_lossy().to_string(),
                 keywords: Self::generate_keywords(&name),
+                folder_count,
+                image_count,
+                archive_count,
+                video_count,
             };
 
             // 添加到索引
@@ -382,10 +428,10 @@ impl FileIndexer {
                                 modified: Some(entry.modified),
                                 created: None,
                                 is_image: entry.is_image,
-                                folder_count: None,
-                                image_count: None,
-                                archive_count: None,
-                                video_count: if entry.is_video { Some(1) } else { None },
+                                folder_count: entry.folder_count,
+                                image_count: entry.image_count,
+                                archive_count: entry.archive_count,
+                                video_count: entry.video_count,
                                 target_path: None,
                             });
                         }
@@ -412,14 +458,10 @@ impl FileIndexer {
                                             modified: Some(entry.modified),
                                             created: None,
                                             is_image: entry.is_image,
-                                            folder_count: None,
-                                            image_count: None,
-                                            archive_count: None,
-                                            video_count: if entry.is_video {
-                                                Some(1)
-                                            } else {
-                                                None
-                                            },
+                                            folder_count: entry.folder_count,
+                                            image_count: entry.image_count,
+                                            archive_count: entry.archive_count,
+                                            video_count: entry.video_count,
                                             target_path: None,
                                         });
                                     }

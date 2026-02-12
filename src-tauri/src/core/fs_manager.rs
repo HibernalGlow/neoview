@@ -68,13 +68,14 @@ pub struct SearchOptions {
 }
 
 /// 子目录统计结果
-#[derive(Default)]
-struct DirStats {
-    total: u64,
-    folders: u32,
-    images: u32,
-    archives: u32,
-    videos: u32,
+#[derive(Default, Debug)]
+pub struct FolderStats {
+    pub total_bytes: u64,
+    pub total_items: u32,
+    pub folders: u32,
+    pub images: u32,
+    pub archives: u32,
+    pub videos: u32,
 }
 
 /// 文件系统管理器
@@ -192,20 +193,20 @@ impl FsManager {
                     }
                 }
 
-                // 子目录统计：仅在 with_stats=true 时计算
+                // 子目录统计
                 let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
                     if with_stats {
-                        // 并行统计子项
-                        let stats = Self::count_directory_items(entry_path);
+                        // 如果需要统计，则获取详细数据（包含大小和计数）
+                        let stats = self.get_directory_stats(entry_path, false);
                         (
-                            stats.total,
+                            stats.total_bytes, // 在此处，由于不递归，这就是直接子文件的大小和
                             Some(stats.folders),
                             Some(stats.images),
                             Some(stats.archives),
                             Some(stats.videos),
                         )
                     } else {
-                        // 快速模式：不统计，返回 0 和 None
+                        // 快速模式：不统计
                         (0, None, None, None, None)
                     }
                 } else {
@@ -262,10 +263,10 @@ impl FsManager {
         Ok(sorted_items)
     }
 
-    /// 快速统计目录内的项目数量（优化版本）
+    /// 快速统计目录内的项目数量和大小（优化版本）
     #[inline]
-    fn count_directory_items(path: &Path) -> DirStats {
-        let mut stats = DirStats::default();
+    fn get_directory_stats(&self, path: &Path, recursive_size: bool) -> FolderStats {
+        let mut stats = FolderStats::default();
 
         if let Ok(sub_entries) = fs::read_dir(path) {
             for sub_entry in sub_entries.flatten() {
@@ -275,22 +276,30 @@ impl FsManager {
                     continue;
                 }
 
-                stats.total += 1;
+                stats.total_items += 1;
 
                 // 优化：使用 file_type() 代替 is_dir()，避免额外的 stat 调用
                 if let Ok(ft) = sub_entry.file_type() {
                     if ft.is_dir() {
                         stats.folders += 1;
+                        if recursive_size {
+                            if let Ok(size) = self.calculate_directory_size(&sub_entry.path()) {
+                                stats.total_bytes += size;
+                            }
+                        }
                     } else {
                         let sub_path = sub_entry.path();
                         if Self::is_image_file(&sub_path) {
                             stats.images += 1;
-                        }
-                        if Self::is_archive_file(&sub_path) {
+                        } else if Self::is_archive_file(&sub_path) {
                             stats.archives += 1;
-                        }
-                        if Self::is_video_file(&sub_path) {
+                        } else if Self::is_video_file(&sub_path) {
                             stats.videos += 1;
+                        }
+
+                        // 累计文件大小
+                        if let Ok(metadata) = sub_entry.metadata() {
+                            stats.total_bytes += metadata.len();
                         }
                     }
                 }
@@ -372,19 +381,15 @@ impl FsManager {
         }
 
         let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
-            let total_size = self.calculate_directory_size(path).unwrap_or(0);
-            if with_stats {
-                let stats = Self::count_directory_items(path);
-                (
-                    total_size,
-                    Some(stats.folders),
-                    Some(stats.images),
-                    Some(stats.archives),
-                    Some(stats.videos),
-                )
-            } else {
-                (total_size, None, None, None, None)
-            }
+            // 获取详细统计（递归计算大小，同时获取浅层计数）
+            let stats = self.get_directory_stats(path, true);
+            (
+                stats.total_bytes,
+                Some(stats.folders),
+                Some(stats.images),
+                Some(stats.archives),
+                Some(stats.videos),
+            )
         } else {
             (metadata.len(), None, None, None, None)
         };
@@ -427,8 +432,7 @@ impl FsManager {
     }
 
     /// 检查是否为图片文件（使用预编译 HashSet，O(1) 查找）
-    #[inline]
-    fn is_image_file(path: &Path) -> bool {
+    pub fn is_image_file(path: &Path) -> bool {
         path.extension()
             .and_then(OsStr::to_str)
             .map(|ext| IMAGE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
@@ -436,8 +440,7 @@ impl FsManager {
     }
 
     /// 检查是否为压缩包文件（使用预编译 HashSet，O(1) 查找）
-    #[inline]
-    fn is_archive_file(path: &Path) -> bool {
+    pub fn is_archive_file(path: &Path) -> bool {
         path.extension()
             .and_then(OsStr::to_str)
             .map(|ext| ARCHIVE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
@@ -445,7 +448,7 @@ impl FsManager {
     }
 
     /// 检查是否为视频文件
-    fn is_video_file(path: &Path) -> bool {
+    pub fn is_video_file(path: &Path) -> bool {
         video_exts::is_video_path(path)
     }
 
@@ -772,18 +775,42 @@ impl FsManager {
 
                 let is_image = !is_dir && Self::is_image_file(&path_buf);
 
+                let (folder_count, image_count, archive_count, video_count, final_size) = if is_dir
+                {
+                    let stats = self.get_directory_stats(&path_buf, false);
+                    (
+                        Some(stats.folders),
+                        Some(stats.images),
+                        Some(stats.archives),
+                        Some(stats.videos),
+                        stats.total_items as u64,
+                    )
+                } else {
+                    (
+                        None,
+                        None,
+                        None,
+                        if Self::is_video_file(&path_buf) {
+                            Some(1)
+                        } else {
+                            None
+                        },
+                        metadata.len(),
+                    )
+                };
+
                 results.push(FsItem {
                     name,
                     path: p,
                     is_dir,
-                    size,
+                    size: final_size,
                     modified,
                     created,
                     is_image,
-                    folder_count: None,
-                    image_count: None,
-                    archive_count: None,
-                    video_count: None,
+                    folder_count,
+                    image_count,
+                    archive_count,
+                    video_count,
                     target_path: None,
                 });
             }

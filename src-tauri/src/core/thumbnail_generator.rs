@@ -222,6 +222,7 @@ impl ThumbnailGenerator {
     }
 
     /// 使用 archive_manager 从压缩包生成缩略图（统一版本）
+    /// 优先使用图片条目，如果没有图片则使用视频条目（提取到临时文件后用 ffmpeg 截帧）
     fn generate_archive_thumbnail_unified(
         &self,
         archive_path: &str,
@@ -232,40 +233,77 @@ impl ThumbnailGenerator {
         let path = Path::new(archive_path);
         let mut handler = archive_manager::open_archive(path)?;
 
-        // 获取第一张图片
-        if let Some((entry, image_data)) = handler.read_first_image()? {
+        // 获取第一个可视条目（优先图片，其次视频）
+        if let Some((entry, data)) = handler.read_first_viewable()? {
             let ext = entry.extension().unwrap_or_default();
+            let is_video = entry.is_video();
 
-            if let Some(webp_data) =
-                Self::generate_webp_from_image_data(&image_data, &ext, &self.config)
-            {
-                // 保存到数据库
-                if let Err(e) = self
-                    .db
-                    .save_thumbnail(path_key, archive_size, ghash, &webp_data)
-                {
-                    eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
-                } else {
-                    // 后台更新父文件夹缩略图
-                    let db_clone = Arc::clone(&self.db);
-                    let path_key_clone = path_key.to_string();
-                    let data_clone = webp_data.clone();
-                    std::thread::spawn(move || {
-                        Self::update_parent_folders_thumbnail(
-                            &db_clone,
-                            &path_key_clone,
-                            &data_clone,
-                            MAX_PARENT_LEVELS,
-                        );
-                    });
-                }
-                return Ok(webp_data);
+            let webp_data = if is_video {
+                // 视频条目：提取到临时文件 → ffmpeg 生成缩略图
+                self.generate_thumbnail_from_video_data(&data, &ext, path_key)?
             } else {
-                return Err(format!("生成缩略图失败: {}", entry.name));
+                // 图片条目：直接生成 webp 缩略图
+                Self::generate_webp_from_image_data(&data, &ext, &self.config)
+                    .ok_or_else(|| format!("生成缩略图失败: {}", entry.name))?
+            };
+
+            // 保存到数据库
+            if let Err(e) = self
+                .db
+                .save_thumbnail(path_key, archive_size, ghash, &webp_data)
+            {
+                eprintln!("❌ 保存压缩包缩略图到数据库失败: {} - {}", path_key, e);
+            } else {
+                // 后台更新父文件夹缩略图
+                let db_clone = Arc::clone(&self.db);
+                let path_key_clone = path_key.to_string();
+                let data_clone = webp_data.clone();
+                std::thread::spawn(move || {
+                    Self::update_parent_folders_thumbnail(
+                        &db_clone,
+                        &path_key_clone,
+                        &data_clone,
+                        MAX_PARENT_LEVELS,
+                    );
+                });
             }
+            return Ok(webp_data);
         }
 
-        Err("压缩包中没有找到图片文件".to_string())
+        Err("压缩包中没有找到图片或视频文件".to_string())
+    }
+
+    /// 从视频数据生成缩略图（提取到临时文件后用 ffmpeg 截帧）
+    fn generate_thumbnail_from_video_data(
+        &self,
+        video_data: &[u8],
+        ext: &str,
+        path_key: &str,
+    ) -> Result<Vec<u8>, String> {
+        use std::fs;
+
+        let temp_dir = std::env::temp_dir();
+        let temp_video_path = temp_dir.join(format!(
+            "neoview_archive_video_{}_{}.{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+            if ext.is_empty() { "mp4" } else { ext }
+        ));
+
+        // 写入临时视频文件
+        fs::write(&temp_video_path, video_data)
+            .map_err(|e| format!("写入临时视频文件失败: {}", e))?;
+
+        // 用 ffmpeg 生成缩略图
+        let result = Self::generate_webp_with_ffmpeg(&temp_video_path, &self.config, path_key);
+
+        // 清理临时文件
+        let _ = fs::remove_file(&temp_video_path);
+
+        result.ok_or_else(|| format!("从压缩包视频生成缩略图失败: {}", path_key))
     }
 
     /// 检查是否为视频文件

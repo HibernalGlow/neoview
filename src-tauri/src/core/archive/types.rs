@@ -18,9 +18,11 @@ pub static ARCHIVE_IMAGE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
 });
 
 /// 预编译的视频扩展名集合（压缩包内部使用）
+/// 统一引用 video_exts::VIDEO_EXTENSIONS，避免各处维护独立列表
 pub static ARCHIVE_VIDEO_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["mp4", "webm", "mkv", "avi", "mov", "wmv", "flv", "m4v"]
-        .into_iter()
+    crate::core::video_exts::VIDEO_EXTENSIONS
+        .iter()
+        .copied()
         .collect()
 });
 

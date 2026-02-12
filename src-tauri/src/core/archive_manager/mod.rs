@@ -1,17 +1,17 @@
 //! 统一压缩包管理器
-//! 
+//!
 //! 提供统一接口处理 ZIP、RAR、7z 等压缩格式
 //! 支持流式读取，避免解压到磁盘
 
-mod zip_handler;
 mod rar_handler;
 mod sevenz_handler;
+mod zip_handler;
 
 use std::path::Path;
 
-pub use zip_handler::ZipHandler;
 pub use rar_handler::RarHandler;
 pub use sevenz_handler::SevenZHandler;
+pub use zip_handler::ZipHandler;
 
 /// 压缩包条目信息
 #[derive(Debug, Clone)]
@@ -36,25 +36,22 @@ impl ArchiveEntry {
             .and_then(|e| e.to_str())
             .map(|e| e.to_lowercase())
     }
-    
+
     /// 检查是否为图片文件
     pub fn is_image(&self) -> bool {
         const IMAGE_EXTS: &[&str] = &[
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", 
-            "avif", "jxl", "tiff", "tif", "ico", "heic", "heif"
+            "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif", "ico",
+            "heic", "heif",
         ];
         self.extension()
             .map(|ext| IMAGE_EXTS.contains(&ext.as_str()))
             .unwrap_or(false)
     }
-    
-    /// 检查是否为视频文件
+
+    /// 检查是否为视频文件（统一引用 video_exts）
     pub fn is_video(&self) -> bool {
-        const VIDEO_EXTS: &[&str] = &[
-            "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v"
-        ];
         self.extension()
-            .map(|ext| VIDEO_EXTS.contains(&ext.as_str()))
+            .map(|ext| crate::core::video_exts::is_video_extension(&ext))
             .unwrap_or(false)
     }
 }
@@ -63,22 +60,48 @@ impl ArchiveEntry {
 pub trait ArchiveHandler: Send + Sync {
     /// 获取压缩包中的所有条目
     fn list_entries(&mut self) -> Result<Vec<ArchiveEntry>, String>;
-    
+
     /// 按索引读取条目内容到内存
     fn read_entry(&mut self, index: usize) -> Result<Vec<u8>, String>;
-    
+
     /// 按名称读取条目内容到内存
     fn read_entry_by_name(&mut self, name: &str) -> Result<Vec<u8>, String>;
-    
+
     /// 获取第一个图片条目
     fn first_image_entry(&mut self) -> Result<Option<ArchiveEntry>, String> {
         let entries = self.list_entries()?;
-        Ok(entries.into_iter().find(|e| !e.is_directory && e.is_image()))
+        Ok(entries
+            .into_iter()
+            .find(|e| !e.is_directory && e.is_image()))
     }
-    
+
+    /// 获取第一个可视条目（优先图片，其次视频）
+    /// 用于压缩包缩略图生成：即使压缩包只含视频也能生成缩略图
+    fn first_viewable_entry(&mut self) -> Result<Option<ArchiveEntry>, String> {
+        let entries = self.list_entries()?;
+        // 优先找图片
+        if let Some(img) = entries.iter().find(|e| !e.is_directory && e.is_image()) {
+            return Ok(Some(img.clone()));
+        }
+        // 其次找视频
+        Ok(entries
+            .into_iter()
+            .find(|e| !e.is_directory && e.is_video()))
+    }
+
     /// 读取第一张图片的数据
     fn read_first_image(&mut self) -> Result<Option<(ArchiveEntry, Vec<u8>)>, String> {
         if let Some(entry) = self.first_image_entry()? {
+            let data = self.read_entry(entry.index)?;
+            Ok(Some((entry, data)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// 读取第一个可视条目（优先图片，其次视频）的数据
+    fn read_first_viewable(&mut self) -> Result<Option<(ArchiveEntry, Vec<u8>)>, String> {
+        if let Some(entry) = self.first_viewable_entry()? {
             let data = self.read_entry(entry.index)?;
             Ok(Some((entry, data)))
         } else {
@@ -105,7 +128,7 @@ impl ArchiveFormat {
             _ => None,
         }
     }
-    
+
     /// 从文件路径检测格式
     pub fn from_path(path: &Path) -> Option<Self> {
         path.extension()
@@ -118,7 +141,7 @@ impl ArchiveFormat {
 pub fn open_archive(path: &Path) -> Result<Box<dyn ArchiveHandler>, String> {
     let format = ArchiveFormat::from_path(path)
         .ok_or_else(|| format!("不支持的压缩格式: {:?}", path.extension()))?;
-    
+
     match format {
         ArchiveFormat::Zip => {
             let handler = ZipHandler::open(path)?;
@@ -152,5 +175,8 @@ pub fn get_first_image(path: &Path) -> Result<Option<(ArchiveEntry, Vec<u8>)>, S
 pub fn list_images(path: &Path) -> Result<Vec<ArchiveEntry>, String> {
     let mut handler = open_archive(path)?;
     let entries = handler.list_entries()?;
-    Ok(entries.into_iter().filter(|e| !e.is_directory && e.is_image()).collect())
+    Ok(entries
+        .into_iter()
+        .filter(|e| !e.is_directory && e.is_image())
+        .collect())
 }

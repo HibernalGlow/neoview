@@ -265,11 +265,18 @@ fn get_mime_type(path: &str) -> &'static str {
         "tiff" | "tif" => "image/tiff",
         "jxl" => "image/jxl",
         "svg" => "image/svg+xml",
-        "mp4" => "video/mp4",
+        // 视频格式
+        "mp4" | "m4v" | "nov" => "video/mp4",
         "webm" => "video/webm",
         "mkv" => "video/x-matroska",
         "avi" => "video/x-msvideo",
         "mov" => "video/quicktime",
+        "wmv" => "video/x-ms-wmv",
+        "flv" => "video/x-flv",
+        "ogg" | "ogv" => "video/ogg",
+        "3gp" => "video/3gpp",
+        "3g2" => "video/3gpp2",
+        "mpg" | "mpeg" => "video/mpeg",
         _ => "application/octet-stream",
     }
 }

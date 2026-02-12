@@ -65,7 +65,8 @@ export const defaultSettings: NeoViewSettings = {
       'avi',
       'flv',
       'wmv'
-    ]
+    ],
+    nativeJxl: false
   },
   view: {
     defaultZoomMode: 'fit',

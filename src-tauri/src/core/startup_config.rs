@@ -58,6 +58,9 @@ pub struct StartupConfig {
     /// 超分条件列表
     #[serde(default)]
     pub upscale_conditions: Vec<UpscaleConditionConfig>,
+    /// 启用原生 JXL 解码（需要 WebView2 >= 145，重启生效）
+    #[serde(default)]
+    pub native_jxl: bool,
 }
 
 impl StartupConfig {
@@ -65,17 +68,15 @@ impl StartupConfig {
     pub fn load(config_path: &Path) -> Self {
         if config_path.exists() {
             match fs::read_to_string(config_path) {
-                Ok(content) => {
-                    match serde_json::from_str(&content) {
-                        Ok(config) => {
-                            log::info!("📋 已加载启动配置: {}", config_path.display());
-                            return config;
-                        }
-                        Err(e) => {
-                            log::warn!("⚠️ 解析启动配置失败: {}", e);
-                        }
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(config) => {
+                        log::info!("📋 已加载启动配置: {}", config_path.display());
+                        return config;
                     }
-                }
+                    Err(e) => {
+                        log::warn!("⚠️ 解析启动配置失败: {}", e);
+                    }
+                },
                 Err(e) => {
                     log::warn!("⚠️ 读取启动配置失败: {}", e);
                 }
@@ -92,12 +93,11 @@ impl StartupConfig {
             let _ = fs::create_dir_all(parent);
         }
 
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("序列化配置失败: {}", e))?;
-        
-        fs::write(config_path, json)
-            .map_err(|e| format!("写入配置文件失败: {}", e))?;
-        
+        let json =
+            serde_json::to_string_pretty(self).map_err(|e| format!("序列化配置失败: {}", e))?;
+
+        fs::write(config_path, json).map_err(|e| format!("写入配置文件失败: {}", e))?;
+
         log::info!("💾 启动配置已保存: {}", config_path.display());
         Ok(())
     }
@@ -109,13 +109,13 @@ impl StartupConfig {
                 return Some(PathBuf::from(dir));
             }
         }
-        
+
         if let Some(cache_dir) = &self.cache_dir {
             if !cache_dir.is_empty() {
                 return Some(PathBuf::from(cache_dir).join("pyo3-upscale"));
             }
         }
-        
+
         None
     }
 }

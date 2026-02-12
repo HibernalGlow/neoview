@@ -11,22 +11,19 @@ pub async fn get_startup_config(app: AppHandle) -> Result<StartupConfig, String>
         .path()
         .app_data_dir()
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
-    
+
     let config_path = get_config_path(&app_data_dir);
     Ok(StartupConfig::load(&config_path))
 }
 
 /// 保存启动配置
 #[command]
-pub async fn save_startup_config(
-    app: AppHandle,
-    config: StartupConfig,
-) -> Result<(), String> {
+pub async fn save_startup_config(app: AppHandle, config: StartupConfig) -> Result<(), String> {
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
-    
+
     let config_path = get_config_path(&app_data_dir);
     config.save(&config_path)
 }
@@ -42,16 +39,17 @@ pub async fn update_startup_config_field(
         .path()
         .app_data_dir()
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
-    
+
     let config_path = get_config_path(&app_data_dir);
     let mut config = StartupConfig::load(&config_path);
-    
+
     match field.as_str() {
         "cacheDir" => config.cache_dir = value,
         "cacheUpscaleDir" => config.cache_upscale_dir = value,
         "pythonModulePath" => config.python_module_path = value,
+        "nativeJxl" => config.native_jxl = value.map_or(false, |v| v == "true"),
         _ => return Err(format!("未知的配置字段: {}", field)),
     }
-    
+
     config.save(&config_path)
 }

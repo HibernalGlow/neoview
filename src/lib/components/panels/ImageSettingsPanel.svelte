@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Palette, Image, Video, MousePointer } from '@lucide/svelte';
+	import { Palette, Image, Video, MousePointer, Check, X, RefreshCw } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
 	import { Switch } from '$lib/components/ui/switch';
@@ -24,6 +25,28 @@
 		settingsManager.updateNestedSettings('image', {
 			supportedFormats: Array.from(formats)
 		});
+	}
+
+	let testStatus = $state<'idle' | 'testing' | 'supported' | 'unsupported'>('idle');
+
+	async function testJxlSupport() {
+		testStatus = 'testing';
+		const jxl = new Image();
+		// 一个最小的合法 JXL (1x1 无损白点)
+		jxl.src = 'data:image/jxl;base64,/xl/AAAABQAAABAAAAEBAQA=';
+		
+		try {
+			await new Promise((resolve, reject) => {
+				jxl.onload = () => resolve(true);
+				jxl.onerror = (e) => reject(e);
+				// 3秒超时
+				setTimeout(() => reject(new Error('Timeout')), 3000);
+			});
+			testStatus = 'supported';
+		} catch (e) {
+			console.error('JXL test failed:', e);
+			testStatus = 'unsupported';
+		}
 	}
 </script>
 
@@ -101,6 +124,61 @@
 			</div>
 			<p class="text-muted-foreground text-xs">
 				控制 NeoView 默认识别为图片的文件扩展名。
+			</p>
+		</div>
+
+		<!-- 原生 JXL 解码 -->
+		<div class="space-y-3">
+			<div class="flex items-center justify-between gap-2">
+				<div class="flex flex-col gap-0.5">
+					<Label class="text-sm">原生 JXL 解码</Label>
+					<div class="mt-1 flex items-center gap-2">
+						<Button 
+							variant="outline" 
+							size="sm" 
+							class="h-7 px-2 text-[10px]" 
+							onclick={testJxlSupport}
+							disabled={testStatus === 'testing'}
+						>
+							{#if testStatus === 'testing'}
+								<RefreshCw class="mr-1 h-3 w-3 animate-spin" />
+								检测中...
+							{:else}
+								检测浏览器支持
+							{/if}
+						</Button>
+						
+						{#if testStatus === 'supported'}
+							<span class="flex items-center gap-1 text-[10px] text-green-500">
+								<Check class="h-3 w-3" /> 支持原生解析
+							</span>
+						{:else if testStatus === 'unsupported'}
+							<span class="flex items-center gap-1 text-[10px] text-destructive">
+								<X class="h-3 w-3" /> 浏览器不支持
+							</span>
+						{/if}
+					</div>
+				</div>
+				<Switch
+					checked={currentSettings.image.nativeJxl ?? false}
+					onCheckedChange={async (checked) => {
+						const val = !!checked;
+						settingsManager.updateNestedSettings('image', { nativeJxl: val });
+						try {
+							const { invoke } = await import('@tauri-apps/api/core');
+							await invoke('update_startup_config_field', {
+								field: 'nativeJxl',
+								value: val ? 'true' : null
+							});
+						} catch (e) {
+							console.warn('更新启动配置失败:', e);
+						}
+					}}
+				/>
+			</div>
+			<p class="text-muted-foreground text-xs">
+				使用 WebView2 (Chromium 145+) 内置的 JXL 解码器直接渲染，跳过 Rust 端的 JXL→PNG 转码，性能更优。<br/>
+				<span class="font-medium text-yellow-500">⚠ 需要 WebView2 Runtime ≥ 145 / 重启后生效</span>
 			</p>
 		</div>
 

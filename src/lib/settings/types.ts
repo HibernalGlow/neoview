@@ -75,6 +75,8 @@ export interface NeoViewSettings {
     videoMaxPlaybackRate: number;
     videoPlaybackRateStep: number;
     videoFormats: string[];
+    /** 启用 WebView2 原生 JXL 解码（需要 WebView2 >= 145，重启生效） */
+    nativeJxl?: boolean;
   };
   view: {
     defaultZoomMode: ZoomMode;

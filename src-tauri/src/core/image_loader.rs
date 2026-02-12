@@ -145,8 +145,29 @@ impl ImageLoader {
         let image_data =
             fs::read(path_obj).map_err(|e| format!("Failed to read image file: {}", e))?;
 
-        // 如果是压缩包或文件系统的 JXL 文件，现在可以直接返回原始二进制数据
-        // 因为我们已经启用了 WebView2 的原生 JXL 支持
+        // JXL 处理：检查扩展名
+        if let Some(ext) = path_obj.extension().and_then(|e| e.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            if ext_lower == "jxl" {
+                // 如果启用了原生 JXL（通过 WebView2 flag），直接返回原始数据
+                let native_jxl = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
+                    .map(|v| v.contains("--enable-jxl-image-format"))
+                    .unwrap_or(false);
+
+                if native_jxl {
+                    log::debug!("🖼️ JXL 原生模式：直接返回原始数据");
+                    return Ok(image_data);
+                }
+
+                // 非原生模式：JXL 解码后转 PNG（浏览器不原生支持）
+                log::debug!("🖼️ JXL 转码模式：解码并转换为 PNG");
+                let img = self.decode_image_unified(&image_data, &ext_lower)?;
+                let mut png_data = Vec::new();
+                img.write_to(&mut Cursor::new(&mut png_data), ImageFormat::Png)
+                    .map_err(|e| format!("Failed to encode PNG: {e}"))?;
+                return Ok(png_data);
+            }
+        }
 
         // 直接返回原始二进制数据
         Ok(image_data)

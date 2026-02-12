@@ -20,6 +20,7 @@
 		Pencil,
 		Play,
 		FolderOpen,
+		FolderTree,
 		PanelRight,
 		RefreshCw,
 		Tags,
@@ -403,7 +404,7 @@
 											tooltipProps
 										)}
 									>
-										<FolderOpen class="h-4 w-4" />
+										<FolderTree class="h-4 w-4" />
 									</button>
 								{/snippet}
 							</Tooltip.Trigger>

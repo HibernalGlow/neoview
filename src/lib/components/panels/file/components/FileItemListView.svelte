@@ -18,7 +18,8 @@
 		X,
 		HardDrive,
 		Clock,
-		Play
+		Play,
+		Images
 	} from '@lucide/svelte';
 	import type { FsItem } from '$lib/types';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -267,7 +268,7 @@
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
-									<Image class="h-3.3 w-3.2" />
+									<Images class="h-3 w-3" />
 									<span class="font-medium">{item.imageCount}</span>
 								</span>
 							</Tooltip.Trigger>

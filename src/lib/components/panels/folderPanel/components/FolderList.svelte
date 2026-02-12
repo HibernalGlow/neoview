@@ -17,7 +17,9 @@ import {
 	tabDeleteMode,
 	tabCurrentPath,
 	tabItems,
-	tabSortConfig
+	tabSortConfig,
+	tabThumbnailWidthPercent,
+	tabBannerWidthPercent
 } from '../stores/folderTabStore';
 import { derived } from 'svelte/store';
 import type { FolderSortField, FolderSortOrder } from '../stores/folderPanelStore';
@@ -278,6 +280,8 @@ $effect(() => {
 		selectedItems={$selectedItems}
 		{viewMode}
 		{showBackButton}
+		thumbnailWidthPercent={$tabThumbnailWidthPercent}
+		bannerWidthPercent={$tabBannerWidthPercent}
 		onSelectionChange={handleSelectionChange}
 		onSelectedIndexChange={handleSelectedIndexChange}
 		onItemSelect={handleItemSelect}

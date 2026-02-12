@@ -51,8 +51,6 @@ export interface ViewerSlice {
 	taskCursor: TaskCursorState;
     magnifier: {
         enabled: boolean;
-        zoom: number;
-        size: number;
     };
 }
 
@@ -174,7 +172,11 @@ export function createDefaultAppState(): AppStateSnapshot {
 					bookDescriptionTemplate: '路径：{{book.path}}',
 					pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
 					pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
-				}
+				},
+                magnifier: {
+                    zoom: 2.0,
+                    size: 200
+                }
 			},
 			book: {
 				autoPageTurnInterval: 3,
@@ -280,9 +282,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 				updatedAt: Date.now()
 			},
             magnifier: {
-                enabled: false,
-                zoom: 2.0,
-                size: 200
+                enabled: false
             }
 		},
 		lastUpdated: Date.now()

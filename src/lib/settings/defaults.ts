@@ -113,6 +113,10 @@ export const defaultSettings: NeoViewSettings = {
       durationMs: 3000,
       maxVisible: 3
     },
+    magnifier: {
+      zoom: 2.0,
+      size: 200
+    },
     switchToast: {
       enableBook: false,
       enablePage: false,

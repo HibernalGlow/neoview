@@ -141,6 +141,10 @@ export interface NeoViewSettings {
         systemMessages?: boolean;
       };
     };
+    magnifier: {
+      zoom: number;
+      size: number;
+    };
     switchToast?: {
       enableBook: boolean;
       enablePage: boolean;

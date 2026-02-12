@@ -146,14 +146,13 @@
     function toggleMagnifier() {
         // Toggle the panel if it's already enabled, or enable it and open panel if disabled
         const snapshot = appState.getSnapshot();
-        const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false, zoom: 2.0, size: 200 };
+        const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false };
         const newState = !currentMagnifier.enabled;
 
         appState.update({
             viewer: {
                 ...snapshot.viewer,
                 magnifier: {
-                    ...currentMagnifier,
                     enabled: newState
                 }
             }

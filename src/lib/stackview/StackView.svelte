@@ -1046,10 +1046,10 @@
 		<Magnifier
 			imageUrl={currentFrameData.images[0].url}
 			{containerRect}
-            imageWidth={currentFrameData.images[0].width}
-            imageHeight={currentFrameData.images[0].height}
-			zoom={$viewerState.magnifier.enabled ? $viewerState.magnifier.zoom : 2.0}
-			size={$viewerState.magnifier.enabled ? $viewerState.magnifier.size : 200}
+			imageWidth={hoverImageSize.width}
+			imageHeight={hoverImageSize.height}
+			zoom={settings.view.magnifier?.zoom ?? 2.0}
+			size={settings.view.magnifier?.size ?? 200}
 			enabled={$viewerState.magnifier.enabled}
 		/>
 	{/if}

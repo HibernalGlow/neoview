@@ -12,6 +12,7 @@
 		children: Snippet;
 		hideDelay?: number;
 		showDelay?: number;
+		side?: 'left' | 'right'; // 显式指定侧边栏位置
 	}
 
 	let {
@@ -20,7 +21,8 @@
 		onVisibilityChange,
 		children,
 		hideDelay = 500, // 增加到 500ms 提高容错性
-		showDelay = 0
+		showDelay = 0,
+		side
 	}: Props = $props();
 
 	let hideTimer: number | null = null;
@@ -65,7 +67,8 @@
 				lastX = clientX;
 				
 				const rect = wrapperContainer.getBoundingClientRect();
-				const isLeftSide = rect.left < window.innerWidth / 2;
+				// 优先使用显式指定的 side，否则回退到基于位置的猜测（仅作兼容）
+				const isLeftSide = side ? side === 'left' : rect.left < window.innerWidth / 2;
 
 				// 1. 如果鼠标在容器内，或正在输入，或在 Tooltip 上，绝对保持开启
 				const elementAtMouse = document.elementFromPoint(clientX, clientY);

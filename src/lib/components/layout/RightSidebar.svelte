@@ -262,6 +262,7 @@
 	onVisibilityChange={handleVisibilityChange}
 	hideDelay={autoHideTiming.hideDelaySec * 1000}
 	showDelay={autoHideTiming.showDelaySec * 1000}
+	side="right"
 >
 	<div
 		class="relative flex h-full"

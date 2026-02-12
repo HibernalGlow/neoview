@@ -18,7 +18,6 @@
 	import { getImageTransform, getClipPath } from '../utils/transform';
 	import FrameImage from '../components/FrameImage.svelte';
 	import FrameImageWithOverlay from '../components/FrameImageWithOverlay.svelte';
-	import FrameContent from '../components/FrameContent.svelte';
 	import '../styles/frameLayer.css';
 	import {
 		pageTransitionStore,
@@ -159,8 +158,131 @@
 		triggerAnimation(dir);
 	});
 
-	/* 【性能优化】原生滚动方案：不再使用 transform-origin
-	   HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop */
+	// 【性能优化】原生滚动方案：不再使用 transform-origin
+	// HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop
+
+	// 本地存储图片实际尺寸（从 onload 事件获取）
+	let loadedImageSize = $state<{ width: number; height: number }>({ width: 0, height: 0 });
+
+	// 优先使用 loadedImageSize，其次使用 props 传入的 imageSize
+	let effectiveImageSize = $derived({
+		width: loadedImageSize.width || imageSize.width,
+		height: loadedImageSize.height || imageSize.height
+	});
+
+	// 计算 transform（只包含 scale 和 rotation）
+	let transformStyle = $derived.by(() => {
+		const parts: string[] = [];
+		if (scale !== 1) parts.push(`scale(${scale})`);
+		if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
+		return parts.length > 0 ? parts.join(' ') : 'none';
+	});
+
+	// 计算单张图片的显示样式
+	// 双页模式下，每张图片有独立的 scale（用于高度对齐）
+	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
+		// 使用图片自带的尺寸和 scale
+		const imgWidth = img.width ?? 0;
+		const imgHeight = img.height ?? 0;
+		const imgScale = img.scale ?? 1.0;
+		
+		// 应用 scale 后的显示尺寸
+		const displayWidth = imgWidth * imgScale;
+		const displayHeight = imgHeight * imgScale;
+		
+		let vp = viewportSize;
+		
+		if (!displayWidth || !displayHeight || !vp.width || !vp.height) {
+			// 没有尺寸信息时使用默认 contain 模式
+			return 'max-width: 100%; max-height: 100%;';
+		}
+		
+		// 双页模式：计算组合后的总尺寸，然后整体适应视口
+		if (layout === 'double' && frame.images.length === 2) {
+			// 计算两张图片的总宽度和最大高度（应用 scale 后）
+			const img1 = frame.images[0];
+			const img2 = frame.images[1];
+			const w1 = (img1.width ?? 0) * (img1.scale ?? 1);
+			const h1 = (img1.height ?? 0) * (img1.scale ?? 1);
+			const w2 = (img2.width ?? 0) * (img2.scale ?? 1);
+			const h2 = (img2.height ?? 0) * (img2.scale ?? 1);
+			
+			const totalWidth = w1 + w2;
+			const maxHeight = Math.max(h1, h2);
+			
+			if (totalWidth > 0 && maxHeight > 0) {
+				// 计算整体缩放比例以适应视口
+				const scaleX = vp.width / totalWidth;
+				const scaleY = vp.height / maxHeight;
+				const frameScale = Math.min(scaleX, scaleY);
+				
+				// 应用帧缩放到当前图片
+				const finalWidth = displayWidth * frameScale;
+				const finalHeight = displayHeight * frameScale;
+				
+				// 必须添加 max-width/max-height: none 覆盖 FrameImage 的默认限制
+				return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: fill;`;
+			}
+		}
+		
+		// 单页模式：使用原有逻辑
+		const imgAspect = displayWidth / displayHeight;
+		
+		// 分割图倍率补偿 (图片标签渲染全宽，但逻辑宽度只有一半)
+		const splitFactor = img.splitHalf ? 2 : 1;
+
+		switch (zoomMode) {
+			case 'fit':
+			case 'fitLeftAlign':
+			case 'fitRightAlign': {
+				const vpAspect = vp.width / vp.height;
+				if (imgAspect > vpAspect) {
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+				} else {
+					const width = vp.height * imgAspect;
+					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+				}
+			}
+			
+			case 'fill': {
+				const vpAspect = vp.width / vp.height;
+				if (imgAspect > vpAspect) {
+					const width = vp.height * imgAspect;
+					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+				} else {
+					const height = vp.width / imgAspect;
+					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+				}
+			}
+			
+			case 'fitWidth': {
+				const height = vp.width / imgAspect;
+				return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+			}
+			
+			case 'fitHeight': {
+				const width = vp.height * imgAspect;
+				return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+			}
+			
+			case 'original': {
+				return `width: ${displayWidth * splitFactor}px; height: ${displayHeight}px; max-width: none; max-height: none;`;
+			}
+			
+			default:
+				return 'max-width: 100%; max-height: 100%;';
+		}
+	}
+
+	// 图片加载完成时更新本地尺寸
+	function handleImageLoad(e: Event, index: number) {
+		const img = e.target as HTMLImageElement;
+		if (img && img.naturalWidth && img.naturalHeight) {
+			loadedImageSize = { width: img.naturalWidth, height: img.naturalHeight };
+		}
+		onImageLoad?.(e, index);
+	}
 
 	let layoutClass = $derived.by(() => {
 		const classes: string[] = [];
@@ -200,17 +322,24 @@
 		style:z-index={LayerZIndex.CURRENT_FRAME}
 		style={animationStyle}
 	>
-		<FrameContent
-			{frame}
-			{layout}
-			vpSize={viewportSize}
-			{scale}
-			{rotation}
-			{imageSize}
-			{zoomMode}
-			{alignMode}
-			{onImageLoad}
-		/>
+		<div
+			class="scroll-frame-content"
+			style:transform={transformStyle}
+		>
+			{#each frame.images as img, i (img.physicalIndex)}
+				<FrameImageWithOverlay
+					pageIndex={img.physicalIndex}
+					url={img.url}
+					alt="Current {i}"
+					transform={getImageTransform(img)}
+					clipPath={getClipPath(img.splitHalf)}
+					style={getImageDisplayStyle(img, i)}
+					imageWidth={img.width ?? 0}
+					imageHeight={img.height ?? 0}
+					onload={(e) => handleImageLoad(e, i)}
+				/>
+			{/each}
+		</div>
 	</div>
 {:else}
 	<div
@@ -243,17 +372,19 @@
 		display: none;
 	}
 
-	/* 
-    FrameContent 的样式不再需要在这里定义，移至 FrameContent.svelte 
-    保留对 .scroll-frame-content 的样式引用，因为 FrameContent 内部使用了它
-    */
-	:global(.scroll-frame-container .scroll-frame-content) {
-		/* 这些样式移到了 FrameContent 中，但为了确保在父容器中正确表现，
-           特别是 scroll-frame-container 的 flex/inline-flex 影响 */
+	.scroll-frame-content {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* 居中：当内容小于容器时居中 */
+		min-width: 100%;
+		min-height: 100%;
+		/* 【修复内存泄露】移除 will-change，保留 translateZ(0) 用于基本 GPU 加速 */
+		transform: translateZ(0);
 	}
 
 	/* 悬停滚动模式：使用 inline-flex 支持滚动到边缘 */
-	.scroll-frame-container.hover-scroll-mode :global(.scroll-frame-content) {
+	.scroll-frame-container.hover-scroll-mode .scroll-frame-content {
 		display: inline-flex;
 	}
 
@@ -262,21 +393,21 @@
 	}
 
 	/* 双页模式（始终左右排列） */
-	.scroll-frame-container.frame-double :global(.scroll-frame-content) {
+	.scroll-frame-container.frame-double .scroll-frame-content {
 		flex-direction: row;
 		gap: 0;
 	}
 
-	.scroll-frame-container.frame-double.frame-rtl :global(.scroll-frame-content) {
+	.scroll-frame-container.frame-double.frame-rtl .scroll-frame-content {
 		flex-direction: row-reverse;
 	}
 
 	/* 对齐模式 - 应用到 flex 容器 .scroll-frame-content 上 */
-	.scroll-frame-container.frame-align-left :global(.scroll-frame-content) {
+	.scroll-frame-container.frame-align-left .scroll-frame-content {
 		justify-content: flex-start;
 	}
 
-	.scroll-frame-container.frame-align-right :global(.scroll-frame-content) {
+	.scroll-frame-container.frame-align-right .scroll-frame-content {
 		justify-content: flex-end;
 	}
 

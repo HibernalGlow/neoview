@@ -17,9 +17,6 @@
 	} from './layers';
 	import HoverScrollLayer from './layers/HoverScrollLayer.svelte';
 	import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
-	import Magnifier from '../components/viewer/Magnifier.svelte';
-	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { readable } from 'svelte/store';
 	import {
 		isLandscape,
 		buildFrameImages,
@@ -38,11 +35,6 @@
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
 	import { convertFileSrc } from '@tauri-apps/api/core';
-
-	function createAppStateStore<T>(selector: StateSelector<T>) {
-		const initial = selector(appState.getSnapshot());
-		return readable(initial, (set) => appState.subscribe(selector, (value) => set(value)));
-	}
 
 	// 导入外部 stores
 	import {
@@ -90,11 +82,9 @@
 	const imageStore = getImageStore();
 	const panoramaStore = getPanoramaStore();
 	const zoomModeManager = createZoomModeManager();
-	const viewerState = createAppStateStore((state) => state.viewer);
 
 	let containerRef: HTMLDivElement | null = $state(null);
 	let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
-	let containerRect = $state<DOMRect | null>(null);
 	let cursorAutoHide: CursorAutoHideController | null = null;
 
 	// 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 DOM
@@ -780,7 +770,6 @@
 	function updateViewportSize() {
 		if (containerRef) {
 			const rect = containerRef.getBoundingClientRect();
-			containerRect = rect;
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
 				// 【新增】同步视口尺寸到 imageStore，用于预计算缩放
@@ -1035,21 +1024,6 @@
 			slideshowVisible = false;
 			slideshowStore.stop();
 		}}
-	/>
-	<!-- 放大镜层 (最上层) -->
-	<Magnifier
-		frame={currentFrameData}
-		layout={effectivePageMode}
-		vpSize={viewportSize}
-		scale={effectiveScale}
-		rotation={rotation}
-		imageSize={hoverImageSize}
-		zoomMode={currentZoomMode}
-		alignMode={alignMode}
-		zoom={$viewerState.magnifier.enabled ? $viewerState.magnifier.zoom : 2.0}
-		size={$viewerState.magnifier.enabled ? $viewerState.magnifier.size : 200}
-		enabled={$viewerState.magnifier.enabled}
-		{containerRect}
 	/>
 </div>
 

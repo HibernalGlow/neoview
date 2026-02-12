@@ -12,6 +12,7 @@ use ahash::AHashMap;
 use log::{debug, error, info, warn};
 use mini_moka::sync::Cache;
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -92,24 +93,20 @@ impl Default for PathRegistry {
 
 /// 缓存的压缩包条目信息
 #[derive(Clone, Debug)]
-struct CachedArchiveEntry {
-    /// 条目名称
-    name: String,
-    /// 条目内部路径
-    path: String,
-    /// 是否是图片
-    is_image: bool,
-    /// 是否是视频
-    is_video: bool,
+pub struct CachedArchiveEntry {
+    pub name: String,
+    pub path: String,
+    pub is_image: bool,
+    pub is_video: bool,
+    pub entry_index: usize,
 }
 
 /// 缓存的压缩包元数据
 #[derive(Clone, Debug)]
 struct CachedArchiveMetadata {
-    /// 图片条目列表
-    image_entries: Vec<CachedArchiveEntry>,
-    /// 缓存时间
-    cached_at: Instant,
+    /// 图片和视频条目 (key: entry_index)
+    image_entries: HashMap<usize, CachedArchiveEntry>,
+    pub cached_at: Instant,
 }
 
 /// Custom Protocol 状态
@@ -161,16 +158,21 @@ impl ProtocolState {
             .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
 
         // 过滤并缓存可查看条目（图片和视频）
-        let image_entries: Vec<CachedArchiveEntry> = entries
-            .iter()
-            .filter(|e| e.is_image || e.is_video)
-            .map(|e| CachedArchiveEntry {
-                name: e.name.clone(),
-                path: e.path.clone(),
-                is_image: e.is_image,
-                is_video: e.is_video,
-            })
-            .collect();
+        let mut image_entries = HashMap::new();
+        for e in entries {
+            if e.is_image || e.is_video {
+                image_entries.insert(
+                    e.entry_index,
+                    CachedArchiveEntry {
+                        name: e.name.clone(),
+                        path: e.path.clone(),
+                        is_image: e.is_image,
+                        is_video: e.is_video,
+                        entry_index: e.entry_index,
+                    },
+                );
+            }
+        }
 
         let metadata = CachedArchiveMetadata {
             image_entries,
@@ -330,10 +332,10 @@ fn handle_archive_image(
         }
     };
 
-    // 查找指定索引的图片条目
-    let Some(entry) = metadata.image_entries.get(entry_index) else {
+    // 查找指定索引的条目
+    let Some(entry) = metadata.image_entries.get(&entry_index) else {
         warn!(
-            "📦 Protocol: 条目索引越界, index={}, total={}",
+            "📦 Protocol: 无法找到条目索引, index={}, entries_cached={}",
             entry_index,
             metadata.image_entries.len()
         );

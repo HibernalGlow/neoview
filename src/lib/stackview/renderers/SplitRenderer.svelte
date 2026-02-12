@@ -42,7 +42,8 @@
 
 <style>
   .split-renderer {
-    max-width: 100%;
+    max-width: 200%;
+    width: 200%;
     max-height: 100%;
     object-fit: contain;
     user-select: none;

@@ -27,6 +27,7 @@
       src={img.url}
       alt="Page {i}"
       class="frame-image"
+      class:is-split={!!img.splitHalf}
       style:transform={getImageTransform(img)}
       style:clip-path={getClipPath(img.splitHalf)}
       onload={(e) => onImageLoad?.(e, i)}
@@ -58,8 +59,19 @@
     -webkit-user-drag: none;
   }
   
+  /* 分割图像在双页模式下也需要倍增宽度 (从 50% 到 100%) */
+  .frame-image.is-split {
+    max-width: 100%;
+    width: 100%;
+  }
+
   /* 单张图片时独占整个区域 */
   .double-frame:has(.frame-image:only-child) .frame-image {
     max-width: 100%;
+  }
+  
+  .double-frame:has(.frame-image:only-child) .frame-image.is-split {
+    max-width: 200%;
+    width: 200%;
   }
 </style>

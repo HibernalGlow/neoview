@@ -25,6 +25,7 @@
       src={img.url}
       alt="Page {i}"
       class="frame-image"
+      class:is-split={!!img.splitHalf}
       style:transform={getImageTransform(img)}
       style:clip-path={getClipPath(img.splitHalf)}
       onload={(e) => onImageLoad?.(e, i)}
@@ -48,5 +49,11 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+  }
+
+  /* 分割图像由于被裁剪了一半，需要倍增宽度以填满区域 */
+  .frame-image.is-split {
+    max-width: 200%;
+    width: 200%;
   }
 </style>

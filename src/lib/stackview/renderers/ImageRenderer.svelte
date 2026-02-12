@@ -36,6 +36,7 @@
   src={image.url}
   alt="Image"
   class="image-renderer"
+  class:is-split={!!image.splitHalf}
   style:transform={getImageTransform(image)}
   style:clip-path={getClipPath(image.splitHalf)}
   onload={handleLoad}
@@ -50,5 +51,10 @@
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
+  }
+
+  .image-renderer.is-split {
+    max-width: 200%;
+    width: 200%;
   }
 </style>

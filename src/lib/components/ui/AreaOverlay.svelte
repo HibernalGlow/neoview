@@ -97,7 +97,7 @@
 </script>
 
 {#if show}
-	<div class="area-overlay pointer-events-none fixed inset-0 z-[50]">
+	<div class="area-overlay pointer-events-none fixed inset-0 z-50">
 		<!-- 半透明背景 -->
 		<div class="pointer-events-none absolute inset-0 bg-black/20"></div>
 
@@ -113,6 +113,12 @@
 					data-area={area.value}
 					onclick={(e) => handleAreaClick(area.value, e)}
 					oncontextmenu={(e) => handleContextMenu(area.value, e)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							handleAreaClick(area.value, e as any);
+						}
+					}}
 					title="点击测试区域绑定"
 					role="button"
 					tabindex="0"

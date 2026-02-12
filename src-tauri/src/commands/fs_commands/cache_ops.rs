@@ -2,8 +2,8 @@
 
 use super::types::{
     BatchDirectorySnapshotResult, DirectoryPageOptions, DirectoryPageResult,
-    DirectorySnapshotResponse, DirectoryStreamOptions, DirectoryStreamStartResult,
-    FileInfo, StreamBatchResult,
+    DirectorySnapshotResponse, DirectoryStreamOptions, DirectoryStreamStartResult, FileInfo,
+    StreamBatchResult,
 };
 use super::{CacheIndexState, DirectoryCacheState, FsState};
 use crate::commands::task_queue_commands::BackgroundSchedulerState;
@@ -57,10 +57,7 @@ pub async fn load_directory_snapshot(
 
     // 内存缓存
     {
-        let mut cache = cache_state
-            .cache
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(entry) = cache.get(&path, mtime) {
             println!(
                 "📁 DirectorySnapshot 命中内存缓存: {} (entries={})",
@@ -78,10 +75,7 @@ pub async fn load_directory_snapshot(
     // SQLite 缓存
     if let Some(persisted_items) = cache_index.db.load_directory_snapshot(&path, mtime)? {
         {
-            let mut cache = cache_state
-                .cache
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
             cache.insert(path.clone(), persisted_items.clone(), mtime);
         }
         return Ok(DirectorySnapshotResponse {
@@ -105,19 +99,14 @@ pub async fn load_directory_snapshot(
             "filebrowser-directory-load",
             job_path,
             move || -> Result<Vec<FsItem>, String> {
-                let fs_manager = fs_manager
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
-                fs_manager.read_directory(&path_for_job)
+                let fs_manager = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+                fs_manager.read_directory_with_stats(&path_for_job)
             },
         )
         .await?;
 
     {
-        let mut cache = cache_state
-            .cache
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
         cache.insert(path.clone(), items.clone(), mtime);
     }
     cache_index
@@ -155,10 +144,7 @@ pub async fn batch_load_directory_snapshots(
 
         // 1. 检查内存缓存
         {
-            let mut cache = cache_state
-                .cache
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(entry) = cache.get(path, mtime) {
                 results.push(BatchDirectorySnapshotResult {
                     path: path.clone(),
@@ -177,10 +163,7 @@ pub async fn batch_load_directory_snapshots(
         match cache_index_db.load_directory_snapshot(path, mtime) {
             Ok(Some(persisted_items)) => {
                 {
-                    let mut cache = cache_state
-                        .cache
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
                     cache.insert(path.clone(), persisted_items.clone(), mtime);
                 }
                 results.push(BatchDirectorySnapshotResult {
@@ -287,6 +270,7 @@ pub async fn batch_load_directory_snapshots(
 #[tauri::command]
 pub async fn browse_directory_page(
     path: String,
+    state: State<'_, FsState>,
     options: Option<DirectoryPageOptions>,
 ) -> Result<DirectoryPageResult, String> {
     let options = options.unwrap_or_default();
@@ -313,7 +297,13 @@ pub async fn browse_directory_page(
     let limit = options.limit.unwrap_or(100);
 
     let page_entries: Vec<PathBuf> = entries.into_iter().skip(offset).take(limit).collect();
-    let items = convert_paths_to_file_info(page_entries)?;
+    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let mut items = Vec::new();
+    for entry_path in page_entries {
+        if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
+            items.push(item);
+        }
+    }
 
     let has_more = offset + items.len() < total;
     let next_offset = if has_more {
@@ -334,6 +324,7 @@ pub async fn browse_directory_page(
 #[tauri::command]
 pub async fn start_directory_stream(
     path: String,
+    state: State<'_, FsState>,
     options: Option<DirectoryStreamOptions>,
 ) -> Result<DirectoryStreamStartResult, String> {
     let options = options.unwrap_or_default();
@@ -360,7 +351,17 @@ pub async fn start_directory_stream(
     let stream_id = format!("stream_{}", STREAM_COUNTER.fetch_add(1, Ordering::SeqCst));
 
     let initial_batch: Vec<PathBuf> = entries.iter().take(batch_size).cloned().collect();
-    let initial_items = convert_paths_to_file_info(initial_batch)?;
+
+    let mut initial_items = Vec::new();
+    {
+        let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+        for entry_path in initial_batch {
+            if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
+                initial_items.push(item);
+            }
+        }
+    }
+
     let has_more = batch_size < total;
 
     let stream = DirectoryStream {
@@ -385,7 +386,10 @@ pub async fn start_directory_stream(
 
 /// 获取流的下一批数据
 #[tauri::command]
-pub async fn get_next_stream_batch(stream_id: String) -> Result<StreamBatchResult, String> {
+pub async fn get_next_stream_batch(
+    stream_id: String,
+    state: State<'_, FsState>,
+) -> Result<StreamBatchResult, String> {
     let mut streams = STREAMS.lock().unwrap();
 
     if let Some(stream) = streams.get_mut(&stream_id) {
@@ -405,7 +409,15 @@ pub async fn get_next_stream_batch(stream_id: String) -> Result<StreamBatchResul
         stream.current_index = next_index;
         let has_more = stream.current_index < stream.entries.len();
 
-        let items = convert_paths_to_file_info(batch)?;
+        let mut items = Vec::new();
+        {
+            let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+            for entry_path in batch {
+                if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
+                    items.push(item);
+                }
+            }
+        }
 
         Ok(StreamBatchResult { items, has_more })
     } else {

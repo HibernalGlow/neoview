@@ -506,7 +506,12 @@
 			)}
 			onclick={(e) => selectNode(node, e)}
 			oncontextmenu={(e) => handleContextMenu(node, e)}
-			onkeydown={(e) => e.key === 'Enter' && selectNode(node)}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					selectNode(node);
+				}
+			}}
 			role="button"
 			tabindex="0"
 		>

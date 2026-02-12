@@ -47,11 +47,16 @@
 	role="button"
 	tabindex="0"
 	onclick={openGitHub}
-	onkeydown={(e) => e.key === 'Enter' && openGitHub()}
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			openGitHub();
+		}
+	}}
 >
 	<!-- 背景装饰 -->
 	<div
-		class="from-primary/5 to-accent/5 absolute inset-0 rounded-xl bg-gradient-to-br via-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+		class="from-primary/5 to-accent/5 absolute inset-0 rounded-xl bg-linear-to-br via-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"
 	></div>
 
 	<!-- 卡片内容 -->
@@ -60,7 +65,7 @@
 		<div class="mb-4 flex flex-col items-center justify-center">
 			<div class="mb-2 flex items-center gap-3">
 				<div
-					class="from-primary/20 to-primary/5 border-primary/20 shadow-primary/5 rounded-xl border bg-gradient-to-br p-2.5 shadow-lg"
+					class="from-primary/20 to-primary/5 border-primary/20 shadow-primary/5 rounded-xl border bg-linear-to-br p-2.5 shadow-lg"
 				>
 					<Github class="text-primary h-6 w-6" />
 				</div>
@@ -133,7 +138,7 @@
 
 	<!-- 悬停光效 -->
 	<div
-		class="from-primary/0 via-primary/5 to-primary/0 pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-r opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+		class="from-primary/0 via-primary/5 to-primary/0 pointer-events-none absolute inset-0 rounded-xl bg-linear-to-r opacity-0 transition-opacity duration-300 group-hover:opacity-100"
 	></div>
 </div>
 

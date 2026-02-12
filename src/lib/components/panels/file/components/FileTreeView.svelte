@@ -292,6 +292,16 @@
 					handleItemContextMenu(e, item);
 				}
 			}}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					if (item) {
+						handleItemClick(item, index);
+					} else if (hasChildren) {
+						toggleNode(node.path);
+					}
+				}
+			}}
 		>
 			<!-- 展开/折叠图标：所有目录节点始终显示箭头 -->
 			{#if node.isDir}

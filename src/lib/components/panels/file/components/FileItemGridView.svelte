@@ -109,6 +109,12 @@
 
 	role="button"
 	tabindex="0"
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onClick?.();
+		}
+	}}
 >
 	<!-- 缩略图区域 - 自动扩展填充可用空间 -->
 	<div class="bg-secondary relative w-full flex-1 min-h-20 overflow-hidden">
@@ -184,6 +190,17 @@
 		<!-- 文件夹统计信息 -->
 		{#if item.isDir}
 			<div class="mt-1 flex flex-wrap items-center gap-1">
+				{#if item.imageCount !== undefined && item.imageCount > 0}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]">
+								<Image class="h-2.5 w-2.5" />
+								<span class="font-medium">{item.imageCount}</span>
+							</span>
+						</Tooltip.Trigger>
+						<Tooltip.Content><p>图片数量</p></Tooltip.Content>
+					</Tooltip.Root>
+				{/if}
 				{#if item.folderCount !== undefined && item.folderCount > 0}
 					<Tooltip.Root>
 						<Tooltip.Trigger>

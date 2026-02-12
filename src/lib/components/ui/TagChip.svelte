@@ -55,7 +55,12 @@
 			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
 		onclick={onClick}
-		onkeydown={(e) => e.key === 'Enter' && onClick?.()}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				onClick?.();
+			}
+		}}
 		oncontextmenu={onContextMenu}
 		title={isManual ? `手动标签 - ${tag}` : isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>

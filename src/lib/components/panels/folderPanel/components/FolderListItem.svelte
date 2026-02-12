@@ -134,7 +134,12 @@ async function handleOpenExternal(e: MouseEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleClick(e as any);
+			}
+		}}
 		role="button"
 		tabindex="0"
 	>
@@ -177,7 +182,12 @@ async function handleOpenExternal(e: MouseEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleClick(e as any);
+			}
+		}}
 		role="button"
 		tabindex="0"
 	>
@@ -228,7 +238,12 @@ async function handleOpenExternal(e: MouseEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleClick(e as any);
+			}
+		}}
 		role="button"
 		tabindex="0"
 	>
@@ -284,7 +299,12 @@ async function handleOpenExternal(e: MouseEvent) {
 		onclick={handleClick}
 		ondblclick={handleDoubleClick}
 		oncontextmenu={handleContextMenu}
-
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleClick(e as any);
+			}
+		}}
 		role="button"
 		tabindex="0"
 	>

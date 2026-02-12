@@ -115,7 +115,7 @@ pub struct DirectoryStreamOptions {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryPageResult {
-    pub items: Vec<FileInfo>,
+    pub items: Vec<crate::core::fs_manager::FsItem>,
     pub total: usize,
     pub has_more: bool,
     pub next_offset: Option<usize>,
@@ -126,7 +126,7 @@ pub struct DirectoryPageResult {
 #[serde(rename_all = "camelCase")]
 pub struct DirectoryStreamStartResult {
     pub stream_id: String,
-    pub initial_batch: Vec<FileInfo>,
+    pub initial_batch: Vec<crate::core::fs_manager::FsItem>,
     pub total: usize,
     pub has_more: bool,
 }
@@ -135,7 +135,7 @@ pub struct DirectoryStreamStartResult {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamBatchResult {
-    pub items: Vec<FileInfo>,
+    pub items: Vec<crate::core::fs_manager::FsItem>,
     pub has_more: bool,
 }
 

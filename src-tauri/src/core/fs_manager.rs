@@ -334,6 +334,16 @@ impl FsManager {
 
     /// 获取文件元数据
     pub fn get_file_metadata(&self, path: &Path) -> Result<FsItem, String> {
+        self.get_file_metadata_impl(path, false)
+    }
+
+    /// 获取文件元数据（带统计信息）
+    pub fn read_item_with_stats(&self, path: &Path) -> Result<FsItem, String> {
+        self.get_file_metadata_impl(path, true)
+    }
+
+    /// 获取文件元数据的内部实现
+    fn get_file_metadata_impl(&self, path: &Path, with_stats: bool) -> Result<FsItem, String> {
         // 安全验证
         self.validate_path(path)?;
 
@@ -357,17 +367,28 @@ impl FsManager {
                 target_path_str = Some(target.to_string_lossy().to_string());
                 if target.is_dir() {
                     is_dir = true;
-                    // 如果需要，可以在这里更新 size/modified 等为 target 的元数据
                 }
-                // 注意：对于 get_file_metadata，如果是图片链接，我们稍后通过 is_image_file 检查 target
             }
         }
 
-        let size = if is_dir {
-            self.calculate_directory_size(path).unwrap_or(0)
+        let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
+            let total_size = self.calculate_directory_size(path).unwrap_or(0);
+            if with_stats {
+                let stats = Self::count_directory_items(path);
+                (
+                    total_size,
+                    Some(stats.folders),
+                    Some(stats.images),
+                    Some(stats.archives),
+                    Some(stats.videos),
+                )
+            } else {
+                (total_size, None, None, None, None)
+            }
         } else {
-            metadata.len()
+            (metadata.len(), None, None, None, None)
         };
+
         let modified = metadata
             .modified()
             .ok()
@@ -397,10 +418,10 @@ impl FsManager {
             modified,
             created,
             is_image,
-            folder_count: None,
-            image_count: None,
-            archive_count: None,
-            video_count: None,
+            folder_count,
+            image_count,
+            archive_count,
+            video_count,
             target_path: target_path_str,
         })
     }

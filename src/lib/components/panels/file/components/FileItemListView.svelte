@@ -144,6 +144,12 @@
 
 	role="button"
 	tabindex="0"
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			onClick?.();
+		}
+	}}
 >
 	<!-- 勾选框（勾选模式）- 正方形图标，扩大透明点击区域 -->
 	{#if isCheckMode}

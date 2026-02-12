@@ -66,6 +66,11 @@ export function getImageTransform(img: FrameImage): string {
   // 旋转
   const rotationTransform = getRotationTransform(img.rotation);
   if (rotationTransform) parts.push(rotationTransform);
+
+  // 缩放 (用于内容对齐)
+  if (img.scale && img.scale !== 1) {
+    parts.push(`scale(${img.scale})`);
+  }
   
   return parts.length > 0 ? parts.join(' ') : 'none';
 }

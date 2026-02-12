@@ -96,15 +96,15 @@
 		const pageIndex = bookStore.currentPageIndex;
 		// 优先从缓存读取当前页尺寸
 		const dims = imageStore.getDimensionsForPage(pageIndex);
-		if (dims?.width && dims?.height) {
-			return { width: dims.width, height: dims.height };
+		let w = dims?.width ?? bookStore.currentPage?.width ?? 0;
+		let h = dims?.height ?? bookStore.currentPage?.height ?? 0;
+
+		// 【关键】如果当前页分割，逻辑宽度减半
+		if (isCurrentPageSplit) {
+			w /= 2;
 		}
-		// 降级：从 bookStore 元数据读取
-		const page = bookStore.currentPage;
-		if (page?.width && page?.height) {
-			return { width: page.width, height: page.height };
-		}
-		return { width: 0, height: 0 };
+
+		return { width: w, height: h };
 	});
 
 	// ============================================================================
@@ -136,7 +136,7 @@
 		}
 		
 		// 2. 降级：使用尺寸实时计算
-		const dims = imageStore.getDimensionsForPage(pageIndex);
+		const dims = hoverImageSize;
 		if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
 			return calculateTargetScale(dims, viewportSize, currentZoomMode);
 		}

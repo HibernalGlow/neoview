@@ -228,6 +228,9 @@
 		// 单页模式：使用原有逻辑
 		const imgAspect = displayWidth / displayHeight;
 		
+		// 分割图倍率补偿 (图片标签渲染全宽，但逻辑宽度只有一半)
+		const splitFactor = img.splitHalf ? 2 : 1;
+
 		switch (zoomMode) {
 			case 'fit':
 			case 'fitLeftAlign':
@@ -235,10 +238,10 @@
 				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width}px; height: ${height}px;`;
+					return `width: ${vp.width * splitFactor}px; height: ${height}px;`;
 				} else {
 					const width = vp.height * imgAspect;
-					return `width: ${width}px; height: ${vp.height}px;`;
+					return `width: ${width * splitFactor}px; height: ${vp.height}px;`;
 				}
 			}
 			
@@ -246,25 +249,25 @@
 				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
 					const width = vp.height * imgAspect;
-					return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 				} else {
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
+					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
 				}
 			}
 			
 			case 'fitWidth': {
 				const height = vp.width / imgAspect;
-				return `width: ${vp.width}px; height: ${height}px; max-width: none; max-height: none;`;
+				return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'fitHeight': {
 				const width = vp.height * imgAspect;
-				return `width: ${width}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+				return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'original': {
-				return `width: ${displayWidth}px; height: ${displayHeight}px; max-width: none; max-height: none;`;
+				return `width: ${displayWidth * splitFactor}px; height: ${displayHeight}px; max-width: none; max-height: none;`;
 			}
 			
 			default:

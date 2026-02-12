@@ -422,6 +422,8 @@ export function buildFrameImages(
       } else {
         mainImage.splitHalf = getInitialSplitHalf(config.direction);
       }
+      // 【关键】逻辑尺寸减半，确保后续缩放计算正确
+      if (mainImage.width) mainImage.width /= 2;
       return [mainImage];
     }
 

@@ -148,7 +148,7 @@ class VirtualPanelSettingsStore {
         saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
     }
     setHistoryThumbnailWidthPercent(value: number) {
-        this.historySettings.thumbnailWidthPercent = Math.max(10, Math.min(50, value));
+        this.historySettings.thumbnailWidthPercent = Math.max(10, Math.min(90, value));
         saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
     }
     toggleHistoryFolderTreeVisible() {
@@ -216,7 +216,7 @@ class VirtualPanelSettingsStore {
         saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
     }
     setBookmarkThumbnailWidthPercent(value: number) {
-        this.bookmarkSettings.thumbnailWidthPercent = Math.max(10, Math.min(50, value));
+        this.bookmarkSettings.thumbnailWidthPercent = Math.max(10, Math.min(90, value));
         saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
     }
     toggleBookmarkFolderTreeVisible() {

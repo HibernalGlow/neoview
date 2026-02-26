@@ -236,7 +236,7 @@ stackActiveIndex: index
 
 /** 设置缩略图宽度百分比 */
 export function setThumbnailWidthPercent(percent: number): void {
-const clampedPercent = Math.max(10, Math.min(50, percent));
+const clampedPercent = Math.max(10, Math.min(90, percent));
 updateActiveTab((tab) => ({
 ...tab,
 thumbnailWidthPercent: clampedPercent

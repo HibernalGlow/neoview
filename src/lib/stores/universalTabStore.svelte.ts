@@ -829,7 +829,7 @@ export class UniversalTabStore {
 	// ============ Width Settings ============
 
 	setThumbnailWidthPercent(percent: number) {
-		const clampedPercent = Math.max(10, Math.min(50, percent));
+		const clampedPercent = Math.max(10, Math.min(90, percent));
 		this.updateActiveTab((tab) => ({
 			...tab,
 			thumbnailWidthPercent: clampedPercent

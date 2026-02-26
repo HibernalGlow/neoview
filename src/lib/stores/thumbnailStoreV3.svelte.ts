@@ -55,9 +55,44 @@ const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | 
 const THROTTLE_MS = 8; // 8ms 节流（更快响应）
 const MAX_BATCH_SIZE = 64; // 单次发送上限，避免一次塞入过多路径
 const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
+const MAX_PARALLEL_INVOKES = 2; // 单轮最多并发请求批次数
+const IN_FLIGHT_TTL_MS = 8000; // 在飞请求超时回收，避免异常时永久占位
 // 单次调度内发送批次数上限（0 表示不限，直到队列清空）。
 // 为避免卡住 UI，我们仍按批次顺序发送，每批 await invoke，剩余批次继续循环。
 const MAX_SYNC_DISPATCHES = 0;
+
+// 在飞请求去重：path -> request start timestamp
+const inFlightRequests = new Map<string, number>();
+
+function releaseInFlight(path: string) {
+  inFlightRequests.delete(path);
+}
+
+function markInFlight(paths: string[]) {
+  const now = Date.now();
+  for (const p of paths) {
+    inFlightRequests.set(p, now);
+  }
+}
+
+function isInFlight(path: string): boolean {
+  const startedAt = inFlightRequests.get(path);
+  if (!startedAt) return false;
+  if (Date.now() - startedAt > IN_FLIGHT_TTL_MS) {
+    inFlightRequests.delete(path);
+    return false;
+  }
+  return true;
+}
+
+function sweepExpiredInFlight() {
+  const now = Date.now();
+  for (const [path, startedAt] of inFlightRequests.entries()) {
+    if (now - startedAt > IN_FLIGHT_TTL_MS) {
+      inFlightRequests.delete(path);
+    }
+  }
+}
 
 // 动态预加载相关（根据停留时间指数扩展）
 const prefetchState = {
@@ -121,6 +156,9 @@ export async function initThumbnailServiceV3(
       // 同步到 fileBrowserStore（供 FileItemCard 使用）
       const key = toRelativeKey(path);
       fileBrowserStore.addThumbnail(key, finalUrl);
+
+      // 该路径已完成，释放在飞占位
+      releaseInFlight(path);
     };
 
     // 监听批量缩略图就绪事件（优化：一次处理多个）
@@ -165,8 +203,10 @@ export async function requestVisibleThumbnails(
     return;
   }
 
+  sweepExpiredInFlight();
+
   // 过滤已缓存的路径
-  const uncachedPaths = paths.filter((p) => !thumbnails.has(p));
+  const uncachedPaths = paths.filter((p) => !thumbnails.has(p) && !isInFlight(p));
 
   if (uncachedPaths.length === 0) return;
 
@@ -199,29 +239,45 @@ export async function requestVisibleThumbnails(
 
     let dispatches = 0;
     while (pendingPathsOrder.length > 0 && (MAX_SYNC_DISPATCHES === 0 || dispatches < MAX_SYNC_DISPATCHES)) {
-      const batch: string[] = [];
-      while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
-        const p = pendingPathsOrder.shift();
-        if (!p) break;
-        if (!pendingPathsSet.has(p)) continue;
-        batch.push(p);
-        pendingPathsSet.delete(p);
-      }
+      const tasks: Promise<void>[] = [];
 
-      if (batch.length === 0) continue;
-      dispatches += 1;
+      while (
+        tasks.length < MAX_PARALLEL_INVOKES &&
+        pendingPathsOrder.length > 0 &&
+        (MAX_SYNC_DISPATCHES === 0 || dispatches < MAX_SYNC_DISPATCHES)
+      ) {
+        const batch: string[] = [];
+        while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
+          const p = pendingPathsOrder.shift();
+          if (!p) break;
+          if (!pendingPathsSet.has(p)) continue;
+          batch.push(p);
+          pendingPathsSet.delete(p);
+        }
 
-      try {
+        if (batch.length === 0) continue;
+        dispatches += 1;
+
         // 计算中心索引（如果未提供，使用可见列表中心）
         const center = centerIndex ?? Math.floor(batch.length / 2);
+        markInFlight(batch);
 
-        await invoke('request_visible_thumbnails_v3', {
-          paths: batch,
-          currentDir: throttleState.dir,
-          centerIndex: center,
-        });
-      } catch (error) {
-        console.error('❌ requestVisibleThumbnails failed:', error);
+        tasks.push(
+          invoke('request_visible_thumbnails_v3', {
+            paths: batch,
+            currentDir: throttleState.dir,
+            centerIndex: center,
+          })
+            .then(() => undefined)
+            .catch((error) => {
+              for (const p of batch) releaseInFlight(p);
+              console.error('❌ requestVisibleThumbnails failed:', error);
+            })
+        );
+      }
+
+      if (tasks.length > 0) {
+        await Promise.all(tasks);
       }
     }
 
@@ -560,13 +616,15 @@ export async function requestAllThumbnails(
     return;
   }
 
+  sweepExpiredInFlight();
+
   // 去重并过滤已缓存的路径
   const deduped: string[] = [];
   const seen = new Set<string>();
   for (const p of paths) {
     if (!p || seen.has(p)) continue;
     seen.add(p);
-    if (thumbnails.has(p)) continue;
+    if (thumbnails.has(p) || isInFlight(p)) continue;
     deduped.push(p);
   }
 
@@ -576,6 +634,7 @@ export async function requestAllThumbnails(
 
   for (let i = 0; i < deduped.length; i += MAX_BATCH_SIZE) {
     const batch = deduped.slice(i, i + MAX_BATCH_SIZE);
+    markInFlight(batch);
     try {
       await invoke('request_visible_thumbnails_v3', {
         paths: batch,
@@ -583,6 +642,7 @@ export async function requestAllThumbnails(
         centerIndex: effectiveCenter,
       });
     } catch (error) {
+      for (const p of batch) releaseInFlight(p);
       console.error('❌ requestAllThumbnails failed:', error);
       break;
     }
@@ -624,6 +684,7 @@ export function cleanup(): void {
     URL.revokeObjectURL(url);
   }
   thumbnails.clear();
+  inFlightRequests.clear();
 
   initialized = false;
   console.log('🛑 ThumbnailStoreV3 cleaned up');

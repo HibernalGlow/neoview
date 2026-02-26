@@ -222,6 +222,9 @@ function createDefaultTabState(id: string, homePath: string = '', mode: TabMode 
 export class UniversalTabStore {
 	private store: Writable<TabsState>;
 	private storageKey: string | null;
+	private pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	private pendingSaveState: TabsState | null = null;
+	private readonly saveDebounceMs = 180;
 	
 	// Derived stores
 	public allTabs;
@@ -397,6 +400,20 @@ export class UniversalTabStore {
 		}
 	}
 
+	private scheduleSave(state: TabsState) {
+		this.pendingSaveState = state;
+		if (this.pendingSaveTimer) {
+			clearTimeout(this.pendingSaveTimer);
+		}
+		this.pendingSaveTimer = setTimeout(() => {
+			if (this.pendingSaveState) {
+				this.saveState(this.pendingSaveState);
+				this.pendingSaveState = null;
+			}
+			this.pendingSaveTimer = null;
+		}, this.saveDebounceMs);
+	}
+
 	// ============ Internal Helpers ============
 
 	private updateActiveTab(updater: (tab: TabState) => TabState) {
@@ -408,7 +425,7 @@ export class UniversalTabStore {
 				return tab;
 			});
 			const newState = { ...$store, tabs };
-			requestAnimationFrame(() => this.saveState(newState));
+			this.scheduleSave(newState);
 			return newState;
 		});
 	}

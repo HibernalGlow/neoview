@@ -114,6 +114,24 @@ tabNavHistory: [firstTabId],
 tabNavHistoryIndex: 0
 };
 
+const STATE_SAVE_DEBOUNCE_MS = 180;
+let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveState: FolderTabsState | null = null;
+
+function scheduleSaveTabsState(state: FolderTabsState): void {
+pendingSaveState = state;
+if (pendingSaveTimer) {
+clearTimeout(pendingSaveTimer);
+}
+pendingSaveTimer = setTimeout(() => {
+if (pendingSaveState) {
+saveTabsState(pendingSaveState);
+pendingSaveState = null;
+}
+pendingSaveTimer = null;
+}, STATE_SAVE_DEBOUNCE_MS);
+}
+
 // 确保 tabNavHistory 存在（兼容旧数据）
 if (!initialState.tabNavHistory) {
 initialState.tabNavHistory = [initialState.activeTabId];
@@ -141,7 +159,7 @@ return updater(tab);
 return tab;
 });
 const newState = { ...$store, tabs };
-requestAnimationFrame(() => saveTabsState(newState));
+scheduleSaveTabsState(newState);
 return newState;
 });
 }

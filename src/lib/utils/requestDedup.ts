@@ -4,6 +4,7 @@
  */
 
 import { LRUCache } from 'lru-cache';
+import pMemoize from 'p-memoize';
 
 /**
  * 去重统计
@@ -19,63 +20,88 @@ export interface DeduplicatorStats {
  * 使用 Map 实现高性能去重
  */
 export class RequestDeduplicator {
-  private pending: LRUCache<string, number>;
-  private nextId = 0;
+  private pending: LRUCache<string, {}>;
+  private inFlightKeys = new Set<string>();
+  private executeMemoized: <T>(key: string, executor: () => Promise<T>) => Promise<T>;
   private stats = { totalRequests: 0, deduplicated: 0 };
 
   /**
    * @param timeout 请求超时时间（毫秒），超过此时间的请求会被清理
    */
   constructor(timeout: number = 30000) {
-    this.pending = new LRUCache<string, number>({
+    this.pending = new LRUCache<string, {}>({
       max: 10000,
       ttl: timeout,
       ttlAutopurge: true,
     });
+
+    this.executeMemoized = pMemoize(
+      async <T>(key: string, executor: () => Promise<T>): Promise<T> => executor(),
+      {
+        cacheKey: (args) => String(args[0]),
+        cache: this.pending as unknown as {
+          has: (key: string) => boolean;
+          get: (key: string) => unknown;
+          set: (key: string, value: unknown) => unknown;
+          delete: (key: string) => boolean;
+          clear?: () => void;
+        },
+      }
+    ) as <T>(key: string, executor: () => Promise<T>) => Promise<T>;
   }
 
   /**
-   * 尝试获取处理权
-   * @returns requestId 如果可以处理，null 如果应跳过
+   * 按 key 去重执行（相同 key 的并发请求共享同一个 Promise）
    */
-  tryAcquire(key: string): number | null {
+  run<T>(key: string, executor: () => Promise<T>): Promise<T> {
     this.stats.totalRequests++;
 
-    // 检查是否已有相同请求
     if (this.pending.has(key)) {
       this.stats.deduplicated++;
       console.debug(`🔄 请求去重: key=${key}`);
-      return null;
     }
 
-    // 分配新的请求 ID
-    const requestId = ++this.nextId;
-    this.pending.set(key, requestId);
-    return requestId;
+    this.inFlightKeys.add(key);
+
+    return this.executeMemoized<T>(key, executor).finally(() => {
+      this.inFlightKeys.delete(key);
+    });
   }
 
   /**
-   * 标记请求完成
+   * 兼容旧接口：尝试获取处理权
+   */
+  tryAcquire(key: string): number | null {
+    this.stats.totalRequests++;
+    if (this.pending.has(key) || this.inFlightKeys.has(key)) {
+      this.stats.deduplicated++;
+      return null;
+    }
+    this.inFlightKeys.add(key);
+    return Date.now();
+  }
+
+  /**
+   * 兼容旧接口：标记完成
    */
   release(key: string): void {
+    this.inFlightKeys.delete(key);
     this.pending.delete(key);
   }
 
   /**
-   * 标记请求完成（验证 ID）
+   * 兼容旧接口：标记完成（验证 ID）
    */
   releaseWithId(key: string, requestId: number): void {
-    const existing = this.pending.get(key);
-    if (existing !== undefined && existing === requestId) {
-      this.pending.delete(key);
-    }
+    void requestId;
+    this.release(key);
   }
 
   /**
    * 检查请求是否活跃
    */
   isActive(key: string): boolean {
-    return this.pending.has(key);
+    return this.inFlightKeys.has(key);
   }
 
   /**
@@ -84,7 +110,7 @@ export class RequestDeduplicator {
   getStats(): DeduplicatorStats {
     return {
       ...this.stats,
-      activeRequests: this.pending.size,
+      activeRequests: this.inFlightKeys.size,
     };
   }
 
@@ -92,6 +118,7 @@ export class RequestDeduplicator {
    * 清除所有
    */
   clear(): void {
+    this.inFlightKeys.clear();
     this.pending.clear();
   }
 }

@@ -325,55 +325,51 @@ class BookStore {
 
     // 【性能优化】快速翻页去重，防止短时间内重复导航到同一页面
     const dedupKey = `nav-${this.state.currentBook.path}-${index}`;
-    const requestId = pageNavigationDedup.tryAcquire(dedupKey);
-    if (requestId === null) {
-      console.debug(`🔄 跳过重复翻页请求: page=${index}`);
-      return;
-    }
-
     try {
-      // 【IPC优化】先更新本地状态以获得即时 UI 响应
-      this.state.currentBook.currentPage = index;
-      this.syncAppStateBookSlice('user');
+      await pageNavigationDedup.run(dedupKey, async () => {
+        const activeBook = this.state.currentBook;
+        if (!activeBook) return;
 
-      // 更新 pageFrameStore 的当前位置
-      pageFrameStore.gotoPage(index);
+        // 【IPC优化】先更新本地状态以获得即时 UI 响应
+        activeBook.currentPage = index;
+        this.syncAppStateBookSlice('user');
 
-      // 异步通知后端（触发预加载）
-      bookApi.navigateToPage(index).catch(err => {
-        console.warn('⚠️ 后端导航通知失败:', err);
-      });
+        // 更新 pageFrameStore 的当前位置
+        pageFrameStore.gotoPage(index);
 
-      // 异步更新面板信息
-      this.syncInfoPanelBookInfo();
+        // 异步通知后端（触发预加载）
+        bookApi.navigateToPage(index).catch(err => {
+          console.warn('⚠️ 后端导航通知失败:', err);
+        });
 
-      if (this.state.singleFileMode) {
-        const currentPage = this.state.currentBook.pages?.[index];
-        if (currentPage) {
-          this.state.originalFilePath = currentPage.path;
+        // 异步更新面板信息
+        this.syncInfoPanelBookInfo();
+
+        if (this.state.singleFileMode) {
+          const currentPage = activeBook.pages?.[index];
+          if (currentPage) {
+            this.state.originalFilePath = currentPage.path;
+            const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+            const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
+            const pathStack = this.buildPathStack();
+            unifiedHistoryStore.add(pathStack, index, activeBook.totalPages, {
+              displayName: name,
+              currentFilePath: currentPage.path
+            });
+          }
+        } else {
           const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-          const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
           const pathStack = this.buildPathStack();
-          unifiedHistoryStore.add(pathStack, index, this.state.currentBook.totalPages, { 
-            displayName: name,
-            currentFilePath: currentPage.path 
-          });
+          const currentPage = activeBook.pages?.[index];
+          const currentFilePath = currentPage?.path;
+          unifiedHistoryStore.updateIndex(pathStack, index, activeBook.totalPages, currentFilePath);
         }
-      } else {
-        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-        const pathStack = this.buildPathStack();
-        const currentPage = this.state.currentBook.pages?.[index];
-        const currentFilePath = currentPage?.path;
-        unifiedHistoryStore.updateIndex(pathStack, index, this.state.currentBook.totalPages, currentFilePath);
-      }
 
-      this.showPageSwitchToastIfEnabled();
+        this.showPageSwitchToastIfEnabled();
+      });
     } catch (err) {
       console.error('❌ Error navigating to page:', err);
       this.state.error = String(err);
-    } finally {
-      // 确保释放去重锁
-      pageNavigationDedup.release(dedupKey);
     }
   }
 

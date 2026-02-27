@@ -20,8 +20,12 @@
 	import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 	import type { EMMTranslationDict } from '$lib/api/emm';
 	import { getManualTags, type ManualTag } from '$lib/stores/emm/manualTagStore.svelte';
-	import { getFileMetadata } from '$lib/api';
 	import { isPathBlacklisted, addToRuntimeBlacklist } from '$lib/stores/pathBlacklist.svelte';
+	import {
+		getFolderSizeSmart,
+		getCachedFolderSize,
+		setFolderSizeCache
+	} from '$lib/stores/folderSizeCache.svelte';
 	import FileItemListView from './FileItemListView.svelte';
 	import FileItemGridView from './FileItemGridView.svelte';
 	import { aiTranslationStore } from '$lib/stores/ai/translationStore.svelte';
@@ -37,66 +41,6 @@
 		genderCategories,
 		normalizeTagKey
 	} from './fileItemUtils';
-
-	const FOLDER_SIZE_CONCURRENCY_LIMIT = 2;
-	const folderSizeCache = new Map<string, number>();
-	const folderSizeInFlight = new Map<string, Promise<number>>();
-	const folderSizeQueue: Array<() => void> = [];
-	let folderSizeRunningCount = 0;
-
-	function normalizePath(path: string): string {
-		return path.replace(/\\/g, '/').toLowerCase();
-	}
-
-	function runFolderSizeQueue() {
-		while (folderSizeRunningCount < FOLDER_SIZE_CONCURRENCY_LIMIT && folderSizeQueue.length > 0) {
-			const task = folderSizeQueue.shift();
-			if (!task) break;
-			folderSizeRunningCount += 1;
-			task();
-		}
-	}
-
-	function enqueueFolderSizeTask<T>(taskFactory: () => Promise<T>): Promise<T> {
-		return new Promise<T>((resolve, reject) => {
-			folderSizeQueue.push(() => {
-				taskFactory()
-					.then(resolve)
-					.catch(reject)
-					.finally(() => {
-						folderSizeRunningCount = Math.max(0, folderSizeRunningCount - 1);
-						runFolderSizeQueue();
-					});
-			});
-			runFolderSizeQueue();
-		});
-	}
-
-	function getFolderSizeCached(path: string): Promise<number> {
-		const key = normalizePath(path);
-
-		const cached = folderSizeCache.get(key);
-		if (cached !== undefined) {
-			return Promise.resolve(cached);
-		}
-
-		const inFlight = folderSizeInFlight.get(key);
-		if (inFlight) {
-			return inFlight;
-		}
-
-		const request = enqueueFolderSizeTask(async () => {
-			const meta = await getFileMetadata(path);
-			const size = meta.size ?? 0;
-			folderSizeCache.set(key, size);
-			return size;
-		}).finally(() => {
-			folderSizeInFlight.delete(key);
-		});
-
-		folderSizeInFlight.set(key, request);
-		return request;
-	}
 
 	let {
 		item,
@@ -749,9 +693,8 @@
 		if (folderTotalSize !== null || folderSizeLoading) return;
 
 		const requestPath = item.path;
-		const requestPathKey = normalizePath(requestPath);
-		const cached = folderSizeCache.get(requestPathKey);
-		if (cached !== undefined) {
+		const cached = getCachedFolderSize(requestPath, item.modified);
+		if (cached !== null) {
 			folderTotalSize = cached;
 			folderSizeLoading = false;
 			return;
@@ -760,13 +703,13 @@
 		// 检查路径是否在黑名单中（系统保护文件夹或用户排除路径）
 		if (isPathBlacklisted(requestPath)) {
 			folderTotalSize = 0; // 设置为0避免重复请求
-			folderSizeCache.set(requestPathKey, 0);
+			setFolderSizeCache(requestPath, 0, item.modified);
 			return;
 		}
 
 		let cancelled = false;
 		folderSizeLoading = true;
-		getFolderSizeCached(requestPath)
+		getFolderSizeSmart(requestPath, { modifiedHint: item.modified, allowStale: true })
 			.then((size) => {
 				if (cancelled) return;
 				folderTotalSize = size;
@@ -775,7 +718,7 @@
 				if (cancelled) return;
 				// 访问失败时添加到运行时黑名单，避免重复请求
 				addToRuntimeBlacklist(requestPath);
-				folderSizeCache.set(requestPathKey, 0);
+				setFolderSizeCache(requestPath, 0, item.modified);
 				folderTotalSize = 0; // 设置为0避免重复请求
 				console.debug('获取文件夹总大小失败（已加入黑名单）:', requestPath, err);
 			})

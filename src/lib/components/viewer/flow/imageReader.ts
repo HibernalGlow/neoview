@@ -21,7 +21,14 @@ import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte'
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
 import * as pm from '$lib/api/pageManager';
-import { registerBookPath, getArchiveImageUrl, preloadArchiveImages } from '$lib/api/imageProtocol';
+import {
+	registerBookPath,
+	getArchiveImageUrl,
+	getArchiveImageUrlCandidates,
+	preloadArchiveImages,
+	resolveProtocolBaseUrl,
+	resetResolvedProtocolBaseUrl
+} from '$lib/api/imageProtocol';
 
 // Tempfile 模式缓存（URL -> blob）
 const tempfileCache = new Map<string, { url: string; blob: Blob }>();
@@ -47,6 +54,7 @@ let currentBookPathForHash: string | null = null;
 
 // 是否启用 Custom Protocol 模式
 let useProtocolMode = true;
+let protocolAvailability: boolean | null = null;
 
 // 预加载策略配置
 const PRELOAD_RANGE = 5; // ±5 页
@@ -76,6 +84,8 @@ export function clearExtractCache(): void {
 	// 重置 Custom Protocol 缓存
 	currentBookHash = null;
 	currentBookPathForHash = null;
+	protocolAvailability = null;
+	resetResolvedProtocolBaseUrl();
 	// 清空临时文件缓存
 	clearTempfileCache();
 }
@@ -85,6 +95,17 @@ export function clearExtractCache(): void {
  */
 export function setProtocolMode(enabled: boolean): void {
 	useProtocolMode = enabled;
+	if (enabled) {
+		protocolAvailability = null;
+	}
+}
+
+async function ensureProtocolAvailable(): Promise<boolean> {
+	if (!useProtocolMode) return false;
+	if (protocolAvailability === true) return true;
+	const resolved = await resolveProtocolBaseUrl();
+	protocolAvailability = resolved !== null;
+	return protocolAvailability;
 }
 
 async function readArchiveUrl(
@@ -210,6 +231,9 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	// 【优化】如果启用 Protocol 模式，使用浏览器预加载
 	if (useProtocolMode) {
 		try {
+			if (!(await ensureProtocolAvailable())) {
+				return;
+			}
 			const bookHash = await getBookHash(currentBook.path);
 			const entryIndices: number[] = [];
 			for (let i = startPage; i <= endPage; i++) {
@@ -223,6 +247,7 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 			}
 		} catch (err) {
 			console.warn('Protocol 预加载失败:', err);
+			protocolAvailability = false;
 		}
 		return;
 	}
@@ -301,21 +326,46 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 			const loadStart = performance.now();
 			
 			try {
+				if (!(await ensureProtocolAvailable())) {
+					throw new Error('Protocol not available in current runtime');
+				}
 				const bookHash = await getBookHash(currentBook.path);
 				const entryIndex = pageInfo.entryIndex ?? pageIndex;
-				const protocolUrl = getArchiveImageUrl(bookHash, entryIndex);
-				logImageTrace(traceId, 'protocol url', { protocolUrl, entryIndex });
-				
-				const response = await fetch(protocolUrl);
-				if (!response.ok) {
-					throw new Error(`Protocol fetch failed: ${response.status}`);
+				const protocolUrls = [
+					getArchiveImageUrl(bookHash, entryIndex),
+					...getArchiveImageUrlCandidates(bookHash, entryIndex)
+				];
+				const dedupedUrls = Array.from(new Set(protocolUrls));
+
+				let protocolBlob: Blob | null = null;
+				let lastProtocolError: unknown = null;
+				for (const protocolUrl of dedupedUrls) {
+					try {
+						logImageTrace(traceId, 'protocol url try', { protocolUrl, entryIndex });
+						const response = await fetch(protocolUrl, { cache: 'force-cache' });
+						if (!response.ok) {
+							lastProtocolError = new Error(`Protocol fetch failed: ${response.status}`);
+							continue;
+						}
+						protocolBlob = await response.blob();
+						break;
+					} catch (err) {
+						lastProtocolError = err;
+					}
 				}
-				blob = await response.blob();
+
+				if (!protocolBlob) {
+					throw lastProtocolError ?? new Error('Protocol fetch failed');
+				}
+
+				blob = protocolBlob;
 				loadMs = performance.now() - loadStart;
+				protocolAvailability = true;
 			} catch (err) {
 				// Protocol 失败，回退到 IPC 模式
 				console.warn('Protocol 模式失败，回退到 IPC:', err);
 				logImageTrace(traceId, 'protocol fallback to ipc', { error: String(err) });
+				protocolAvailability = false;
 				const { loadImageFromArchiveAsBlob } = await import('$lib/api/filesystem');
 				const result = await loadImageFromArchiveAsBlob(currentBook.path, pageInfo.path, {
 					traceId,

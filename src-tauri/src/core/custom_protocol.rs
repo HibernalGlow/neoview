@@ -206,6 +206,8 @@ impl ProtocolState {
 /// 解析协议请求
 #[derive(Debug)]
 pub enum ProtocolRequest {
+    /// 健康检查: `/health`
+    Health,
     /// 压缩包内图片: `/image/{book_hash}/{entry_index}`
     ArchiveImage {
         book_hash: String,
@@ -226,6 +228,7 @@ impl ProtocolRequest {
         let parts: Vec<&str> = path.split('/').collect();
 
         match parts.as_slice() {
+            ["health"] => ProtocolRequest::Health,
             ["image", book_hash, entry_index] => {
                 if let Ok(index) = entry_index.parse::<usize>() {
                     ProtocolRequest::ArchiveImage {
@@ -409,6 +412,15 @@ fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
     }
 }
 
+fn handle_health_check() -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/plain")
+        .header("Cache-Control", "no-store")
+        .body(b"ok".to_vec())
+        .unwrap()
+}
+
 /// 处理协议请求
 pub fn handle_protocol_request(
     app: &tauri::AppHandle,
@@ -432,6 +444,7 @@ pub fn handle_protocol_request(
     let protocol_request = ProtocolRequest::parse(path);
 
     match protocol_request {
+        ProtocolRequest::Health => handle_health_check(),
         ProtocolRequest::ArchiveImage {
             book_hash,
             entry_index,
@@ -483,6 +496,12 @@ mod tests {
         assert!(matches!(
             ProtocolRequest::parse("/unknown/path"),
             ProtocolRequest::Unknown
+        ));
+
+        // 测试健康检查请求
+        assert!(matches!(
+            ProtocolRequest::parse("/health"),
+            ProtocolRequest::Health
         ));
     }
 

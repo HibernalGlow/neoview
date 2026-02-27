@@ -9,6 +9,13 @@ import { invoke } from '@tauri-apps/api/core';
 /** 协议名称 */
 const PROTOCOL_NAME = 'neoview';
 
+let resolvedBaseUrl: string | null = null;
+
+function isWindowsRuntime(): boolean {
+	if (typeof navigator === 'undefined') return false;
+	return /windows/i.test(navigator.userAgent);
+}
+
 /** 
  * 获取基础协议 URL
  * 
@@ -17,10 +24,49 @@ const PROTOCOL_NAME = 'neoview';
  *   必须使用 http://neoview.localhost 格式，否则会被浏览器拦截 (ERR_UNKNOWN_URL_SCHEME)。
  * - macOS/Linux: 保持传统的 neoview://localhost 格式。
  */
-const getBaseUrl = () => {
-	const isWindows = typeof navigator !== 'undefined' && /windows/i.test(navigator.userAgent);
-	return isWindows ? `http://${PROTOCOL_NAME}.localhost` : `${PROTOCOL_NAME}://localhost`;
-};
+function getBaseUrlCandidates(): string[] {
+	const windows = isWindowsRuntime();
+	const windowsPreferred = [`http://${PROTOCOL_NAME}.localhost`, `${PROTOCOL_NAME}://localhost`];
+	const unixPreferred = [`${PROTOCOL_NAME}://localhost`, `http://${PROTOCOL_NAME}.localhost`];
+	return windows ? windowsPreferred : unixPreferred;
+}
+
+function getBaseUrl(): string {
+	if (resolvedBaseUrl) return resolvedBaseUrl;
+	return getBaseUrlCandidates()[0];
+}
+
+async function probeProtocolBase(baseUrl: string): Promise<boolean> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 1200);
+	try {
+		const response = await fetch(`${baseUrl}/health`, {
+			method: 'GET',
+			cache: 'no-store',
+			signal: controller.signal
+		});
+		return response.ok;
+	} catch {
+		return false;
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+export async function resolveProtocolBaseUrl(): Promise<string | null> {
+	if (resolvedBaseUrl) return resolvedBaseUrl;
+	for (const base of getBaseUrlCandidates()) {
+		if (await probeProtocolBase(base)) {
+			resolvedBaseUrl = base;
+			return base;
+		}
+	}
+	return null;
+}
+
+export function resetResolvedProtocolBaseUrl(): void {
+	resolvedBaseUrl = null;
+}
 
 /** 路径注册表缓存（前端侧） */
 const pathHashCache = new Map<string, string>();
@@ -51,6 +97,10 @@ export async function registerBookPath(bookPath: string): Promise<string> {
  */
 export function getArchiveImageUrl(bookHash: string, entryIndex: number): string {
 	return `${getBaseUrl()}/image/${bookHash}/${entryIndex}`;
+}
+
+export function getArchiveImageUrlCandidates(bookHash: string, entryIndex: number): string[] {
+	return getBaseUrlCandidates().map((base) => `${base}/image/${bookHash}/${entryIndex}`);
 }
 
 /**
@@ -116,12 +166,6 @@ export function preloadArchiveImages(bookHash: string, entryIndices: number[]): 
  * @returns 是否可用
  */
 export async function isProtocolAvailable(): Promise<boolean> {
-	try {
-		// 尝试一个简单的请求
-		const response = await fetch(`${getBaseUrl()}/health`);
-		return response.ok;
-	} catch {
-		// 协议不可用时会抛出错误
-		return false;
-	}
+	const resolved = await resolveProtocolBaseUrl();
+	return resolved !== null;
 }

@@ -71,7 +71,9 @@ const MAX_SYNC_DISPATCHES = 0;
 const inFlightRequests = new SvelteMap<string, number>();
 const recentRequestedAt = new SvelteMap<string, number>();
 const pendingFileBrowserThumbnails = new SvelteMap<string, string>();
+const lastVisiblePathsByDir = new SvelteMap<string, SvelteSet<string>>();
 let fileBrowserFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_VISIBLE_DIR_SNAPSHOTS = 16;
 
 function flushFileBrowserThumbnails() {
   if (pendingFileBrowserThumbnails.size === 0) {
@@ -95,6 +97,31 @@ function scheduleFileBrowserThumbnail(path: string, url: string) {
 function removeFileBrowserThumbnails(paths: string[]) {
   if (paths.length === 0) return;
   fileBrowserStore.removeThumbnailsBatch(paths);
+}
+
+function updateVisibleSnapshot(currentDir: string, paths: string[]): string[] {
+  const previous = lastVisiblePathsByDir.get(currentDir) ?? new SvelteSet<string>();
+  const next = new SvelteSet<string>();
+  const entered: string[] = [];
+
+  for (const path of paths) {
+    if (!path || next.has(path)) continue;
+    next.add(path);
+    if (!previous.has(path)) {
+      entered.push(path);
+    }
+  }
+
+  lastVisiblePathsByDir.delete(currentDir);
+  lastVisiblePathsByDir.set(currentDir, next);
+
+  while (lastVisiblePathsByDir.size > MAX_VISIBLE_DIR_SNAPSHOTS) {
+    const oldestDir = lastVisiblePathsByDir.keys().next().value as string | undefined;
+    if (!oldestDir) break;
+    lastVisiblePathsByDir.delete(oldestDir);
+  }
+
+  return entered;
 }
 
 function releaseInFlight(path: string) {
@@ -364,6 +391,27 @@ export async function requestVisibleThumbnails(
       void sendRequest();
     }, THROTTLE_MS);
   }
+}
+
+/**
+ * 可见区差量请求：仅请求新进入视口的路径
+ */
+export async function requestVisibleThumbnailsDelta(
+  paths: string[],
+  currentDir: string,
+  centerIndex?: number
+): Promise<void> {
+  if (!initialized) {
+    console.warn('⚠️ ThumbnailStoreV3 not initialized');
+    return;
+  }
+
+  if (!currentDir || paths.length === 0) return;
+
+  const enteredPaths = updateVisibleSnapshot(currentDir, paths);
+  if (enteredPaths.length === 0) return;
+
+  await requestVisibleThumbnails(enteredPaths, currentDir, centerIndex);
 }
 
 /**
@@ -774,6 +822,7 @@ export function cleanup(): void {
   thumbnails.clear();
   inFlightRequests.clear();
   recentRequestedAt.clear();
+  lastVisiblePathsByDir.clear();
 
   initialized = false;
   console.log('🛑 ThumbnailStoreV3 cleaned up');

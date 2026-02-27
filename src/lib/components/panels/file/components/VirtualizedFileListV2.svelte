@@ -5,7 +5,7 @@
 	import type { FsItem } from '$lib/types';
 	// V3 缩略图系统（复刻 NeeView 架构）
 	import {
-		requestVisibleThumbnails,
+		requestVisibleThumbnailsDelta,
 		hasThumbnail,
 		getThumbnailUrl
 	} from '$lib/stores/thumbnailStoreV3.svelte';
@@ -72,6 +72,8 @@
 	let container: HTMLDivElement | undefined = $state();
 	let viewportWidth = $state(800);
 	let resizeObserver: ResizeObserver | null = null;
+	let visibleRangeRaf: number | null = null;
+	let lastVisibleRequestKey = $state('');
 
 	// 滚动位置缓存
 	const scrollPositions = new Map<string, number>();
@@ -237,17 +239,29 @@
 		visiblePaths.sort((a, b) => a.dist - b.dist);
 
 		// V3: 调用后端，后端处理一切
-		requestVisibleThumbnails(
+		requestVisibleThumbnailsDelta(
 			visiblePaths.map((p) => p.path),
-			currentPath
+			currentPath,
+			center
 		);
-	}, 32); // 32ms debounce（2帧，平衡响应速度和请求频率）
+	}, 24); // 24ms debounce（约1.5帧，兼顾响应与稳定）
 
-	// 当 virtualItems 变化时触发缩略图加载
+	function scheduleVisibleRangeChange() {
+		if (visibleRangeRaf !== null) return;
+		visibleRangeRaf = requestAnimationFrame(() => {
+			visibleRangeRaf = null;
+			handleVisibleRangeChange();
+		});
+	}
+
+	// 当可见范围关键签名变化时触发缩略图加载（避免滚动中的重复触发）
 	$effect(() => {
-		// 显式依赖 virtualItems，确保滚动时重新触发
-		const _ = virtualItems.length;
-		handleVisibleRangeChange();
+		const firstRow = virtualItems.length > 0 ? virtualItems[0].index : -1;
+		const lastRow = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+		const requestKey = `${currentPath}|${items.length}|${columns}|${firstRow}|${lastRow}|${viewMode}`;
+		if (requestKey === lastVisibleRequestKey) return;
+		lastVisibleRequestKey = requestKey;
+		scheduleVisibleRangeChange();
 	});
 
 	// --- Lifecycle ---
@@ -265,6 +279,10 @@
 
 	onDestroy(() => {
 		resizeObserver?.disconnect();
+		if (visibleRangeRaf !== null) {
+			cancelAnimationFrame(visibleRangeRaf);
+			visibleRangeRaf = null;
+		}
 	});
 
 	// --- Event Handlers ---
@@ -279,8 +297,7 @@
 		const maxScroll = container.scrollHeight - container.clientHeight;
 		scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
 
-		// 滚动时也触发缩略图加载（debounce 会合并多次调用）
-		handleVisibleRangeChange();
+		// 缩略图请求由可见范围签名变化触发，这里不重复触发
 	}
 
 	function handleItemClick(item: FsItem, index: number) {

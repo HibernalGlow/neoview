@@ -84,4 +84,26 @@ describe('thumbnailStoreV3 request queue', () => {
 
     expect(sentPathsCount).toBe(512);
   });
+
+  it('should request only newly entered visible paths in delta mode', async () => {
+    vi.resetModules();
+    const mod = await import('./thumbnailStoreV3.svelte');
+
+    await mod.initThumbnailServiceV3('', 256);
+
+    await mod.requestVisibleThumbnailsDelta(['/p/1', '/p/2', '/p/3'], '/dir');
+    await vi.runAllTimersAsync();
+
+    await mod.requestVisibleThumbnailsDelta(['/p/1', '/p/2', '/p/3'], '/dir');
+    await vi.runAllTimersAsync();
+
+    await mod.requestVisibleThumbnailsDelta(['/p/2', '/p/3', '/p/4'], '/dir');
+    await vi.runAllTimersAsync();
+
+    const batches = invokeMock.mock.calls
+      .filter((c) => (c?.[0] as string) === 'request_visible_thumbnails_v3')
+      .map((c) => (c?.[1] as { paths: string[] }).paths);
+
+    expect(batches).toEqual([['/p/1', '/p/2', '/p/3'], ['/p/4']]);
+  });
 });

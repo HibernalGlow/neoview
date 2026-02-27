@@ -34,6 +34,11 @@ const { subscribe, set, update } = writable<EMMMetadataState>({
 	fileListTagDisplayMode: initialSettings.fileListTagDisplayMode
 });
 
+let stateSnapshot: EMMMetadataState;
+subscribe((state) => {
+	stateSnapshot = state;
+});
+
 // 初始化状态标志
 let isInitializing = false;
 let isInitialized = false;
@@ -185,9 +190,14 @@ export const emmMetadataStore = {
 	 * 设置手动配置的主数据库路径
 	 */
 	setManualDatabasePaths(paths: string[]) {
-		subscribe(state => {
-			saveSettings(paths, state.manualTranslationDbPath, state.manualSettingPath, state.manualTranslationDictPath, state.enableEMM, state.fileListTagDisplayMode);
-		})();
+		saveSettings(
+			paths,
+			stateSnapshot.manualTranslationDbPath,
+			stateSnapshot.manualSettingPath,
+			stateSnapshot.manualTranslationDictPath,
+			stateSnapshot.enableEMM,
+			stateSnapshot.fileListTagDisplayMode
+		);
 		update(state => ({
 			...state,
 			manualDatabasePaths: paths
@@ -200,9 +210,14 @@ export const emmMetadataStore = {
 	 * 设置手动配置的翻译数据库路径
 	 */
 	setManualTranslationDbPath(path: string) {
-		subscribe(state => {
-			saveSettings(state.manualDatabasePaths, path, state.manualSettingPath, state.manualTranslationDictPath, state.enableEMM, state.fileListTagDisplayMode);
-		})();
+		saveSettings(
+			stateSnapshot.manualDatabasePaths,
+			path,
+			stateSnapshot.manualSettingPath,
+			stateSnapshot.manualTranslationDictPath,
+			stateSnapshot.enableEMM,
+			stateSnapshot.fileListTagDisplayMode
+		);
 		update(state => ({
 			...state,
 			manualTranslationDbPath: path,
@@ -216,9 +231,14 @@ export const emmMetadataStore = {
 	 * 设置手动配置的设置文件路径
 	 */
 	async setManualSettingPath(path: string) {
-		subscribe(state => {
-			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, path, state.manualTranslationDictPath, state.enableEMM, state.fileListTagDisplayMode);
-		})();
+		saveSettings(
+			stateSnapshot.manualDatabasePaths,
+			stateSnapshot.manualTranslationDbPath,
+			path,
+			stateSnapshot.manualTranslationDictPath,
+			stateSnapshot.enableEMM,
+			stateSnapshot.fileListTagDisplayMode
+		);
 		update(state => ({
 			...state,
 			manualSettingPath: path
@@ -240,9 +260,14 @@ export const emmMetadataStore = {
 	 * 设置手动配置的翻译字典路径
 	 */
 	async setManualTranslationDictPath(path: string) {
-		subscribe(state => {
-			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, path, state.enableEMM, state.fileListTagDisplayMode);
-		})();
+		saveSettings(
+			stateSnapshot.manualDatabasePaths,
+			stateSnapshot.manualTranslationDbPath,
+			stateSnapshot.manualSettingPath,
+			path,
+			stateSnapshot.enableEMM,
+			stateSnapshot.fileListTagDisplayMode
+		);
 		update(state => ({
 			...state,
 			manualTranslationDictPath: path
@@ -264,9 +289,14 @@ export const emmMetadataStore = {
 	 * 设置是否启用 EMM
 	 */
 	setEnableEMM(enable: boolean) {
-		subscribe(state => {
-			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, state.manualTranslationDictPath, enable, state.fileListTagDisplayMode);
-		})();
+		saveSettings(
+			stateSnapshot.manualDatabasePaths,
+			stateSnapshot.manualTranslationDbPath,
+			stateSnapshot.manualSettingPath,
+			stateSnapshot.manualTranslationDictPath,
+			enable,
+			stateSnapshot.fileListTagDisplayMode
+		);
 		update(state => ({
 			...state,
 			enableEMM: enable
@@ -277,9 +307,14 @@ export const emmMetadataStore = {
 	 * 设置文件列表标签显示模式
 	 */
 	setFileListTagDisplayMode(mode: 'all' | 'collect' | 'none') {
-		subscribe(state => {
-			saveSettings(state.manualDatabasePaths, state.manualTranslationDbPath, state.manualSettingPath, state.manualTranslationDictPath, state.enableEMM, mode);
-		})();
+		saveSettings(
+			stateSnapshot.manualDatabasePaths,
+			stateSnapshot.manualTranslationDbPath,
+			stateSnapshot.manualSettingPath,
+			stateSnapshot.manualTranslationDictPath,
+			stateSnapshot.enableEMM,
+			mode
+		);
 		update(state => ({
 			...state,
 			fileListTagDisplayMode: mode
@@ -290,119 +325,80 @@ export const emmMetadataStore = {
 	 * 获取当前配置的数据库路径（自动 + 手动）
 	 */
 	getDatabasePaths(): string[] {
-		let paths: string[] = [];
-		subscribe(state => {
-			paths = state.databasePaths;
-		})();
-		return paths;
+		return stateSnapshot.databasePaths;
 	},
 
 	/**
 	 * 获取手动配置的数据库路径
 	 */
 	getManualDatabasePaths(): string[] {
-		let paths: string[] = [];
-		subscribe(state => {
-			paths = state.manualDatabasePaths;
-		})();
-		return paths;
+		return stateSnapshot.manualDatabasePaths;
 	},
 
 	/**
 	 * 获取手动配置的翻译数据库路径
 	 */
 	getManualTranslationDbPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.manualTranslationDbPath;
-		})();
-		return path;
+		return stateSnapshot.manualTranslationDbPath;
 	},
 
 	/**
 	 * 获取手动配置的设置文件路径
 	 */
 	getManualSettingPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.manualSettingPath;
-		})();
-		return path;
+		return stateSnapshot.manualSettingPath;
 	},
 
 	/**
 	 * 获取手动配置的翻译字典路径
 	 */
 	getManualTranslationDictPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.manualTranslationDictPath;
-		})();
-		return path;
+		return stateSnapshot.manualTranslationDictPath;
 	},
 
 	/**
 	 * 获取当前配置的翻译数据库路径
 	 */
 	getTranslationDbPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.translationDbPath;
-		})();
-		return path;
+		return stateSnapshot.translationDbPath;
 	},
 
 	/**
 	 * 获取当前配置的设置文件路径
 	 */
 	getSettingPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.settingPath;
-		})();
-		return path;
+		return stateSnapshot.settingPath;
 	},
 
 	/**
 	 * 获取当前配置的翻译字典路径
 	 */
 	getTranslationDictPath(): string | undefined {
-		let path: string | undefined;
-		subscribe(state => {
-			path = state.translationDictPath;
-		})();
-		return path;
+		return stateSnapshot.translationDictPath;
 	},
 
 	/**
 	 * 获取翻译字典
 	 */
 	getTranslationDict(): EMMAPI.EMMTranslationDict | undefined {
-		let dict: EMMAPI.EMMTranslationDict | undefined;
-		subscribe(state => {
-			dict = state.translationDict;
-		})();
-		return dict;
+		return stateSnapshot.translationDict;
 	},
 
 	/**
 	 * 加载元数据（通过 hash）
 	 */
 	async loadMetadataByHash(hash: string): Promise<EMMMetadata | null> {
-		let currentState: EMMMetadataState;
-		subscribe(state => {
-			currentState = state;
-		})();
+		const currentState = stateSnapshot;
 
 		// 检查缓存
-		if (currentState!.metadataCache.has(hash)) {
-			return currentState!.metadataCache.get(hash)!;
+		if (currentState.metadataCache.has(hash)) {
+			return currentState.metadataCache.get(hash)!;
 		}
 
-		const translationDbPath = currentState!.translationDbPath;
+		const translationDbPath = currentState.translationDbPath;
 
 		// 从所有主数据库尝试加载（过滤掉 translations.db）
-		const mainDatabases = currentState!.databasePaths.filter(db =>
+		const mainDatabases = currentState.databasePaths.filter(db =>
 			!db.toLowerCase().includes('translations.db')
 		);
 
@@ -433,30 +429,19 @@ export const emmMetadataStore = {
 		// 规范化路径用于缓存键和查询
 		const normalizedPath = normalizePathKey(filePath);
 
-		let currentState: EMMMetadataState;
-		subscribe(state => {
-			currentState = state;
-		})();
+		const currentState = stateSnapshot;
 
 		// 检查路径缓存（包括 null 结果，避免重复查询不存在的元数据）
-		if (currentState!.pathCache.has(normalizedPath)) {
-			const cached = currentState!.pathCache.get(normalizedPath);
+		if (currentState.pathCache.has(normalizedPath)) {
+			const cached = currentState.pathCache.get(normalizedPath);
 			return cached ?? null;
 		}
 
 		// 1. 优先从嵌入的 emm_json 获取
 		try {
-			console.log('[EMMStore] 尝试从嵌入的 emm_json 获取:', normalizedPath);
 			const emmJsonStr = await invoke<string | null>('get_emm_json', { path: normalizedPath });
-			console.log('[EMMStore] get_emm_json 返回:', emmJsonStr ? `有数据(${emmJsonStr.length}字符)` : 'null');
 			if (emmJsonStr) {
 				const cacheEntry = JSON.parse(emmJsonStr) as EMMCacheEntry;
-				console.log('[EMMStore] 解析 emm_json:', {
-					hash: cacheEntry.hash,
-					translated_title: cacheEntry.translated_title,
-					rating: cacheEntry.rating,
-					tags: cacheEntry.tags?.length ?? 0
-				});
 				// 将 tags 数组转换为 Record<string, string[]> 格式
 				const tagsRecord: Record<string, string[]> = {};
 				if (Array.isArray(cacheEntry.tags)) {
@@ -487,17 +472,15 @@ export const emmMetadataStore = {
 					newPathCache.set(normalizedPath, metadata);
 					return { ...s, metadataCache: newCache, pathCache: newPathCache };
 				});
-				console.log('[EMMStore] 从 emm_json 加载成功:', metadata.translated_title);
 				return metadata;
 			}
 		} catch (e) {
-			// 嵌入数据不可用，继续尝试外部数据库
-			console.log('[EMMStore] 从 emm_json 加载失败:', e);
+			console.debug('[EMMStore] 从 emm_json 加载失败，回退外部数据库:', e);
 		}
 
 		// 2. 回退到外部数据库
-		const translationDbPath = currentState!.translationDbPath;
-		const mainDatabases = currentState!.databasePaths.filter(db =>
+		const translationDbPath = currentState.translationDbPath;
+		const mainDatabases = currentState.databasePaths.filter(db =>
 			!db.toLowerCase().includes('translations.db')
 		);
 
@@ -532,10 +515,7 @@ export const emmMetadataStore = {
 	 * 获取收藏标签
 	 */
 	getCollectTags(): EMMCollectTag[] {
-		let tags: EMMCollectTag[] = [];
-		subscribe(state => {
-			tags = state.collectTags;
-		})();
+		const tags = stateSnapshot.collectTags;
 		console.debug('[EMMStore] getCollectTags: 返回收藏标签数量:', tags.length);
 		if (tags.length > 0) {
 			console.debug('[EMMStore] getCollectTags: 前3个标签:', tags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
@@ -547,11 +527,7 @@ export const emmMetadataStore = {
 	 * 检查标签是否为收藏标签
 	 */
 	isCollectTag(tag: string): EMMCollectTag | null {
-		let result: EMMCollectTag | null = null;
-		subscribe(state => {
-			result = isCollectTag(tag, state.collectTags);
-		})();
-		return result;
+		return isCollectTag(tag, stateSnapshot.collectTags);
 	},
 
 	/**

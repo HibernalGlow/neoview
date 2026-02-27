@@ -12,15 +12,7 @@ interface Bookmark {
   name: string;
   path: string;
   type: 'file' | 'folder';
-  createdAt: number;
-}
-
-interface StoredBookmark {
-  id?: string;
-  name?: string;
-  path?: string;
-  type?: 'file' | 'folder';
-  createdAt?: string | number | Date;
+  createdAt: Date;
 }
 
 const STORAGE_KEY = 'neoview-bookmarks';
@@ -30,23 +22,11 @@ function loadBookmarks(): Bookmark[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored) as StoredBookmark[];
-      return parsed
-        .filter((bookmark) => !!bookmark?.path && !!bookmark?.name)
-        .map((bookmark) => ({
-          id: bookmark.id ?? crypto.randomUUID(),
-          name: bookmark.name ?? '',
-          path: bookmark.path ?? '',
-          type: bookmark.type === 'folder' ? 'folder' : 'file',
-          createdAt:
-            typeof bookmark.createdAt === 'number'
-              ? bookmark.createdAt
-              : bookmark.createdAt instanceof Date
-                ? bookmark.createdAt.getTime()
-                : typeof bookmark.createdAt === 'string'
-                  ? new Date(bookmark.createdAt).getTime()
-                  : Date.now()
-        }));
+      const parsed = JSON.parse(stored);
+      return parsed.map((b: any) => ({
+        ...b,
+        createdAt: new Date(b.createdAt)
+      }));
     }
   } catch (err) {
     console.error('Failed to load bookmarks:', err);
@@ -94,7 +74,7 @@ export const bookmarkStore = {
       name: item.name,
       path: item.path,
       type: item.isDir ? 'folder' : 'file',
-      createdAt: Date.now()
+      createdAt: new Date()
     };
 
     update(bookmarks => {
@@ -175,7 +155,7 @@ export const bookmarkStore = {
   clearByDate(days: number) {
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
     update(bookmarks => {
-      const newBookmarks = bookmarks.filter(b => b.createdAt >= cutoff);
+      const newBookmarks = bookmarks.filter(b => b.createdAt.getTime() >= cutoff);
       if (newBookmarks.length !== bookmarks.length) {
         saveToStorage(newBookmarks);
       }

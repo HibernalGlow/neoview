@@ -3,15 +3,19 @@
  * 用于 MetadataService 缓存文件元数据
  */
 
+import { LRUCache as BaseLRUCache } from 'lru-cache';
+
 export class LRUCache<K, V> {
-  private cache: Map<K, V>;
+  private cache: BaseLRUCache<K, V>;
   private maxSize: number;
   private hits: number = 0;
   private misses: number = 0;
 
   constructor(maxSize: number = 1000) {
-    this.cache = new Map();
     this.maxSize = maxSize;
+    this.cache = new BaseLRUCache<K, V>({
+      max: maxSize,
+    });
   }
 
   /**
@@ -20,9 +24,6 @@ export class LRUCache<K, V> {
   get(key: K): V | undefined {
     const value = this.cache.get(key);
     if (value !== undefined) {
-      // 移到最后（最近使用）
-      this.cache.delete(key);
-      this.cache.set(key, value);
       this.hits++;
       return value;
     }
@@ -34,15 +35,6 @@ export class LRUCache<K, V> {
    * 设置缓存值，如果超过最大容量则驱逐最旧的条目
    */
   set(key: K, value: V): void {
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      // 删除最旧的条目（Map 的第一个元素）
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        this.cache.delete(firstKey);
-      }
-    }
     this.cache.set(key, value);
   }
 

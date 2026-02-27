@@ -42,101 +42,6 @@
 		normalizeTagKey
 	} from './fileItemUtils';
 
-	const FOLDER_SCAN_TTL_MS = 30_000;
-	const FOLDER_SCAN_CONCURRENCY_LIMIT = 3;
-	let folderScanRunningCount = 0;
-	const folderScanQueue: Array<() => void> = [];
-	const folderScanCache = new Map<
-		string,
-		{ cachedAt: number; isPureMediaFolder: boolean; archives: Array<{ name: string; path: string }> }
-	>();
-	const folderScanInFlight = new Map<
-		string,
-		Promise<{ isPureMediaFolder: boolean; archives: Array<{ name: string; path: string }> }>
-	>();
-
-	function normalizeCachePath(path: string): string {
-		return path.replace(/\\/g, '/').toLowerCase();
-	}
-
-	function runFolderScanQueue() {
-		while (folderScanRunningCount < FOLDER_SCAN_CONCURRENCY_LIMIT && folderScanQueue.length > 0) {
-			const task = folderScanQueue.shift();
-			if (!task) break;
-			folderScanRunningCount += 1;
-			task();
-		}
-	}
-
-	function enqueueFolderScanTask<T>(taskFactory: () => Promise<T>): Promise<T> {
-		return new Promise<T>((resolve, reject) => {
-			folderScanQueue.push(() => {
-				taskFactory()
-					.then(resolve)
-					.catch(reject)
-					.finally(() => {
-						folderScanRunningCount = Math.max(0, folderScanRunningCount - 1);
-						runFolderScanQueue();
-					});
-			});
-			runFolderScanQueue();
-		});
-	}
-
-	async function scanFolderForPenetrate(path: string): Promise<{
-		isPureMediaFolder: boolean;
-		archives: Array<{ name: string; path: string }>;
-	}> {
-		const cacheKey = normalizeCachePath(path);
-		const now = Date.now();
-
-		const cached = folderScanCache.get(cacheKey);
-		if (cached && now - cached.cachedAt <= FOLDER_SCAN_TTL_MS) {
-			return {
-				isPureMediaFolder: cached.isPureMediaFolder,
-				archives: cached.archives
-			};
-		}
-
-		const inFlight = folderScanInFlight.get(cacheKey);
-		if (inFlight) {
-			return inFlight;
-		}
-
-		const request = enqueueFolderScanTask(async () => {
-			const children = await FileSystemAPI.browseDirectory(path);
-
-			const hasSubDir = children.some((child) => child.isDir);
-			const archives = children
-				.filter((child) => !child.isDir && isArchiveFile(child.name))
-				.map((child) => ({ name: child.name, path: child.path }));
-			const hasFiles = children.some((child) => !child.isDir);
-
-			const result = {
-				isPureMediaFolder: !hasSubDir && archives.length === 0 && hasFiles,
-				archives
-			};
-
-			folderScanCache.set(cacheKey, {
-				cachedAt: Date.now(),
-				isPureMediaFolder: result.isPureMediaFolder,
-				archives: result.archives
-			});
-
-			if (folderScanCache.size > 512) {
-				const firstKey = folderScanCache.keys().next().value;
-				if (firstKey) folderScanCache.delete(firstKey);
-			}
-
-			return result;
-		}).finally(() => {
-			folderScanInFlight.delete(cacheKey);
-		});
-
-		folderScanInFlight.set(cacheKey, request);
-		return request;
-	}
-
 	let {
 		item,
 		thumbnail = undefined,
@@ -396,9 +301,21 @@
 
 		// 延迟加载，避免影响初始列表渲染
 		const timeoutId = setTimeout(() => {
-			scanFolderForPenetrate(itemPath)
-				.then(async ({ isPureMediaFolder: isPureMedia, archives }) => {
-					isPureMediaFolder = isPureMedia;
+			// 加载文件夹内容
+			FileSystemAPI.browseDirectory(itemPath)
+				.then(async (children) => {
+					// 检测是否为纯媒体文件夹
+					// 反向判断：只要没有子文件夹和压缩包，且有文件，就认为是纯媒体文件夹
+					// 这样 .nfo、.ass 等附属文件不会阻止穿透
+					const hasSubDir = children.some((c) => c.isDir);
+					const hasArchive = children.some((c) => !c.isDir && isArchiveFile(c.name));
+					const hasFiles = children.some((c) => !c.isDir);
+
+					// 纯媒体文件夹：无子文件夹、无压缩包、且至少有一个文件
+					isPureMediaFolder = !hasSubDir && !hasArchive && hasFiles;
+
+					// 过滤出压缩包文件
+					const archives = children.filter((c) => !c.isDir && isArchiveFile(c.name));
 
 					// countMode: 'single' 只处理单个压缩包，'all' 处理所有
 					if (countMode === 'single' && archives.length !== 1) {

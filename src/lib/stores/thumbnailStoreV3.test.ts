@@ -4,7 +4,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const invokeMock = vi.fn();
 const listenMock = vi.fn(async () => () => {});
 const addThumbnailMock = vi.fn();
+const addThumbnailsBatchMock = vi.fn();
 const removeThumbnailMock = vi.fn();
+const removeThumbnailsBatchMock = vi.fn();
 const getThumbUrlMock = vi.fn((path: string) => `neoview://${path}`);
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -18,7 +20,9 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('./fileBrowser.svelte', () => ({
   fileBrowserStore: {
     addThumbnail: addThumbnailMock,
+    addThumbnailsBatch: addThumbnailsBatchMock,
     removeThumbnail: removeThumbnailMock,
+    removeThumbnailsBatch: removeThumbnailsBatchMock,
   },
 }));
 
@@ -32,7 +36,9 @@ describe('thumbnailStoreV3 request queue', () => {
     invokeMock.mockReset();
     listenMock.mockReset();
     addThumbnailMock.mockReset();
+    addThumbnailsBatchMock.mockReset();
     removeThumbnailMock.mockReset();
+    removeThumbnailsBatchMock.mockReset();
     getThumbUrlMock.mockReset();
   });
 

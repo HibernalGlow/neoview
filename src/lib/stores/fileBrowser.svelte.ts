@@ -664,6 +664,25 @@ function createFileBrowserStore() {
         newThumbnails.set(path, normalized);
         return { ...state, thumbnails: newThumbnails };
       }),
+    addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) =>
+      update(state => {
+        if (thumbnailsBatch.size === 0) return state;
+
+        let changed = false;
+        const newThumbnails = new Map(state.thumbnails);
+
+        for (const [path, thumbnail] of thumbnailsBatch.entries()) {
+          const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
+            ? thumbnail
+            : (toAssetUrl(thumbnail) || thumbnail) as string;
+
+          if (newThumbnails.get(path) === normalized) continue;
+          newThumbnails.set(path, normalized);
+          changed = true;
+        }
+
+        return changed ? { ...state, thumbnails: newThumbnails } : state;
+      }),
     removeThumbnail: (path: string) =>
       update(state => {
         if (!state.thumbnails.has(path)) {
@@ -672,6 +691,20 @@ function createFileBrowserStore() {
         const newThumbnails = new Map(state.thumbnails);
         newThumbnails.delete(path);
         return { ...state, thumbnails: newThumbnails };
+      }),
+    removeThumbnailsBatch: (paths: string[]) =>
+      update(state => {
+        if (paths.length === 0) return state;
+
+        let changed = false;
+        const newThumbnails = new Map(state.thumbnails);
+        for (const path of paths) {
+          if (!newThumbnails.has(path)) continue;
+          newThumbnails.delete(path);
+          changed = true;
+        }
+
+        return changed ? { ...state, thumbnails: newThumbnails } : state;
       }),
     setThumbnails: (thumbnails: Map<string, string>) =>
       update(state => ({ ...state, thumbnails: new Map(thumbnails) })),

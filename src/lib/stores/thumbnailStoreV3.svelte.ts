@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
 import { getThumbUrl } from '$lib/api/imageProtocol';
 
@@ -24,6 +24,8 @@ function setThumbnailWithEviction(path: string, url: string) {
   thumbnails.delete(path);
   thumbnails.set(path, url);
 
+  const evictedKeys: string[] = [];
+
   // 超过容量则淘汰最早的条目
   while (thumbnails.size > THUMBNAIL_CACHE_LIMIT) {
     const first = thumbnails.keys().next().value as string | undefined;
@@ -31,8 +33,10 @@ function setThumbnailWithEviction(path: string, url: string) {
     const oldUrl = thumbnails.get(first);
     if (oldUrl) revokeIfObjectUrl(oldUrl);
     thumbnails.delete(first);
-    fileBrowserStore.removeThumbnail(toRelativeKey(first));
+    evictedKeys.push(toRelativeKey(first));
   }
+
+  removeFileBrowserThumbnails(evictedKeys);
 }
 
 // 路径转换：统一使用正斜杠作为 key
@@ -57,12 +61,41 @@ const MAX_BATCH_SIZE = 64; // 单次发送上限，避免一次塞入过多路�
 const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
 const MAX_PARALLEL_INVOKES = 2; // 单轮最多并发请求批次数
 const IN_FLIGHT_TTL_MS = 8000; // 在飞请求超时回收，避免异常时永久占位
+const RECENT_REQUEST_TTL_MS = 220; // 短时请求去重窗口，降低滚动抖动重复请求
+const FILE_BROWSER_FLUSH_MS = 12; // 批量同步到 fileBrowserStore 的刷新间隔
 // 单次调度内发送批次数上限（0 表示不限，直到队列清空）。
 // 为避免卡住 UI，我们仍按批次顺序发送，每批 await invoke，剩余批次继续循环。
 const MAX_SYNC_DISPATCHES = 0;
 
 // 在飞请求去重：path -> request start timestamp
-const inFlightRequests = new Map<string, number>();
+const inFlightRequests = new SvelteMap<string, number>();
+const recentRequestedAt = new SvelteMap<string, number>();
+const pendingFileBrowserThumbnails = new SvelteMap<string, string>();
+let fileBrowserFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushFileBrowserThumbnails() {
+  if (pendingFileBrowserThumbnails.size === 0) {
+    fileBrowserFlushTimer = null;
+    return;
+  }
+
+  const batch = new Map(pendingFileBrowserThumbnails);
+  pendingFileBrowserThumbnails.clear();
+  fileBrowserFlushTimer = null;
+  fileBrowserStore.addThumbnailsBatch(batch);
+}
+
+function scheduleFileBrowserThumbnail(path: string, url: string) {
+  pendingFileBrowserThumbnails.set(path, url);
+  if (!fileBrowserFlushTimer) {
+    fileBrowserFlushTimer = setTimeout(flushFileBrowserThumbnails, FILE_BROWSER_FLUSH_MS);
+  }
+}
+
+function removeFileBrowserThumbnails(paths: string[]) {
+  if (paths.length === 0) return;
+  fileBrowserStore.removeThumbnailsBatch(paths);
+}
 
 function releaseInFlight(path: string) {
   inFlightRequests.delete(path);
@@ -90,6 +123,32 @@ function sweepExpiredInFlight() {
   for (const [path, startedAt] of inFlightRequests.entries()) {
     if (now - startedAt > IN_FLIGHT_TTL_MS) {
       inFlightRequests.delete(path);
+    }
+  }
+}
+
+function isRecentlyRequested(path: string): boolean {
+  const requestedAt = recentRequestedAt.get(path);
+  if (!requestedAt) return false;
+  if (Date.now() - requestedAt > RECENT_REQUEST_TTL_MS) {
+    recentRequestedAt.delete(path);
+    return false;
+  }
+  return true;
+}
+
+function markRecentlyRequested(paths: string[]) {
+  const now = Date.now();
+  for (const p of paths) {
+    recentRequestedAt.set(p, now);
+  }
+}
+
+function sweepExpiredRecentRequests() {
+  const now = Date.now();
+  for (const [path, requestedAt] of recentRequestedAt.entries()) {
+    if (now - requestedAt > RECENT_REQUEST_TTL_MS) {
+      recentRequestedAt.delete(path);
     }
   }
 }
@@ -155,7 +214,7 @@ export async function initThumbnailServiceV3(
 
       // 同步到 fileBrowserStore（供 FileItemCard 使用）
       const key = toRelativeKey(path);
-      fileBrowserStore.addThumbnail(key, finalUrl);
+      scheduleFileBrowserThumbnail(key, finalUrl);
 
       // 该路径已完成，释放在飞占位
       releaseInFlight(path);
@@ -204,9 +263,12 @@ export async function requestVisibleThumbnails(
   }
 
   sweepExpiredInFlight();
+  sweepExpiredRecentRequests();
 
   // 过滤已缓存的路径
-  const uncachedPaths = paths.filter((p) => !thumbnails.has(p) && !isInFlight(p));
+  const uncachedPaths = paths.filter(
+    (p) => !thumbnails.has(p) && !isInFlight(p) && !isRecentlyRequested(p)
+  );
 
   if (uncachedPaths.length === 0) return;
 
@@ -261,13 +323,16 @@ export async function requestVisibleThumbnails(
         // 计算中心索引（如果未提供，使用可见列表中心）
         const center = centerIndex ?? Math.floor(batch.length / 2);
         markInFlight(batch);
+        markRecentlyRequested(batch);
 
         tasks.push(
-          invoke('request_visible_thumbnails_v3', {
-            paths: batch,
-            currentDir: throttleState.dir,
-            centerIndex: center,
-          })
+          Promise.resolve(
+            invoke('request_visible_thumbnails_v3', {
+              paths: batch,
+              currentDir: throttleState.dir,
+              centerIndex: center,
+            })
+          )
             .then(() => undefined)
             .catch((error) => {
               for (const p of batch) releaseInFlight(p);
@@ -591,10 +656,13 @@ export async function requestVisibleThumbnailsWithPrefetch(
 
   // 合并可见路径和预取路径（可见优先）
   const prefetchPaths = allPaths.slice(prefetchStart, prefetchEnd);
-  const pathsToRequest = [
-    ...visiblePaths,
-    ...prefetchPaths.filter((p) => !visiblePaths.includes(p)),
-  ];
+  const pathsToRequest = [...visiblePaths];
+  const seen = new SvelteSet(visiblePaths);
+  for (const path of prefetchPaths) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    pathsToRequest.push(path);
+  }
 
   // 传递中心索引给后端，用于优先级排序
   return requestVisibleThumbnails(pathsToRequest, currentDir, centerIndex);
@@ -620,7 +688,7 @@ export async function requestAllThumbnails(
 
   // 去重并过滤已缓存的路径
   const deduped: string[] = [];
-  const seen = new Set<string>();
+  const seen = new SvelteSet<string>();
   for (const p of paths) {
     if (!p || seen.has(p)) continue;
     seen.add(p);
@@ -632,23 +700,38 @@ export async function requestAllThumbnails(
 
   const effectiveCenter = centerIndex ?? Math.floor(deduped.length / 2);
 
-  for (let i = 0; i < deduped.length; i += MAX_BATCH_SIZE) {
-    const batch = deduped.slice(i, i + MAX_BATCH_SIZE);
-    markInFlight(batch);
-    try {
-      await invoke('request_visible_thumbnails_v3', {
-        paths: batch,
-        currentDir,
-        centerIndex: effectiveCenter,
-      });
-    } catch (error) {
-      for (const p of batch) releaseInFlight(p);
-      console.error('❌ requestAllThumbnails failed:', error);
-      break;
+  for (let i = 0; i < deduped.length;) {
+    const tasks: Promise<void>[] = [];
+
+    for (let slot = 0; slot < MAX_PARALLEL_INVOKES && i < deduped.length; slot += 1) {
+      const batch = deduped.slice(i, i + MAX_BATCH_SIZE);
+      i += MAX_BATCH_SIZE;
+
+      markInFlight(batch);
+      markRecentlyRequested(batch);
+
+      tasks.push(
+        Promise.resolve(
+          invoke('request_visible_thumbnails_v3', {
+            paths: batch,
+            currentDir,
+            centerIndex: effectiveCenter,
+          })
+        )
+          .then(() => undefined)
+          .catch((error) => {
+            for (const p of batch) releaseInFlight(p);
+            console.error('❌ requestAllThumbnails failed:', error);
+          })
+      );
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
     }
 
     // 分帧发送，避免一次性塞满事件循环
-    if (i + MAX_BATCH_SIZE < deduped.length) {
+    if (i < deduped.length) {
       await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS));
     }
   }
@@ -683,8 +766,14 @@ export function cleanup(): void {
   for (const url of thumbnails.values()) {
     URL.revokeObjectURL(url);
   }
+  if (fileBrowserFlushTimer) {
+    clearTimeout(fileBrowserFlushTimer);
+    fileBrowserFlushTimer = null;
+  }
+  pendingFileBrowserThumbnails.clear();
   thumbnails.clear();
   inFlightRequests.clear();
+  recentRequestedAt.clear();
 
   initialized = false;
   console.log('🛑 ThumbnailStoreV3 cleaned up');

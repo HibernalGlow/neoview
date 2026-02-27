@@ -453,6 +453,7 @@
 	}
 
 	let validationInterval: ReturnType<typeof setInterval> | null = null;
+	let expandRequestToken = 0;
 
 	onMount(() => {
 		unpinSubscription = folderTreePinStore.subscribe((paths) => {
@@ -465,6 +466,9 @@
 
 		// 启动后台校验（每 30 秒检查一次）
 		validationInterval = setInterval(() => {
+			if (typeof document !== 'undefined' && document.hidden) {
+				return;
+			}
 			if (cacheInitialized && roots.length > 0) {
 				validateExpandedNodes().catch(() => {});
 			}
@@ -489,6 +493,8 @@
 		const path = $currentPath;
 		if (!path || roots.length === 0 || !cacheInitialized) return;
 
+		const currentToken = ++expandRequestToken;
+
 		// 避免重复展开同一路径
 		if (path === lastExpandedPath) return;
 		lastExpandedPath = path;
@@ -510,6 +516,7 @@
 		}
 
 		async function expandToPath(nodes: TreeNode[], targetPath: string, depth = 0): Promise<boolean> {
+			if (currentToken !== expandRequestToken) return false;
 			let changed = false;
 			const targetSegment = pathSegments[depth];
 
@@ -537,6 +544,7 @@
 		}
 
 		expandToPath(roots, normalized).then((changed) => {
+			if (currentToken !== expandRequestToken) return;
 			if (changed) {
 				roots = [...roots];
 			}

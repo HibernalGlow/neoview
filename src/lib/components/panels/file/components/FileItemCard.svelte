@@ -710,6 +710,16 @@
 	let previewIconElement = $state<HTMLElement | null>(null);
 	let folderTotalSize = $state<number | null>(null);
 	let folderSizeLoading = $state(false);
+	let folderSizeRequestId = 0;
+	let lastFolderPath = $state<string | null>(null);
+
+	$effect(() => {
+		if (!item.isDir) return;
+		if (lastFolderPath === item.path) return;
+		lastFolderPath = item.path;
+		folderTotalSize = null;
+		folderSizeLoading = false;
+	});
 
 	// 加载文件夹预览内容
 	async function loadFolderPreview() {
@@ -752,15 +762,15 @@
 			return;
 		}
 
-		let cancelled = false;
+		const requestId = ++folderSizeRequestId;
 		folderSizeLoading = true;
 		getFolderSizeSmart(requestPath, { modifiedHint: item.modified, allowStale: true })
 			.then((size) => {
-				if (cancelled) return;
+				if (requestId !== folderSizeRequestId) return;
 				folderTotalSize = size;
 			})
 			.catch((err) => {
-				if (cancelled) return;
+				if (requestId !== folderSizeRequestId) return;
 				// 访问失败时添加到运行时黑名单，避免重复请求
 				addToRuntimeBlacklist(requestPath);
 				setFolderSizeCache(requestPath, 0, item.modified);
@@ -768,13 +778,9 @@
 				console.debug('获取文件夹总大小失败（已加入黑名单）:', requestPath, err);
 			})
 			.finally(() => {
-				if (cancelled) return;
+				if (requestId !== folderSizeRequestId) return;
 				folderSizeLoading = false;
 			});
-
-		return () => {
-			cancelled = true;
-		};
 	});
 
 	const isReadCompleted = $derived(

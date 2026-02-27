@@ -93,6 +93,15 @@ interface UpscaleStoreState {
     completedCount: number;
     skippedCount: number;
     failedCount: number;
+    queueWaitSampleCount: number;
+    queueWaitAvgMs: number;
+    queueWaitMaxMs: number;
+    dedupeRequestCount: number;
+    dedupeHitCount: number;
+    dedupeHitRate: number;
+    regexCacheHitCount: number;
+    regexCacheMissCount: number;
+    regexCacheHitRate: number;
   };
 }
 
@@ -113,6 +122,15 @@ class UpscaleStore {
       completedCount: 0,
       skippedCount: 0,
       failedCount: 0,
+      queueWaitSampleCount: 0,
+      queueWaitAvgMs: 0,
+      queueWaitMaxMs: 0,
+      dedupeRequestCount: 0,
+      dedupeHitCount: 0,
+      dedupeHitRate: 0,
+      regexCacheHitCount: 0,
+      regexCacheMissCount: 0,
+      regexCacheHitRate: 0,
     },
   });
 
@@ -671,6 +689,15 @@ class UpscaleStore {
         completedCount: number;
         skippedCount: number;
         failedCount: number;
+        queueWaitSampleCount: number;
+        queueWaitAvgMs: number;
+        queueWaitMaxMs: number;
+        dedupeRequestCount: number;
+        dedupeHitCount: number;
+        dedupeHitRate: number;
+        regexCacheHitCount: number;
+        regexCacheMissCount: number;
+        regexCacheHitRate: number;
         isEnabled: boolean;
       }>('upscale_service_get_stats');
 
@@ -680,6 +707,15 @@ class UpscaleStore {
         completedCount: stats.completedCount,
         skippedCount: stats.skippedCount,
         failedCount: stats.failedCount,
+        queueWaitSampleCount: stats.queueWaitSampleCount,
+        queueWaitAvgMs: stats.queueWaitAvgMs,
+        queueWaitMaxMs: stats.queueWaitMaxMs,
+        dedupeRequestCount: stats.dedupeRequestCount,
+        dedupeHitCount: stats.dedupeHitCount,
+        dedupeHitRate: stats.dedupeHitRate,
+        regexCacheHitCount: stats.regexCacheHitCount,
+        regexCacheMissCount: stats.regexCacheMissCount,
+        regexCacheHitRate: stats.regexCacheHitRate,
       };
       this.state.enabled = stats.isEnabled;
     } catch (err) {

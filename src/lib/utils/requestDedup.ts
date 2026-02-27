@@ -3,6 +3,8 @@
  * 防止快速翻页时发送重复请求
  */
 
+import { LRUCache } from 'lru-cache';
+
 /**
  * 去重统计
  */
@@ -17,16 +19,19 @@ export interface DeduplicatorStats {
  * 使用 Map 实现高性能去重
  */
 export class RequestDeduplicator {
-  private pending = new Map<string, { timestamp: number; requestId: number }>();
+  private pending: LRUCache<string, number>;
   private nextId = 0;
   private stats = { totalRequests: 0, deduplicated: 0 };
-  private timeout: number;
 
   /**
    * @param timeout 请求超时时间（毫秒），超过此时间的请求会被清理
    */
   constructor(timeout: number = 30000) {
-    this.timeout = timeout;
+    this.pending = new LRUCache<string, number>({
+      max: 10000,
+      ttl: timeout,
+      ttlAutopurge: true,
+    });
   }
 
   /**
@@ -35,14 +40,9 @@ export class RequestDeduplicator {
    */
   tryAcquire(key: string): number | null {
     this.stats.totalRequests++;
-    const now = Date.now();
-
-    // 清理过期请求
-    this.cleanupExpired(now);
 
     // 检查是否已有相同请求
-    const existing = this.pending.get(key);
-    if (existing && now - existing.timestamp < this.timeout) {
+    if (this.pending.has(key)) {
       this.stats.deduplicated++;
       console.debug(`🔄 请求去重: key=${key}`);
       return null;
@@ -50,7 +50,7 @@ export class RequestDeduplicator {
 
     // 分配新的请求 ID
     const requestId = ++this.nextId;
-    this.pending.set(key, { timestamp: now, requestId });
+    this.pending.set(key, requestId);
     return requestId;
   }
 
@@ -66,7 +66,7 @@ export class RequestDeduplicator {
    */
   releaseWithId(key: string, requestId: number): void {
     const existing = this.pending.get(key);
-    if (existing && existing.requestId === requestId) {
+    if (existing !== undefined && existing === requestId) {
       this.pending.delete(key);
     }
   }
@@ -93,17 +93,6 @@ export class RequestDeduplicator {
    */
   clear(): void {
     this.pending.clear();
-  }
-
-  /**
-   * 清理过期请求
-   */
-  private cleanupExpired(now: number): void {
-    for (const [key, state] of this.pending.entries()) {
-      if (now - state.timestamp > this.timeout) {
-        this.pending.delete(key);
-      }
-    }
   }
 }
 

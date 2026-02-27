@@ -3,6 +3,8 @@
  * 提供优先级队列和并发控制
  */
 
+import PQueue from 'p-queue';
+
 /** 加载任务 */
 interface LoadTask {
 	pageIndex: number;
@@ -10,6 +12,12 @@ interface LoadTask {
 	resolve: () => void;
 	reject: (error: Error) => void;
 	executor: () => Promise<void>;
+	queueId: string;
+	controller: AbortController;
+	started: boolean;
+	settled: boolean;
+	cancelled: boolean;
+	cleared: boolean;
 }
 
 /** 队列清空错误（用于区分正常取消和真正错误） */
@@ -43,12 +51,13 @@ export const LoadPriority = {
  * 【优化】使用插入排序代替全量排序，O(n) vs O(n log n)
  */
 export class LoadQueueManager {
-	private queue: LoadTask[] = [];
-	private activeCount = 0;
+	private queue: PQueue;
+	private tasksByPage = new Map<number, LoadTask>();
 	private maxConcurrent: number;
 
 	constructor(maxConcurrent = 4) {
 		this.maxConcurrent = maxConcurrent;
+		this.queue = new PQueue({ concurrency: maxConcurrent });
 	}
 
 	/**
@@ -61,29 +70,61 @@ export class LoadQueueManager {
 		executor: () => Promise<void>
 	): Promise<void> {
 		return new Promise((resolve, reject) => {
+			const controller = new AbortController();
+			const queueId = `page-${pageIndex}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 			const task: LoadTask = {
 				pageIndex,
 				priority,
 				resolve,
 				reject,
-				executor
+				executor,
+				queueId,
+				controller,
+				started: false,
+				settled: false,
+				cancelled: false,
+				cleared: false
 			};
 
-			// 二分查找插入位置（高优先级在前）
-			let left = 0;
-			let right = this.queue.length;
-			while (left < right) {
-				const mid = (left + right) >>> 1;
-				if (this.queue[mid].priority > priority) {
-					left = mid + 1;
-				} else {
-					right = mid;
-				}
-			}
-			this.queue.splice(left, 0, task);
+			this.tasksByPage.set(pageIndex, task);
 
-			// 尝试处理队列
-			this.processQueue();
+			void this.queue
+				.add(
+					async () => {
+						task.started = true;
+						if (task.cleared) {
+							throw new QueueClearedError();
+						}
+						if (task.cancelled) {
+							throw new TaskCancelledError(pageIndex);
+						}
+						await task.executor();
+					},
+					{ priority, id: queueId, signal: controller.signal }
+				)
+				.then(() => {
+					if (!task.settled) {
+						task.settled = true;
+						task.resolve();
+					}
+				})
+				.catch((error: unknown) => {
+					if (!task.settled) {
+						task.settled = true;
+						if (task.cleared) {
+							task.reject(new QueueClearedError());
+							return;
+						}
+						if (task.cancelled) {
+							task.reject(new TaskCancelledError(pageIndex));
+							return;
+						}
+						task.reject(error instanceof Error ? error : new Error(String(error)));
+					}
+				})
+				.finally(() => {
+					this.tasksByPage.delete(pageIndex);
+				});
 		});
 	}
 
@@ -91,11 +132,10 @@ export class LoadQueueManager {
 	 * 提升任务优先级（用于当前页切换时）
 	 */
 	boostPriority(pageIndex: number, newPriority: number): void {
-		const task = this.queue.find(t => t.pageIndex === pageIndex);
+		const task = this.tasksByPage.get(pageIndex);
 		if (task && task.priority < newPriority) {
 			task.priority = newPriority;
-			// 重新排序
-			this.queue.sort((a, b) => b.priority - a.priority);
+			this.queue.setPriority(task.queueId, newPriority);
 		}
 	}
 
@@ -103,23 +143,32 @@ export class LoadQueueManager {
 	 * 取消指定页面的加载任务
 	 */
 	cancel(pageIndex: number): void {
-		const index = this.queue.findIndex(t => t.pageIndex === pageIndex);
-		if (index !== -1) {
-			const task = this.queue[index];
-			this.queue.splice(index, 1);
+		const task = this.tasksByPage.get(pageIndex);
+		if (!task || task.started || task.settled) return;
+
+		task.cancelled = true;
+		task.controller.abort();
+		if (!task.settled) {
+			task.settled = true;
 			task.reject(new TaskCancelledError(pageIndex));
 		}
+		this.tasksByPage.delete(pageIndex);
 	}
 
 	/**
 	 * 清空队列（使用专门的错误类型，便于上层识别）
 	 */
 	clear(): void {
-		const clearedError = new QueueClearedError();
-		for (const task of this.queue) {
-			task.reject(clearedError);
+		for (const task of this.tasksByPage.values()) {
+			if (!task.started && !task.settled) {
+				task.cleared = true;
+				task.controller.abort();
+				task.settled = true;
+				task.reject(new QueueClearedError());
+			}
 		}
-		this.queue = [];
+		this.queue.clear();
+		this.tasksByPage.clear();
 	}
 
 	/**
@@ -127,28 +176,9 @@ export class LoadQueueManager {
 	 */
 	getStatus(): { queueLength: number; activeCount: number } {
 		return {
-			queueLength: this.queue.length,
-			activeCount: this.activeCount
+			queueLength: this.queue.size,
+			activeCount: this.queue.pending
 		};
-	}
-
-	/**
-	 * 处理队列
-	 */
-	private processQueue(): void {
-		while (this.activeCount < this.maxConcurrent && this.queue.length > 0) {
-			const task = this.queue.shift()!;
-			this.activeCount++;
-
-			task.executor()
-				.then(() => task.resolve())
-				.catch(err => task.reject(err))
-				.finally(() => {
-					this.activeCount--;
-					// 继续处理队列
-					this.processQueue();
-				});
-		}
 	}
 }
 

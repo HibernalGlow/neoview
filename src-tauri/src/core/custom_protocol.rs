@@ -417,6 +417,7 @@ fn handle_health_check() -> Response<Vec<u8>> {
         .status(StatusCode::OK)
         .header("Content-Type", "text/plain")
         .header("Cache-Control", "no-store")
+    .header("Access-Control-Allow-Origin", "*")
         .body(b"ok".to_vec())
         .unwrap()
 }

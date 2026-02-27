@@ -23,6 +23,7 @@
 		applyRuntimeThemeFromStorage,
 		type RuntimeThemeMode
 	} from '$lib/utils/runtimeTheme';
+	import { isProtocolAvailable } from '$lib/api/imageProtocol';
 	import { onMount } from 'svelte';
 	import {
 		Menu,
@@ -117,6 +118,24 @@
 	let themeMode = $state<RuntimeThemeMode>('system');
 	let themeName = $state<string | null>(null);
 	let quickThemes = $state<QuickThemeConfig[]>([]);
+	let protocolStatus = $state<'checking' | 'available' | 'unavailable'>('checking');
+	let renderSettingsOpen = $state(false);
+
+	async function refreshProtocolStatus() {
+		protocolStatus = 'checking';
+		try {
+			const available = await isProtocolAvailable();
+			protocolStatus = available ? 'available' : 'unavailable';
+		} catch {
+			protocolStatus = 'unavailable';
+		}
+	}
+
+	$effect(() => {
+		if (renderSettingsOpen) {
+			void refreshProtocolStatus();
+		}
+	});
 
 	function syncQuickThemesFromStorage() {
 		if (typeof window === 'undefined') return;
@@ -244,6 +263,10 @@
 
 	onMount(() => {
 		if (typeof window === 'undefined') return;
+		void refreshProtocolStatus();
+		const delayedCheck = window.setTimeout(() => {
+			void refreshProtocolStatus();
+		}, 1500);
 		const payload = loadRuntimeThemeFromStorage();
 		if (payload) {
 			themeMode = payload.mode;
@@ -268,7 +291,10 @@
 			}
 		};
 		window.addEventListener('storage', handleStorage);
-		return () => window.removeEventListener('storage', handleStorage);
+		return () => {
+			window.removeEventListener('storage', handleStorage);
+			window.clearTimeout(delayedCheck);
+		};
 	});
 </script>
 
@@ -489,7 +515,7 @@
 		</Tooltip.Root>
 
 		<!-- 渲染设置（弹出菜单） -->
-		<DropdownMenu.Root>
+		<DropdownMenu.Root bind:open={renderSettingsOpen}>
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					<DropdownMenu.Trigger>
@@ -508,17 +534,19 @@
 				</Tooltip.Content>
 			</Tooltip.Root>
 
-			<DropdownMenu.Content side="bottom" align="end" class="w-56">
-				<DropdownMenu.Label>数据源</DropdownMenu.Label>
+			<DropdownMenu.Content side="bottom" align="end" class="w-72">
+				<DropdownMenu.Label>
+					数据源（文件读取层，当前：{loadModeStore.isBlobMode ? 'IPC 内存 Blob' : 'Tempfile 文件'}）
+				</DropdownMenu.Label>
 				<DropdownMenu.Item onclick={() => loadModeStore.toggleDataSource()}>
 					<div class="flex w-full items-center justify-between">
 						<div class="flex items-center gap-2">
 							{#if loadModeStore.isBlobMode}
 								<Zap class="h-4 w-4" />
-								<span>Blob (IPC)</span>
+								<span>IPC 内存 Blob</span>
 							{:else}
 								<HardDrive class="h-4 w-4" />
-								<span>Tempfile</span>
+								<span>Tempfile 文件</span>
 							{/if}
 						</div>
 						<span class="text-muted-foreground text-xs">点击切换</span>
@@ -543,19 +571,37 @@
 				</DropdownMenu.Item>
 
 				<DropdownMenu.Separator />
-				<DropdownMenu.Label>传输模式</DropdownMenu.Label>
+				<DropdownMenu.Label>传输模式（IPC 传输层）</DropdownMenu.Label>
 				<DropdownMenu.Item onclick={() => pageTransferModeStore.toggle()}>
 					<div class="flex w-full items-center justify-between">
 						<div class="flex items-center gap-2">
 							{#if pageTransferModeStore.isBinary}
 								<Zap class="h-4 w-4" />
-								<span>Binary (直接)</span>
+								<span>Binary 二进制</span>
 							{:else}
 								<HardDrive class="h-4 w-4" />
 								<span>Base64</span>
 							{/if}
 						</div>
 						<span class="text-muted-foreground text-xs">点击切换</span>
+					</div>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Separator />
+				<DropdownMenu.Label>
+					协议直连（压缩包，自动优先）：
+					{#if protocolStatus === 'available'}
+						可用
+					{:else if protocolStatus === 'checking'}
+						检测中
+					{:else}
+						探测失败（将回退 IPC，可手动重试）
+					{/if}
+				</DropdownMenu.Label>
+				<DropdownMenu.Item onclick={() => void refreshProtocolStatus()}>
+					<div class="flex w-full items-center justify-between">
+						<span>重新检测协议直连</span>
+						<span class="text-muted-foreground text-xs">点击重试</span>
 					</div>
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>

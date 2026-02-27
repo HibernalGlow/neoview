@@ -28,6 +28,11 @@ function getBaseUrlCandidates(): string[] {
 	const windows = isWindowsRuntime();
 	const windowsPreferred = [`http://${PROTOCOL_NAME}.localhost`, `${PROTOCOL_NAME}://localhost`];
 	const unixPreferred = [`${PROTOCOL_NAME}://localhost`, `http://${PROTOCOL_NAME}.localhost`];
+
+	if (typeof window !== 'undefined' && window.location.protocol.startsWith('http')) {
+		return [`http://${PROTOCOL_NAME}.localhost`];
+	}
+
 	return windows ? windowsPreferred : unixPreferred;
 }
 

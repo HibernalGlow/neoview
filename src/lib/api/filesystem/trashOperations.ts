@@ -10,6 +10,35 @@ import type { TrashItem } from './types';
 const trashCallbacks = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
 let trashListenerSetup = false;
 
+// 应用内删除事务栈（用于精确撤回，避免恢复到其他来源的“最近删除项”）
+const trashDeleteUndoStack: string[][] = [];
+const MAX_UNDO_STACK_SIZE = 50;
+
+function normalizePath(path: string): string {
+  return path.replace(/[/\\]+/g, '\\').replace(/\\+$/, '').toLowerCase();
+}
+
+function isChildPath(path: string, parent: string): boolean {
+  const pathNorm = normalizePath(path);
+  const parentNorm = normalizePath(parent);
+  return pathNorm === parentNorm || pathNorm.startsWith(`${parentNorm}\\`);
+}
+
+function compactRestorePaths(paths: string[]): string[] {
+  const uniquePaths = Array.from(new Set(paths));
+  uniquePaths.sort((a, b) => a.length - b.length);
+
+  const compacted: string[] = [];
+  for (const path of uniquePaths) {
+    const coveredByParent = compacted.some((parent) => isChildPath(path, parent));
+    if (!coveredByParent) {
+      compacted.push(path);
+    }
+  }
+
+  return compacted;
+}
+
 /**
  * 设置异步删除的事件监听器
  */
@@ -69,6 +98,38 @@ export async function moveToTrashAsync(path: string): Promise<void> {
       reject(err);
     });
   });
+}
+
+/**
+ * 记录一次已成功的“移动到回收站”事务
+ */
+export function recordTrashDeletion(paths: string[]): void {
+  const compacted = compactRestorePaths(paths).filter(Boolean);
+  if (compacted.length === 0) return;
+
+  trashDeleteUndoStack.push(compacted);
+  if (trashDeleteUndoStack.length > MAX_UNDO_STACK_SIZE) {
+    trashDeleteUndoStack.shift();
+  }
+}
+
+/**
+ * 精确撤回应用内最近一次删除事务
+ * 返回恢复的路径数组；若没有可撤回事务，返回 null
+ */
+export async function undoRecordedTrashDelete(): Promise<string[] | null> {
+  const lastBatch = trashDeleteUndoStack.pop();
+  if (!lastBatch || lastBatch.length === 0) return null;
+
+  try {
+    for (const path of lastBatch) {
+      await restoreFromTrash(path);
+    }
+    return lastBatch;
+  } catch (error) {
+    trashDeleteUndoStack.push(lastBatch);
+    throw error;
+  }
 }
 
 /**

@@ -60,6 +60,8 @@ export {
 // ===== 回收站操作导出 =====
 export {
   moveToTrashAsync,
+  recordTrashDeletion,
+  undoRecordedTrashDelete,
   getLastDeletedItem,
   undoLastDelete,
   restoreFromTrash

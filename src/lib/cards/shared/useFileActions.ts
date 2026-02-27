@@ -310,6 +310,9 @@ export function createDeleteActions(
 
 		if (successPaths.length > 0) {
 			directoryTreeCache.removeItemsFromCache(successPaths);
+			if (strategy === 'trash') {
+				FileSystemAPI.recordTrashDeletion(successPaths);
+			}
 		}
 
 		folderTabActions.deselectAll();
@@ -341,6 +344,9 @@ export function createDeleteActions(
 				await FileSystemAPI.moveToTrash(item.path);
 			} else {
 				await FileSystemAPI.deletePath(item.path);
+			}
+			if (strategy === 'trash') {
+				FileSystemAPI.recordTrashDeletion([item.path]);
 			}
 			directoryTreeCache.removeItemFromCache(item.path);
 			showSuccessToast('删除成功', item.name);
@@ -402,13 +408,17 @@ export function createDeleteActions(
 	// 撤回上一次删除
 	const handleUndoDelete = async () => {
 		try {
-			const restoredPath = await FileSystemAPI.undoLastDelete();
-			if (restoredPath) {
+			const restoredPaths = await FileSystemAPI.undoRecordedTrashDelete();
+			if (restoredPaths && restoredPaths.length > 0) {
 				// 刷新目录以显示恢复的文件
 				handleRefresh();
-				showSuccessToast('撤回成功', restoredPath.split(/[\\/]/).pop() || restoredPath);
+				const tip =
+					restoredPaths.length === 1
+						? (restoredPaths[0].split(/[\\/]/).pop() || restoredPaths[0])
+						: `已恢复 ${restoredPaths.length} 项`;
+				showSuccessToast('撤回成功', tip);
 			} else {
-				showErrorToast('撤回失败', '回收站为空');
+				showErrorToast('撤回失败', '没有可撤回的删除操作');
 			}
 		} catch (err) {
 			showErrorToast('撤回失败', err instanceof Error ? err.message : String(err));

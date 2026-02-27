@@ -385,35 +385,14 @@ pub async fn undo_last_delete() -> Result<Option<String>, String> {
             return Ok(None);
         }
 
-        // 先找到最新删除的项目，提取需要的信息
-        let (latest_time, original_path) = {
-            let latest = items.iter().max_by_key(|item| item.time_deleted);
-            match latest {
-                Some(item) => (
-                    item.time_deleted,
-                    item.original_path().to_string_lossy().to_string(),
-                ),
-                None => return Ok(None),
-            }
-        };
-
-        let items_to_restore: Vec<_> = items
+        let latest_item = items
             .into_iter()
-            .filter(|item| {
-                let item_path = item.original_path().to_string_lossy().to_string();
-                let time_diff = (item.time_deleted - latest_time).abs();
+            .max_by_key(|item| item.time_deleted)
+            .ok_or_else(|| "回收站为空".to_string())?;
 
-                time_diff <= 2
-                    || item_path.starts_with(&format!("{}\\", original_path))
-                    || item_path.starts_with(&format!("{}/", original_path))
-            })
-            .collect();
+        let original_path = latest_item.original_path().to_string_lossy().to_string();
 
-        if items_to_restore.is_empty() {
-            return Ok(None);
-        }
-
-        trash::os_limited::restore_all(items_to_restore).map_err(|e| format!("恢复失败: {}", e))?;
+        trash::os_limited::restore_all(vec![latest_item]).map_err(|e| format!("恢复失败: {}", e))?;
 
         Ok(Some(original_path))
     })

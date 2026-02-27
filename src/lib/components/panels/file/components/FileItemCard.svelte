@@ -42,6 +42,43 @@
 		normalizeTagKey
 	} from './fileItemUtils';
 
+	const namespaceDisplayCache = new Map<string, string>();
+	const tagTranslationCache = new Map<string, string>();
+	const objectIdMap = new WeakMap<object, number>();
+	let objectIdSeed = 1;
+
+	function getObjectId(value: unknown): number {
+		if (!value || typeof value !== 'object') return 0;
+		const objectValue = value as object;
+		const existing = objectIdMap.get(objectValue);
+		if (existing) return existing;
+		const next = objectIdSeed++;
+		objectIdMap.set(objectValue, next);
+		return next;
+	}
+
+	function getShortNamespaceCached(category: string): string {
+		const cached = namespaceDisplayCache.get(category);
+		if (cached) return cached;
+		const shortName = emmTranslationStore.getShortNamespace(category);
+		namespaceDisplayCache.set(category, shortName);
+		return shortName;
+	}
+
+	function translateTagCached(tag: string, category: string, dict: EMMTranslationDict | undefined): string {
+		const dictId = getObjectId(dict as unknown as object);
+		const cacheKey = `${dictId}|${category}|${tag}`;
+		const cached = tagTranslationCache.get(cacheKey);
+		if (cached) return cached;
+		const translated = emmTranslationStore.translateTag(tag, category, dict);
+		tagTranslationCache.set(cacheKey, translated);
+		if (tagTranslationCache.size > 10000) {
+			const first = tagTranslationCache.keys().next().value;
+			if (first) tagTranslationCache.delete(first);
+		}
+		return translated;
+	}
+
 	let {
 		item,
 		thumbnail = undefined,
@@ -535,14 +572,25 @@
 		});
 	});
 
-	// 获取显示的标签（高亮收藏的，支持混合匹配，包含手动标签）
-	const displayTags = $derived(() => {
-		if (fileListTagDisplayMode === 'none') return [];
+	const displayTagPayload = $derived.by<{
+		tags: Array<{
+			tag: string;
+			isCollect: boolean;
+			color?: string;
+			display: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}>;
+		collectCount: number;
+	}>(() => {
+		if (fileListTagDisplayMode === 'none') {
+			return { tags: [], collectCount: 0 };
+		}
 
-		const map = $collectTagMap; // Use the shared map
+		const map = $collectTagMap;
 		const isMixedEnabled = mixedGenderStore.enabled;
 
-		const allTags: Array<{
+		const collectTagsList: Array<{
 			tag: string;
 			isCollect: boolean;
 			color?: string;
@@ -550,32 +598,46 @@
 			isMixedVariant?: boolean;
 			isManual?: boolean;
 		}> = [];
+		const manualTagsList: Array<{
+			tag: string;
+			isCollect: boolean;
+			color?: string;
+			display: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}> = [];
+		const normalTagsList: Array<{
+			tag: string;
+			isCollect: boolean;
+			color?: string;
+			display: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}> = [];
+
 		const addedTagKeys = new Set<string>();
+		let collectCount = 0;
 
-		// 先添加 EMM 标签
-		if (emmMetadata?.tags) {
-			for (const [category, tags] of Object.entries(emmMetadata.tags)) {
-				for (const tag of tags) {
+		const metadataTags = emmMetadata?.tags;
+		if (metadataTags) {
+			for (const [category, tagList] of Object.entries(metadataTags) as [string, string[]][]) {
+				const shortCategory = getShortNamespaceCached(category);
+				for (const tag of tagList) {
 					const fullTagKey = normalizeTagKey(`${category}:${tag}`);
-
-					// 避免重复添加
 					if (addedTagKeys.has(fullTagKey)) continue;
 					addedTagKeys.add(fullTagKey);
 
-					// 尝试多种组合查找
 					let collectTag = map.get(fullTagKey);
 					if (!collectTag) {
 						collectTag = map.get(normalizeTagKey(tag));
 					}
 
-					// 混合匹配：如果是性别类别，检查其他性别类别的收藏
 					let matchedByMixed = false;
 					let mixedCollectTag = collectTag;
 					if (!collectTag && isMixedEnabled && genderCategories.includes(category)) {
 						for (const altCat of genderCategories) {
 							if (altCat === category) continue;
-							const altKey = normalizeTagKey(`${altCat}:${tag}`);
-							const altCollect = map.get(altKey);
+							const altCollect = map.get(normalizeTagKey(`${altCat}:${tag}`));
 							if (altCollect) {
 								mixedCollectTag = altCollect;
 								matchedByMixed = true;
@@ -585,77 +647,60 @@
 					}
 
 					const isCollect = !!collectTag || matchedByMixed;
+					if (fileListTagDisplayMode === 'collect' && !isCollect) continue;
 
-					// 根据显示模式过滤
-					if (fileListTagDisplayMode === 'collect' && !isCollect) {
-						continue;
-					}
-
-					// 翻译和缩写
-					const translatedTag = emmTranslationStore.translateTag(tag, category, translationDict);
-					const shortCategory = emmTranslationStore.getShortNamespace(category);
-					const displayStr = `${shortCategory}:${translatedTag}`;
-
-					// 使用类别颜色或收藏颜色
-					const tagColor =
-						collectTag?.color ||
-						(matchedByMixed ? mixedCollectTag?.color : categoryColors[category]);
-
-					allTags.push({
+					const translatedTag = translateTagCached(tag, category, translationDict);
+					const tagItem = {
 						tag: `${category}:${tag}`,
 						isCollect,
-						color: tagColor,
-						display: displayStr,
+						color: collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]),
+						display: `${shortCategory}:${translatedTag}`,
 						isMixedVariant: matchedByMixed,
 						isManual: false
-					});
+					};
+
+					if (isCollect) {
+						collectCount += 1;
+						collectTagsList.push(tagItem);
+					} else {
+						normalTagsList.push(tagItem);
+					}
 				}
 			}
 		}
 
-		// 添加手动标签（虚线边框样式）
 		for (const mt of manualTags) {
 			const fullTagKey = normalizeTagKey(`${mt.namespace}:${mt.tag}`);
-
-			// 避免与 EMM 标签重复
 			if (addedTagKeys.has(fullTagKey)) continue;
 			addedTagKeys.add(fullTagKey);
 
-			// 翻译手动标签
-			const translatedTag = emmTranslationStore.translateTag(mt.tag, mt.namespace, translationDict);
-			const shortCategory = emmTranslationStore.getShortNamespace(mt.namespace);
-			const displayStr = `${shortCategory}:${translatedTag}`;
-
-			allTags.push({
+			const translatedTag = translateTagCached(mt.tag, mt.namespace, translationDict);
+			manualTagsList.push({
 				tag: `${mt.namespace}:${mt.tag}`,
 				isCollect: false,
-				color: categoryColors[mt.namespace] || '#10b981', // 默认绿色
-				display: displayStr,
+				color: categoryColors[mt.namespace] || '#10b981',
+				display: `${getShortNamespaceCached(mt.namespace)}:${translatedTag}`,
 				isMixedVariant: false,
 				isManual: true
 			});
 		}
 
-		// 收藏标签优先显示，手动标签次之
-		const collectTagsList = allTags.filter((t) => t.isCollect);
-		const manualTagsList = allTags.filter((t) => t.isManual && !t.isCollect);
-		const normalTagsList = allTags.filter((t) => !t.isCollect && !t.isManual);
-
-		return [...collectTagsList, ...manualTagsList, ...normalTagsList];
+		return { tags: [...collectTagsList, ...manualTagsList, ...normalTagsList], collectCount };
 	});
 
+	const displayTags = $derived(displayTagPayload.tags);
+
 	// 当 displayTags 计算完成后，更新 collectTagCount 到缓存（用于排序）
+	let lastCollectTagCount = $state<number | null>(null);
+
 	$effect(() => {
 		// 只对压缩包（book）更新 collectTagCount
 		if (!isArchive || item.isDir) return;
 
-		const tags = displayTags();
-		const collectCount = tags.filter((t) => t.isCollect).length;
-
-		// 更新到缓存（直接调用内部更新方法）
-		if (collectCount > 0) {
-			collectTagCountStore.setCount(item.path, collectCount);
-		}
+		const collectCount = displayTagPayload.collectCount;
+		if (lastCollectTagCount === collectCount) return;
+		lastCollectTagCount = collectCount;
+		collectTagCountStore.setCount(item.path, collectCount);
 	});
 
 	// 文件夹预览相关

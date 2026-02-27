@@ -69,12 +69,7 @@ export const emmMetadataStore = {
 			const autoDatabases = await EMMAPI.findEMMDatabases();
 			console.debug('[EMMStore] initialize: 自动检测到的主数据库:', autoDatabases);
 
-			let currentState: EMMMetadataState;
-			subscribe(state => {
-				currentState = state;
-			})();
-
-			const manualDbPaths = currentState!.manualDatabasePaths || [];
+			const manualDbPaths = stateSnapshot.manualDatabasePaths || [];
 			console.debug('[EMMStore] initialize: 手动配置的主数据库:', manualDbPaths);
 
 			const useManualOnly = manualDbPaths.length > 0;
@@ -90,7 +85,7 @@ export const emmMetadataStore = {
 			}
 
 			// 确定翻译数据库路径（优先手动配置，否则自动检测）
-			let translationDbPath = currentState!.manualTranslationDbPath;
+			let translationDbPath = stateSnapshot.manualTranslationDbPath;
 			if (!translationDbPath) {
 				translationDbPath = await EMMAPI.findEMMTranslationDatabase() || undefined;
 			}
@@ -103,12 +98,7 @@ export const emmMetadataStore = {
 			}));
 
 			// 优先使用手动配置的设置文件，否则尝试自动查找
-			let stateForSetting: EMMMetadataState;
-			subscribe(s => {
-				stateForSetting = s;
-			})();
-
-			const settingPath = stateForSetting!.manualSettingPath || await EMMAPI.findEMMSettingFile();
+			const settingPath = stateSnapshot.manualSettingPath || await EMMAPI.findEMMSettingFile();
 			console.debug('[EMMStore] initialize: 设置文件路径:', settingPath);
 
 			if (settingPath) {
@@ -139,7 +129,8 @@ export const emmMetadataStore = {
 			}
 
 			// 加载翻译字典
-			const translationDictPath = stateForSetting!.manualTranslationDictPath || await EMMAPI.findEMMTranslationFile();
+			const translationDictPath =
+				stateSnapshot.manualTranslationDictPath || await EMMAPI.findEMMTranslationFile();
 			console.debug('[EMMStore] initialize: 翻译字典路径:', translationDictPath);
 
 			if (translationDictPath) {

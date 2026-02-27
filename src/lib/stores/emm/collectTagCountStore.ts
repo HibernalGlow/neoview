@@ -5,7 +5,7 @@
  * - 与 favoriteTagStore 配合使用
  */
 
-import { writable, get } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { favoriteTagStore, mixedGenderStore } from './favoriteTagStore.svelte';
 
@@ -20,6 +20,14 @@ const { subscribe, set, update } = writable<CollectTagCountCache>({
 	lastUpdated: 0
 });
 
+let cacheSnapshot: CollectTagCountCache = {
+	counts: new Map(),
+	lastUpdated: 0
+};
+subscribe((cache) => {
+	cacheSnapshot = cache;
+});
+
 // 规范化路径（统一小写和斜杠）
 function normalizePath(path: string): string {
 	return path.replace(/\\/g, '/').toLowerCase();
@@ -32,18 +40,16 @@ export const collectTagCountStore = {
 	 * 获取文件夹的收藏标签匹配数（同步）
 	 */
 	getCount(folderPath: string): number {
-		const cache = get({ subscribe });
 		const key = normalizePath(folderPath);
-		return cache.counts.get(key) ?? 0;
+		return cacheSnapshot.counts.get(key) ?? 0;
 	},
 
 	/**
 	 * 检查是否有缓存数据
 	 */
 	hasCount(folderPath: string): boolean {
-		const cache = get({ subscribe });
 		const key = normalizePath(folderPath);
-		return cache.counts.has(key);
+		return cacheSnapshot.counts.has(key);
 	},
 
 	/**
@@ -67,9 +73,15 @@ export const collectTagCountStore = {
 			// 更新缓存
 			update(cache => {
 				const newCounts = new Map(cache.counts);
+				let changed = false;
 				for (const [path, count] of countResults) {
-					newCounts.set(normalizePath(path), count);
+					const key = normalizePath(path);
+					if (newCounts.get(key) !== count) {
+						newCounts.set(key, count);
+						changed = true;
+					}
 				}
+				if (!changed) return cache;
 				return {
 					counts: newCounts,
 					lastUpdated: Date.now()
@@ -96,10 +108,9 @@ export const collectTagCountStore = {
 	 */
 	setCount(path: string, count: number): void {
 		const key = normalizePath(path);
-		const cache = get({ subscribe });
 		
 		// 如果值没有变化，不触发更新
-		if (cache.counts.get(key) === count) {
+		if (cacheSnapshot.counts.get(key) === count) {
 			return;
 		}
 		
@@ -117,10 +128,9 @@ export const collectTagCountStore = {
 	 * 获取缓存统计信息
 	 */
 	getStats(): { count: number; lastUpdated: number } {
-		const cache = get({ subscribe });
 		return {
-			count: cache.counts.size,
-			lastUpdated: cache.lastUpdated
+			count: cacheSnapshot.counts.size,
+			lastUpdated: cacheSnapshot.lastUpdated
 		};
 	}
 };

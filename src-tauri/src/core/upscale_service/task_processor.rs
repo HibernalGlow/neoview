@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 use regex::Regex;
@@ -21,21 +22,33 @@ use super::cache::cache_key;
 use super::{log_info, log_debug};
 
 static REGEX_CACHE: OnceLock<RwLock<HashMap<String, Option<Regex>>>> = OnceLock::new();
+static REGEX_CACHE_HIT_COUNT: AtomicUsize = AtomicUsize::new(0);
+static REGEX_CACHE_MISS_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn get_compiled_regex(pattern: &str) -> Option<Regex> {
     let cache = REGEX_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
 
     if let Ok(reader) = cache.read() {
         if let Some(compiled) = reader.get(pattern) {
+            REGEX_CACHE_HIT_COUNT.fetch_add(1, Ordering::SeqCst);
             return compiled.clone();
         }
     }
+
+    REGEX_CACHE_MISS_COUNT.fetch_add(1, Ordering::SeqCst);
 
     let compiled = Regex::new(pattern).ok();
     if let Ok(mut writer) = cache.write() {
         writer.insert(pattern.to_string(), compiled.clone());
     }
     compiled
+}
+
+pub fn get_regex_cache_stats() -> (usize, usize) {
+    (
+        REGEX_CACHE_HIT_COUNT.load(Ordering::SeqCst),
+        REGEX_CACHE_MISS_COUNT.load(Ordering::SeqCst),
+    )
 }
 
 /// 读取图片数据（支持普通文件和压缩包内文件）

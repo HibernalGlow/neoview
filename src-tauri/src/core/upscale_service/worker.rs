@@ -3,7 +3,7 @@
 //! 包含工作线程启动逻辑、任务处理循环
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -38,6 +38,9 @@ pub fn start_workers(
     completed_count: Arc<AtomicUsize>,
     skipped_count: Arc<AtomicUsize>,
     failed_count: Arc<AtomicUsize>,
+    queue_wait_sample_count: Arc<AtomicUsize>,
+    queue_wait_total_ms: Arc<AtomicU64>,
+    queue_wait_max_ms: Arc<AtomicU64>,
     py_state: Arc<PyO3UpscalerState>,
     condition_settings: Arc<RwLock<ConditionalUpscaleSettings>>,
     conditions_list: Arc<RwLock<Vec<FrontendCondition>>>,
@@ -59,6 +62,9 @@ pub fn start_workers(
         let completed_count = Arc::clone(&completed_count);
         let skipped_count = Arc::clone(&skipped_count);
         let failed_count = Arc::clone(&failed_count);
+        let queue_wait_sample_count = Arc::clone(&queue_wait_sample_count);
+        let queue_wait_total_ms = Arc::clone(&queue_wait_total_ms);
+        let queue_wait_max_ms = Arc::clone(&queue_wait_max_ms);
         let py_state = Arc::clone(&py_state);
         let condition_settings = Arc::clone(&condition_settings);
         let conditions_list = Arc::clone(&conditions_list);
@@ -81,6 +87,9 @@ pub fn start_workers(
                 completed_count,
                 skipped_count,
                 failed_count,
+                queue_wait_sample_count,
+                queue_wait_total_ms,
+                queue_wait_max_ms,
                 py_state,
                 condition_settings,
                 conditions_list,
@@ -113,6 +122,9 @@ fn worker_loop(
     completed_count: Arc<AtomicUsize>,
     skipped_count: Arc<AtomicUsize>,
     failed_count: Arc<AtomicUsize>,
+    queue_wait_sample_count: Arc<AtomicUsize>,
+    queue_wait_total_ms: Arc<AtomicU64>,
+    queue_wait_max_ms: Arc<AtomicU64>,
     py_state: Arc<PyO3UpscalerState>,
     condition_settings: Arc<RwLock<ConditionalUpscaleSettings>>,
     conditions_list: Arc<RwLock<Vec<FrontendCondition>>>,
@@ -134,6 +146,22 @@ fn worker_loop(
         if let Some(task) = task {
             if let Ok(mut set) = pending_set.write() {
                 set.remove(&(task.book_path.clone(), task.page_index));
+            }
+
+            let queue_wait_ms = task.submitted_at.elapsed().as_millis() as u64;
+            queue_wait_sample_count.fetch_add(1, Ordering::SeqCst);
+            queue_wait_total_ms.fetch_add(queue_wait_ms, Ordering::SeqCst);
+            let mut observed_max = queue_wait_max_ms.load(Ordering::SeqCst);
+            while queue_wait_ms > observed_max {
+                match queue_wait_max_ms.compare_exchange(
+                    observed_max,
+                    queue_wait_ms,
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                ) {
+                    Ok(_) => break,
+                    Err(actual) => observed_max = actual,
+                }
             }
 
             // 检查是否应该取消（书籍已切换）

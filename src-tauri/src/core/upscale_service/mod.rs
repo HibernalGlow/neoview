@@ -35,10 +35,11 @@ pub use events::{UpscaleStatus, UpscaleReadyPayload, UpscaleServiceStats};
 use crate::commands::pyo3_upscale_commands::PyO3UpscalerState;
 use crate::core::pyo3_upscaler::UpscaleModel;
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
+use crate::core::upscale_service::task_processor::get_regex_cache_stats;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -115,6 +116,11 @@ pub struct UpscaleService {
     completed_count: Arc<AtomicUsize>,
     skipped_count: Arc<AtomicUsize>,
     failed_count: Arc<AtomicUsize>,
+    dedupe_request_count: Arc<AtomicUsize>,
+    dedupe_hit_count: Arc<AtomicUsize>,
+    queue_wait_sample_count: Arc<AtomicUsize>,
+    queue_wait_total_ms: Arc<AtomicU64>,
+    queue_wait_max_ms: Arc<AtomicU64>,
 
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -154,6 +160,11 @@ impl UpscaleService {
             completed_count: Arc::new(AtomicUsize::new(0)),
             skipped_count: Arc::new(AtomicUsize::new(0)),
             failed_count: Arc::new(AtomicUsize::new(0)),
+            dedupe_request_count: Arc::new(AtomicUsize::new(0)),
+            dedupe_hit_count: Arc::new(AtomicUsize::new(0)),
+            queue_wait_sample_count: Arc::new(AtomicUsize::new(0)),
+            queue_wait_total_ms: Arc::new(AtomicU64::new(0)),
+            queue_wait_max_ms: Arc::new(AtomicU64::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             condition_settings: Arc::new(RwLock::new(ConditionalUpscaleSettings::default())),
             conditions_list: Arc::new(RwLock::new(Vec::new())),
@@ -185,6 +196,9 @@ impl UpscaleService {
             Arc::clone(&self.completed_count),
             Arc::clone(&self.skipped_count),
             Arc::clone(&self.failed_count),
+            Arc::clone(&self.queue_wait_sample_count),
+            Arc::clone(&self.queue_wait_total_ms),
+            Arc::clone(&self.queue_wait_max_ms),
             Arc::clone(&self.py_state),
             Arc::clone(&self.condition_settings),
             Arc::clone(&self.conditions_list),
@@ -339,6 +353,8 @@ impl UpscaleService {
             return Err("超分未启用".to_string());
         }
 
+        self.dedupe_request_count.fetch_add(1, Ordering::SeqCst);
+
         let key = (task.book_path.clone(), task.page_index);
 
         // 先检查内存映射缓存，避免重复走磁盘校验
@@ -407,6 +423,7 @@ impl UpscaleService {
         // 检查是否正在处理
         if let Ok(set) = self.processing_set.read() {
             if set.contains(&key) {
+                self.dedupe_hit_count.fetch_add(1, Ordering::SeqCst);
                 log_debug!("⏳ 正在处理 page {}", task.page_index);
                 return Ok(());
             }
@@ -415,6 +432,7 @@ impl UpscaleService {
         // 检查是否已在待处理集合中（O(1)）
         if let Ok(set) = self.pending_set.read() {
             if set.contains(&key) {
+                self.dedupe_hit_count.fetch_add(1, Ordering::SeqCst);
                 log_debug!("📋 已在队列 page {}", task.page_index);
                 return Ok(());
             }
@@ -518,6 +536,31 @@ impl UpscaleService {
         let cache_count = self.cache_map.read().ok().map(|c| c.len()).unwrap_or(0);
         let pending_tasks = self.pending_set.read().ok().map(|s| s.len()).unwrap_or(0);
         let processing_tasks = self.processing_set.read().ok().map(|s| s.len()).unwrap_or(0);
+        let queue_wait_sample_count = self.queue_wait_sample_count.load(Ordering::SeqCst);
+        let queue_wait_total_ms = self.queue_wait_total_ms.load(Ordering::SeqCst);
+        let queue_wait_max_ms = self.queue_wait_max_ms.load(Ordering::SeqCst);
+        let dedupe_request_count = self.dedupe_request_count.load(Ordering::SeqCst);
+        let dedupe_hit_count = self.dedupe_hit_count.load(Ordering::SeqCst);
+        let (regex_cache_hit_count, regex_cache_miss_count) = get_regex_cache_stats();
+
+        let queue_wait_avg_ms = if queue_wait_sample_count > 0 {
+            queue_wait_total_ms as f64 / queue_wait_sample_count as f64
+        } else {
+            0.0
+        };
+
+        let dedupe_hit_rate = if dedupe_request_count > 0 {
+            dedupe_hit_count as f64 / dedupe_request_count as f64
+        } else {
+            0.0
+        };
+
+        let regex_total = regex_cache_hit_count + regex_cache_miss_count;
+        let regex_cache_hit_rate = if regex_total > 0 {
+            regex_cache_hit_count as f64 / regex_total as f64
+        } else {
+            0.0
+        };
 
         UpscaleServiceStats {
             memory_cache_count: cache_count,
@@ -527,6 +570,15 @@ impl UpscaleService {
             completed_count: self.completed_count.load(Ordering::SeqCst),
             skipped_count: self.skipped_count.load(Ordering::SeqCst),
             failed_count: self.failed_count.load(Ordering::SeqCst),
+            queue_wait_sample_count,
+            queue_wait_avg_ms,
+            queue_wait_max_ms,
+            dedupe_request_count,
+            dedupe_hit_count,
+            dedupe_hit_rate,
+            regex_cache_hit_count,
+            regex_cache_miss_count,
+            regex_cache_hit_rate,
             is_enabled: self.enabled.load(Ordering::SeqCst),
         }
     }

@@ -4,7 +4,7 @@
  */
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import type { LanguageModelV1 } from 'ai';
+import type { LanguageModel } from 'ai';
 import type { AiProvider } from '$lib/stores/aiApiConfig.svelte';
 
 /**
@@ -12,7 +12,7 @@ import type { AiProvider } from '$lib/stores/aiApiConfig.svelte';
  */
 export interface TanStackAIConfig {
 	/** 语言模型实例 */
-	model: LanguageModelV1;
+	model: LanguageModel;
 	/** 温度参数 */
 	temperature: number;
 	/** 最大输出 token 数 */
@@ -52,8 +52,7 @@ export function createTanStackProvider(config: AiProvider): TanStackAIConfig {
 
 	const openai = createOpenAI({
 		apiKey: config.apiKey || 'dummy-key', // Ollama 本地不需要 key
-		baseURL,
-		compatibility: 'compatible', // 兼容模式，支持非标准 OpenAI API
+		baseURL
 	});
 
 	return {

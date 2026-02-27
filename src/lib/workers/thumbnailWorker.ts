@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 /**
  * Thumbnail Worker
  * 缩略图处理 WebWorker - 将缩略图处理移到 Worker 线程，避免阻塞主线程

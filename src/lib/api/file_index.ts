@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { FsItem } from '$lib/types';
 
 export interface IndexStats {
   totalFiles: number;

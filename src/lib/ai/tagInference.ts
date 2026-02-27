@@ -96,7 +96,7 @@ export async function inferTags(options: TagInferenceOptions): Promise<TagInfere
 					model: tanstackConfig.model,
 					prompt,
 					temperature: 0.3, // 使用较低温度以获得更一致的结果
-					maxTokens: tanstackConfig.maxTokens,
+					maxOutputTokens: tanstackConfig.maxTokens,
 				});
 
 				return response.text;
@@ -157,7 +157,7 @@ export async function inferTagsWithStreaming(
 			model: tanstackConfig.model,
 			prompt,
 			temperature: 0.3,
-			maxTokens: tanstackConfig.maxTokens,
+			maxOutputTokens: tanstackConfig.maxTokens,
 		});
 
 		let fullText = '';

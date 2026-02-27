@@ -327,7 +327,7 @@ function createAiApiConfigStore() {
 							model: tanstackConfig.model,
 							prompt,
 							temperature: tanstackConfig.temperature,
-							maxTokens: tanstackConfig.maxTokens,
+							maxOutputTokens: tanstackConfig.maxTokens,
 						});
 
 						if (!response.text) {

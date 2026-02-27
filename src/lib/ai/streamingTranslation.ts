@@ -104,7 +104,7 @@ export async function translateWithStreaming(
 			model: config.model,
 			prompt,
 			temperature: config.temperature,
-			maxTokens: config.maxTokens,
+			maxOutputTokens: config.maxTokens,
 			abortSignal,
 		});
 
@@ -172,7 +172,7 @@ export async function translateWithoutStreaming(
 			model: config.model,
 			prompt,
 			temperature: config.temperature,
-			maxTokens: config.maxTokens,
+			maxOutputTokens: config.maxTokens,
 			abortSignal,
 		});
 

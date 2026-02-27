@@ -47,7 +47,7 @@ async function invokeWithToast<T>(cmd: string, args: Record<string, unknown>): P
 		const mode = pageTransferModeStore.mode;
 		const msg = `页面加载失败 [${mode}]: ${error}`;
 		console.error(`❌ [PageManager] ${msg}`);
-		showToast.error(msg);
+		showToast({ title: '页面加载失败', description: msg, variant: 'error' });
 		throw error;
 	}
 }

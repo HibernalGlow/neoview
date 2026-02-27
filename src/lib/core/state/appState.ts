@@ -101,8 +101,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 				preLoadSize: 3,
 				multiThreadedRendering: true,
 				maxThreads: 2,
-                archiveTempfileThresholdMB: 100,
-                directUrlThresholdMB: 50
+				archiveTempfileThresholdMB: 500,
+				directUrlThresholdMB: 500
 			},
 			image: {
 				supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],

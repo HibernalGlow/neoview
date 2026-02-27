@@ -9,7 +9,7 @@
 	import { Slider } from '$lib/components/ui/slider';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tabs from '$lib/components/ui/tabs';
-	import { showErrorToast } from '$lib/utils/toast';
+	import { showErrorToast, showSuccessToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 	import { Label } from '$lib/components/ui/label';
@@ -79,13 +79,14 @@
 				archive_tempfile_threshold_mb: archiveTempfileThresholdMB,
 				direct_url_threshold_mb: directUrlThresholdMB
 			};
-			await savePerformanceSettings(settings);
-
-			// 显式同步到全局设置管理器，触发监听器（如 loadModeStore）更新后端阈值
 			settingsManager.updateNestedSettings('performance', {
 				archiveTempfileThresholdMB: archiveTempfileThresholdMB,
 				directUrlThresholdMB: directUrlThresholdMB
 			});
+
+			// 先持久化到前端设置，避免“立即重启”导致后续代码来不及执行
+			await savePerformanceSettings(settings);
+			showSuccessToast('性能设置已保存');
 		} catch (err) {
 			console.error('Failed to save performance settings:', err);
 			showErrorToast('保存性能设置失败');

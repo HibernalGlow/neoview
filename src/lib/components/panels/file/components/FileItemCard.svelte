@@ -38,6 +38,66 @@
 		normalizeTagKey
 	} from './fileItemUtils';
 
+	const FOLDER_SIZE_CONCURRENCY_LIMIT = 2;
+	const folderSizeCache = new Map<string, number>();
+	const folderSizeInFlight = new Map<string, Promise<number>>();
+	const folderSizeQueue: Array<() => void> = [];
+	let folderSizeRunningCount = 0;
+
+	function normalizePath(path: string): string {
+		return path.replace(/\\/g, '/').toLowerCase();
+	}
+
+	function runFolderSizeQueue() {
+		while (folderSizeRunningCount < FOLDER_SIZE_CONCURRENCY_LIMIT && folderSizeQueue.length > 0) {
+			const task = folderSizeQueue.shift();
+			if (!task) break;
+			folderSizeRunningCount += 1;
+			task();
+		}
+	}
+
+	function enqueueFolderSizeTask<T>(taskFactory: () => Promise<T>): Promise<T> {
+		return new Promise<T>((resolve, reject) => {
+			folderSizeQueue.push(() => {
+				taskFactory()
+					.then(resolve)
+					.catch(reject)
+					.finally(() => {
+						folderSizeRunningCount = Math.max(0, folderSizeRunningCount - 1);
+						runFolderSizeQueue();
+					});
+			});
+			runFolderSizeQueue();
+		});
+	}
+
+	function getFolderSizeCached(path: string): Promise<number> {
+		const key = normalizePath(path);
+
+		const cached = folderSizeCache.get(key);
+		if (cached !== undefined) {
+			return Promise.resolve(cached);
+		}
+
+		const inFlight = folderSizeInFlight.get(key);
+		if (inFlight) {
+			return inFlight;
+		}
+
+		const request = enqueueFolderSizeTask(async () => {
+			const meta = await getFileMetadata(path);
+			const size = meta.size ?? 0;
+			folderSizeCache.set(key, size);
+			return size;
+		}).finally(() => {
+			folderSizeInFlight.delete(key);
+		});
+
+		folderSizeInFlight.set(key, request);
+		return request;
+	}
+
 	let {
 		item,
 		thumbnail = undefined,
@@ -688,26 +748,45 @@
 		if (!item.isDir) return;
 		if (folderTotalSize !== null || folderSizeLoading) return;
 
-		// 检查路径是否在黑名单中（系统保护文件夹或用户排除路径）
-		if (isPathBlacklisted(item.path)) {
-			folderTotalSize = 0; // 设置为0避免重复请求
+		const requestPath = item.path;
+		const requestPathKey = normalizePath(requestPath);
+		const cached = folderSizeCache.get(requestPathKey);
+		if (cached !== undefined) {
+			folderTotalSize = cached;
+			folderSizeLoading = false;
 			return;
 		}
 
+		// 检查路径是否在黑名单中（系统保护文件夹或用户排除路径）
+		if (isPathBlacklisted(requestPath)) {
+			folderTotalSize = 0; // 设置为0避免重复请求
+			folderSizeCache.set(requestPathKey, 0);
+			return;
+		}
+
+		let cancelled = false;
 		folderSizeLoading = true;
-		getFileMetadata(item.path)
-			.then((meta) => {
-				folderTotalSize = meta.size ?? 0;
+		getFolderSizeCached(requestPath)
+			.then((size) => {
+				if (cancelled) return;
+				folderTotalSize = size;
 			})
 			.catch((err) => {
+				if (cancelled) return;
 				// 访问失败时添加到运行时黑名单，避免重复请求
-				addToRuntimeBlacklist(item.path);
+				addToRuntimeBlacklist(requestPath);
+				folderSizeCache.set(requestPathKey, 0);
 				folderTotalSize = 0; // 设置为0避免重复请求
-				console.debug('获取文件夹总大小失败（已加入黑名单）:', item.path, err);
+				console.debug('获取文件夹总大小失败（已加入黑名单）:', requestPath, err);
 			})
 			.finally(() => {
+				if (cancelled) return;
 				folderSizeLoading = false;
 			});
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	const isReadCompleted = $derived(

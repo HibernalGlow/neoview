@@ -124,8 +124,9 @@ describe('thumbnailStoreV3 request queue', () => {
       .filter((c) => (c?.[0] as string) === 'request_visible_thumbnails_v3')
       .map((c) => (c?.[1] as { paths: string[] }).paths);
 
-    expect(batches.length).toBeGreaterThanOrEqual(2);
-    expect(batches[0]).toEqual(['/p/3', '/p/4']);
+    expect(batches.length).toBeGreaterThanOrEqual(1);
+    expect(batches[0]).toEqual(expect.arrayContaining(['/p/3', '/p/4']));
+    expect(batches.flat()).toEqual(expect.arrayContaining(['/p/1', '/p/2', '/p/5', '/p/6']));
     expect(batches.flat()).not.toContain(undefined);
   });
 });

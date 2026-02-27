@@ -222,54 +222,67 @@ pub async fn list_subfolders(path: String) -> Result<Vec<SubfolderItem>, String>
             return Err(format!("路径不是目录: {}", path.display()));
         }
 
-        let search = path.join("*");
-        let wide = to_wide_null(search.as_os_str());
-
-        let mut data = WIN32_FIND_DATAW::default();
-        let handle = unsafe {
-            FindFirstFileExW(
-                PCWSTR(wide.as_ptr()),
-                FindExInfoBasic,
-                &mut data as *mut _ as *mut _,
-                FindExSearchNameMatch,
-                None,
-                Default::default(),
-            )
-        }
-        .map_err(|e| format!("无法枚举目录 {}: {e}", path.display()))?;
-
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(format!("无法枚举目录: {}", path.display()));
-        }
-
+        let root = path.to_path_buf();
         let mut total_size: u64 = 0;
+        let mut pending_dirs: Vec<PathBuf> = vec![root.clone()];
 
-        loop {
-            let name = file_name_from_find_data(&data);
-            if name != "." && name != ".." {
-                let attr = data.dwFileAttributes;
+        while let Some(current_dir) = pending_dirs.pop() {
+            let search = current_dir.join("*");
+            let wide = to_wide_null(search.as_os_str());
 
-                // 跳过重解析点，避免循环链接导致无限递归
-                if attr & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 {
-                    if attr & FILE_ATTRIBUTE_DIRECTORY.0 != 0 {
-                        let child = path.join(&name);
-                        if let Ok(child_size) = get_directory_total_size_windows(&child) {
-                            total_size = total_size.saturating_add(child_size);
-                        }
-                    } else {
-                        let size = ((data.nFileSizeHigh as u64) << 32) | data.nFileSizeLow as u64;
-                        total_size = total_size.saturating_add(size);
+            let mut data = WIN32_FIND_DATAW::default();
+            let handle = unsafe {
+                FindFirstFileExW(
+                    PCWSTR(wide.as_ptr()),
+                    FindExInfoBasic,
+                    &mut data as *mut _ as *mut _,
+                    FindExSearchNameMatch,
+                    None,
+                    Default::default(),
+                )
+            };
+
+            let handle = match handle {
+                Ok(h) => h,
+                Err(e) => {
+                    if current_dir == root {
+                        return Err(format!("无法枚举目录 {}: {e}", current_dir.display()));
                     }
+                    continue;
+                }
+            };
+
+            if handle == INVALID_HANDLE_VALUE {
+                if current_dir == root {
+                    return Err(format!("无法枚举目录: {}", current_dir.display()));
+                }
+                continue;
+            }
+
+            loop {
+                let name = file_name_from_find_data(&data);
+                if name != "." && name != ".." {
+                    let attr = data.dwFileAttributes;
+
+                    if attr & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 {
+                        if attr & FILE_ATTRIBUTE_DIRECTORY.0 != 0 {
+                            pending_dirs.push(current_dir.join(&name));
+                        } else {
+                            let size = ((data.nFileSizeHigh as u64) << 32) | data.nFileSizeLow as u64;
+                            total_size = total_size.saturating_add(size);
+                        }
+                    }
+                }
+
+                let has_next = unsafe { FindNextFileW(handle, &mut data).is_ok() };
+                if !has_next {
+                    break;
                 }
             }
 
-            let has_next = unsafe { FindNextFileW(handle, &mut data).is_ok() };
-            if !has_next {
-                break;
-            }
+            let _ = unsafe { FindClose(handle) };
         }
 
-        let _ = unsafe { FindClose(handle) };
         Ok(total_size)
     }
 

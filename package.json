@@ -60,6 +60,8 @@
   "dependencies": {
     "@ai-sdk/google": "^2.0.46",
     "@ai-sdk/openai": "^2.0.86",
+    "@floating-ui/core": "^1.7.4",
+    "@floating-ui/dom": "^1.7.5",
     "@tailwindcss/vite": "^4.1.7",
     "@tanstack/svelte-virtual": "^3.13.12",
     "@tanstack/virtual-core": "^3.13.12",

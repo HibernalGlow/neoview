@@ -18,6 +18,12 @@ importers:
       '@ai-sdk/openai':
         specifier: ^2.0.86
         version: 2.0.95(zod@4.3.6)
+      '@floating-ui/core':
+        specifier: ^1.7.4
+        version: 1.7.4
+      '@floating-ui/dom':
+        specifier: ^1.7.5
+        version: 1.7.5
       '@tailwindcss/vite':
         specifier: ^4.1.7
         version: 4.2.1(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.8.2))

@@ -15,6 +15,7 @@
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { get } from 'svelte/store';
 	import { debounce, scheduleIdleTask, getAdaptivePerformanceConfig } from '$lib/utils/performance';
+	import { notifyFolderSizeNavigation } from '$lib/stores/folderSizeCache.svelte';
 	import FileItemCard from './FileItemCard.svelte';
 	import ListSlider from './ListSlider.svelte';
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
@@ -315,6 +316,11 @@
 		visibleRangeRaf = requestAnimationFrame(() => {
 			visibleRangeRaf = null;
 			handleVisibleRangeChange();
+		});
+
+		$effect(() => {
+			if (!currentPath) return;
+			notifyFolderSizeNavigation(currentPath);
 		});
 	}
 

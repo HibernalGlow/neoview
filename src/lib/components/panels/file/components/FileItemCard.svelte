@@ -734,6 +734,7 @@
 	$effect(() => {
 		if (!showSizeAndModified) return;
 		if (!item.isDir) return;
+		if (penetrateModeEnabled) return;
 		if (folderTotalSize !== null || folderSizeLoading) return;
 
 		const requestPath = item.path;

@@ -1,5 +1,5 @@
 import { getFileMetadata } from '$lib/api';
-import { fileBrowserStore } from './fileBrowser.svelte';
+import { appState } from '$lib/core/state/appState';
 
 interface FolderSizeCacheEntry {
 	size: number;
@@ -22,7 +22,7 @@ const taskQueue: Array<() => void> = [];
 let runningCount = 0;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let lastPathChangeAt = 0;
-let lastPath = '';
+let readingActive = false;
 
 function normalizePath(path: string): string {
 	return path.replace(/\\/g, '/').toLowerCase();
@@ -147,12 +147,12 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-fileBrowserStore.subscribe((state) => {
-	if (state.currentPath !== lastPath) {
-		lastPath = state.currentPath;
-		lastPathChangeAt = Date.now();
+appState.subscribe(
+	(state) => state.book.currentBookPath,
+	(currentBookPath) => {
+		readingActive = !!currentBookPath;
 	}
-});
+);
 
 loadFromStorage();
 
@@ -164,6 +164,11 @@ export function getCachedFolderSize(path: string, modifiedHint?: number): number
 	if (age > FRESH_TTL_MS) return null;
 
 	return entry.size;
+}
+
+export function notifyFolderSizeNavigation(path: string): void {
+	if (!path) return;
+	lastPathChangeAt = Date.now();
 }
 
 export function setFolderSizeCache(path: string, size: number, modifiedHint?: number): void {
@@ -182,6 +187,12 @@ export async function getFolderSizeSmart(
 	if (fresh !== null) return fresh;
 
 	const staleEntry = getEntryIfValid(path, modifiedHint);
+
+	// 阅读过程中禁止触发新的目录大小扫描，避免影响阅读流畅性。
+	if (readingActive) {
+		if (staleEntry) return staleEntry.size;
+		return 0;
+	}
 
 	const existing = inFlight.get(key);
 	if (existing) return existing;

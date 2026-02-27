@@ -26,7 +26,7 @@
 		Undo2
 	} from '@lucide/svelte';
 	import { Pin } from '@lucide/svelte';
-	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { folderTreePinStore } from '$lib/stores/folderTreePin.svelte';
 
 	interface Props {
 		item: FsItem | null;
@@ -43,7 +43,7 @@
 		onDelete?: (item: FsItem) => void;
 		onRename?: (item: FsItem) => void;
 		onAddBookmark?: (item: FsItem) => void;
-		onToggleBookmarkPin?: (item: FsItem) => void;
+		onToggleFolderTreePin?: (item: FsItem) => void;
 		onCopyPath?: (item: FsItem) => void;
 		onCopyName?: (item: FsItem) => void;
 		onOpenInExplorer?: (item: FsItem) => void;
@@ -68,7 +68,7 @@
 		onDelete,
 		onRename,
 		onAddBookmark,
-		onToggleBookmarkPin,
+		onToggleFolderTreePin,
 		onCopyPath,
 		onCopyName,
 		onOpenInExplorer,
@@ -78,15 +78,16 @@
 		onUndoDelete
 	}: Props = $props();
 
-	let isPinnedInBook = $state(false);
+	let isPinnedInFolderTree = $state(false);
 
 	$effect(() => {
 		if (!visible || !item) {
-			isPinnedInBook = false;
+			isPinnedInFolderTree = false;
 			return;
 		}
-		const unsubscribe = bookmarkStore.subscribe((bookmarks) => {
-			isPinnedInBook = bookmarks.some((bookmark) => bookmark.path === item.path && (bookmark.pinned ?? false));
+		const unsubscribe = folderTreePinStore.subscribe((paths) => {
+			const key = item.path.replace(/\\/g, '/').toLowerCase();
+			isPinnedInFolderTree = paths.includes(key);
 		});
 		return unsubscribe;
 	});
@@ -180,8 +181,8 @@
 		onClose();
 	}
 
-	function handleToggleBookmarkPin() {
-		if (item) onToggleBookmarkPin?.(item);
+	function handleToggleFolderTreePin() {
+		if (item) onToggleFolderTreePin?.(item);
 		onClose();
 	}
 
@@ -503,10 +504,10 @@
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-					onclick={handleToggleBookmarkPin}
+					onclick={handleToggleFolderTreePin}
 				>
 					<Pin class="h-4 w-4" />
-					<span>{isPinnedInBook ? '取消文件书置顶' : '在文件书中置顶'}</span>
+					<span>{isPinnedInFolderTree ? '取消文件树置顶' : '在文件树中置顶'}</span>
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"

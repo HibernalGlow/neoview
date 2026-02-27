@@ -9,6 +9,7 @@ import { ClipboardAPI } from '$lib/api/clipboard';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+import { folderTreePinStore } from '$lib/stores/folderTreePin.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore';
@@ -598,7 +599,7 @@ export interface SystemActions {
 	handleOpenInExplorer: (item: FsItem) => Promise<void>;
 	handleOpenWithSystem: (item: FsItem) => Promise<void>;
 	handleAddBookmark: (item: FsItem) => void;
-	handleToggleBookmarkPin: (item: FsItem) => void;
+	handleToggleFolderTreePin: (item: FsItem) => void;
 	handleReloadThumbnail: (item: FsItem) => Promise<void>;
 }
 
@@ -616,9 +617,9 @@ export function createSystemActions(): SystemActions {
 		showSuccessToast('已添加书签', item.name);
 	};
 
-	const handleToggleBookmarkPin = (item: FsItem) => {
-		const pinned = bookmarkStore.togglePinned(item);
-		showSuccessToast(pinned ? '已置顶到文件书' : '已取消文件书置顶', item.name);
+	const handleToggleFolderTreePin = (item: FsItem) => {
+		const pinned = folderTreePinStore.toggle(item.path);
+		showSuccessToast(pinned ? '已置顶到文件树' : '已取消文件树置顶', item.name);
 	};
 
 	const handleReloadThumbnail = async (item: FsItem) => {
@@ -638,7 +639,7 @@ export function createSystemActions(): SystemActions {
 		handleOpenInExplorer,
 		handleOpenWithSystem,
 		handleAddBookmark,
-		handleToggleBookmarkPin,
+		handleToggleFolderTreePin,
 		handleReloadThumbnail
 	};
 }

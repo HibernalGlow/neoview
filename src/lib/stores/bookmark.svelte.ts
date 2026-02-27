@@ -13,8 +13,6 @@ interface Bookmark {
   path: string;
   type: 'file' | 'folder';
   createdAt: Date;
-  pinned?: boolean;
-  pinnedAt?: number;
 }
 
 const STORAGE_KEY = 'neoview-bookmarks';
@@ -27,9 +25,7 @@ function loadBookmarks(): Bookmark[] {
       const parsed = JSON.parse(stored);
       return parsed.map((b: any) => ({
         ...b,
-        createdAt: new Date(b.createdAt),
-        pinned: b.pinned === true,
-        pinnedAt: typeof b.pinnedAt === 'number' ? b.pinnedAt : undefined
+        createdAt: new Date(b.createdAt)
       }));
     }
   } catch (err) {
@@ -52,26 +48,18 @@ function saveToStorage(bookmarks: Bookmark[]) {
 
 export const bookmarkStore = {
   subscribe,
-
-  /**
-   * 创建书签对象
-   */
-  createBookmark(item: FsItem): Bookmark {
-    return {
-      id: crypto.randomUUID(),
-      name: item.name,
-      path: item.path,
-      type: item.isDir ? 'folder' : 'file',
-      createdAt: new Date(),
-      pinned: false
-    };
-  },
   
   /**
    * 添加书签
    */
   add(item: FsItem) {
-    const bookmark = this.createBookmark(item);
+    const bookmark: Bookmark = {
+      id: crypto.randomUUID(),
+      name: item.name,
+      path: item.path,
+      type: item.isDir ? 'folder' : 'file',
+      createdAt: new Date()
+    };
 
     update(bookmarks => {
       // 检查是否已存在相同路径的书签
@@ -91,78 +79,6 @@ export const bookmarkStore = {
       }
       return bookmarks;
     });
-  },
-
-  /**
-   * 切换指定条目的置顶状态
-   * 若条目不存在则会先添加并置顶
-   * 返回切换后的置顶状态
-   */
-  togglePinned(item: FsItem): boolean {
-    let nextPinned = false;
-
-    update(bookmarks => {
-      const index = bookmarks.findIndex(b => b.path === item.path);
-      const now = Date.now();
-
-      if (index === -1) {
-        const bookmark = this.createBookmark(item);
-        bookmark.pinned = true;
-        bookmark.pinnedAt = now;
-        nextPinned = true;
-
-        let newBookmarks = [...bookmarks, bookmark];
-
-        const limit = historySettingsStore.maxBookmarkSize;
-        if (limit > 0 && newBookmarks.length > limit) {
-          newBookmarks = newBookmarks.slice(newBookmarks.length - limit);
-        }
-
-        saveToStorage(newBookmarks);
-        return newBookmarks;
-      }
-
-      const current = bookmarks[index];
-      nextPinned = !(current.pinned ?? false);
-
-      const updated = [...bookmarks];
-      updated[index] = {
-        ...current,
-        pinned: nextPinned,
-        pinnedAt: nextPinned ? now : undefined
-      };
-
-      saveToStorage(updated);
-      return updated;
-    });
-
-    return nextPinned;
-  },
-
-  /**
-   * 判断路径是否已置顶
-   */
-  isPinned(path: string): boolean {
-    let pinned = false;
-    subscribe((bookmarks) => {
-      pinned = bookmarks.some(b => b.path === path && (b.pinned ?? false));
-    })();
-    return pinned;
-  },
-
-  /**
-   * 获取所有置顶路径集合
-   */
-  getPinnedPathSet(): Set<string> {
-    const pinned = new Set<string>();
-    subscribe((bookmarks) => {
-      for (const bookmark of bookmarks) {
-        if (bookmark.pinned) {
-          pinned.add(bookmark.path);
-        }
-      }
-    })();
-    return pinned;
   },
 
   /**

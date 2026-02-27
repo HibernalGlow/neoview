@@ -16,6 +16,7 @@
 	import { FileSystemAPI } from '$lib/api';
 	import type { FsItem } from '$lib/types';
 	import { tabCurrentPath, folderTabActions } from '../stores/folderTabStore';
+	import { folderTreePinStore } from '$lib/stores/folderTreePin.svelte';
 	import * as TreeView from '$lib/components/ui/tree-view';
 	import { cn } from '$lib/utils';
 	import * as TreeCache from '$lib/stores/folderTreeCache';
@@ -45,8 +46,32 @@
 	// 树状态
 	let roots = $state<TreeNode[]>([]);
 	let loadingRoots = $state(true);
+	let pinnedPathSet = $state<Set<string>>(new Set());
 	// 缓存是否已初始化
 	let cacheInitialized = $state(false);
+	let unpinSubscription: (() => void) | null = null;
+
+	function normalizePath(path: string): string {
+		return path.replace(/\\/g, '/').toLowerCase();
+	}
+
+	function compareTreeNode(a: TreeNode, b: TreeNode): number {
+		const aPinned = pinnedPathSet.has(normalizePath(a.path));
+		const bPinned = pinnedPathSet.has(normalizePath(b.path));
+		if (aPinned !== bPinned) {
+			return aPinned ? -1 : 1;
+		}
+		return a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+	}
+
+	function sortTreeRecursively(nodes: TreeNode[] = roots) {
+		nodes.sort(compareTreeNode);
+		for (const node of nodes) {
+			if (node.children.length > 0) {
+				sortTreeRecursively(node.children);
+			}
+		}
+	}
 
 	// 根据深度生成颜色（使用主题色，深度越深颜色越深）
 	function getDepthColor(depth: number): string {
@@ -109,6 +134,7 @@
 					return node;
 				})
 			);
+			sortTreeRecursively();
 
 			cacheInitialized = true;
 			return true;
@@ -178,6 +204,7 @@
 			children: [],
 			hasChildren: true
 		}));
+		sortTreeRecursively();
 
 		// 保存根节点到缓存
 		const cacheNodes = commonDrives.map((drive) =>
@@ -239,6 +266,7 @@
 				children: [],
 				hasChildren: folder.hasChildren
 			}));
+			node.children.sort(compareTreeNode);
 
 			// 保存到缓存
 			const childPaths = subfolders.map((f) => f.path);
@@ -379,6 +407,7 @@
 							hasChildren: true
 						};
 					});
+					node.children.sort(compareTreeNode);
 
 					// 更新缓存
 					const childPaths = newFolders.map(f => f.path);
@@ -404,6 +433,12 @@
 	let validationInterval: ReturnType<typeof setInterval> | null = null;
 
 	onMount(() => {
+		unpinSubscription = folderTreePinStore.subscribe((paths) => {
+			pinnedPathSet = new Set(paths);
+			sortTreeRecursively();
+			roots = [...roots];
+		});
+
 		loadRoots();
 
 		// 启动后台校验（每 30 秒检查一次）
@@ -414,6 +449,10 @@
 		}, 30000);
 
 		return () => {
+			if (unpinSubscription) {
+				unpinSubscription();
+				unpinSubscription = null;
+			}
 			if (validationInterval) {
 				clearInterval(validationInterval);
 			}

@@ -688,7 +688,7 @@
 		return { tags: [...collectTagsList, ...manualTagsList, ...normalTagsList], collectCount };
 	});
 
-	const displayTags = $derived(displayTagPayload.tags);
+	const displayTags = $derived(() => displayTagPayload.tags);
 
 	// 当 displayTags 计算完成后，更新 collectTagCount 到缓存（用于排序）
 	let lastCollectTagCount = $state<number | null>(null);

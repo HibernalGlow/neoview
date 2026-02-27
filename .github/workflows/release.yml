@@ -6,7 +6,7 @@ permissions:
 on:
   push:
     tags:
-      - "[0-9]+.*"
+      - '[0-9]+.*'
   workflow_dispatch:
 
 env:
@@ -16,7 +16,7 @@ env:
   CARGO_NET_GIT_FETCH_WITH_CLI: true
   CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
   # 极致性能优化：启用 CPU 原生指令集优化
-  RUSTFLAGS: "-C target-cpu=x86-64-v3"
+  RUSTFLAGS: '-C target-cpu=x86-64-v3'
 
 jobs:
   release:
@@ -27,11 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: setup python 3.11
         uses: actions/setup-python@v5
@@ -44,9 +49,9 @@ jobs:
       - name: cache rust
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "src-tauri -> target"
+          workspaces: 'src-tauri -> target'
           cache-on-failure: true
-          shared-key: "release"
+          shared-key: 'release'
 
       - name: build windows bundles
         timeout-minutes: 60
@@ -54,7 +59,7 @@ jobs:
         env:
           PYO3_PYTHON: python
         run: |
-          yarn install --frozen-lockfile
+          pnpm install --frozen-lockfile
           npx tauri build --bundles msi,nsis -- --profile ci-release
 
       - name: verify installer

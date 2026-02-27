@@ -63,6 +63,10 @@ export function getFolderSizeDisplay(
 	if (folderTotalSize !== null && folderTotalSize !== undefined) {
 		return formatBytes(folderTotalSize);
 	}
+	// 回退到项目数；若值明显过大，视为字节避免显示成“xxxx 项”
+	if (itemSize >= 1024 * 1024) {
+		return formatBytes(itemSize);
+	}
 	// 回退到项目数
 	return itemSize === 0 ? '空文件夹' : `${itemSize} 项`;
 }

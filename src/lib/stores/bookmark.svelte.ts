@@ -12,7 +12,15 @@ interface Bookmark {
   name: string;
   path: string;
   type: 'file' | 'folder';
-  createdAt: Date;
+  createdAt: number;
+}
+
+interface StoredBookmark {
+  id?: string;
+  name?: string;
+  path?: string;
+  type?: 'file' | 'folder';
+  createdAt?: string | number | Date;
 }
 
 const STORAGE_KEY = 'neoview-bookmarks';
@@ -22,11 +30,23 @@ function loadBookmarks(): Bookmark[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.map((b: any) => ({
-        ...b,
-        createdAt: new Date(b.createdAt)
-      }));
+      const parsed = JSON.parse(stored) as StoredBookmark[];
+      return parsed
+        .filter((bookmark) => !!bookmark?.path && !!bookmark?.name)
+        .map((bookmark) => ({
+          id: bookmark.id ?? crypto.randomUUID(),
+          name: bookmark.name ?? '',
+          path: bookmark.path ?? '',
+          type: bookmark.type === 'folder' ? 'folder' : 'file',
+          createdAt:
+            typeof bookmark.createdAt === 'number'
+              ? bookmark.createdAt
+              : bookmark.createdAt instanceof Date
+                ? bookmark.createdAt.getTime()
+                : typeof bookmark.createdAt === 'string'
+                  ? new Date(bookmark.createdAt).getTime()
+                  : Date.now()
+        }));
     }
   } catch (err) {
     console.error('Failed to load bookmarks:', err);
@@ -36,6 +56,22 @@ function loadBookmarks(): Bookmark[] {
 
 // 创建 writable store
 const { subscribe, set, update } = writable<Bookmark[]>(loadBookmarks());
+
+let currentBookmarks: Bookmark[] = [];
+let normalizedPathIndex = new Set<string>();
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
+}
+
+function rebuildIndexes(bookmarks: Bookmark[]) {
+  currentBookmarks = bookmarks;
+  normalizedPathIndex = new Set(bookmarks.map((bookmark) => normalizePath(bookmark.path)));
+}
+
+subscribe((bookmarks) => {
+  rebuildIndexes(bookmarks);
+});
 
 // 保存书签到 localStorage
 function saveToStorage(bookmarks: Bookmark[]) {
@@ -58,7 +94,7 @@ export const bookmarkStore = {
       name: item.name,
       path: item.path,
       type: item.isDir ? 'folder' : 'file',
-      createdAt: new Date()
+      createdAt: Date.now()
     };
 
     update(bookmarks => {
@@ -96,9 +132,14 @@ export const bookmarkStore = {
    * 获取所有书签
    */
   getAll(): Bookmark[] {
-    let bookmarks: Bookmark[] = [];
-    subscribe(value => bookmarks = value)();
-    return bookmarks;
+    return currentBookmarks;
+  },
+
+  /**
+   * 按路径判断是否已收藏（O(1)）
+   */
+  hasPath(path: string): boolean {
+    return normalizedPathIndex.has(normalizePath(path));
   },
 
   /**
@@ -134,7 +175,7 @@ export const bookmarkStore = {
   clearByDate(days: number) {
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
     update(bookmarks => {
-      const newBookmarks = bookmarks.filter(b => b.createdAt.getTime() >= cutoff);
+      const newBookmarks = bookmarks.filter(b => b.createdAt >= cutoff);
       if (newBookmarks.length !== bookmarks.length) {
         saveToStorage(newBookmarks);
       }

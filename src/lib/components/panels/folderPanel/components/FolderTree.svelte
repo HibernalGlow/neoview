@@ -48,9 +48,11 @@
 	let roots = $state<TreeNode[]>([]);
 	let loadingRoots = $state(true);
 	let pinnedPathSet = $state<Set<string>>(new Set());
+	const loadChildrenInFlight = new Map<string, Promise<void>>();
 	// 缓存是否已初始化
 	let cacheInitialized = $state(false);
 	let unpinSubscription: (() => void) | null = null;
+	let normalizedCurrentPath = $derived($currentPath.replace(/\\/g, '/').toLowerCase());
 
 	function normalizePath(path: string): string {
 		return path.replace(/\\/g, '/').toLowerCase();
@@ -223,6 +225,14 @@
 
 	// 加载子目录（带缓存）
 	async function loadChildren(node: TreeNode, forceRefresh = false) {
+		const requestKey = `${node.path}|${forceRefresh ? 'force' : 'cache'}`;
+		const existingTask = loadChildrenInFlight.get(requestKey);
+		if (existingTask) {
+			await existingTask;
+			return;
+		}
+
+		const task = (async () => {
 		if (node.loading) return;
 
 		// 检查缓存
@@ -302,6 +312,14 @@
 
 		node.loading = false;
 		roots = [...roots];
+		})();
+
+		loadChildrenInFlight.set(requestKey, task);
+		try {
+			await task;
+		} finally {
+			loadChildrenInFlight.delete(requestKey);
+		}
 	}
 
 	// 切换展开/折叠
@@ -341,16 +359,14 @@
 
 	// 检查节点是否在当前路径上
 	function isInCurrentPath(nodePath: string): boolean {
-		const current = $currentPath.replace(/\\/g, '/').toLowerCase();
 		const node = nodePath.replace(/\\/g, '/').toLowerCase();
-		return current.startsWith(node);
+		return normalizedCurrentPath.startsWith(node);
 	}
 
 	// 检查节点是否是当前路径
 	function isCurrentPath(nodePath: string): boolean {
-		const current = $currentPath.replace(/\\/g, '/').toLowerCase();
 		const node = nodePath.replace(/\\/g, '/').toLowerCase();
-		return current === node;
+		return normalizedCurrentPath === node;
 	}
 
 	// 后台校验 mtime 变化（增量更新）
@@ -373,12 +389,13 @@
 		const paths = expandedNodes.map(n => n.path);
 		try {
 			const results = await FileSystemAPI.batchLoadDirectorySnapshots(paths);
+			const expandedNodeMap = new Map(expandedNodes.map((node) => [node.path, node]));
 			
 			for (const result of results) {
 				if (result.error || !result.snapshot) continue;
 				
 				// 找到对应的节点
-				const node = expandedNodes.find(n => n.path === result.path);
+				const node = expandedNodeMap.get(result.path);
 				if (!node) continue;
 
 				// 检查是否有变化（通过比较子节点数量和名称）

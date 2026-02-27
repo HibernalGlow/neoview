@@ -96,8 +96,7 @@
 	const isBookmarked = $derived.by(() => {
 		if (!showBookmarkMark) return false;
 		try {
-			const bookmarks = bookmarkStore.getAll();
-			return bookmarks.some((b) => b.path === item.path);
+			return bookmarkStore.hasPath(item.path);
 		} catch (err) {
 			console.debug('检查收藏状态失败:', err);
 			return false;

@@ -6,6 +6,7 @@ import type { FsItem } from '$lib/types';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
 // ============ 随机排序种子缓存 ============
 const randomSeedCache = new Map<string, number>();
@@ -55,24 +56,41 @@ export function sortItems(
   skipFolderFirst = false, 
   path?: string
 ): FsItem[] {
+  const isBookmarkVirtualPath = !!path && path.startsWith('virtual://bookmark');
+  const pinnedPathSet = isBookmarkVirtualPath ? bookmarkStore.getPinnedPathSet() : null;
+  const comparePinned = (a: FsItem, b: FsItem): number => {
+    if (!pinnedPathSet) return 0;
+    const aPinned = pinnedPathSet.has(a.path);
+    const bPinned = pinnedPathSet.has(b.path);
+    if (aPinned === bPinned) return 0;
+    return aPinned ? -1 : 1;
+  };
+
+  const prioritizePinned = (sortedItems: FsItem[]): FsItem[] => {
+    if (!pinnedPathSet) return sortedItems;
+    return [...sortedItems].sort((a, b) => comparePinned(a, b));
+  };
+
   // 随机排序特殊处理
   if (field === 'random') {
     const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
     if (skipFolderFirst) {
-      return seededShuffle(items, seed);
+      return prioritizePinned(seededShuffle(items, seed));
     }
     const folders = items.filter(item => item.isDir);
     const files = items.filter(item => !item.isDir);
     const shuffledFolders = seededShuffle(folders, seed);
     const shuffledFiles = seededShuffle(files, seed + 1);
     const result = [...shuffledFolders, ...shuffledFiles];
-    return order === 'asc' ? result : result.reverse();
+    return prioritizePinned(order === 'asc' ? result : result.reverse());
   }
 
   // rating 排序特殊处理
   if (field === 'rating') {
     const defaultRating = getDefaultRating();
     const sorted = [...items].sort((a, b) => {
+      const pinnedComparison = comparePinned(a, b);
+      if (pinnedComparison !== 0) return pinnedComparison;
       if (!skipFolderFirst && a.isDir !== b.isDir) {
         return a.isDir ? -1 : 1;
       }
@@ -90,6 +108,8 @@ export function sortItems(
   // collectTagCount 排序特殊处理
   if (field === 'collectTagCount') {
     const sorted = [...items].sort((a, b) => {
+      const pinnedComparison = comparePinned(a, b);
+      if (pinnedComparison !== 0) return pinnedComparison;
       if (!skipFolderFirst && a.isDir !== b.isDir) {
         return a.isDir ? -1 : 1;
       }
@@ -105,6 +125,9 @@ export function sortItems(
   }
 
   const sorted = [...items].sort((a, b) => {
+    const pinnedComparison = comparePinned(a, b);
+    if (pinnedComparison !== 0) return pinnedComparison;
+
     if (!skipFolderFirst && a.isDir !== b.isDir) {
       return a.isDir ? -1 : 1;
     }

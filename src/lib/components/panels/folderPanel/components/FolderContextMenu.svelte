@@ -25,6 +25,8 @@
 		Tags,
 		Undo2
 	} from '@lucide/svelte';
+	import { Pin } from '@lucide/svelte';
+	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 
 	interface Props {
 		item: FsItem | null;
@@ -41,6 +43,7 @@
 		onDelete?: (item: FsItem) => void;
 		onRename?: (item: FsItem) => void;
 		onAddBookmark?: (item: FsItem) => void;
+		onToggleBookmarkPin?: (item: FsItem) => void;
 		onCopyPath?: (item: FsItem) => void;
 		onCopyName?: (item: FsItem) => void;
 		onOpenInExplorer?: (item: FsItem) => void;
@@ -65,6 +68,7 @@
 		onDelete,
 		onRename,
 		onAddBookmark,
+		onToggleBookmarkPin,
 		onCopyPath,
 		onCopyName,
 		onOpenInExplorer,
@@ -73,6 +77,19 @@
 		onEditTags,
 		onUndoDelete
 	}: Props = $props();
+
+	let isPinnedInBook = $state(false);
+
+	$effect(() => {
+		if (!visible || !item) {
+			isPinnedInBook = false;
+			return;
+		}
+		const unsubscribe = bookmarkStore.subscribe((bookmarks) => {
+			isPinnedInBook = bookmarks.some((bookmark) => bookmark.path === item.path && (bookmark.pinned ?? false));
+		});
+		return unsubscribe;
+	});
 
 	// 菜单位置状态（经过边界检查调整）
 	let menuX = $state(0);
@@ -160,6 +177,11 @@
 
 	function handleAddBookmark() {
 		if (item) onAddBookmark?.(item);
+		onClose();
+	}
+
+	function handleToggleBookmarkPin() {
+		if (item) onToggleBookmarkPin?.(item);
 		onClose();
 	}
 
@@ -478,6 +500,13 @@
 				>
 					<Star class="h-4 w-4" />
 					<span>添加书签</span>
+				</button>
+				<button
+					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+					onclick={handleToggleBookmarkPin}
+				>
+					<Pin class="h-4 w-4" />
+					<span>{isPinnedInBook ? '取消文件书置顶' : '在文件书中置顶'}</span>
 				</button>
 				<button
 					class="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm"

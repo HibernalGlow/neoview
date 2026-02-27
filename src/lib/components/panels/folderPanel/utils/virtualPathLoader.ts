@@ -46,7 +46,17 @@ interface BookmarkEntry {
 	name: string;
 	type: 'folder' | 'file';
 	starred?: boolean;
+	pinned?: boolean;
 	createdAt: Date;
+}
+
+function sortBookmarksPinnedFirst(bookmarks: BookmarkEntry[]): BookmarkEntry[] {
+	return [...bookmarks].sort((a, b) => {
+		const aPinned = a.pinned === true;
+		const bPinned = b.pinned === true;
+		if (aPinned === bPinned) return 0;
+		return aPinned ? -1 : 1;
+	});
 }
 
 /**
@@ -131,7 +141,7 @@ export function loadVirtualPathData(path: string): FsItem[] {
 		case 'bookmark': {
 			// 触发后台清理（首次加载时执行一次，不阻塞）
 			triggerBookmarkCleanup();
-			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
+			const bookmarks = sortBookmarksPinnedFirst(get(bookmarkStore) as BookmarkEntry[]);
 			return bookmarks.map(bookmarkToFsItem);
 		}
 		case 'history': {
@@ -161,7 +171,7 @@ export function subscribeVirtualPathData(
 	switch (type) {
 		case 'bookmark': {
 			return bookmarkStore.subscribe((bookmarks: BookmarkEntry[]) => {
-				callback(bookmarks.map(bookmarkToFsItem));
+				callback(sortBookmarksPinnedFirst(bookmarks).map(bookmarkToFsItem));
 			});
 		}
 		case 'history': {

@@ -598,6 +598,7 @@ export interface SystemActions {
 	handleOpenInExplorer: (item: FsItem) => Promise<void>;
 	handleOpenWithSystem: (item: FsItem) => Promise<void>;
 	handleAddBookmark: (item: FsItem) => void;
+	handleToggleBookmarkPin: (item: FsItem) => void;
 	handleReloadThumbnail: (item: FsItem) => Promise<void>;
 }
 
@@ -613,6 +614,11 @@ export function createSystemActions(): SystemActions {
 	const handleAddBookmark = (item: FsItem) => {
 		bookmarkStore.add(item);
 		showSuccessToast('已添加书签', item.name);
+	};
+
+	const handleToggleBookmarkPin = (item: FsItem) => {
+		const pinned = bookmarkStore.togglePinned(item);
+		showSuccessToast(pinned ? '已置顶到文件书' : '已取消文件书置顶', item.name);
 	};
 
 	const handleReloadThumbnail = async (item: FsItem) => {
@@ -632,6 +638,7 @@ export function createSystemActions(): SystemActions {
 		handleOpenInExplorer,
 		handleOpenWithSystem,
 		handleAddBookmark,
+		handleToggleBookmarkPin,
 		handleReloadThumbnail
 	};
 }

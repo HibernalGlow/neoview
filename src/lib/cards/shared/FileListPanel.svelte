@@ -356,6 +356,7 @@
 	onDelete={actions.handleDelete}
 	onRename={actions.handleRename}
 	onAddBookmark={actions.handleAddBookmark}
+	onToggleBookmarkPin={actions.handleToggleBookmarkPin}
 	onCopyPath={actions.handleCopyPath}
 	onCopyName={actions.handleCopyName}
 	onOpenInExplorer={actions.handleOpenInExplorer}

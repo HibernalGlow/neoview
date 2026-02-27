@@ -313,6 +313,37 @@ impl UpscaleService {
 
         let key = (task.book_path.clone(), task.page_index);
 
+        // 先检查内存映射缓存，避免重复走磁盘校验
+        if let Ok(cache) = self.cache_map.read() {
+            if let Some(entry) = cache.get(&key) {
+                let cache_path = PathBuf::from(&entry.cache_path);
+                if cache_path.exists() {
+                    log_debug!("📦 内存缓存命中 page {}", task.page_index);
+                    if let Some(ref app) = self.app_handle {
+                        let payload = UpscaleReadyPayload {
+                            book_path: task.book_path.clone(),
+                            page_index: task.page_index,
+                            image_hash: task.image_hash.clone(),
+                            status: UpscaleStatus::Completed,
+                            cache_path: Some(entry.cache_path.clone()),
+                            error: None,
+                            original_size: Some(entry.original_size),
+                            upscaled_size: Some(entry.upscaled_size),
+                            is_preload: task.score.priority != TaskPriority::Current,
+                            model_name: if task.model.model_name.is_empty() {
+                                None
+                            } else {
+                                Some(task.model.model_name.clone())
+                            },
+                            scale: Some(task.model.scale),
+                        };
+                        let _ = app.emit("upscale-ready", payload);
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
         // 检查文件缓存是否存在
         if let Some(cache_path) = self.check_cache(&task.book_path, &task.image_path, &task.model) {
             log_debug!("📦 文件缓存命中 page {}", task.page_index);

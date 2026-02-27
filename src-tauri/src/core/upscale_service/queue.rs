@@ -3,9 +3,16 @@
 //! 包含任务队列管理、优先级排序、跳页重规划等功能
 
 use std::collections::VecDeque;
+use std::cmp::Ordering;
 use std::sync::Mutex;
-use super::types::{UpscaleTask, TaskScore};
+use super::types::UpscaleTask;
 use super::log_debug;
+
+fn compare_task_order(a: &UpscaleTask, b: &UpscaleTask) -> Ordering {
+    a.score
+        .cmp(&b.score)
+        .then_with(|| a.submitted_at.cmp(&b.submitted_at))
+}
 
 /// 跳页时重新规划队列
 /// - 清除不在预超分范围内的待处理任务
@@ -46,18 +53,11 @@ pub fn replan_queue_for_jump(
 
 /// 从队列中获取优先级最高的任务
 pub fn get_highest_priority_task(task_queue: &Mutex<VecDeque<UpscaleTask>>) -> Option<UpscaleTask> {
-    let mut queue = match task_queue.lock() {
-        Ok(q) => q,
-        Err(_) => return None,
-    };
-
-    // 优先取分数最小的任务（当前页 > 后方近页 > 后方远页）
-    queue
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, t)| &t.score)
-        .map(|(idx, _)| idx)
-        .and_then(|idx| queue.remove(idx))
+    if let Ok(mut queue) = task_queue.lock() {
+        queue.pop_front()
+    } else {
+        None
+    }
 }
 
 /// 检查任务是否已在队列中
@@ -76,7 +76,13 @@ pub fn is_task_in_queue(
 /// 添加任务到队列
 pub fn add_task_to_queue(task_queue: &Mutex<VecDeque<UpscaleTask>>, task: UpscaleTask) {
     if let Ok(mut queue) = task_queue.lock() {
-        queue.push_back(task);
+        let insert_idx = {
+            let contiguous = queue.make_contiguous();
+            contiguous
+                .binary_search_by(|existing| compare_task_order(existing, &task))
+                .unwrap_or_else(|idx| idx)
+        };
+        queue.insert(insert_idx, task);
     }
 }
 

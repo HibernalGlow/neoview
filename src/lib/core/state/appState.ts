@@ -102,7 +102,8 @@ export function createDefaultAppState(): AppStateSnapshot {
 				multiThreadedRendering: true,
 				maxThreads: 2,
 				archiveTempfileThresholdMB: 500,
-				directUrlThresholdMB: 500
+				directUrlThresholdMB: 500,
+				protocolDirectEnabled: true
 			},
 			image: {
 				supportedFormats: ['jpg', 'png', 'webp', 'avif', 'jxl'],

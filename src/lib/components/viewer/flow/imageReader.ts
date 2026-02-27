@@ -17,6 +17,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { invoke } from '@tauri-apps/api/core';
 import { bookStore } from '$lib/stores/book.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+import { settingsManager } from '$lib/settings/settingsManager';
 import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { createImageTraceId, logImageTrace } from '$lib/utils/imageTrace';
@@ -55,6 +56,11 @@ let currentBookPathForHash: string | null = null;
 // 是否启用 Custom Protocol 模式
 let useProtocolMode = true;
 let protocolAvailability: boolean | null = null;
+
+function isProtocolModeEnabled(): boolean {
+	const settingEnabled = settingsManager.getSettings().performance.protocolDirectEnabled ?? true;
+	return useProtocolMode && settingEnabled;
+}
 
 // 预加载策略配置
 const PRELOAD_RANGE = 5; // ±5 页
@@ -100,8 +106,16 @@ export function setProtocolMode(enabled: boolean): void {
 	}
 }
 
+settingsManager.addListener((settings) => {
+	if ((settings.performance.protocolDirectEnabled ?? true) === false) {
+		protocolAvailability = false;
+		return;
+	}
+	protocolAvailability = null;
+});
+
 async function ensureProtocolAvailable(): Promise<boolean> {
-	if (!useProtocolMode) return false;
+	if (!isProtocolModeEnabled()) return false;
 	if (protocolAvailability === true) return true;
 	const resolved = await resolveProtocolBaseUrl();
 	protocolAvailability = resolved !== null;
@@ -229,7 +243,7 @@ async function triggerParallelPreload(currentPage: number): Promise<void> {
 	const endPage = Math.min(totalPages - 1, currentPage + PRELOAD_RANGE);
 	
 	// 【优化】如果启用 Protocol 模式，使用浏览器预加载
-	if (useProtocolMode) {
+	if (isProtocolModeEnabled()) {
 		try {
 			if (!(await ensureProtocolAvailable())) {
 				return;
@@ -320,7 +334,7 @@ export async function readPageBlob(pageIndex: number, options: ReadPageOptions =
 			logImageTrace(traceId, 'tempfile cache hit', { cacheKey });
 			blob = cached.blob;
 			cacheHit = true;
-		} else if (useProtocolMode && !loadModeStore.isTempfileMode) {
+		} else if (isProtocolModeEnabled() && !loadModeStore.isTempfileMode) {
 			// 【优化】Protocol 模式：使用 neoview:// 自定义协议（绕过 IPC 序列化）
 			logImageTrace(traceId, 'using protocol mode');
 			const loadStart = performance.now();
@@ -655,7 +669,7 @@ export async function readPageSourceV2(
 		return readFileUrl(page.path, pageIndex, traceId);
 	}
 
-	if (currentBook.type === 'archive' && useProtocolMode && page.entryIndex != null) {
+	if (currentBook.type === 'archive' && isProtocolModeEnabled() && page.entryIndex != null) {
 		// 优先使用 Tempfile 模式（如果显式启用）
 		if (loadModeStore.isTempfileMode) {
 			const innerPath = page.innerPath ?? page.path;

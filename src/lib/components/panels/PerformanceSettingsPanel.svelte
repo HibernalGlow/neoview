@@ -35,6 +35,7 @@
 
 	let archiveTempfileThresholdMB = $state(currentSettings.performance.archiveTempfileThresholdMB ?? 500);
 	let directUrlThresholdMB = $state(currentSettings.performance.directUrlThresholdMB ?? 500);
+	let protocolDirectEnabled = $state(currentSettings.performance.protocolDirectEnabled ?? true);
 
 
 	// 从后端加载性能设置
@@ -56,6 +57,7 @@
 			const s = settingsManager.getSettings();
 			archiveTempfileThresholdMB = s.performance.archiveTempfileThresholdMB ?? loaded.archive_tempfile_threshold_mb ?? 500;
 			directUrlThresholdMB = s.performance.directUrlThresholdMB ?? loaded.direct_url_threshold_mb ?? 500;
+			protocolDirectEnabled = s.performance.protocolDirectEnabled ?? true;
 		} catch (err) {
 			console.error('Failed to load performance settings:', err);
 		}
@@ -81,7 +83,8 @@
 			};
 			settingsManager.updateNestedSettings('performance', {
 				archiveTempfileThresholdMB: archiveTempfileThresholdMB,
-				directUrlThresholdMB: directUrlThresholdMB
+				directUrlThresholdMB: directUrlThresholdMB,
+				protocolDirectEnabled: protocolDirectEnabled
 			});
 
 			// 先持久化到前端设置，避免“立即重启”导致后续代码来不及执行
@@ -175,6 +178,16 @@
 				加载策略
 			</h3>
 			<p class="text-muted-foreground text-[10px]">控制内存占用与加载速度的平衡</p>
+
+			<div class="mt-2 flex items-center justify-between rounded-sm border border-border/50 px-2 py-1.5">
+				<div class="space-y-0.5">
+					<div class="text-xs">启用协议直连</div>
+					<div class="text-[9px] text-muted-foreground italic opacity-70">
+						关闭后直接走 IPC，不进行协议探测与直连判断。
+					</div>
+				</div>
+				<Switch bind:checked={protocolDirectEnabled} class="scale-75" />
+			</div>
 			
 			<div class="space-y-3 mt-2">
 				<!-- 后端解压阈值 -->

@@ -193,7 +193,9 @@ export class SettingsManager {
       archiveTempfileThresholdMB:
         perf.archiveTempfileThresholdMB ?? defaultSettings.performance.archiveTempfileThresholdMB,
       directUrlThresholdMB:
-        perf.directUrlThresholdMB ?? defaultSettings.performance.directUrlThresholdMB
+        perf.directUrlThresholdMB ?? defaultSettings.performance.directUrlThresholdMB,
+      protocolDirectEnabled:
+        perf.protocolDirectEnabled ?? defaultSettings.performance.protocolDirectEnabled
     };
   }
 

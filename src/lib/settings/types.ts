@@ -60,6 +60,8 @@ export interface NeoViewSettings {
     archiveTempfileThresholdMB: number;
     /** 启用协议直连 URL 的阈值 (MB) - 用于前端 imageReader */
     directUrlThresholdMB: number;
+    /** 是否启用协议直连链路（关闭后直接走 IPC） */
+    protocolDirectEnabled?: boolean;
   };
   image: {
     supportedFormats: string[];

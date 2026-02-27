@@ -7,6 +7,20 @@ use std::path::{Path, PathBuf};
 use tauri::async_runtime::spawn_blocking;
 use tauri::State;
 
+#[cfg(target_os = "windows")]
+use std::ffi::OsStr;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(target_os = "windows")]
+use windows::core::PCWSTR;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
+#[cfg(target_os = "windows")]
+use windows::Win32::Storage::FileSystem::{
+    FindClose, FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW, FindNextFileW,
+    WIN32_FIND_DATAW, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
+};
+
 /// 读取目录内容
 #[tauri::command]
 pub async fn read_directory(
@@ -186,6 +200,104 @@ pub async fn list_subfolders(path: String) -> Result<Vec<SubfolderItem>, String>
         .await
         .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
+
+    #[cfg(target_os = "windows")]
+    fn to_wide_null(s: &OsStr) -> Vec<u16> {
+        s.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    #[cfg(target_os = "windows")]
+    fn file_name_from_find_data(data: &WIN32_FIND_DATAW) -> String {
+        let end = data
+            .cFileName
+            .iter()
+            .position(|&ch| ch == 0)
+            .unwrap_or(data.cFileName.len());
+        String::from_utf16_lossy(&data.cFileName[..end])
+    }
+
+    #[cfg(target_os = "windows")]
+    fn get_directory_total_size_windows(path: &Path) -> Result<u64, String> {
+        if !path.is_dir() {
+            return Err(format!("路径不是目录: {}", path.display()));
+        }
+
+        let search = path.join("*");
+        let wide = to_wide_null(search.as_os_str());
+
+        let mut data = WIN32_FIND_DATAW::default();
+        let handle = unsafe {
+            FindFirstFileExW(
+                PCWSTR(wide.as_ptr()),
+                FindExInfoBasic,
+                &mut data as *mut _ as *mut _,
+                FindExSearchNameMatch,
+                None,
+                Default::default(),
+            )
+        }
+        .map_err(|e| format!("无法枚举目录 {}: {e}", path.display()))?;
+
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(format!("无法枚举目录: {}", path.display()));
+        }
+
+        let mut total_size: u64 = 0;
+
+        loop {
+            let name = file_name_from_find_data(&data);
+            if name != "." && name != ".." {
+                let attr = data.dwFileAttributes;
+
+                // 跳过重解析点，避免循环链接导致无限递归
+                if attr & FILE_ATTRIBUTE_REPARSE_POINT.0 == 0 {
+                    if attr & FILE_ATTRIBUTE_DIRECTORY.0 != 0 {
+                        let child = path.join(&name);
+                        if let Ok(child_size) = get_directory_total_size_windows(&child) {
+                            total_size = total_size.saturating_add(child_size);
+                        }
+                    } else {
+                        let size = ((data.nFileSizeHigh as u64) << 32) | data.nFileSizeLow as u64;
+                        total_size = total_size.saturating_add(size);
+                    }
+                }
+            }
+
+            let has_next = unsafe { FindNextFileW(handle, &mut data).is_ok() };
+            if !has_next {
+                break;
+            }
+        }
+
+        let _ = unsafe { FindClose(handle) };
+        Ok(total_size)
+    }
+
+    /// 使用系统 API 计算目录总大小（Windows 走 Win32，其他平台回退 FsManager）
+    #[cfg(target_os = "windows")]
+    #[tauri::command]
+    pub async fn get_directory_total_size_system(path: String) -> Result<u64, String> {
+        let path_buf = PathBuf::from(path);
+
+        spawn_blocking(move || get_directory_total_size_windows(&path_buf))
+            .await
+            .map_err(|e| format!("spawn_blocking error: {e}"))?
+    }
+
+    /// 使用系统 API 计算目录总大小（Windows 走 Win32，其他平台回退 FsManager）
+    #[cfg(not(target_os = "windows"))]
+    #[tauri::command]
+    pub async fn get_directory_total_size_system(path: String, state: State<'_, FsState>) -> Result<u64, String> {
+        let fs_manager = state.fs_manager.clone();
+        let path_buf = PathBuf::from(path);
+
+        spawn_blocking(move || {
+            let fs_manager = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+            fs_manager.get_directory_total_size(&path_buf)
+        })
+        .await
+        .map_err(|e| format!("spawn_blocking error: {e}"))?
+    }
 
 /// 同步版本的子文件夹列表
 fn list_subfolders_sync(path: &Path) -> Result<Vec<SubfolderItem>, String> {

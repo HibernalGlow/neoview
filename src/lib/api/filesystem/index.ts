@@ -44,6 +44,7 @@ export {
   browseDirectoryPage,
   readDirectory,
   getFileMetadata,
+  getDirectoryTotalSizeSystem,
   getImagesInDirectory,
   pathExists,
   createDirectory,

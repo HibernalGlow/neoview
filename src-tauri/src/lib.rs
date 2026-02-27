@@ -302,6 +302,7 @@ pub fn run() {
             commands::fs_commands::get_next_stream_batch,
             commands::fs_commands::cancel_directory_stream,
             commands::fs_commands::get_file_metadata,
+            commands::fs_commands::get_directory_total_size_system,
             commands::cache_index_stats,
             commands::cache_index_gc,
             commands::enqueue_cache_maintenance,

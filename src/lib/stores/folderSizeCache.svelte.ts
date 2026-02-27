@@ -1,4 +1,4 @@
-import { getFileMetadata } from '$lib/api';
+import { getDirectoryTotalSizeSystem } from '$lib/api';
 import { appState } from '$lib/core/state/appState';
 
 interface FolderSizeCacheEntry {
@@ -205,9 +205,8 @@ export async function getFolderSizeSmart(
 			}
 		}
 
-		const metadata = await getFileMetadata(path);
-		const size = metadata.size ?? 0;
-		setEntry(path, size, metadata.modified ?? modifiedHint);
+		const size = await getDirectoryTotalSizeSystem(path);
+		setEntry(path, size, modifiedHint);
 		return size;
 	})
 		.catch((error) => {

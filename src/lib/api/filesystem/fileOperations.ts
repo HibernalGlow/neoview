@@ -129,6 +129,13 @@ export async function getFileMetadata(path: string): Promise<FsItem> {
 }
 
 /**
+ * 获取目录总大小（优先系统 API）
+ */
+export async function getDirectoryTotalSizeSystem(path: string): Promise<number> {
+  return await invoke<number>('get_directory_total_size_system', { path });
+}
+
+/**
  * 获取目录中的所有图片
  */
 export async function getImagesInDirectory(

@@ -717,6 +717,51 @@ export async function requestVisibleThumbnailsWithPrefetch(
 }
 
 /**
+ * 可见区差量 + 稳态预取：
+ * - 可见区只请求新增进入视口的路径
+ * - 预取区请求可见区之外的增量路径
+ */
+export async function requestVisibleThumbnailsDeltaWithPrefetch(
+  visiblePaths: string[],
+  allPaths: string[],
+  currentDir: string
+): Promise<void> {
+  if (!initialized || visiblePaths.length === 0) return;
+
+  // 先做可见区差量请求
+  await requestVisibleThumbnailsDelta(visiblePaths, currentDir);
+
+  // 动态计算预取数量
+  const prefetchCount = calculateDynamicPrefetchCount(currentDir);
+
+  // 找到可见区域在完整列表中的位置
+  const firstVisibleIndex = allPaths.indexOf(visiblePaths[0]);
+  const lastVisibleIndex = allPaths.indexOf(visiblePaths[visiblePaths.length - 1]);
+
+  if (firstVisibleIndex === -1 || lastVisibleIndex === -1) {
+    return;
+  }
+
+  const centerIndex = Math.floor((firstVisibleIndex + lastVisibleIndex) / 2);
+
+  // 计算预取范围
+  const prefetchStart = Math.max(0, firstVisibleIndex - prefetchCount);
+  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
+
+  // 仅预取可见区之外的路径
+  const visibleSet = new SvelteSet(visiblePaths);
+  const prefetchOnly: string[] = [];
+  for (let i = prefetchStart; i < prefetchEnd; i += 1) {
+    const path = allPaths[i];
+    if (!path || visibleSet.has(path)) continue;
+    prefetchOnly.push(path);
+  }
+
+  if (prefetchOnly.length === 0) return;
+  await requestVisibleThumbnails(prefetchOnly, currentDir, centerIndex);
+}
+
+/**
  * 预加载整本书的所有缩略图（顺序批量发送，避免队列上限丢弃）
  * @param paths 书籍内所有页面的完整路径
  * @param currentDir 当前书籍路径（作为优先级上下文）

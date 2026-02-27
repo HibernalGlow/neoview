@@ -6,6 +6,7 @@
 	// V3 缩略图系统（复刻 NeeView 架构）
 	import {
 		requestVisibleThumbnailsDelta,
+		requestVisibleThumbnailsDeltaWithPrefetch,
 		hasThumbnail,
 		getThumbnailUrl
 	} from '$lib/stores/thumbnailStoreV3.svelte';
@@ -74,6 +75,9 @@
 	let resizeObserver: ResizeObserver | null = null;
 	let visibleRangeRaf: number | null = null;
 	let lastVisibleRequestKey = $state('');
+	let stablePrefetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const ARCHIVE_REGEX = /\.(zip|cbz|rar|cbr|7z|cb7)$/i;
 
 	// 滚动位置缓存
 	const scrollPositions = new Map<string, number>();
@@ -207,6 +211,81 @@
 	// Thumbnail loading for visible items - V3 版本
 	// 复刻 NeeView 架构：后端为主，前端只通知可见区域
 	// 优化：增加 debounce 到 32ms（2帧），减少快速滚动时的请求频率
+	const thumbnailCandidatePaths = $derived.by(() => {
+		const paths: string[] = [];
+		for (const item of items) {
+			if (!item) continue;
+			const effectivePath = item.targetPath || item.path;
+			if (
+				item.isDir ||
+				item.isImage ||
+				isVideoFile(effectivePath) ||
+				ARCHIVE_REGEX.test(effectivePath.toLowerCase())
+			) {
+				paths.push(item.path);
+			}
+		}
+		return paths;
+	});
+
+	function collectVisiblePathsCenterFirst(startIndex: number, endIndex: number): string[] {
+		const center = Math.floor((startIndex + endIndex) / 2);
+		const result: string[] = [];
+		const seen = new Set<string>();
+
+		for (let offset = 0; offset <= endIndex - startIndex; offset += 1) {
+			const left = center - offset;
+			const right = center + offset;
+
+			if (left >= startIndex) {
+				const item = items[left];
+				if (item) {
+					const effectivePath = item.targetPath || item.path;
+					if (
+						(item.isDir || item.isImage || isVideoFile(effectivePath) || ARCHIVE_REGEX.test(effectivePath.toLowerCase())) &&
+						!seen.has(item.path)
+					) {
+						seen.add(item.path);
+						result.push(item.path);
+					}
+				}
+			}
+
+			if (right <= endIndex && right !== left) {
+				const item = items[right];
+				if (item) {
+					const effectivePath = item.targetPath || item.path;
+					if (
+						(item.isDir || item.isImage || isVideoFile(effectivePath) || ARCHIVE_REGEX.test(effectivePath.toLowerCase())) &&
+						!seen.has(item.path)
+					) {
+						seen.add(item.path);
+						result.push(item.path);
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+
+	function scheduleStablePrefetch(visiblePaths: string[]) {
+		if (stablePrefetchTimer) {
+			clearTimeout(stablePrefetchTimer);
+		}
+
+		stablePrefetchTimer = setTimeout(() => {
+			stablePrefetchTimer = null;
+			scheduleIdleTask(() => {
+				void requestVisibleThumbnailsDeltaWithPrefetch(
+					visiblePaths,
+					thumbnailCandidatePaths,
+					currentPath
+				);
+			}, 500);
+		}, 180);
+	}
+
 	const handleVisibleRangeChange = debounce(() => {
 		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
 
@@ -216,34 +295,19 @@
 		const startIndex = startRowIndex * columns;
 		const endIndex = Math.min((endRowIndex + 1) * columns - 1, items.length - 1);
 
-		// 收集可见区域的路径（中央优先排序）
 		const center = Math.floor((startIndex + endIndex) / 2);
-		const visiblePaths: { path: string; dist: number }[] = [];
-
-		for (let i = startIndex; i <= endIndex; i++) {
-			const item = items[i];
-			if (!item) continue;
-			// 只处理需要缩略图的项目
-			const effectivePath = item.targetPath || item.path;
-			if (
-				item.isDir ||
-				item.isImage ||
-				isVideoFile(effectivePath) ||
-				effectivePath.toLowerCase().match(/\.(zip|cbz|rar|cbr|7z|cb7)$/i)
-			) {
-				visiblePaths.push({ path: item.path, dist: Math.abs(i - center) });
-			}
-		}
-
-		// 按距离中心排序
-		visiblePaths.sort((a, b) => a.dist - b.dist);
+		const visiblePaths = collectVisiblePathsCenterFirst(startIndex, endIndex);
+		if (visiblePaths.length === 0) return;
 
 		// V3: 调用后端，后端处理一切
 		requestVisibleThumbnailsDelta(
-			visiblePaths.map((p) => p.path),
+			visiblePaths,
 			currentPath,
 			center
 		);
+
+		// 稳态触发增量预取（滚动停留后）
+		scheduleStablePrefetch(visiblePaths);
 	}, 24); // 24ms debounce（约1.5帧，兼顾响应与稳定）
 
 	function scheduleVisibleRangeChange() {
@@ -282,6 +346,10 @@
 		if (visibleRangeRaf !== null) {
 			cancelAnimationFrame(visibleRangeRaf);
 			visibleRangeRaf = null;
+		}
+		if (stablePrefetchTimer) {
+			clearTimeout(stablePrefetchTimer);
+			stablePrefetchTimer = null;
 		}
 	});
 

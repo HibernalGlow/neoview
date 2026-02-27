@@ -11,7 +11,8 @@
 		Folder,
 		FolderOpen,
 		HardDrive,
-		Loader2
+		Loader2,
+		Pin
 	} from '@lucide/svelte';
 	import { FileSystemAPI } from '$lib/api';
 	import type { FsItem } from '$lib/types';
@@ -62,6 +63,10 @@
 			return aPinned ? -1 : 1;
 		}
 		return a.name.localeCompare(b.name, 'zh-CN', { numeric: true, sensitivity: 'base' });
+	}
+
+	function isPinned(nodePath: string): boolean {
+		return pinnedPathSet.has(normalizePath(nodePath));
 	}
 
 	function sortTreeRecursively(nodes: TreeNode[] = roots) {
@@ -580,6 +585,10 @@
 
 			<!-- 名称 -->
 			<span class="truncate">{node.name}</span>
+
+			{#if isPinned(node.path)}
+				<Pin class="text-primary h-3.5 w-3.5 shrink-0" />
+			{/if}
 		</div>
 
 		<!-- 子节点容器（带层级线） -->

@@ -100,7 +100,7 @@ export async function loadImageFromArchiveAsBlob(
   options: LoadImageFromArchiveOptions = {}
 ): Promise<{ blob: Blob; traceId: string }> {
   const traceId = options.traceId ?? createImageTraceId('archive', options.pageIndex);
-  logImageTrace(traceId, 'invoke load_image_from_archive_base64', {
+  logImageTrace(traceId, 'invoke load_image_from_archive_binary', {
     archivePath,
     innerPath: filePath,
     pageIndex: options.pageIndex
@@ -108,20 +108,36 @@ export async function loadImageFromArchiveAsBlob(
 
   const mimeType = getMimeTypeFromPath(filePath);
 
-  const base64 = await invokeWithRetry<string>('load_image_from_archive_base64', {
-    archivePath,
-    filePath,
-    traceId,
-    pageIndex: options.pageIndex
-  });
+  try {
+    const binary = await invokeWithRetry<Uint8Array | number[]>('load_image_from_archive_binary', {
+      archivePath,
+      filePath,
+      traceId,
+      pageIndex: options.pageIndex
+    });
 
-  const arrayBuffer = await decodeBase64(base64, mimeType);
-  logImageTrace(traceId, 'archive image base64 decoded', { bytes: arrayBuffer.byteLength });
+    const bytes = binary instanceof Uint8Array ? binary : new Uint8Array(binary);
+    const blob = new Blob([bytes], { type: mimeType });
+    logImageTrace(traceId, 'archive image binary received', { bytes: bytes.byteLength });
+    return { blob, traceId };
+  } catch (binaryError) {
+    logImageTrace(traceId, 'binary transfer failed, fallback to base64', {
+      error: String(binaryError)
+    });
 
-  const blob = new Blob([arrayBuffer], { type: mimeType });
-  logImageTrace(traceId, 'blob created', { size: blob.size, mimeType });
+    const base64 = await invokeWithRetry<string>('load_image_from_archive_base64', {
+      archivePath,
+      filePath,
+      traceId,
+      pageIndex: options.pageIndex
+    });
 
-  return { blob, traceId };
+    const arrayBuffer = await decodeBase64(base64, mimeType);
+    logImageTrace(traceId, 'archive image base64 decoded', { bytes: arrayBuffer.byteLength });
+
+    const blob = new Blob([arrayBuffer], { type: mimeType });
+    return { blob, traceId };
+  }
 }
 
 /**

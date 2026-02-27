@@ -75,21 +75,21 @@ pub async fn load_image_from_archive_binary(
     .await
     .map_err(|e| format!("load_image_from_archive_binary join error: {}", e))?;
 
-    match &result {
+    match result {
         Ok(bytes) => {
             info!(
                 "📤 [ImagePipeline:{}] load_image_from_archive_binary success bytes={}",
                 trace_id,
                 bytes.len()
             );
-            Ok(tauri::ipc::Response::new(bytes.clone()))
+            Ok(tauri::ipc::Response::new(bytes))
         },
         Err(err) => {
             warn!(
                 "⚠️ [ImagePipeline:{}] load_image_from_archive_binary failed: {}",
                 trace_id, err
             );
-            Err(err.clone())
+            Err(err)
         }
     }
 }

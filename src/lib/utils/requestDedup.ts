@@ -21,7 +21,6 @@ export interface DeduplicatorStats {
  */
 export class RequestDeduplicator {
   private pending: LRUCache<string, {}>;
-  private inFlightKeys = new Set<string>();
   private executeMemoized: <T>(key: string, executor: () => Promise<T>) => Promise<T>;
   private stats = { totalRequests: 0, deduplicated: 0 };
 
@@ -61,47 +60,16 @@ export class RequestDeduplicator {
       console.debug(`🔄 请求去重: key=${key}`);
     }
 
-    this.inFlightKeys.add(key);
-
     return this.executeMemoized<T>(key, executor).finally(() => {
-      this.inFlightKeys.delete(key);
+      this.pending.delete(key);
     });
-  }
-
-  /**
-   * 兼容旧接口：尝试获取处理权
-   */
-  tryAcquire(key: string): number | null {
-    this.stats.totalRequests++;
-    if (this.pending.has(key) || this.inFlightKeys.has(key)) {
-      this.stats.deduplicated++;
-      return null;
-    }
-    this.inFlightKeys.add(key);
-    return Date.now();
-  }
-
-  /**
-   * 兼容旧接口：标记完成
-   */
-  release(key: string): void {
-    this.inFlightKeys.delete(key);
-    this.pending.delete(key);
-  }
-
-  /**
-   * 兼容旧接口：标记完成（验证 ID）
-   */
-  releaseWithId(key: string, requestId: number): void {
-    void requestId;
-    this.release(key);
   }
 
   /**
    * 检查请求是否活跃
    */
   isActive(key: string): boolean {
-    return this.inFlightKeys.has(key);
+    return this.pending.has(key);
   }
 
   /**
@@ -110,7 +78,7 @@ export class RequestDeduplicator {
   getStats(): DeduplicatorStats {
     return {
       ...this.stats,
-      activeRequests: this.inFlightKeys.size,
+      activeRequests: this.pending.size,
     };
   }
 
@@ -118,7 +86,6 @@ export class RequestDeduplicator {
    * 清除所有
    */
   clear(): void {
-    this.inFlightKeys.clear();
     this.pending.clear();
   }
 }

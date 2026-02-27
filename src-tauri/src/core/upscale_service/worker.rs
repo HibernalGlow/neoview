@@ -28,6 +28,7 @@ pub fn start_workers(
     running: Arc<AtomicBool>,
     enabled: Arc<AtomicBool>,
     task_queue: Arc<Mutex<VecDeque<UpscaleTask>>>,
+    pending_set: Arc<RwLock<HashSet<(String, usize)>>>,
     current_book: Arc<RwLock<Option<String>>>,
     cache_map: Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
     cache_dir: std::path::PathBuf,
@@ -48,6 +49,7 @@ pub fn start_workers(
         let running = Arc::clone(&running);
         let enabled = Arc::clone(&enabled);
         let task_queue = Arc::clone(&task_queue);
+        let pending_set = Arc::clone(&pending_set);
         let current_book = Arc::clone(&current_book);
         let cache_map = Arc::clone(&cache_map);
         let cache_dir = cache_dir.clone();
@@ -69,6 +71,7 @@ pub fn start_workers(
                 running,
                 enabled,
                 task_queue,
+                pending_set,
                 current_book,
                 cache_map,
                 cache_dir,
@@ -100,6 +103,7 @@ fn worker_loop(
     running: Arc<AtomicBool>,
     enabled: Arc<AtomicBool>,
     task_queue: Arc<Mutex<VecDeque<UpscaleTask>>>,
+    pending_set: Arc<RwLock<HashSet<(String, usize)>>>,
     current_book: Arc<RwLock<Option<String>>>,
     cache_map: Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
     cache_dir: std::path::PathBuf,
@@ -128,6 +132,10 @@ fn worker_loop(
         let task = get_highest_priority_task(&task_queue);
 
         if let Some(task) = task {
+            if let Ok(mut set) = pending_set.write() {
+                set.remove(&(task.book_path.clone(), task.page_index));
+            }
+
             // 检查是否应该取消（书籍已切换）
             let current = current_book
                 .read()

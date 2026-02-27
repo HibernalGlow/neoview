@@ -99,6 +99,9 @@ pub struct UpscaleService {
     /// 任务队列
     task_queue: Arc<Mutex<VecDeque<UpscaleTask>>>,
 
+    /// 待处理任务索引（用于 O(1) 去重）
+    pending_set: Arc<RwLock<HashSet<(String, usize)>>>,
+
     /// 正在处理的任务集合：(book_path, page_index)
     processing_set: Arc<RwLock<HashSet<(String, usize)>>>,
 
@@ -144,6 +147,7 @@ impl UpscaleService {
             current_page: Arc::new(AtomicUsize::new(0)),
             cache_map: Arc::new(RwLock::new(HashMap::new())),
             task_queue: Arc::new(Mutex::new(VecDeque::new())),
+            pending_set: Arc::new(RwLock::new(HashSet::new())),
             processing_set: Arc::new(RwLock::new(HashSet::new())),
             skipped_pages: Arc::new(RwLock::new(HashSet::new())),
             failed_pages: Arc::new(RwLock::new(HashSet::new())),
@@ -171,6 +175,7 @@ impl UpscaleService {
             Arc::clone(&self.running),
             Arc::clone(&self.enabled),
             Arc::clone(&self.task_queue),
+            Arc::clone(&self.pending_set),
             Arc::clone(&self.current_book),
             Arc::clone(&self.cache_map),
             self.cache_dir.clone(),
@@ -216,6 +221,10 @@ impl UpscaleService {
             // 从启用变为禁用：清空队列
             let cleared = queue::clear_queue(&self.task_queue);
             log_info!("🚫 超分已禁用，清空 {} 个待处理任务", cleared);
+
+            if let Ok(mut set) = self.pending_set.write() {
+                set.clear();
+            }
 
             // 清空处理中集合
             if let Ok(mut set) = self.processing_set.write() {
@@ -270,6 +279,9 @@ impl UpscaleService {
                 // 清空队列中属于旧书籍的任务
                 if let Some(ref old) = old_book {
                     queue::clear_old_book_tasks(&self.task_queue, old);
+                    if let Ok(mut set) = self.pending_set.write() {
+                        set.retain(|(bp, _)| bp != old);
+                    }
                 }
 
                 // 清空状态
@@ -297,6 +309,22 @@ impl UpscaleService {
                 old_page,
                 page_index,
             );
+            self.rebuild_pending_set_from_queue();
+        }
+    }
+
+    fn rebuild_pending_set_from_queue(&self) {
+        let pending_keys: HashSet<(String, usize)> = if let Ok(queue) = self.task_queue.lock() {
+            queue
+                .iter()
+                .map(|task| (task.book_path.clone(), task.page_index))
+                .collect()
+        } else {
+            HashSet::new()
+        };
+
+        if let Ok(mut set) = self.pending_set.write() {
+            *set = pending_keys;
         }
     }
 
@@ -384,10 +412,17 @@ impl UpscaleService {
             }
         }
 
-        // 检查是否已在队列中
-        if queue::is_task_in_queue(&self.task_queue, &task.book_path, task.page_index) {
-            log_debug!("📋 已在队列 page {}", task.page_index);
-            return Ok(());
+        // 检查是否已在待处理集合中（O(1)）
+        if let Ok(set) = self.pending_set.read() {
+            if set.contains(&key) {
+                log_debug!("📋 已在队列 page {}", task.page_index);
+                return Ok(());
+            }
+        }
+
+        // 加入队列索引
+        if let Ok(mut set) = self.pending_set.write() {
+            set.insert(key);
         }
 
         // 加入队列
@@ -460,11 +495,17 @@ impl UpscaleService {
     /// 取消指定页面的任务
     pub fn cancel_page(&self, book_path: &str, page_index: usize) {
         queue::cancel_page_task(&self.task_queue, book_path, page_index);
+        if let Ok(mut set) = self.pending_set.write() {
+            set.remove(&(book_path.to_string(), page_index));
+        }
     }
 
     /// 取消指定书籍的所有任务
     pub fn cancel_book(&self, book_path: &str) {
         queue::cancel_book_tasks(&self.task_queue, book_path);
+        if let Ok(mut set) = self.pending_set.write() {
+            set.retain(|(bp, _)| bp != book_path);
+        }
     }
 
     /// 清除缓存
@@ -475,7 +516,7 @@ impl UpscaleService {
     /// 获取统计信息
     pub fn get_stats(&self) -> UpscaleServiceStats {
         let cache_count = self.cache_map.read().ok().map(|c| c.len()).unwrap_or(0);
-        let pending_tasks = queue::get_queue_length(&self.task_queue);
+        let pending_tasks = self.pending_set.read().ok().map(|s| s.len()).unwrap_or(0);
         let processing_tasks = self.processing_set.read().ok().map(|s| s.len()).unwrap_or(0);
 
         UpscaleServiceStats {
@@ -522,9 +563,11 @@ impl UpscaleService {
             }
         }
 
-        // 检查队列
-        if queue::is_task_in_queue(&self.task_queue, book_path, page_index) {
-            return UpscaleStatus::Pending;
+        // 检查待处理集合（O(1)）
+        if let Ok(set) = self.pending_set.read() {
+            if set.contains(&key) {
+                return UpscaleStatus::Pending;
+            }
         }
 
         UpscaleStatus::Pending

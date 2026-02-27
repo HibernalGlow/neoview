@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
 use regex::Regex;
 
@@ -19,6 +19,24 @@ use super::events::{UpscaleStatus, UpscaleReadyPayload};
 use super::types::{TaskPriority, UpscaleTask, CacheEntry};
 use super::cache::cache_key;
 use super::{log_info, log_debug};
+
+static REGEX_CACHE: OnceLock<RwLock<HashMap<String, Option<Regex>>>> = OnceLock::new();
+
+fn get_compiled_regex(pattern: &str) -> Option<Regex> {
+    let cache = REGEX_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
+
+    if let Ok(reader) = cache.read() {
+        if let Some(compiled) = reader.get(pattern) {
+            return compiled.clone();
+        }
+    }
+
+    let compiled = Regex::new(pattern).ok();
+    if let Ok(mut writer) = cache.write() {
+        writer.insert(pattern.to_string(), compiled.clone());
+    }
+    compiled
+}
 
 /// 读取图片数据（支持普通文件和压缩包内文件）
 pub fn load_image_data(image_path: &str) -> Result<Vec<u8>, String> {
@@ -409,8 +427,8 @@ fn check_path_regex(task: &UpscaleTask, cond: &FrontendCondition) -> (bool, bool
 fn match_regex(regex_opt: &Option<String>, path: &str, path_type: &str) -> bool {
     match regex_opt {
         Some(regex_str) if !regex_str.is_empty() => {
-            match Regex::new(regex_str) {
-                Ok(re) => {
+            match get_compiled_regex(regex_str) {
+                Some(re) => {
                     let matched = re.is_match(path);
                     log_debug!(
                         "📁 {}正则匹配: pattern='{}' path='{}' matched={}",
@@ -418,8 +436,8 @@ fn match_regex(regex_opt: &Option<String>, path: &str, path_type: &str) -> bool 
                     );
                     matched
                 }
-                Err(e) => {
-                    log_debug!("⚠️ 无效的{}正则: {} - {}", path_type, regex_str, e);
+                None => {
+                    log_debug!("⚠️ 无效的{}正则: {}", path_type, regex_str);
                     true
                 }
             }

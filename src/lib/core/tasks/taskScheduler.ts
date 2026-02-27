@@ -1,3 +1,5 @@
+import PQueue from 'p-queue';
+
 export type TaskPriority = 'low' | 'normal' | 'high';
 export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type TaskBucket = 'current' | 'forward' | 'backward' | 'background';
@@ -45,36 +47,30 @@ function nextId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${idCounter}`;
 }
 
-interface QueuedTask {
-	bucket: TaskBucket;
-	snapshot: TaskSnapshot;
-	descriptor: TaskDescriptor;
-}
-
 export class TaskScheduler {
-	private buckets: Record<TaskBucket, QueuedTask[]> = {
+	private queue: PQueue;
+	private buckets: Record<TaskBucket, TaskSnapshot[]> = {
 		current: [],
 		forward: [],
 		backward: [],
 		background: []
 	};
 	private active = new Map<string, TaskSnapshot>();
+	private controllers = new Map<string, AbortController>();
 	private listeners = new Set<TaskListener>();
 	private metricsListeners = new Set<MetricsListener>();
-	private concurrency: number;
-	private running = 0;
 	private readonly bucketOrder: TaskBucket[] = ['current', 'forward', 'backward', 'background'];
 
 	constructor(concurrency?: number) {
 		// 默认并发度：根据 CPU 核心数动态调整，最少 8，最多 32
 		// 参考 NeeView 的 JobClient 多线程设计
 		const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
-		this.concurrency = concurrency ?? Math.min(32, Math.max(8, cores * 2));
+		const resolvedConcurrency = concurrency ?? Math.min(32, Math.max(8, cores * 2));
+		this.queue = new PQueue({ concurrency: resolvedConcurrency });
 	}
 
 	setConcurrency(limit: number): void {
-		this.concurrency = Math.max(1, limit);
-		this.pump();
+		this.queue.concurrency = Math.max(1, limit);
 		this.emitMetrics();
 	}
 
@@ -110,8 +106,8 @@ export class TaskScheduler {
 				backward: this.buckets.backward.length,
 				background: this.buckets.background.length
 			},
-			running: this.running,
-			concurrency: this.concurrency,
+			running: this.queue.pending,
+			concurrency: this.queue.concurrency,
 			updatedAt: Date.now()
 		};
 	}
@@ -129,65 +125,117 @@ export class TaskScheduler {
 			createdAt: Date.now()
 		};
 
-		this.buckets[bucket].push({ bucket, snapshot, descriptor });
+		this.buckets[bucket].push(snapshot);
+		const controller = new AbortController();
+		this.controllers.set(snapshot.id, controller);
+
+		void this.queue
+			.add(
+				async () => {
+					this.removeQueuedSnapshot(snapshot.id);
+					snapshot.status = 'running';
+					snapshot.startedAt = Date.now();
+					this.active.set(snapshot.id, snapshot);
+					this.notify(snapshot);
+					this.emitMetrics();
+
+					const result = await this.runWithTimeout(descriptor, snapshot.id);
+					return result;
+				},
+				{
+					id: snapshot.id,
+					priority: this.toQueuePriority(bucket, snapshot.priority),
+					signal: controller.signal
+				}
+			)
+			.then((result) => {
+				this.completeTask(snapshot.id, result);
+			})
+			.catch((error: unknown) => {
+				const current = this.active.get(snapshot.id);
+				if (current?.status === 'cancelled') {
+					return;
+				}
+				if (error instanceof Error && error.name === 'AbortError') {
+					return;
+				}
+				this.failTask(snapshot.id, error);
+			})
+			.finally(() => {
+				this.active.delete(snapshot.id);
+				this.controllers.delete(snapshot.id);
+				this.emitMetrics();
+			});
+
 		this.notify(snapshot);
 		this.emitMetrics();
-		this.pump();
 		return snapshot;
 	}
 
-	private pump(): void {
-		if (this.running >= this.concurrency) {
-			return;
+	private async runWithTimeout<TResult>(
+		descriptor: TaskDescriptor<unknown, TResult>,
+		taskId: string
+	): Promise<TResult> {
+		const timeoutMs = descriptor.timeoutMs ?? 0;
+		if (timeoutMs <= 0) {
+			return descriptor.executor();
 		}
 
-		const entry = this.shiftNextTask();
-		if (!entry) {
-			return;
+		return new Promise<TResult>((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				this.controllers.get(taskId)?.abort();
+				reject(new Error('Task timeout'));
+			}, timeoutMs);
+
+			descriptor
+				.executor()
+				.then((result) => {
+					clearTimeout(timeout);
+					resolve(result);
+				})
+				.catch((error) => {
+					clearTimeout(timeout);
+					reject(error);
+				});
+		});
+	}
+
+	private toQueuePriority(bucket: TaskBucket, priority: TaskPriority): number {
+		const bucketWeight: Record<TaskBucket, number> = {
+			current: 400,
+			forward: 300,
+			backward: 200,
+			background: 100
+		};
+		const priorityWeight: Record<TaskPriority, number> = {
+			low: 1,
+			normal: 2,
+			high: 3
+		};
+		return bucketWeight[bucket] + priorityWeight[priority];
+	}
+
+	private removeQueuedSnapshot(taskId: string): void {
+		for (const bucket of this.bucketOrder) {
+			const queue = this.buckets[bucket];
+			const index = queue.findIndex((task) => task.id === taskId);
+			if (index >= 0) {
+				queue.splice(index, 1);
+				return;
+			}
 		}
-		const { snapshot: next, descriptor } = entry;
-
-		this.running += 1;
-		next.status = 'running';
-		next.startedAt = Date.now();
-		this.active.set(next.id, next);
-		this.notify(next);
-		this.emitMetrics();
-
-		const timeout =
-			descriptor.timeoutMs && descriptor.timeoutMs > 0
-				? setTimeout(() => {
-						this.failTask(next.id, new Error('Task timeout'));
-				  }, descriptor.timeoutMs)
-				: null;
-
-		descriptor
-			.executor()
-			.then((result) => {
-				if (timeout) clearTimeout(timeout);
-				this.completeTask(next.id, result);
-			})
-			.catch((error) => {
-				if (timeout) clearTimeout(timeout);
-				this.failTask(next.id, error);
-			})
-			.finally(() => {
-				this.running -= 1;
-				this.active.delete(next.id);
-				this.emitMetrics();
-				this.pump();
-			});
 	}
 
 	cancel(taskId: string): void {
-		const located = this.findQueuedTask(taskId);
-		if (located) {
-			const { bucket, index } = located;
-			const [{ snapshot }] = this.buckets[bucket].splice(index, 1);
-			snapshot.status = 'cancelled';
-			snapshot.completedAt = Date.now();
-			this.notify(snapshot);
+		const queuedTask = this.getQueuedTask(taskId);
+		if (queuedTask) {
+			queuedTask.status = 'cancelled';
+			queuedTask.completedAt = Date.now();
+			this.removeQueuedSnapshot(taskId);
+			this.controllers.get(taskId)?.abort();
+			this.notify(queuedTask);
 			this.emitMetrics();
+			this.controllers.delete(taskId);
 			return;
 		}
 
@@ -195,6 +243,7 @@ export class TaskScheduler {
 		if (activeTask) {
 			activeTask.status = 'cancelled';
 			activeTask.completedAt = Date.now();
+			this.controllers.get(taskId)?.abort();
 			this.notify(activeTask);
 			this.emitMetrics();
 			// 具体 executor 需要自行监听取消信号，这里仅标记状态
@@ -204,6 +253,7 @@ export class TaskScheduler {
 	private completeTask<TResult>(taskId: string, result: TResult): void {
 		const task = this.active.get(taskId);
 		if (!task) return;
+		if (task.status === 'cancelled') return;
 		task.status = 'completed';
 		task.completedAt = Date.now();
 		task.result = result;
@@ -214,6 +264,7 @@ export class TaskScheduler {
 	private failTask(taskId: string, error: unknown): void {
 		const task = this.active.get(taskId);
 		if (!task) return;
+		if (task.status === 'cancelled') return;
 		task.status = 'failed';
 		task.completedAt = Date.now();
 		task.error = error instanceof Error ? error.message : String(error);
@@ -228,7 +279,7 @@ export class TaskScheduler {
 	getQueuedTasks(): TaskSnapshot[] {
 		const snapshots: TaskSnapshot[] = [];
 		for (const bucket of this.bucketOrder) {
-			snapshots.push(...this.buckets[bucket].map((task) => ({ ...task.snapshot })));
+			snapshots.push(...this.buckets[bucket].map((task) => ({ ...task })));
 		}
 		return snapshots;
 	}
@@ -242,22 +293,12 @@ export class TaskScheduler {
 		};
 	}
 
-	private shiftNextTask(): QueuedTask | undefined {
+	private getQueuedTask(taskId: string): TaskSnapshot | null {
 		for (const bucket of this.bucketOrder) {
 			const queue = this.buckets[bucket];
-			if (queue.length > 0) {
-				return queue.shift();
-			}
-		}
-		return undefined;
-	}
-
-	private findQueuedTask(taskId: string): { bucket: TaskBucket; index: number } | null {
-		for (const bucket of this.bucketOrder) {
-			const queue = this.buckets[bucket];
-			const index = queue.findIndex((task) => task.snapshot.id === taskId);
-			if (index >= 0) {
-				return { bucket, index };
+			const found = queue.find((task) => task.id === taskId);
+			if (found) {
+				return found;
 			}
 		}
 		return null;

@@ -236,6 +236,10 @@ pub async fn get_thumbnail_cache_stats_v3(app: AppHandle) -> Result<CacheStats, 
             processed_visible: 0,
             processed_prefetch: 0,
             processed_background: 0,
+            decode_wait_count: 0,
+            decode_wait_ms: 0,
+            encode_wait_count: 0,
+            encode_wait_ms: 0,
         })
     }
 }

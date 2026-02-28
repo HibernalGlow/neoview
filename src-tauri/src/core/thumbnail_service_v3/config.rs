@@ -44,8 +44,10 @@ pub struct ThumbnailServiceConfig {
     pub adaptive_scale_down_avg_ms: u64,
     /// 缩并发失败率阈值（百分比，0-100）
     pub adaptive_scale_down_fail_percent: usize,
-    /// 重任务并发上限（archive/video/folder）
-    pub heavy_task_max_active: usize,
+    /// 解码阶段并发上限（主要约束 archive/video/folder）
+    pub decode_stage_max_active: usize,
+    /// 编码阶段并发上限（主要约束 image/archive/video）
+    pub encode_stage_max_active: usize,
 }
 
 impl Default for ThumbnailServiceConfig {
@@ -70,7 +72,8 @@ impl Default for ThumbnailServiceConfig {
         };
 
         let adaptive_min_active_workers = (worker_threads / 3).max(2).min(worker_threads);
-        let heavy_task_max_active = (worker_threads / 2).max(1);
+        let decode_stage_max_active = (worker_threads / 2).max(1);
+        let encode_stage_max_active = ((worker_threads * 2) / 3).max(1);
         
         Self {
             folder_search_depth: 3,  // 允许递归3层查找子文件夹中的图片
@@ -101,7 +104,8 @@ impl Default for ThumbnailServiceConfig {
             adaptive_scale_up_avg_ms: 40,
             adaptive_scale_down_avg_ms: 160,
             adaptive_scale_down_fail_percent: 18,
-            heavy_task_max_active,
+            decode_stage_max_active,
+            encode_stage_max_active,
         }
     }
 }

@@ -106,6 +106,10 @@ pub struct CacheStats {
     pub processed_visible: usize,
     pub processed_prefetch: usize,
     pub processed_background: usize,
+    pub decode_wait_count: usize,
+    pub decode_wait_ms: u64,
+    pub encode_wait_count: usize,
+    pub encode_wait_ms: u64,
 }
 
 /// 检测文件类型

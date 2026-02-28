@@ -89,6 +89,11 @@ pub struct ThumbnailServiceV3 {
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
     processed_background: Arc<AtomicUsize>,
+    /// 解码/编码阶段等待统计
+    decode_wait_count: Arc<AtomicUsize>,
+    decode_wait_ms: Arc<AtomicU64>,
+    encode_wait_count: Arc<AtomicUsize>,
+    encode_wait_ms: Arc<AtomicU64>,
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// 数据库索引 (已有缩略图的路径集合)
@@ -144,6 +149,10 @@ impl ThumbnailServiceV3 {
             processed_visible: Arc::new(AtomicUsize::new(0)),
             processed_prefetch: Arc::new(AtomicUsize::new(0)),
             processed_background: Arc::new(AtomicUsize::new(0)),
+            decode_wait_count: Arc::new(AtomicUsize::new(0)),
+            decode_wait_ms: Arc::new(AtomicU64::new(0)),
+            encode_wait_count: Arc::new(AtomicUsize::new(0)),
+            encode_wait_ms: Arc::new(AtomicU64::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
             folder_db_index: Arc::new(RwLock::new(folder_db_index)),
@@ -178,6 +187,10 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.processed_visible),
             Arc::clone(&self.processed_prefetch),
             Arc::clone(&self.processed_background),
+            Arc::clone(&self.decode_wait_count),
+            Arc::clone(&self.decode_wait_ms),
+            Arc::clone(&self.encode_wait_count),
+            Arc::clone(&self.encode_wait_ms),
             Arc::clone(&self.memory_cache),
             Arc::clone(&self.memory_cache_bytes),
             Arc::clone(&self.db),
@@ -548,6 +561,10 @@ impl ThumbnailServiceV3 {
         let processed_visible = self.processed_visible.load(Ordering::Relaxed);
         let processed_prefetch = self.processed_prefetch.load(Ordering::Relaxed);
         let processed_background = self.processed_background.load(Ordering::Relaxed);
+        let decode_wait_count = self.decode_wait_count.load(Ordering::Relaxed);
+        let decode_wait_ms = self.decode_wait_ms.load(Ordering::Relaxed);
+        let encode_wait_count = self.encode_wait_count.load(Ordering::Relaxed);
+        let encode_wait_ms = self.encode_wait_ms.load(Ordering::Relaxed);
         let (database_count, database_bytes) = self
             .db
             .get_maintenance_stats()
@@ -566,6 +583,10 @@ impl ThumbnailServiceV3 {
             processed_visible,
             processed_prefetch,
             processed_background,
+            decode_wait_count,
+            decode_wait_ms,
+            encode_wait_count,
+            encode_wait_ms,
         }
     }
 

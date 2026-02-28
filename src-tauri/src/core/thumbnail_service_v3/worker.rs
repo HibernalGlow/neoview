@@ -83,10 +83,20 @@ fn preferred_lane_for_tick(
     lane_from_quota_tick(tick, default_quota)
 }
 
-fn is_heavy_task(task: &GenerateTask) -> bool {
+fn needs_decode_limit(task: &GenerateTask) -> bool {
     matches!(
         task.file_type,
         ThumbnailFileType::Archive | ThumbnailFileType::Video | ThumbnailFileType::Folder
+    )
+}
+
+fn needs_encode_limit(task: &GenerateTask) -> bool {
+    matches!(
+        task.file_type,
+        ThumbnailFileType::Archive
+            | ThumbnailFileType::Video
+            | ThumbnailFileType::Image
+            | ThumbnailFileType::Other
     )
 }
 
@@ -168,6 +178,10 @@ pub fn start_workers(
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
     processed_background: Arc<AtomicUsize>,
+    decode_wait_count: Arc<AtomicUsize>,
+    decode_wait_ms: Arc<AtomicU64>,
+    encode_wait_count: Arc<AtomicUsize>,
+    encode_wait_ms: Arc<AtomicU64>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
@@ -191,7 +205,8 @@ pub fn start_workers(
             .max(1)
             .min(config.worker_threads),
     ));
-    let heavy_inflight = Arc::new(AtomicUsize::new(0));
+    let decode_inflight = Arc::new(AtomicUsize::new(0));
+    let encode_inflight = Arc::new(AtomicUsize::new(0));
     let adaptive_completed = Arc::new(AtomicUsize::new(0));
     let adaptive_failed = Arc::new(AtomicUsize::new(0));
     let adaptive_total_elapsed_ms = Arc::new(AtomicU64::new(0));
@@ -220,7 +235,8 @@ pub fn start_workers(
             default_quota,
             side_boost_quota,
             Arc::clone(&worker_budget),
-            Arc::clone(&heavy_inflight),
+            Arc::clone(&decode_inflight),
+            Arc::clone(&encode_inflight),
             Arc::clone(&adaptive_completed),
             Arc::clone(&adaptive_failed),
             Arc::clone(&adaptive_total_elapsed_ms),
@@ -237,6 +253,10 @@ pub fn start_workers(
             Arc::clone(&processed_visible),
             Arc::clone(&processed_prefetch),
             Arc::clone(&processed_background),
+            Arc::clone(&decode_wait_count),
+            Arc::clone(&decode_wait_ms),
+            Arc::clone(&encode_wait_count),
+            Arc::clone(&encode_wait_ms),
             Arc::clone(&memory_cache),
             Arc::clone(&memory_cache_bytes),
             Arc::clone(&db),
@@ -264,7 +284,8 @@ fn create_worker_thread(
     default_quota: LaneQuota,
     side_boost_quota: LaneQuota,
     worker_budget: Arc<AtomicUsize>,
-    heavy_inflight: Arc<AtomicUsize>,
+    decode_inflight: Arc<AtomicUsize>,
+    encode_inflight: Arc<AtomicUsize>,
     adaptive_completed: Arc<AtomicUsize>,
     adaptive_failed: Arc<AtomicUsize>,
     adaptive_total_elapsed_ms: Arc<AtomicU64>,
@@ -281,6 +302,10 @@ fn create_worker_thread(
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
     processed_background: Arc<AtomicUsize>,
+    decode_wait_count: Arc<AtomicUsize>,
+    decode_wait_ms: Arc<AtomicU64>,
+    encode_wait_count: Arc<AtomicUsize>,
+    encode_wait_ms: Arc<AtomicU64>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
@@ -426,9 +451,13 @@ fn create_worker_thread(
                     continue;
                 }
 
-                if is_heavy_task(&task)
-                    && heavy_inflight.load(Ordering::Acquire) >= config.heavy_task_max_active.max(1)
+                if needs_decode_limit(&task)
+                    && decode_inflight.load(Ordering::Acquire)
+                        >= config.decode_stage_max_active.max(1)
                 {
+                    const DECODE_BACKOFF_MS: u64 = 2;
+                    decode_wait_count.fetch_add(1, Ordering::Relaxed);
+                    decode_wait_ms.fetch_add(DECODE_BACKOFF_MS, Ordering::Relaxed);
                     queue::requeue_front(
                         &task_queue,
                         task,
@@ -436,14 +465,14 @@ fn create_worker_thread(
                         &queued_prefetch,
                         &queued_background,
                     );
-                    thread::sleep(Duration::from_millis(2));
+                    thread::sleep(Duration::from_millis(DECODE_BACKOFF_MS));
                     continue;
                 }
 
-                let mut heavy_token_held = false;
-                if is_heavy_task(&task) {
-                    heavy_inflight.fetch_add(1, Ordering::SeqCst);
-                    heavy_token_held = true;
+                let mut decode_token_held = false;
+                if needs_decode_limit(&task) {
+                    decode_inflight.fetch_add(1, Ordering::SeqCst);
+                    decode_token_held = true;
                 }
 
                 active_workers.fetch_add(1, Ordering::SeqCst);
@@ -461,23 +490,50 @@ fn create_worker_thread(
 
                 let started = Instant::now();
                 let mut task_succeeded = false;
-                if let Some(payload) = process_task(
+                let generated = generate_task_blob(
                     &task,
                     &generator,
                     &db,
                     folder_depth,
-                    &memory_cache,
-                    &memory_cache_bytes,
-                    &db_index,
-                    &folder_db_index,
                     &failed_index,
-                    &save_queue,
-                    &request_deduplicator,
-                ) {
+                );
+
+                if decode_token_held {
+                    decode_inflight.fetch_sub(1, Ordering::SeqCst);
+                }
+
+                if let Some((blob, save_info)) = generated {
+                    let mut encode_token_held = false;
+                    let encode_wait_started = Instant::now();
+                    if needs_encode_limit(&task) {
+                        while running.load(Ordering::SeqCst)
+                            && encode_inflight.load(Ordering::Acquire)
+                                >= config.encode_stage_max_active.max(1)
+                        {
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        if running.load(Ordering::SeqCst) {
+                            encode_inflight.fetch_add(1, Ordering::SeqCst);
+                            encode_token_held = true;
+                        }
+                    }
+                    let encode_wait_elapsed = encode_wait_started.elapsed().as_millis() as u64;
+                    if encode_wait_elapsed > 0 {
+                        encode_wait_count.fetch_add(1, Ordering::Relaxed);
+                        encode_wait_ms.fetch_add(encode_wait_elapsed, Ordering::Relaxed);
+                    }
+
+                    let payload = handle_success(
+                        &task,
+                        blob,
+                        save_info,
+                        &memory_cache,
+                        &memory_cache_bytes,
+                        &db_index,
+                        &folder_db_index,
+                        &save_queue,
+                    );
                     emit_batch.push(payload);
-                    // 任务处理完后检查队列是否已空：
-                    // 若空则立即强制发射，避免小批量（< EMIT_BATCH_SIZE）永远滞留
-                    // （典型场景：文件夹只有几个压缩包，处理完后队列变空但 batch 不满 16）
                     let queue_is_empty = backlog_is_empty(
                         &queued_visible,
                         &queued_prefetch,
@@ -485,12 +541,14 @@ fn create_worker_thread(
                     );
                     flush_worker_emit_batch(&app, &mut emit_batch, queue_is_empty, EMIT_BATCH_SIZE);
                     task_succeeded = true;
+
+                    if encode_token_held {
+                        encode_inflight.fetch_sub(1, Ordering::SeqCst);
+                    }
                 }
                 active_workers.fetch_sub(1, Ordering::SeqCst);
 
-                if heavy_token_held {
-                    heavy_inflight.fetch_sub(1, Ordering::SeqCst);
-                }
+                request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
 
                 let elapsed_ms = started.elapsed().as_millis() as u64;
                 adaptive_total_elapsed_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
@@ -548,20 +606,13 @@ fn check_task_validity(
 
 /// 处理单个任务
 #[allow(clippy::too_many_arguments)]
-fn process_task(
+fn generate_task_blob(
     task: &GenerateTask,
     generator: &Arc<ThumbnailGenerator>,
     db: &Arc<ThumbnailDb>,
     folder_depth: u32,
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
-    memory_cache_bytes: &Arc<AtomicUsize>,
-    db_index: &Arc<RwLock<HashSet<String>>>,
-    folder_db_index: &Arc<RwLock<HashSet<String>>>,
     failed_index: &Arc<RwLock<HashSet<String>>>,
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
-    request_deduplicator: &Arc<RequestDeduplicator>,
-) -> Option<ThumbnailReadyPayload> {
-    let mut ready_payload: Option<ThumbnailReadyPayload> = None;
+) -> Option<(Vec<u8>, Option<(String, i64, i32)>)> {
 
     let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| match task.file_type {
         ThumbnailFileType::Folder => {
@@ -580,16 +631,7 @@ fn process_task(
 
     match gen_result {
         Ok(Ok((blob, save_info))) => {
-            ready_payload = Some(handle_success(
-                task,
-                blob,
-                save_info,
-                memory_cache,
-                memory_cache_bytes,
-                db_index,
-                folder_db_index,
-                save_queue,
-            ));
+            return Some((blob, save_info));
         }
         Ok(Err(e)) => {
             log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
@@ -611,9 +653,7 @@ fn process_task(
         }
     }
 
-    request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
-
-    ready_payload
+    None
 }
 
 /// 处理成功生成的缩略图（接收 owned blob 避免多余 to_vec）

@@ -94,11 +94,7 @@ impl Default for PathRegistry {
 /// 缓存的压缩包条目信息
 #[derive(Clone, Debug)]
 pub struct CachedArchiveEntry {
-    pub name: String,
     pub path: String,
-    pub is_image: bool,
-    pub is_video: bool,
-    pub entry_index: usize,
 }
 
 /// 缓存的压缩包元数据
@@ -119,9 +115,9 @@ pub struct ProtocolState {
     pub archive_manager: Arc<ArchiveManager>,
     /// 压缩包元数据缓存（避免重复列出内容）
     /// 参考 Spacedrive 的 file_metadata_cache
-    archive_metadata_cache: Cache<String, Arc<CachedArchiveMetadata>>,
+    archive_metadata_cache: Cache<u64, Arc<CachedArchiveMetadata>>,
     /// 压缩包图片二进制缓存（避免重复解包读取）
-    archive_image_cache: Cache<String, Arc<[u8]>>,
+    archive_image_cache: Cache<(u64, usize), Arc<[u8]>>,
 }
 
 impl ProtocolState {
@@ -151,14 +147,25 @@ impl ProtocolState {
         }
     }
 
+    #[inline]
+    fn parse_book_key(book_hash: &str) -> u64 {
+        u64::from_str_radix(book_hash, 16).unwrap_or_else(|_| {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = ahash::AHasher::default();
+            book_hash.hash(&mut hasher);
+            hasher.finish()
+        })
+    }
+
     /// 获取或缓存压缩包元数据
     fn get_or_cache_metadata(
         &self,
+        book_key: u64,
         book_hash: &str,
         book_path: &Path,
     ) -> Result<Arc<CachedArchiveMetadata>, String> {
         // 先检查缓存
-        if let Some(cached) = self.archive_metadata_cache.get(&book_hash.to_string()) {
+        if let Some(cached) = self.archive_metadata_cache.get(&book_key) {
             debug!("📦 Protocol: 使用缓存的元数据, hash={}", book_hash);
             return Ok(cached);
         }
@@ -175,11 +182,7 @@ impl ProtocolState {
         for e in entries {
             if e.is_image || e.is_video {
                 image_entries[e.entry_index] = Some(CachedArchiveEntry {
-                        name: e.name.clone(),
                         path: e.path.clone(),
-                        is_image: e.is_image,
-                        is_video: e.is_video,
-                        entry_index: e.entry_index,
                     });
             }
         }
@@ -190,8 +193,7 @@ impl ProtocolState {
         });
 
         // 存入缓存
-        self.archive_metadata_cache
-            .insert(book_hash.to_string(), metadata.clone());
+        self.archive_metadata_cache.insert(book_key, metadata.clone());
         debug!(
             "📦 Protocol: 缓存元数据, hash={}, entries={}",
             book_hash,
@@ -204,7 +206,7 @@ impl ProtocolState {
     /// 使指定压缩包的缓存失效
     pub fn invalidate_cache(&self, book_hash: &str) {
         self.archive_metadata_cache
-            .invalidate(&book_hash.to_string());
+            .invalidate(&Self::parse_book_key(book_hash));
     }
 
     /// 清空所有缓存
@@ -394,7 +396,8 @@ fn handle_archive_image(
     );
 
     // 使用缓存的元数据（参考 Spacedrive 的 get_or_init_lru_entry）
-    let metadata = match state.get_or_cache_metadata(book_hash, &book_path) {
+    let book_key = ProtocolState::parse_book_key(book_hash);
+    let metadata = match state.get_or_cache_metadata(book_key, book_hash, &book_path) {
         Ok(m) => m,
         Err(e) => {
             error!("📦 Protocol: 获取元数据失败: {e}");
@@ -416,8 +419,8 @@ fn handle_archive_image(
         return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
     };
 
-    let cache_key = format!("{}:{}", book_hash, entry_index);
-    let mime_type = get_mime_type(&entry.name);
+    let cache_key = (book_key, entry_index);
+    let mime_type = get_mime_type(&entry.path);
     if let Some(cached) = state.archive_image_cache.get(&cache_key) {
         let range = parse_byte_range(request, cached.len());
         return build_response_from_slice(cached.as_ref(), mime_type, range);

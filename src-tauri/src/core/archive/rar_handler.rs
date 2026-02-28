@@ -80,9 +80,11 @@ pub fn extract_file_from_rar(
 
     // 尝试使用索引
     let target_index = get_rar_entry_index(index_cache, archive_path, file_path);
-
-    // 规范化路径（RAR 可能使用反斜杠）
-    let normalized_path = file_path.replace('\\', "/");
+    let normalized_path = if target_index.is_none() {
+        Some(file_path.replace('\\', "/"))
+    } else {
+        None
+    };
 
     // 打开 RAR 并解压指定文件
     let mut archive = unrar::Archive::new(archive_path)
@@ -96,14 +98,13 @@ pub fn extract_file_from_rar(
         .read_header()
         .map_err(|e| format!("读取 RAR 头失败: {:?}", e))?
     {
-        let entry_path = header.entry().filename.to_string_lossy().to_string();
-        let entry_normalized = entry_path.replace('\\', "/");
-
-        // 如果有索引，直接跳到目标位置
+        // 如果有索引，直接按索引定位，避免热路径字符串分配与归一化
         let is_target = if let Some(idx) = target_index {
             current_index == idx
         } else {
-            entry_normalized == normalized_path || entry_path == file_path
+            let entry_path = header.entry().filename.to_string_lossy().to_string();
+            let entry_normalized = entry_path.replace('\\', "/");
+            entry_normalized == normalized_path.as_deref().unwrap_or("") || entry_path == file_path
         };
 
         if is_target {

@@ -84,66 +84,61 @@ pub fn extract_file_from_7z(
 
     // 尝试使用索引
     let target_index = get_7z_entry_index(index_cache, archive_path, file_path);
-
-    // 规范化路径
-    let normalized_path = file_path.replace('\\', "/");
+    let normalized_path = if target_index.is_none() {
+        Some(file_path.replace('\\', "/"))
+    } else {
+        None
+    };
 
     let mut archive = sevenz_rust::SevenZReader::open(archive_path, "".into())
         .map_err(|e| format!("打开 7z 压缩包失败: {}", e))?;
 
-    // 查找目标文件
-    let target_entry = if let Some(idx) = target_index {
-        // 使用索引直接定位
-        archive.archive().files.get(idx).map(|e| (idx, e))
-    } else {
-        // 顺序查找
-        archive
-            .archive()
-            .files
-            .iter()
-            .enumerate()
-            .find(|(_, entry)| {
-                let entry_path = entry.name().replace('\\', "/");
-                entry_path == normalized_path || entry.name() == file_path
-            })
-    };
-
-    if let Some((_index, _)) = target_entry {
-        let mut data = Vec::new();
-        let mut found = false;
-
-        archive
-            .for_each_entries(|entry, reader| {
-                let entry_path = entry.name().replace('\\', "/");
-                if entry_path == normalized_path || entry.name() == file_path {
-                    reader.read_to_end(&mut data)?;
-                    found = true;
-                    return Ok(false); // 找到后停止遍历
-                }
-                Ok(true)
-            })
-            .map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
-
-        let elapsed = start.elapsed();
-        let indexed = if target_index.is_some() {
-            "indexed"
-        } else {
-            "sequential"
-        };
-        info!(
-            "📦 extract_file_from_7z end: read_bytes={} elapsed_ms={} mode={} archive={} inner={}",
-            data.len(),
-            elapsed.as_millis(),
-            indexed,
-            archive_path.display(),
-            file_path
-        );
-
-        if data.is_empty() {
-            Err(format!("在 7z 压缩包中找不到文件或文件为空: {}", file_path))
-        } else {
-            Ok(data)
+    if let Some(idx) = target_index {
+        if idx >= archive.archive().files.len() {
+            return Err(format!("在 7z 压缩包中找不到文件: {}", file_path));
         }
+    }
+
+    let mut data = Vec::new();
+    let mut found = false;
+    let mut current_index = 0usize;
+
+    archive
+        .for_each_entries(|entry, reader| {
+            let is_target = if let Some(idx) = target_index {
+                current_index == idx
+            } else {
+                let entry_path = entry.name().replace('\\', "/");
+                entry_path == normalized_path.as_deref().unwrap_or("") || entry.name() == file_path
+            };
+            current_index += 1;
+
+            if is_target {
+                reader.read_to_end(&mut data)?;
+                found = true;
+                return Ok(false);
+            }
+            Ok(true)
+        })
+        .map_err(|e| format!("遍历 7z 条目失败: {}", e))?;
+
+    let elapsed = start.elapsed();
+    let indexed = if target_index.is_some() {
+        "indexed"
+    } else {
+        "sequential"
+    };
+    info!(
+        "📦 extract_file_from_7z end: read_bytes={} elapsed_ms={} mode={} archive={} inner={}",
+        data.len(),
+        elapsed.as_millis(),
+        indexed,
+        archive_path.display(),
+        file_path
+    );
+
+    if found {
+        Ok(data)
     } else {
         Err(format!("在 7z 压缩包中找不到文件: {}", file_path))
     }

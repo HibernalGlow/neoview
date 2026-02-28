@@ -26,8 +26,7 @@ import {
 	tabInlineTreeMode,
 	tabThumbnailWidthPercent,
 	tabBannerWidthPercent,
-	tabFolderTreeConfig,
-	type SortInheritStrategy
+	tabFolderTreeConfig
 } from '../../stores/folderTabStore';
 import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
 import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
@@ -250,8 +249,10 @@ function handleSetFolderTreeLayout(layout: TreePosition) {
 
 function handleToggleSortOrder() { handleSetSort(sortConfig.field); }
 function handleToggleSortLock(e: MouseEvent) { e.preventDefault(); if (virtualMode) return; folderTabActions.toggleSortLock(); refreshSortLockSettings(); }
-function handleSetSortStrategy(strategy: SortInheritStrategy) { if (virtualMode) return; folderTabActions.setSortStrategy(strategy); refreshSortLockSettings(); }
 function handleSetSortLocked(locked: boolean) { if (virtualMode) return; folderTabActions.setSortLocked(locked); refreshSortLockSettings(); }
+function handleSetDefaultSortScope(scope: 'global' | 'tab') { if (virtualMode) return; folderTabActions.setDefaultSortScope(scope); refreshSortLockSettings(); }
+function handleSetCurrentSortAsDefault(scope?: 'global' | 'tab') { if (virtualMode) return; folderTabActions.setCurrentSortAsDefault(scope); refreshSortLockSettings(); }
+function handleClearFolderSortMemory(path?: string) { if (virtualMode) return; folderTabActions.clearFolderSortMemory(path); refreshSortLockSettings(); }
 function handleSetHome(e: MouseEvent) { e.preventDefault(); onSetHome?.(); }
 function handleToggleDeleteStrategy(e: MouseEvent) { e.preventDefault(); onToggleDeleteStrategy?.(); }
 function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPenetrateSettingsBar(); }
@@ -322,7 +323,9 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		onSetSort={handleSetSort}
 		onToggleSortOrder={handleToggleSortOrder}
 		onSetSortLocked={handleSetSortLocked}
-		onSetSortStrategy={handleSetSortStrategy}
+		onSetDefaultSortScope={handleSetDefaultSortScope}
+		onSetCurrentSortAsDefault={handleSetCurrentSortAsDefault}
+		onClearFolderSortMemory={handleClearFolderSortMemory}
 	/>
 {/if}
 

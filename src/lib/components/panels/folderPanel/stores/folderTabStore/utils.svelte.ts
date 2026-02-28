@@ -10,6 +10,7 @@ FolderTabsState,
 RecentlyClosedTab,
 SharedFolderTreeSettings,
 SharedSortSettings,
+SortSource,
 PanelLayoutSettings,
 PerPanelLayoutSettings,
 VirtualPathType,
@@ -121,20 +122,20 @@ const saved = localStorage.getItem(STORAGE_KEYS.SHARED_SORT);
 if (saved) {
 const parsed = JSON.parse(saved);
 return {
-locked: parsed.locked ?? false,
-strategy: parsed.strategy ?? 'default',
-lockedSortField: parsed.lockedSortField ?? 'name',
-lockedSortOrder: parsed.lockedSortOrder ?? 'asc'
+globalDefaultSortField: parsed.globalDefaultSortField ?? parsed.lockedSortField ?? 'name',
+globalDefaultSortOrder: parsed.globalDefaultSortOrder ?? parsed.lockedSortOrder ?? 'asc',
+defaultScope: parsed.defaultScope ?? 'tab',
+folderSortMemory: parsed.folderSortMemory ?? {}
 };
 }
 } catch (e) {
 console.error('[FolderTabStore] Failed to load shared sort settings:', e);
 }
 return {
-locked: false,
-strategy: 'default',
-lockedSortField: 'name',
-lockedSortOrder: 'asc'
+globalDefaultSortField: 'name',
+globalDefaultSortOrder: 'asc',
+defaultScope: 'tab',
+folderSortMemory: {}
 };
 }
 
@@ -206,6 +207,10 @@ if (parsed.tabs) {
 parsed.tabs = parsed.tabs.map((tab: FolderTabState) => ({
 ...tab,
 pinned: tab.pinned ?? false,
+tabDefaultSortField: tab.tabDefaultSortField ?? 'name',
+tabDefaultSortOrder: tab.tabDefaultSortOrder ?? 'asc',
+temporarySortRule: tab.temporarySortRule ?? null,
+sortSource: tab.sortSource ?? 'global-default',
 selectedItems: new SvelteSet(tab.selectedItems || []),
 expandedFolders: new SvelteSet(tab.expandedFolders || [])
 }));
@@ -263,23 +268,59 @@ export function getSortSettingsForNewTab(
 sharedSortSettings: SharedSortSettings,
 sourceTab?: FolderTabState
 ): { sortField: FolderSortField; sortOrder: FolderSortOrder } {
-if (sharedSortSettings.locked) {
+if (sourceTab) {
 return {
-sortField: sharedSortSettings.lockedSortField,
-sortOrder: sharedSortSettings.lockedSortOrder
+sortField: sourceTab.tabDefaultSortField,
+sortOrder: sourceTab.tabDefaultSortOrder
+};
+}
+return {
+sortField: sharedSortSettings.globalDefaultSortField,
+sortOrder: sharedSortSettings.globalDefaultSortOrder
 };
 }
 
-if (sharedSortSettings.strategy === 'inherit' && sourceTab) {
+export function normalizeSortPathKey(path: string): string {
+return path.replace(/\\/g, '/').toLowerCase();
+}
+
+export function resolveSortForPath(
+tab: FolderTabState,
+path: string,
+sharedSortSettings: SharedSortSettings
+): { sortField: FolderSortField; sortOrder: FolderSortOrder; source: SortSource } {
+const pathKey = normalizeSortPathKey(path);
+
+const tempRule = tab.temporarySortRule;
+if (tempRule && normalizeSortPathKey(tempRule.path) === pathKey) {
 return {
-sortField: sourceTab.sortField,
-sortOrder: sourceTab.sortOrder
+sortField: tempRule.sortField,
+sortOrder: tempRule.sortOrder,
+source: 'temporary'
+};
+}
+
+const memoryRule = sharedSortSettings.folderSortMemory[pathKey];
+if (memoryRule) {
+return {
+sortField: memoryRule.sortField,
+sortOrder: memoryRule.sortOrder,
+source: 'memory'
+};
+}
+
+if (tab.tabDefaultSortField && tab.tabDefaultSortOrder) {
+return {
+sortField: tab.tabDefaultSortField,
+sortOrder: tab.tabDefaultSortOrder,
+source: 'tab-default'
 };
 }
 
 return {
-sortField: 'name',
-sortOrder: 'asc'
+sortField: sharedSortSettings.globalDefaultSortField,
+sortOrder: sharedSortSettings.globalDefaultSortOrder,
+source: 'global-default'
 };
 }
 

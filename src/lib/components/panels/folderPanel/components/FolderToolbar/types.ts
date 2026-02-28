@@ -19,10 +19,14 @@ export interface FolderTreeConfig {
 
 /** 排序锁定设置 */
 export interface SortLockSettings {
-	locked: boolean;
-	strategy: 'default' | 'inherit';
-	field?: FolderSortField;
-	order?: 'asc' | 'desc';
+	defaultScope: 'global' | 'tab';
+	globalDefaultSortField: FolderSortField;
+	globalDefaultSortOrder: 'asc' | 'desc';
+	tabDefaultSortField: FolderSortField;
+	tabDefaultSortOrder: 'asc' | 'desc';
+	hasTemporaryRule: boolean;
+	temporaryRulePath: string | null;
+	sortSource: 'temporary' | 'memory' | 'tab-default' | 'global-default';
 }
 
 /** 视图样式定义 */

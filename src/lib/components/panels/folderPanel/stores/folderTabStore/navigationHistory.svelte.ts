@@ -8,6 +8,7 @@ import type { FolderHistoryEntry, FolderTabState } from './types';
 import { store, updateActiveTab, getActiveTab } from './tabManagement.svelte';
 import { getDisplayName, normalizePath, isVirtualPath } from './utils.svelte';
 import { saveTabsState } from './utils.svelte';
+import { resolveSortForTab } from './sortingFiltering.svelte';
 
 // ============ 路径导航 ============
 
@@ -16,7 +17,16 @@ export function setPath(path: string, addToHistory = true): void {
 const normalizedPath = normalizePath(path);
 
 updateActiveTab((tab) => {
-const newTab = { ...tab, currentPath: normalizedPath, loading: true, error: null };
+const resolvedSort = resolveSortForTab(tab, normalizedPath);
+const newTab = {
+...tab,
+currentPath: normalizedPath,
+loading: true,
+error: null,
+sortField: resolvedSort.sortField,
+sortOrder: resolvedSort.sortOrder,
+sortSource: resolvedSort.source
+};
 newTab.title = getDisplayName(normalizedPath);
 
 if (addToHistory && normalizedPath) {
@@ -26,8 +36,8 @@ displayName: getDisplayName(normalizedPath),
 timestamp: Date.now(),
 scrollTop: 0,
 selectedItemPath: null,
-sortField: tab.sortField,
-sortOrder: tab.sortOrder
+sortField: resolvedSort.sortField,
+sortOrder: resolvedSort.sortOrder
 };
 
 // 截断当前位置之后的历史
@@ -89,12 +99,18 @@ if (!tab || index < 0 || index >= tab.historyStack.length) return null;
 const entry = tab.historyStack[index];
 if (!entry) return null;
 
-updateActiveTab((t) => ({
+updateActiveTab((t) => {
+const resolvedSort = resolveSortForTab(t, entry.path);
+return {
 ...t,
 currentPath: entry.path,
 historyIndex: index,
-title: getDisplayName(entry.path)
-}));
+title: getDisplayName(entry.path),
+sortField: resolvedSort.sortField,
+sortOrder: resolvedSort.sortOrder,
+sortSource: resolvedSort.source
+};
+});
 
 return { path: entry.path };
 }
@@ -107,12 +123,18 @@ if (!tab || tab.historyIndex <= 0) return null;
 const newIndex = tab.historyIndex - 1;
 const entry = tab.historyStack[newIndex];
 
-updateActiveTab((t) => ({
+updateActiveTab((t) => {
+const resolvedSort = resolveSortForTab(t, entry.path);
+return {
 ...t,
 currentPath: entry.path,
 historyIndex: newIndex,
-title: getDisplayName(entry.path)
-}));
+title: getDisplayName(entry.path),
+sortField: resolvedSort.sortField,
+sortOrder: resolvedSort.sortOrder,
+sortSource: resolvedSort.source
+};
+});
 
 return { path: entry.path };
 }
@@ -125,12 +147,18 @@ if (!tab || tab.historyIndex >= tab.historyStack.length - 1) return null;
 const newIndex = tab.historyIndex + 1;
 const entry = tab.historyStack[newIndex];
 
-updateActiveTab((t) => ({
+updateActiveTab((t) => {
+const resolvedSort = resolveSortForTab(t, entry.path);
+return {
 ...t,
 currentPath: entry.path,
 historyIndex: newIndex,
-title: getDisplayName(entry.path)
-}));
+title: getDisplayName(entry.path),
+sortField: resolvedSort.sortField,
+sortOrder: resolvedSort.sortOrder,
+sortSource: resolvedSort.source
+};
+});
 
 return { path: entry.path };
 }

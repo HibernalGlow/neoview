@@ -69,15 +69,35 @@ history: PanelLayoutSettings;
 
 // ============ 排序设置类型 ============
 
-/** 排序继承策略 */
+/** 默认排序作用域 */
+export type SortDefaultScope = 'global' | 'tab';
+
+/** 排序来源（用于规则引擎调试与展示） */
+export type SortSource = 'temporary' | 'memory' | 'tab-default' | 'global-default';
+
+/** 兼容旧命名：排序继承策略 */
 export type SortInheritStrategy = 'default' | 'inherit';
+
+/** 当前标签页临时排序规则（仅某个文件夹生效） */
+export interface TemporarySortRule {
+path: string;
+sortField: FolderSortField;
+sortOrder: FolderSortOrder;
+}
+
+/** 文件夹排序记忆条目 */
+export interface FolderSortMemoryEntry {
+sortField: FolderSortField;
+sortOrder: FolderSortOrder;
+updatedAt: number;
+}
 
 /** 共享排序设置 */
 export interface SharedSortSettings {
-locked: boolean;
-strategy: SortInheritStrategy;
-lockedSortField: FolderSortField;
-lockedSortOrder: FolderSortOrder;
+globalDefaultSortField: FolderSortField;
+globalDefaultSortOrder: FolderSortOrder;
+defaultScope: SortDefaultScope;
+folderSortMemory: Record<string, FolderSortMemoryEntry>;
 }
 
 /** 共享文件夹树设置 */
@@ -104,6 +124,10 @@ error: string | null;
 viewStyle: FolderViewStyle;
 sortField: FolderSortField;
 sortOrder: FolderSortOrder;
+tabDefaultSortField: FolderSortField;
+tabDefaultSortOrder: FolderSortOrder;
+temporarySortRule: TemporarySortRule | null;
+sortSource: SortSource;
 ratingVersion: number;
 multiSelectMode: boolean;
 deleteMode: boolean;

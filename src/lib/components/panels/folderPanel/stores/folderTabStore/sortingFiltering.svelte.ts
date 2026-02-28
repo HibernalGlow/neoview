@@ -12,10 +12,12 @@ FolderSortField,
 FolderSortOrder,
 DeleteStrategy,
 SharedSortSettings,
+SortDefaultScope,
+SortSource,
 SortInheritStrategy
 } from './types';
 import { updateActiveTab, getActiveTab, getSharedSortSettings } from './tabManagement.svelte';
-import { saveSharedSortSettings } from './utils.svelte';
+import { saveSharedSortSettings, resolveSortForPath, normalizeSortPathKey, isVirtualPath } from './utils.svelte';
 
 // ============ 全局搜索结果 Store ============
 
@@ -25,6 +27,21 @@ export const globalSearchResults = writable<FsItem[]>([]);
 // ============ 内部排序设置状态 ============
 
 let sharedSortSettings = getSharedSortSettings();
+
+function persistSharedSortSettings(): void {
+saveSharedSortSettings(sharedSortSettings);
+}
+
+function resolveForCurrentPath(tab: FolderTabState): { sortField: FolderSortField; sortOrder: FolderSortOrder; source: SortSource } {
+if (!tab.currentPath) {
+return {
+sortField: tab.tabDefaultSortField,
+sortOrder: tab.tabDefaultSortOrder,
+source: 'tab-default'
+};
+}
+return resolveSortForPath(tab, tab.currentPath, sharedSortSettings);
+}
 
 // ============ 视图和排序操作 ============
 
@@ -38,58 +55,161 @@ export function setSort(field: FolderSortField, order?: FolderSortOrder): void {
 updateActiveTab((tab) => {
 const newOrder = order ?? (tab.sortField === field && tab.sortOrder === 'asc' ? 'desc' : 'asc');
 
-// 如果排序已锁定，同步更新锁定的排序设置
-if (sharedSortSettings.locked) {
-sharedSortSettings.lockedSortField = field;
-sharedSortSettings.lockedSortOrder = newOrder;
-saveSharedSortSettings(sharedSortSettings);
+const normalizedCurrentPath = tab.currentPath ? normalizeSortPathKey(tab.currentPath) : '';
+const hasTempRuleForCurrentPath =
+tab.temporarySortRule && normalizeSortPathKey(tab.temporarySortRule.path) === normalizedCurrentPath;
+
+let nextTab: FolderTabState = {
+...tab,
+sortField: field,
+sortOrder: newOrder,
+sortSource: hasTempRuleForCurrentPath ? 'temporary' : 'memory'
+};
+
+if (hasTempRuleForCurrentPath && tab.temporarySortRule) {
+nextTab.temporarySortRule = {
+...tab.temporarySortRule,
+sortField: field,
+sortOrder: newOrder
+};
+} else if (tab.currentPath && !isVirtualPath(tab.currentPath)) {
+sharedSortSettings.folderSortMemory[normalizedCurrentPath] = {
+sortField: field,
+sortOrder: newOrder,
+updatedAt: Date.now()
+};
+persistSharedSortSettings();
 }
 
-return { ...tab, sortField: field, sortOrder: newOrder };
+return nextTab;
 });
 }
 
 // ============ 排序锁定操作 ============
 
 /** 获取共享排序设置 */
-export function getSortSettings(): SharedSortSettings {
-return { ...sharedSortSettings };
+export function getSortSettings(): {
+defaultScope: SortDefaultScope;
+globalDefaultSortField: FolderSortField;
+globalDefaultSortOrder: FolderSortOrder;
+tabDefaultSortField: FolderSortField;
+tabDefaultSortOrder: FolderSortOrder;
+hasTemporaryRule: boolean;
+temporaryRulePath: string | null;
+sortSource: SortSource;
+} {
+const tab = getActiveTab();
+return {
+defaultScope: sharedSortSettings.defaultScope,
+globalDefaultSortField: sharedSortSettings.globalDefaultSortField,
+globalDefaultSortOrder: sharedSortSettings.globalDefaultSortOrder,
+tabDefaultSortField: tab?.tabDefaultSortField ?? sharedSortSettings.globalDefaultSortField,
+tabDefaultSortOrder: tab?.tabDefaultSortOrder ?? sharedSortSettings.globalDefaultSortOrder,
+hasTemporaryRule: !!tab?.temporarySortRule,
+temporaryRulePath: tab?.temporarySortRule?.path ?? null,
+sortSource: tab?.sortSource ?? 'global-default'
+};
 }
 
-/** 切换排序锁定 */
+/** 切换当前文件夹临时规则（兼容旧 API 名） */
 export function toggleSortLock(): void {
 const tab = getActiveTab();
 if (!tab) return;
-
-sharedSortSettings.locked = !sharedSortSettings.locked;
-
-if (sharedSortSettings.locked) {
-sharedSortSettings.lockedSortField = tab.sortField;
-sharedSortSettings.lockedSortOrder = tab.sortOrder;
+setSortLocked(!tab.temporarySortRule);
 }
 
-saveSharedSortSettings(sharedSortSettings);
+/** 设置当前文件夹临时规则状态（兼容旧 API 名） */
+export function setSortLocked(enabled: boolean): void {
+updateActiveTab((tab) => {
+let nextTab: FolderTabState = {
+...tab,
+temporarySortRule: enabled && tab.currentPath
+? {
+path: tab.currentPath,
+sortField: tab.sortField,
+sortOrder: tab.sortOrder
+}
+: null
+};
+
+const resolved = resolveForCurrentPath(nextTab);
+nextTab = {
+...nextTab,
+sortField: resolved.sortField,
+sortOrder: resolved.sortOrder,
+sortSource: resolved.source
+};
+
+return nextTab;
+});
 }
 
-/** 设置排序锁定状态 */
-export function setSortLocked(locked: boolean): void {
+/** 设置默认排序作用域 */
+export function setDefaultSortScope(scope: SortDefaultScope): void {
+sharedSortSettings.defaultScope = scope;
+persistSharedSortSettings();
+}
+
+/** 将当前排序设为默认（可指定全局或当前标签） */
+export function setCurrentSortAsDefault(scope?: SortDefaultScope): void {
 const tab = getActiveTab();
 if (!tab) return;
 
-sharedSortSettings.locked = locked;
-
-if (locked) {
-sharedSortSettings.lockedSortField = tab.sortField;
-sharedSortSettings.lockedSortOrder = tab.sortOrder;
+const finalScope = scope ?? sharedSortSettings.defaultScope;
+if (finalScope === 'global') {
+sharedSortSettings.globalDefaultSortField = tab.sortField;
+sharedSortSettings.globalDefaultSortOrder = tab.sortOrder;
+persistSharedSortSettings();
+return;
 }
 
-saveSharedSortSettings(sharedSortSettings);
+updateActiveTab((current) => ({
+...current,
+tabDefaultSortField: tab.sortField,
+tabDefaultSortOrder: tab.sortOrder
+}));
 }
 
-/** 设置排序继承策略 */
+/** 清理文件夹排序记忆 */
+export function clearFolderSortMemory(path?: string): void {
+if (path) {
+delete sharedSortSettings.folderSortMemory[normalizeSortPathKey(path)];
+} else {
+sharedSortSettings.folderSortMemory = {};
+}
+persistSharedSortSettings();
+}
+
+/** 获取文件夹排序记忆（按更新时间倒序） */
+export function getFolderSortMemoryEntries(limit = 30): Array<{
+path: string;
+sortField: FolderSortField;
+sortOrder: FolderSortOrder;
+updatedAt: number;
+}> {
+return Object.entries(sharedSortSettings.folderSortMemory)
+.map(([path, value]) => ({
+path,
+sortField: value.sortField,
+sortOrder: value.sortOrder,
+updatedAt: value.updatedAt
+}))
+.sort((a, b) => b.updatedAt - a.updatedAt)
+.slice(0, limit);
+}
+
+/** 解析指定路径应该使用的排序（导航时调用） */
+export function resolveSortForTab(tab: FolderTabState, path: string): {
+sortField: FolderSortField;
+sortOrder: FolderSortOrder;
+source: SortSource;
+} {
+return resolveSortForPath(tab, path, sharedSortSettings);
+}
+
+/** 设置排序继承策略（兼容旧 API，映射为默认作用域） */
 export function setSortStrategy(strategy: SortInheritStrategy): void {
-sharedSortSettings.strategy = strategy;
-saveSharedSortSettings(sharedSortSettings);
+setDefaultSortScope(strategy === 'inherit' ? 'tab' : 'global');
 }
 
 // ============ 模式切换操作 ============

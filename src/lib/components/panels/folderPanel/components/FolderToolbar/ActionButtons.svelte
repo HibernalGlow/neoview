@@ -19,7 +19,7 @@ import {
 	Settings2,
 	ArrowUp,
 	ArrowDown,
-	Lock,
+	Pin,
 	ALargeSmall,
 	Calendar,
 	HardDrive,
@@ -159,14 +159,14 @@ function getCurrentViewIcon() {
 <Tooltip.Root disabled={!showToolbarTooltip}>
 	<Tooltip.Trigger>
 		<Button 
-			variant={sortPanelExpanded ? 'default' : (sortLockSettings.locked && !virtualMode ? 'secondary' : 'ghost')} 
+			variant={sortPanelExpanded ? 'default' : (sortLockSettings.hasTemporaryRule && !virtualMode ? 'secondary' : 'ghost')} 
 			size="sm" 
 			class="h-7 gap-0.5 px-1.5"
 			onclick={onToggleSortPanel}
 			oncontextmenu={onToggleSortLock}
 		>
-			{#if sortLockSettings.locked && !virtualMode}
-				<Lock class="h-3 w-3 text-amber-500" />
+			{#if sortLockSettings.hasTemporaryRule && !virtualMode}
+				<Pin class="h-3 w-3 text-amber-500" />
 			{/if}
 			{@const SortIcon = getCurrentSortIcon()}
 			<SortIcon class="h-3.5 w-3.5" />
@@ -182,7 +182,7 @@ function getCurrentViewIcon() {
 	<Tooltip.Content>
 		<p>排序 {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
 		{#if !virtualMode}
-			<p class="text-muted-foreground text-xs">{sortLockSettings.locked ? '🔒 已锁定 (右键解锁)' : '右键锁定排序'}</p>
+			<p class="text-muted-foreground text-xs">{sortLockSettings.hasTemporaryRule ? '📌 当前文件夹临时规则已启用（右键关闭）' : '右键：仅当前文件夹生效'}</p>
 		{/if}
 	</Tooltip.Content>
 </Tooltip.Root>

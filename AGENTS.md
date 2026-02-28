@@ -5,35 +5,35 @@
 ### Development
 
 ```bash
-npm run dev              # Start dev server (port 1420)
-npm run dev:web          # Web-only mode (no Tauri backend)
+pnpm run dev              # Start dev server (port 1420)
+pnpm run dev:web          # Web-only mode (no Tauri backend)
 ```
 
 ### Building
 
 ```bash
-npm run build            # Build for production
-npm run preview          # Preview production build
-npm run tauri [command]  # Run Tauri CLI commands
+pnpm run build            # Build for production
+pnpm run preview          # Preview production build
+pnpm run tauri [command]  # Run Tauri CLI commands
 ```
 
 ### Type Checking
 
 ```bash
-npm run check            # Run svelte-check and TypeScript check
+pnpm run check            # Run svelte-check and TypeScript check
 ```
 
 ### Formatting & Linting
 
 ```bash
-npm run format           # Format code with Prettier (writes)
-npm run lint             # Check format and ESLint (read-only)
+pnpm run format           # Format code with Prettier (writes)
+pnpm run lint             # Check format and ESLint (read-only)
 ```
 
 ### Testing
 
 ```bash
-npm run test             # Run all tests
+pnpm run test             # Run all tests
 npx vitest run src/lib/stores/imageStore.test.ts  # Run single test file
 npx vitest run --reporter=verbose src/lib/**/*.test.ts  # Run with verbose output
 ```

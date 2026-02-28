@@ -20,9 +20,43 @@ use super::generators::{
     generate_folder_thumbnail_static, generate_video_thumbnail_static,
 };
 use super::types::{
-    GenerateTask, ThumbnailBatchReadyPayload, ThumbnailFileType, ThumbnailReadyPayload,
+    GenerateTask, TaskLane, ThumbnailBatchReadyPayload, ThumbnailFileType, ThumbnailReadyPayload,
 };
 use super::{log_debug, log_info};
+
+const LANE_SCHEDULE_LEN: usize = 9;
+
+fn preferred_lane_for_tick(tick: usize) -> TaskLane {
+    // 6:2:1 时间片配额（visible:prefetch:background）
+    match tick % LANE_SCHEDULE_LEN {
+        0 | 1 | 2 | 4 | 5 | 7 => TaskLane::Visible,
+        3 | 6 => TaskLane::Prefetch,
+        _ => TaskLane::Background,
+    }
+}
+
+fn pop_task_by_lane(queue: &mut VecDeque<GenerateTask>, preferred: TaskLane) -> Option<GenerateTask> {
+    if queue.is_empty() {
+        return None;
+    }
+
+    if let Some(pos) = queue.iter().position(|t| t.lane == preferred) {
+        return queue.remove(pos);
+    }
+
+    // 配额车道无任务时降级回退，避免空转/饥饿
+    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Visible) {
+        return queue.remove(pos);
+    }
+    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Prefetch) {
+        return queue.remove(pos);
+    }
+    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Background) {
+        return queue.remove(pos);
+    }
+
+    queue.pop_front()
+}
 
 /// 启动工作线程
 #[allow(clippy::too_many_arguments)]
@@ -98,6 +132,7 @@ fn create_worker_thread(
         const EMIT_BATCH_SIZE: usize = 16;
         log_debug!("🔧 Worker {} started", worker_id);
         let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
+        let mut lane_tick: usize = worker_id % LANE_SCHEDULE_LEN;
 
         while running.load(Ordering::SeqCst) {
             if scheduler_paused.load(Ordering::Acquire) {
@@ -127,7 +162,9 @@ fn create_worker_thread(
 
                 // 若队列非空，直接取任务（避免短期 Condvar 等待）
                 if !guard.is_empty() {
-                    guard.pop_front()
+                    let preferred = preferred_lane_for_tick(lane_tick);
+                    lane_tick = lane_tick.wrapping_add(1);
+                    pop_task_by_lane(&mut guard, preferred)
                 } else if !running.load(Ordering::SeqCst) {
                     None
                 } else {
@@ -137,7 +174,9 @@ fn create_worker_thread(
                             if !running.load(Ordering::SeqCst) {
                                 None
                             } else {
-                                g.pop_front() // None if still empty → outer loop flushes
+                                let preferred = preferred_lane_for_tick(lane_tick);
+                                lane_tick = lane_tick.wrapping_add(1);
+                                pop_task_by_lane(&mut g, preferred) // None if still empty → outer loop flushes
                             }
                         }
                         Err(poisoned) => {

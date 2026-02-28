@@ -399,16 +399,19 @@ impl ThumbnailServiceV3 {
         if let Some(blob) = self.peek_from_memory_cache(key) {
             return Some(blob);
         }
-        // 2. 回落到数据库
-        let category = if std::path::Path::new(key).is_dir() { "folder" } else { "file" };
-        if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, category) {
+        // 2. 回落到数据库（无 syscall：用启发式优先类别，再回退另一类别）
+        let likely_folder = is_likely_folder(key);
+        let (primary, secondary) = if likely_folder {
+            ("folder", "file")
+        } else {
+            ("file", "folder")
+        };
+
+        if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, primary) {
             return Some(blob);
         }
-        // folder 尝试另一种类型
-        if category == "file" {
-            if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, "folder") {
-                return Some(blob);
-            }
+        if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, secondary) {
+            return Some(blob);
         }
         None
     }
@@ -422,21 +425,33 @@ impl ThumbnailServiceV3 {
                 results.push((path, blob));
                 continue;
             }
-            let category = if std::path::Path::new(&path).is_dir() {
-                "folder"
+            let likely_folder = is_likely_folder(&path);
+            let (primary, secondary) = if likely_folder {
+                ("folder", "file")
             } else {
-                "file"
+                ("file", "folder")
             };
-            match self.db.load_thumbnail_by_key_and_category(&path, category) {
-                Ok(Some(blob)) => {
-                    if let Ok(mut c) = self.memory_cache.write() {
-                        self.memory_cache_bytes
-                            .fetch_add(blob.len(), Ordering::SeqCst);
-                        c.put(path.clone(), blob.clone());
-                    }
-                    results.push((path, Some(blob)));
+
+            let loaded = self
+                .db
+                .load_thumbnail_by_key_and_category(&path, primary)
+                .ok()
+                .flatten()
+                .or_else(|| {
+                    self.db
+                        .load_thumbnail_by_key_and_category(&path, secondary)
+                        .ok()
+                        .flatten()
+                });
+
+            if let Some(blob) = loaded {
+                if let Ok(mut c) = self.memory_cache.write() {
+                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    c.put(path.clone(), blob.clone());
                 }
-                _ => results.push((path, None)),
+                results.push((path, Some(blob)));
+            } else {
+                results.push((path, None));
             }
         }
         results

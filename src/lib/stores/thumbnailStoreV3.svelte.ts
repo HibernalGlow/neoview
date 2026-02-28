@@ -8,16 +8,11 @@ import { getThumbUrl } from '$lib/api/imageProtocol';
 const thumbnails = new SvelteMap<string, string>();
 const THUMBNAIL_CACHE_LIMIT = 512; // 内存 LRU 上限，防止无限增长
 
-function revokeIfObjectUrl(url: string) {
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
-    URL.revokeObjectURL(url);
-  }
-}
-
 function setThumbnailWithEviction(path: string, url: string) {
   const existing = thumbnails.get(path);
-  if (existing && existing !== url) {
-    revokeIfObjectUrl(existing);
+  // 相同 URL 直接跳过，避免无意义 delete/set 触发响应式更新
+  if (existing === url) {
+    return;
   }
 
   // 通过重新 set 维持 LRU 顺序
@@ -30,8 +25,6 @@ function setThumbnailWithEviction(path: string, url: string) {
   while (thumbnails.size > THUMBNAIL_CACHE_LIMIT) {
     const first = thumbnails.keys().next().value as string | undefined;
     if (!first) break;
-    const oldUrl = thumbnails.get(first);
-    if (oldUrl) revokeIfObjectUrl(oldUrl);
     thumbnails.delete(first);
     evictedKeys.push(toRelativeKey(first));
   }
@@ -328,7 +321,7 @@ export async function initThumbnailServiceV3(
         const evictedKeys: string[] = [];
         for (const [path, url] of entries) {
           const existing = thumbnails.get(path);
-          if (existing && existing !== url) revokeIfObjectUrl(existing);
+          if (existing === url) continue;
           thumbnails.delete(path);
           thumbnails.set(path, url);
         }
@@ -336,8 +329,6 @@ export async function initThumbnailServiceV3(
         while (thumbnails.size > THUMBNAIL_CACHE_LIMIT) {
           const first = thumbnails.keys().next().value as string | undefined;
           if (!first) break;
-          const oldUrl = thumbnails.get(first);
-          if (oldUrl) revokeIfObjectUrl(oldUrl);
           thumbnails.delete(first);
           evictedKeys.push(toRelativeKey(first));
         }
@@ -549,7 +540,6 @@ export async function reloadThumbnail(
   // 1. 删除本地缓存（释放 blob URL）
   const existingUrl = thumbnails.get(path);
   if (existingUrl) {
-    URL.revokeObjectURL(existingUrl);
     thumbnails.delete(path);
   }
 

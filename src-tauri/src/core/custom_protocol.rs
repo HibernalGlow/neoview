@@ -110,6 +110,12 @@ struct CachedArchiveMetadata {
     image_entries: Vec<Option<CachedArchiveEntry>>,
 }
 
+#[derive(Clone)]
+struct CachedProtocolImage {
+    data: Arc<[u8]>,
+    mime_type: &'static str,
+}
+
 /// Custom Protocol 状态
 pub struct ProtocolState {
     /// 路径注册表
@@ -122,7 +128,7 @@ pub struct ProtocolState {
     /// 参考 Spacedrive 的 file_metadata_cache
     archive_metadata_cache: Cache<u64, Arc<CachedArchiveMetadata>>,
     /// 压缩包图片二进制缓存（避免重复解包读取）
-    archive_image_cache: Cache<(u64, usize), Arc<[u8]>>,
+    archive_image_cache: Cache<(u64, usize), CachedProtocolImage>,
     /// 旧缩略图路径缓存（避免重复 DB 查询）
     legacy_thumb_cache: Cache<u64, (Arc<str>, Arc<[u8]>)>,
     /// 旧缩略图类别提示缓存（file/folder）
@@ -530,10 +536,11 @@ fn parse_byte_range(request: &Request<Vec<u8>>, total_len: usize) -> Option<(usi
 }
 
 fn build_response_from_slice(
+    request: &Request<Vec<u8>>,
     bytes: &[u8],
     mime_type: &str,
-    range: Option<(usize, usize)>,
 ) -> Response<Vec<u8>> {
+    let range = parse_byte_range(request, bytes.len());
     if let Some((start, end)) = range {
         let body = bytes[start..=end].to_vec();
         return Response::builder()
@@ -561,6 +568,16 @@ fn build_error_response(status: StatusCode, message: &str) -> Response<Vec<u8>> 
         .unwrap()
 }
 
+#[inline]
+fn build_error_response_static(status: StatusCode, message: &'static [u8]) -> Response<Vec<u8>> {
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "text/plain")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(Vec::from(message))
+        .unwrap()
+}
+
 /// 处理压缩包图片请求
 fn handle_archive_image(
     state: &ProtocolState,
@@ -569,10 +586,15 @@ fn handle_archive_image(
     book_key: u64,
     entry_index: usize,
 ) -> Response<Vec<u8>> {
+    let cache_key = (book_key, entry_index);
+    if let Some(cached) = state.archive_image_cache.get(&cache_key) {
+        return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+    }
+
     // 从注册表获取路径
     let Some(book_path) = state.path_registry.get_path(book_hash) else {
         warn!("📦 Protocol: 未找到书籍路径, hash={book_hash}");
-        return build_error_response(StatusCode::NOT_FOUND, "Book not found");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Book not found");
     };
 
     debug!(
@@ -601,15 +623,10 @@ fn handle_archive_image(
             entry_index,
             metadata.image_entries.len()
         );
-        return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Entry not found");
     };
 
-    let cache_key = (book_key, entry_index);
     let mime_type = entry.mime_type;
-    if let Some(cached) = state.archive_image_cache.get(&cache_key) {
-        let range = parse_byte_range(request, cached.len());
-        return build_response_from_slice(cached.as_ref(), mime_type, range);
-    }
 
     // 提取图片数据
     let shared = match state
@@ -622,9 +639,14 @@ fn handle_archive_image(
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
         }
     };
-    state.archive_image_cache.insert(cache_key, shared.clone());
-    let range = parse_byte_range(request, shared.len());
-    build_response_from_slice(shared.as_ref(), mime_type, range)
+    state.archive_image_cache.insert(
+        cache_key,
+        CachedProtocolImage {
+            data: shared.clone(),
+            mime_type,
+        },
+    );
+    build_response_from_slice(request, shared.as_ref(), mime_type)
 }
 
 /// 处理文件图片请求
@@ -636,7 +658,7 @@ fn handle_file_image(
     // 从注册表获取路径
     let Some(file_path) = state.path_registry.get_path(path_hash) else {
         warn!("📁 Protocol: 未找到文件路径, hash={path_hash}");
-        return build_error_response(StatusCode::NOT_FOUND, "File not found");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"File not found");
     };
 
     debug!("📁 Protocol: 加载文件图片, path={}", file_path.display());
@@ -651,9 +673,7 @@ fn handle_file_image(
     };
 
     let mime_type = get_mime_type_from_path(file_path.as_ref());
-    let bytes = data.as_slice();
-    let range = parse_byte_range(request, bytes.len());
-    build_response_from_slice(bytes, mime_type, range)
+    build_response_from_slice(request, data.as_slice(), mime_type)
 }
 
 /// 处理缩略图请求
@@ -665,7 +685,7 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
 
     if state.is_legacy_thumbnail_known_missing(key) {
         debug!("🖼️ Protocol: 旧路未命中缓存命中, key={key}");
-        return build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Thumbnail not found");
     }
 
     // 优先查 ThumbnailServiceV3：内存缓存（O(1)）→ DB
@@ -682,9 +702,9 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
     // 回落到旧 ThumbnailState DB（兴趣点：只查 DB）
     let Some(thumb_state) = app.try_state::<ThumbnailState>() else {
         warn!("🖼️ Protocol: ThumbnailState 未初始化");
-        return build_error_response(
+        return build_error_response_static(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Thumbnail state not initialized",
+            b"Thumbnail state not initialized",
         );
     };
 
@@ -706,7 +726,7 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
 
     debug!("🖼️ Protocol: 未找到缩略图, key={key}");
     state.mark_legacy_thumbnail_missing(key);
-    build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found")
+    build_error_response_static(StatusCode::NOT_FOUND, b"Thumbnail not found")
 }
 
 fn handle_health_check() -> Response<Vec<u8>> {
@@ -732,9 +752,9 @@ pub fn handle_protocol_request(
     // 获取协议状态
     let Some(state) = app.try_state::<ProtocolState>() else {
         error!("🌐 Protocol: 状态未初始化");
-        return build_error_response(
+        return build_error_response_static(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Protocol state not initialized",
+            b"Protocol state not initialized",
         );
     };
 
@@ -752,7 +772,7 @@ pub fn handle_protocol_request(
             }
         }
         warn!("🌐 Protocol: 非法 image 请求路径: {path}");
-        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
     }
 
     if let Some(path_hash) = path.strip_prefix("/file/") {
@@ -760,7 +780,7 @@ pub fn handle_protocol_request(
             return handle_file_image(&state, request, path_hash);
         }
         warn!("🌐 Protocol: 非法 file 请求路径: {path}");
-        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
     }
 
     if let Some(raw_key) = path.strip_prefix("/thumb/") {
@@ -769,11 +789,11 @@ pub fn handle_protocol_request(
             return handle_thumbnail(&state, app, key.as_ref());
         }
         warn!("🌐 Protocol: 非法 thumb 请求路径: {path}");
-        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
     }
 
     warn!("🌐 Protocol: 未知请求路径: {path}");
-    build_error_response(StatusCode::NOT_FOUND, "Unknown request")
+    build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request")
 }
 
 #[cfg(test)]

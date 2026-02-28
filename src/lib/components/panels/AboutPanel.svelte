@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { open } from '@tauri-apps/plugin-shell';
 
-	const version = '4.5.0';
+	const version = __APP_VERSION__;
 
 	// 技术栈标签
 	const tags = [

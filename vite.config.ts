@@ -1,6 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
+import packageJson from './package.json';
 import { defineConfig } from 'vite';
 
 const host = process.env.TAURI_DEV_HOST;
@@ -9,6 +10,9 @@ const isWebOnly = process.env.WEB_ONLY === 'true';
 
 export default defineConfig({
 	plugins: [svelte({ compilerOptions: { runes: true } }), tailwindcss()],
+	define: {
+		__APP_VERSION__: JSON.stringify(packageJson.version)
+	},
 	// 确保 Release 版本的资源路径正确
 	base: './',
 	resolve: {

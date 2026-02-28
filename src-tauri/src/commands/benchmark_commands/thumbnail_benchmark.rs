@@ -1,6 +1,16 @@
 //! 缩略图基准测试
 //! 包含各种缩略图生成方法的测试函数
 
+#![allow(
+    clippy::similar_names,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::uninlined_format_args,
+    clippy::match_same_arms,
+    clippy::redundant_closure
+)]
+
 use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::io::Cursor;
 

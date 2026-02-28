@@ -24,6 +24,7 @@ use tauri::Manager;
 /// 协议名称
 pub const PROTOCOL_NAME: &str = "neoview";
 const LEGACY_THUMB_CACHE_LIMIT: usize = 512;
+const LEGACY_THUMB_HINT_LIMIT: usize = 1024;
 
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
@@ -127,6 +128,12 @@ pub struct ProtocolState {
     legacy_thumb_cache: Mutex<AHashMap<String, Arc<[u8]>>>,
     /// 旧缩略图缓存插入顺序（用于有界淘汰）
     legacy_thumb_order: Mutex<VecDeque<String>>,
+    /// 旧缩略图类别提示缓存（file/folder）
+    legacy_thumb_category_hint: Mutex<AHashMap<String, &'static str>>,
+    /// 类别提示缓存插入顺序（用于有界淘汰）
+    legacy_thumb_hint_order: Mutex<VecDeque<String>>,
+    /// 旧缩略图未命中缓存（短 TTL，减少重复 DB miss 查询）
+    legacy_thumb_miss_cache: Cache<u64, ()>,
 }
 
 impl ProtocolState {
@@ -140,6 +147,10 @@ impl ProtocolState {
         let archive_image_cache = Cache::builder()
             .max_capacity(256)
             .time_to_live(Duration::from_secs(180))
+            .build();
+        let legacy_thumb_miss_cache = Cache::builder()
+            .max_capacity(4096)
+            .time_to_live(Duration::from_secs(30))
             .build();
 
         let shared_archive_manager = {
@@ -155,6 +166,9 @@ impl ProtocolState {
             archive_image_cache,
             legacy_thumb_cache: Mutex::new(AHashMap::new()),
             legacy_thumb_order: Mutex::new(VecDeque::new()),
+            legacy_thumb_category_hint: Mutex::new(AHashMap::new()),
+            legacy_thumb_hint_order: Mutex::new(VecDeque::new()),
+            legacy_thumb_miss_cache,
         }
     }
 
@@ -180,6 +194,57 @@ impl ProtocolState {
                 break;
             }
         }
+    }
+
+    #[inline]
+    fn get_legacy_thumbnail_hint(&self, key: &str) -> Option<&'static str> {
+        self.legacy_thumb_category_hint.lock().get(key).copied()
+    }
+
+    fn put_legacy_thumbnail_hint(&self, key: &str, category: &'static str) {
+        let mut hints = self.legacy_thumb_category_hint.lock();
+        let mut order = self.legacy_thumb_hint_order.lock();
+        let key_owned = key.to_string();
+
+        if !hints.contains_key(key) {
+            order.push_back(key_owned.clone());
+        }
+        hints.insert(key_owned, category);
+
+        while hints.len() > LEGACY_THUMB_HINT_LIMIT {
+            if let Some(oldest) = order.pop_front() {
+                hints.remove(&oldest);
+            } else {
+                break;
+            }
+        }
+    }
+
+    #[inline]
+    fn thumb_key_hash(key: &str) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = ahash::AHasher::default();
+        key.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[inline]
+    fn is_legacy_thumbnail_known_missing(&self, key: &str) -> bool {
+        self.legacy_thumb_miss_cache
+            .get(&Self::thumb_key_hash(key))
+            .is_some()
+    }
+
+    #[inline]
+    fn mark_legacy_thumbnail_missing(&self, key: &str) {
+        self.legacy_thumb_miss_cache
+            .insert(Self::thumb_key_hash(key), ());
+    }
+
+    #[inline]
+    fn clear_legacy_thumbnail_missing(&self, key: &str) {
+        self.legacy_thumb_miss_cache
+            .invalidate(&Self::thumb_key_hash(key));
     }
 
     #[inline]
@@ -252,6 +317,9 @@ impl ProtocolState {
         self.archive_image_cache.invalidate_all();
         self.legacy_thumb_cache.lock().clear();
         self.legacy_thumb_order.lock().clear();
+        self.legacy_thumb_category_hint.lock().clear();
+        self.legacy_thumb_hint_order.lock().clear();
+        self.legacy_thumb_miss_cache.invalidate_all();
     }
 }
 
@@ -606,12 +674,18 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
         return build_response(cached.as_ref().to_vec(), "image/webp");
     }
 
+    if state.is_legacy_thumbnail_known_missing(key) {
+        debug!("🖼️ Protocol: 旧路未命中缓存命中, key={key}");
+        return build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found");
+    }
+
     // 优先查 ThumbnailServiceV3：内存缓存（O(1)）→ DB
     // 这是 IPC 去-blob 优化的关锎：前端不再通过 IPC 接收 blob，而是通过此协议 URL 取
     if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
         if let Some(data) = v3_state.service.lookup_thumbnail(key) {
             debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
             state.put_cached_legacy_thumbnail(key, data.clone());
+            state.clear_legacy_thumbnail_missing(key);
             return build_response(data.as_ref().to_vec(), "image/webp");
         }
     }
@@ -626,15 +700,23 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
     };
 
     let db = &thumb_state.db;
-    for category in ["file", "folder"] {
+    let categories: [&'static str; 2] = match state.get_legacy_thumbnail_hint(key) {
+        Some("folder") => ["folder", "file"],
+        _ => ["file", "folder"],
+    };
+
+    for category in categories {
         if let Ok(Some(data)) = db.load_thumbnail_by_key_and_category(key, category) {
             debug!("🖼️ Protocol: 旧路加载缩略图成功, key={key}, category={category}");
             state.put_cached_legacy_thumbnail(key, Arc::<[u8]>::from(data.clone()));
+            state.put_legacy_thumbnail_hint(key, category);
+            state.clear_legacy_thumbnail_missing(key);
             return build_response(data, "image/webp");
         }
     }
 
     debug!("🖼️ Protocol: 未找到缩略图, key={key}");
+    state.mark_legacy_thumbnail_missing(key);
     build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found")
 }
 

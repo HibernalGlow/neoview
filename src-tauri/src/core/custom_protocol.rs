@@ -503,7 +503,7 @@ fn handle_archive_image(
     // 提取图片数据
     let shared = match state
         .archive_manager
-        .load_image_from_archive_shared(&book_path, &entry.path)
+        .load_image_from_archive_shared_with_hint(&book_path, &entry.path, Some(entry_index))
     {
         Ok(data) => data,
         Err(e) => {

@@ -23,9 +23,26 @@ pub fn extract_file(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Vec<u8>, String> {
+    extract_file_with_hint(archive_cache, index_cache, archive_path, file_path, None)
+}
+
+/// 从压缩包中提取文件（可选索引提示）
+pub fn extract_file_with_hint(
+    archive_cache: &zip_handler::ZipArchiveCache,
+    index_cache: &Arc<ArchiveIndexCache>,
+    archive_path: &Path,
+    file_path: &str,
+    entry_index_hint: Option<usize>,
+) -> Result<Vec<u8>, String> {
     let format = ArchiveFormat::from_extension(archive_path);
     match format {
-        ArchiveFormat::Zip => zip_handler::extract_file_from_zip(archive_cache, archive_path, file_path),
+        ArchiveFormat::Zip => {
+            if let Some(entry_index) = entry_index_hint {
+                zip_handler::extract_file_from_zip_by_index(archive_cache, archive_path, entry_index)
+            } else {
+                zip_handler::extract_file_from_zip(archive_cache, archive_path, file_path)
+            }
+        }
         ArchiveFormat::Rar => rar_handler::extract_file_from_rar(index_cache, archive_path, file_path),
         ArchiveFormat::SevenZ => sevenz_handler::extract_file_from_7z(index_cache, archive_path, file_path),
         ArchiveFormat::Unknown => Err(format!(
@@ -61,6 +78,25 @@ pub fn load_image_from_archive_binary_shared(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Arc<[u8]>, String> {
+    load_image_from_archive_binary_shared_with_hint(
+        archive_cache,
+        index_cache,
+        image_cache,
+        archive_path,
+        file_path,
+        None,
+    )
+}
+
+/// 从压缩包中加载图片（返回共享二进制，支持可选索引提示）
+pub fn load_image_from_archive_binary_shared_with_hint(
+    archive_cache: &zip_handler::ZipArchiveCache,
+    index_cache: &Arc<ArchiveIndexCache>,
+    image_cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
+    archive_path: &Path,
+    file_path: &str,
+    entry_index_hint: Option<usize>,
+) -> Result<Arc<[u8]>, String> {
     let normalized_archive = normalize_archive_key(archive_path);
     let mut cache_key = String::with_capacity(normalized_archive.len() + 2 + file_path.len());
     cache_key.push_str(&normalized_archive);
@@ -78,7 +114,13 @@ pub fn load_image_from_archive_binary_shared(
     }
 
     // 使用 extract_file 自动检测格式
-    let data = extract_file(archive_cache, index_cache, archive_path, file_path)?;
+    let data = extract_file_with_hint(
+        archive_cache,
+        index_cache,
+        archive_path,
+        file_path,
+        entry_index_hint,
+    )?;
 
     // 对于 JXL 格式，需要先解码再重新编码为通用格式
     if let Some(ext) = Path::new(file_path).extension() {
@@ -200,7 +242,7 @@ pub fn list_contents(archive_path: &Path) -> Result<Vec<super::types::ArchiveEnt
 /// 快速查找压缩包中的第一张图片（早停扫描）
 /// 找到第一张图片即返回，避免遍历全部条目
 pub fn find_first_image_entry(archive_path: &Path) -> Result<Option<String>, String> {
-    println!(
+    debug!(
         "⚡ find_first_image_entry start: {}",
         archive_path.display()
     );
@@ -219,7 +261,8 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
         "p001", "p_001", "img",
     ];
 
-    // 先按优先级查找
+    let mut first_image: Option<String> = None;
+    // 单遍扫描：优先命中优先模式，否则回落首个图片
     for i in 0..archive.len() {
         let entry = archive
             .by_index(i)
@@ -236,34 +279,25 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
             continue;
         }
 
+        if first_image.is_none() {
+            first_image = Some(name.clone());
+        }
+
         for pattern in &priority_patterns {
             if name_lower.contains(pattern) {
-                println!("⚡ 快速扫描找到优先图片: {}", name);
+                debug!("⚡ 快速扫描找到优先图片: {}", name);
                 return Ok(Some(name));
             }
         }
     }
 
-    // 如果没找到优先图片，再次扫描找到第一张图片
-    for i in 0..archive.len() {
-        let entry = archive
-            .by_index(i)
-            .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-
-        let name = entry.name().to_string();
-
-        if entry.is_dir() {
-            continue;
-        }
-
-        if is_image_file(&name) {
-            println!("⚡ 快速扫描找到图片: {}", name);
-            return Ok(Some(name));
-        }
+    if let Some(name) = first_image {
+        debug!("⚡ 快速扫描找到图片: {}", name);
+        Ok(Some(name))
+    } else {
+        debug!("⚡ 压缩包中未找到图片");
+        Ok(None)
     }
-
-    println!("⚡ 压缩包中未找到图片");
-    Ok(None)
 }
 
 /// 扫描压缩包内的前N张图片（限制扫描数量）
@@ -272,7 +306,7 @@ pub fn scan_archive_images_fast(
     archive_path: &Path,
     limit: usize,
 ) -> Result<Vec<String>, String> {
-    println!(
+    debug!(
         "⚡ scan_archive_images_fast start: {} limit={}",
         archive_path.display(),
         limit
@@ -283,6 +317,7 @@ pub fn scan_archive_images_fast(
     let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
 
     let mut images = Vec::new();
+    let mut first_image: Option<String> = None;
     let scan_limit = limit.min(archive.len()); // 限制扫描数量
 
     // 优先查找常见的图片命名模式
@@ -291,7 +326,7 @@ pub fn scan_archive_images_fast(
         "p001", "p_001", "img",
     ];
 
-    // 先按优先级查找
+    // 单遍扫描：优先命中优先模式，否则返回首图
     for i in 0..scan_limit {
         let entry = archive
             .by_index(i)
@@ -308,36 +343,27 @@ pub fn scan_archive_images_fast(
             continue;
         }
 
+        if first_image.is_none() {
+            first_image = Some(name.clone());
+        }
+
         for pattern in &priority_patterns {
             if name_lower.contains(pattern) {
                 images.push(name.clone());
-                println!("⚡ 快速扫描找到优先图片: {}", name);
+                debug!("⚡ 快速扫描找到优先图片: {}", name);
                 return Ok(images);
             }
         }
     }
 
-    // 如果没找到优先图片，扫描前limit个文件
-    for i in 0..scan_limit {
-        let entry = archive
-            .by_index(i)
-            .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
-
-        let name = entry.name().to_string();
-
-        if entry.is_dir() {
-            continue;
-        }
-
-        if is_image_file(&name) {
-            images.push(name.clone());
-            println!("⚡ 快速扫描找到图片: {}", name);
-            return Ok(images);
-        }
+    if let Some(name) = first_image {
+        images.push(name.clone());
+        debug!("⚡ 快速扫描找到图片: {}", name);
+        return Ok(images);
     }
 
     if images.is_empty() {
-        println!("⚡ 压缩包内未找到图片");
+        debug!("⚡ 压缩包内未找到图片");
         Err("压缩包内未找到图片".to_string())
     } else {
         Ok(images)
@@ -369,7 +395,7 @@ pub fn get_first_image_blob_or_scan(
         Some(format!("{}::{}", archive_path.display(), inner_path)), // 传递路径用于日志
     );
 
-    println!(
+    debug!(
         "🎯 首图 blob 注册完成: {} -> {} bytes (inner: {})",
         archive_path.display(),
         image_data.len(),

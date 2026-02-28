@@ -5,7 +5,7 @@ use super::types::ArchiveEntry;
 use super::utils::{is_image_file, is_video_file};
 use crate::core::archive_index::{ArchiveIndex, ArchiveIndexCache};
 use crate::core::archive_index_builder::RarIndexBuilder;
-use log::{debug, info};
+use log::debug;
 use natural_sort_rs::natural_cmp;
 use std::cmp::Ordering;
 use std::path::Path;
@@ -14,7 +14,7 @@ use std::time::Instant;
 
 /// 读取 RAR 压缩包内容列表
 pub fn list_rar_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-    println!("📦 list_rar_contents start: {}", archive_path.display());
+    debug!("📦 list_rar_contents start: {}", archive_path.display());
 
     let archive = unrar::Archive::new(archive_path)
         .open_for_listing()
@@ -52,7 +52,7 @@ pub fn list_rar_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, Strin
         index += 1;
     }
 
-    println!("📦 list_rar_contents end: {} entries", entries.len());
+    debug!("📦 list_rar_contents end: {} entries", entries.len());
 
     // 排序：目录优先，然后按自然排序
     entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
@@ -70,7 +70,7 @@ pub fn extract_file_from_rar(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Vec<u8>, String> {
-    info!(
+    debug!(
         "📦 extract_file_from_rar start: archive={} inner={}",
         archive_path.display(),
         file_path
@@ -132,7 +132,7 @@ pub fn extract_file_from_rar(
             } else {
                 "sequential"
             };
-            info!(
+            debug!(
                 "📦 extract_file_from_rar end: read_bytes={} elapsed_ms={} mode={} archive={} inner={}",
                 data.len(),
                 elapsed.as_millis(),

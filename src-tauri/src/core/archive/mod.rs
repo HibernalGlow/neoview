@@ -283,12 +283,23 @@ impl ArchiveManager {
         archive_path: &Path,
         file_path: &str,
     ) -> Result<Arc<[u8]>, String> {
-        image_ops::load_image_from_archive_binary_shared(
+        self.load_image_from_archive_shared_with_hint(archive_path, file_path, None)
+    }
+
+    /// 从压缩包中加载图片（返回共享二进制，支持可选索引提示）
+    pub fn load_image_from_archive_shared_with_hint(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+        entry_index_hint: Option<usize>,
+    ) -> Result<Arc<[u8]>, String> {
+        image_ops::load_image_from_archive_binary_shared_with_hint(
             &self.archive_cache,
             &self.index_cache,
             &self.cache,
             archive_path,
             file_path,
+            entry_index_hint,
         )
     }
 

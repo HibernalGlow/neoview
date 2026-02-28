@@ -5,7 +5,7 @@ use super::types::ArchiveEntry;
 use super::utils::{
     is_image_file, is_video_file, normalize_archive_key, normalize_inner_path, zip_datetime_to_unix,
 };
-use log::info;
+use log::debug;
 use natural_sort_rs::natural_cmp;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ pub fn get_cached_archive(
 
 /// 读取 ZIP 压缩包内容列表
 pub fn list_zip_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, String> {
-    println!("📦 list_zip_contents start: {}", archive_path.display());
+    debug!("📦 list_zip_contents start: {}", archive_path.display());
     let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
     let mut archive = ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {}", e))?;
@@ -86,7 +86,7 @@ pub fn list_zip_contents(archive_path: &Path) -> Result<Vec<ArchiveEntry>, Strin
         });
     }
 
-    println!("📦 list_zip_contents end: {} entries", entries.len());
+    debug!("📦 list_zip_contents end: {} entries", entries.len());
 
     // 排序：目录优先，然后按自然排序
     entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
@@ -104,7 +104,7 @@ pub fn extract_file_from_zip(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Vec<u8>, String> {
-    info!(
+    debug!(
         "📦 extract_file_from_zip start: archive={} inner={}",
         archive_path.display(),
         file_path
@@ -136,7 +136,52 @@ pub fn extract_file_from_zip(
     } else {
         0.0
     };
-    info!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
+    debug!("📦 extract_file_from_zip end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} inner={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), file_path);
+
+    Ok(buffer)
+}
+
+/// 从 ZIP 压缩包中按条目索引提取文件内容（避免 by_name 查找）
+pub fn extract_file_from_zip_by_index(
+    archive_cache: &ZipArchiveCache,
+    archive_path: &Path,
+    entry_index: usize,
+) -> Result<Vec<u8>, String> {
+    debug!(
+        "📦 extract_file_from_zip_by_index start: archive={} index={}",
+        archive_path.display(),
+        entry_index
+    );
+
+    let cached_archive = get_cached_archive(archive_cache, archive_path)?;
+    let mut archive = cached_archive.lock().unwrap();
+
+    let mut zip_file = archive
+        .by_index(entry_index)
+        .map_err(|e| format!("在压缩包中找不到索引 {}: {}", entry_index, e))?;
+
+    if zip_file.is_dir() {
+        return Err(format!("索引 {} 指向目录而非文件", entry_index));
+    }
+
+    let uncompressed_size = zip_file.size() as usize;
+    let mut buffer =
+        crate::core::buffer_pool::IMAGE_BUFFER_POOL.acquire_with_capacity(uncompressed_size);
+
+    let start = Instant::now();
+    zip_file
+        .read_to_end(&mut buffer)
+        .map_err(|e| format!("读取文件失败: {}", e))?;
+
+    let elapsed = start.elapsed();
+    let compressed = zip_file.compressed_size();
+    let uncompressed = buffer.len() as u64;
+    let ratio = if uncompressed > 0 {
+        (compressed as f64) / (uncompressed as f64)
+    } else {
+        0.0
+    };
+    debug!("📦 extract_file_from_zip_by_index end: read_bytes={} compressed={} ratio={:.3} elapsed_ms={} archive={} index={}", uncompressed, compressed, ratio, elapsed.as_millis(), archive_path.display(), entry_index);
 
     Ok(buffer)
 }

@@ -26,8 +26,42 @@ use super::{log_debug, log_info};
 
 const LANE_SCHEDULE_LEN: usize = 9;
 
-fn preferred_lane_for_tick(tick: usize) -> TaskLane {
-    // 6:2:1 时间片配额（visible:prefetch:background）
+fn lane_backlog(queue: &VecDeque<GenerateTask>) -> (usize, usize, usize) {
+    let mut visible = 0usize;
+    let mut prefetch = 0usize;
+    let mut background = 0usize;
+    for task in queue.iter() {
+        match task.lane {
+            TaskLane::Visible => visible += 1,
+            TaskLane::Prefetch => prefetch += 1,
+            TaskLane::Background => background += 1,
+        }
+    }
+    (visible, prefetch, background)
+}
+
+fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, background: usize) -> TaskLane {
+    let side_total = prefetch + background;
+
+    // visible 积压明显时，提升前台配额（8:1:1）
+    if visible > 0 && visible >= side_total {
+        return match tick % 10 {
+            0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 => TaskLane::Visible,
+            7 => TaskLane::Prefetch,
+            _ => TaskLane::Background,
+        };
+    }
+
+    // 后台/预取积压明显时，放宽为 4:3:3 提升总体吞吐
+    if side_total > visible.saturating_mul(2) {
+        return match tick % 10 {
+            0 | 3 | 6 | 9 => TaskLane::Visible,
+            1 | 4 | 7 => TaskLane::Prefetch,
+            _ => TaskLane::Background,
+        };
+    }
+
+    // 默认 6:2:1 时间片配额（visible:prefetch:background）
     match tick % LANE_SCHEDULE_LEN {
         0 | 1 | 2 | 4 | 5 | 7 => TaskLane::Visible,
         3 | 6 => TaskLane::Prefetch,
@@ -171,7 +205,8 @@ fn create_worker_thread(
 
                 // 若队列非空，直接取任务（避免短期 Condvar 等待）
                 if !guard.is_empty() {
-                    let preferred = preferred_lane_for_tick(lane_tick);
+                    let (visible, prefetch, background) = lane_backlog(&guard);
+                    let preferred = preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                     lane_tick = lane_tick.wrapping_add(1);
                     pop_task_by_lane(&mut guard, preferred)
                 } else if !running.load(Ordering::SeqCst) {
@@ -183,7 +218,9 @@ fn create_worker_thread(
                             if !running.load(Ordering::SeqCst) {
                                 None
                             } else {
-                                let preferred = preferred_lane_for_tick(lane_tick);
+                                let (visible, prefetch, background) = lane_backlog(&g);
+                                let preferred =
+                                    preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                                 lane_tick = lane_tick.wrapping_add(1);
                                 pop_task_by_lane(&mut g, preferred) // None if still empty → outer loop flushes
                             }

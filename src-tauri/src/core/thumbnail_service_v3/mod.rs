@@ -305,8 +305,9 @@ impl ThumbnailServiceV3 {
 
         tokio::spawn(async move {
             const DB_EVENT_BATCH_SIZE: usize = 24;
-            let mut batch_payloads: Vec<ThumbnailReadyPayload> = Vec::with_capacity(DB_EVENT_BATCH_SIZE);
 
+            // 阶段 1：批量读 DB（无需持锁，I/O 密集）
+            let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(db_paths.len());
             for path in db_paths.iter() {
                 let category = if std::path::Path::new(path).is_dir() || !path.contains('.') {
                     "folder"
@@ -314,28 +315,29 @@ impl ThumbnailServiceV3 {
                     "file"
                 };
                 if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(path, category) {
-                    // 直接移动 blob 入内存缓存（无需先 clone）：IPC 只发 path
-                    if let Ok(mut c) = memory_cache.write() {
-                        memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
-                        c.put(path.clone(), blob); // moved，不再 clone
-                    }
-                    batch_payloads.push(ThumbnailReadyPayload {
-                        path: path.clone(),
-                    });
-
-                    if batch_payloads.len() >= DB_EVENT_BATCH_SIZE {
-                        let payload = ThumbnailBatchReadyPayload {
-                            items: std::mem::take(&mut batch_payloads),
-                        };
-                        let _ = app.emit("thumbnail-batch-ready", payload);
-                    }
+                    loaded.push((path.clone(), blob));
                     let _ = db.update_access_time(path);
                 }
             }
 
-            if !batch_payloads.is_empty() {
+            if loaded.is_empty() {
+                return;
+            }
+
+            // 阶段 2：单次写锁批量写入内存缓存（N 路径 1 次锁，而非 N 次锁）
+            let mut payloads: Vec<ThumbnailReadyPayload> = Vec::with_capacity(loaded.len());
+            if let Ok(mut c) = memory_cache.write() {
+                for (path, blob) in loaded {
+                    memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    payloads.push(ThumbnailReadyPayload { path: path.clone() });
+                    c.put(path, blob);
+                }
+            }
+
+            // 阶段 3：分批发送 IPC 事件（只发 path，前端走协议 URL）
+            for chunk in payloads.chunks(DB_EVENT_BATCH_SIZE) {
                 let payload = ThumbnailBatchReadyPayload {
-                    items: batch_payloads,
+                    items: chunk.iter().map(|p| ThumbnailReadyPayload { path: p.path.clone() }).collect(),
                 };
                 let _ = app.emit("thumbnail-batch-ready", payload);
             }

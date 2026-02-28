@@ -10,10 +10,11 @@ use crate::commands::thumbnail_v3_commands::ThumbnailServiceV3State;
 use crate::core::archive::ArchiveManager;
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use mini_moka::sync::Cache;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,6 +23,7 @@ use tauri::Manager;
 
 /// 协议名称
 pub const PROTOCOL_NAME: &str = "neoview";
+const LEGACY_THUMB_CACHE_LIMIT: usize = 512;
 
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
@@ -121,6 +123,10 @@ pub struct ProtocolState {
     archive_metadata_cache: Cache<u64, Arc<CachedArchiveMetadata>>,
     /// 压缩包图片二进制缓存（避免重复解包读取）
     archive_image_cache: Cache<(u64, usize), Arc<[u8]>>,
+    /// 旧缩略图路径缓存（避免重复 DB 查询）
+    legacy_thumb_cache: Mutex<AHashMap<String, Arc<[u8]>>>,
+    /// 旧缩略图缓存插入顺序（用于有界淘汰）
+    legacy_thumb_order: Mutex<VecDeque<String>>,
 }
 
 impl ProtocolState {
@@ -147,6 +153,32 @@ impl ProtocolState {
             archive_manager: shared_archive_manager,
             archive_metadata_cache,
             archive_image_cache,
+            legacy_thumb_cache: Mutex::new(AHashMap::new()),
+            legacy_thumb_order: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    #[inline]
+    fn get_cached_legacy_thumbnail(&self, key: &str) -> Option<Arc<[u8]>> {
+        self.legacy_thumb_cache.lock().get(key).cloned()
+    }
+
+    fn put_cached_legacy_thumbnail(&self, key: &str, data: Arc<[u8]>) {
+        let mut cache = self.legacy_thumb_cache.lock();
+        let mut order = self.legacy_thumb_order.lock();
+        let key_owned = key.to_string();
+
+        if !cache.contains_key(key) {
+            order.push_back(key_owned.clone());
+        }
+        cache.insert(key_owned, data);
+
+        while cache.len() > LEGACY_THUMB_CACHE_LIMIT {
+            if let Some(oldest) = order.pop_front() {
+                cache.remove(&oldest);
+            } else {
+                break;
+            }
         }
     }
 
@@ -218,6 +250,8 @@ impl ProtocolState {
     pub fn clear_cache(&self) {
         self.archive_metadata_cache.invalidate_all();
         self.archive_image_cache.invalidate_all();
+        self.legacy_thumb_cache.lock().clear();
+        self.legacy_thumb_order.lock().clear();
     }
 }
 
@@ -288,6 +322,11 @@ impl<'a> ProtocolRequest<'a> {
                 };
                 if parts.next().is_some() {
                     return ProtocolRequest::Unknown;
+                }
+                if !key.as_bytes().iter().any(|b| *b == b'%' || *b == b'+') {
+                    return ProtocolRequest::Thumbnail {
+                        key: Cow::Borrowed(key),
+                    };
                 }
                 ProtocolRequest::Thumbnail {
                     key: urlencoding::decode(key)
@@ -561,12 +600,18 @@ fn handle_file_image(
 }
 
 /// 处理缩略图请求
-fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
+fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
+    if let Some(cached) = state.get_cached_legacy_thumbnail(key) {
+        debug!("🖼️ Protocol: 旧路缓存命中缩略图, key={key}");
+        return build_response(cached.as_ref().to_vec(), "image/webp");
+    }
+
     // 优先查 ThumbnailServiceV3：内存缓存（O(1)）→ DB
     // 这是 IPC 去-blob 优化的关锎：前端不再通过 IPC 接收 blob，而是通过此协议 URL 取
     if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
         if let Some(data) = v3_state.service.lookup_thumbnail(key) {
             debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
+            state.put_cached_legacy_thumbnail(key, data.clone());
             return build_response(data.as_ref().to_vec(), "image/webp");
         }
     }
@@ -581,22 +626,16 @@ fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
     };
 
     let db = &thumb_state.db;
-    match db.load_thumbnail_by_key_and_category(key, "file") {
-        Ok(Some(data)) => {
-            debug!("🖼️ Protocol: 旧路加载文件缩略图成功, key={key}");
-            build_response(data, "image/webp")
+    for category in ["file", "folder"] {
+        if let Ok(Some(data)) = db.load_thumbnail_by_key_and_category(key, category) {
+            debug!("🖼️ Protocol: 旧路加载缩略图成功, key={key}, category={category}");
+            state.put_cached_legacy_thumbnail(key, Arc::<[u8]>::from(data.clone()));
+            return build_response(data, "image/webp");
         }
-        _ => match db.load_thumbnail_by_key_and_category(key, "folder") {
-            Ok(Some(data)) => {
-                debug!("🖼️ Protocol: 旧路加载文件夹缩略图成功, key={key}");
-                build_response(data, "image/webp")
-            }
-            _ => {
-                debug!("🖼️ Protocol: 未找到缩略图, key={key}");
-                build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found")
-            }
-        },
     }
+
+    debug!("🖼️ Protocol: 未找到缩略图, key={key}");
+    build_error_response(StatusCode::NOT_FOUND, "Thumbnail not found")
 }
 
 fn handle_health_check() -> Response<Vec<u8>> {
@@ -639,7 +678,7 @@ pub fn handle_protocol_request(
             entry_index,
         } => handle_archive_image(&state, request, book_hash, book_key, entry_index),
         ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, path_hash),
-        ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, key.as_ref()),
+        ProtocolRequest::Thumbnail { key } => handle_thumbnail(&state, app, key.as_ref()),
         ProtocolRequest::Unknown => {
             warn!("🌐 Protocol: 未知请求路径: {path}");
             build_error_response(StatusCode::NOT_FOUND, "Unknown request")

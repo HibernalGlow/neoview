@@ -304,9 +304,10 @@ fn handle_success(
             q.insert(path_key, (blob.to_vec(), size, ghash, Instant::now()));
         }
     }
+    // IPC 不再传输 blob：前端通过协议 URL /thumb/{key} 直接从内存缓存读取
+    // 卡除了第 3 次 blob.to_vec() 分配 + 全量 JSON 序列化开销
     ThumbnailReadyPayload {
         path: task.path.clone(),
-        blob: blob.to_vec(),
     }
 }
 

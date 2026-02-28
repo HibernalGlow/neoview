@@ -51,10 +51,11 @@ impl GenerateTask {
 }
 
 /// 缩略图就绪事件 payload
+/// 优化：不再通过 IPC 传输 blob 数据，前端通过内建协议 URL /thumb/{key} 直接读取
+/// 减少每个事件 10-30KB 的 JSON 序列化开销
 #[derive(Clone, Serialize)]
 pub struct ThumbnailReadyPayload {
     pub path: String,
-    pub blob: Vec<u8>,
 }
 
 /// 批量缩略图就绪事件 payload（优化：减少 IPC 调用）

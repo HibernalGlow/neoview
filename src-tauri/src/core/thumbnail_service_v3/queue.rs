@@ -25,13 +25,13 @@ pub fn enqueue_tasks(
     }
     
     if let Ok(mut queue) = task_queue.0.lock() {
-        // 收集已有路径用于去重
-        let existing: HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
+        // 收集已有路径用于去重：用 &str 引用而非 String clone，避免 O(N) 内存分配
+        let existing: HashSet<&str> = queue.iter().map(|t| t.path.as_str()).collect();
         
         // 计算每个路径到中心的距离并创建任务
         let mut new_tasks: Vec<GenerateTask> = paths
             .into_iter()
-            .filter(|(path, _, _, _)| !existing.contains(path))
+            .filter(|(path, _, _, _)| !existing.contains(path.as_str()))
             .map(|(path, file_type, original_index, dedup_request_id)| {
                 let center_distance = if original_index >= center {
                     original_index - center

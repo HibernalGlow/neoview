@@ -229,7 +229,7 @@ impl ThumbnailServiceV3 {
         }
 
         // 批量分类路径
-        let mut cached_paths: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut cached_paths: Vec<String> = Vec::new();
         let mut db_paths: Vec<String> = Vec::new();
         let mut generate_paths: Vec<(String, ThumbnailFileType, usize, u64)> = Vec::new();
 
@@ -243,12 +243,10 @@ impl ThumbnailServiceV3 {
 
         // 分类每个路径
         for (priority, path) in paths.iter().enumerate() {
-            // 检查内存缓存
+            // 检查内存缓存（不再克隆 blob：前端通过协议 URL 接口读取）
             if self.has_in_memory_cache(path) {
-                if let Some(blob) = self.get_from_memory_cache(path) {
-                    cached_paths.push((path.clone(), blob));
-                    continue;
-                }
+                cached_paths.push(path.clone());
+                continue;
             }
             // 检查失败索引
             if let Some(ref failed) = failed_snap {
@@ -276,9 +274,12 @@ impl ThumbnailServiceV3 {
             }
         }
 
-        // 1. 立即发送内存缓存命中的
-        for (path, blob) in cached_paths {
-            let _ = app.emit("thumbnail-ready", ThumbnailReadyPayload { path, blob });
+        // 1. 立即批量发送内存缓存命中的（仅发 path，前端通过协议 URL 取数据）
+        if !cached_paths.is_empty() {
+            let payload = ThumbnailBatchReadyPayload {
+                items: cached_paths.into_iter().map(|path| ThumbnailReadyPayload { path }).collect(),
+            };
+            let _ = app.emit("thumbnail-batch-ready", payload);
         }
 
         // 2. 批量从数据库加载
@@ -315,13 +316,13 @@ impl ThumbnailServiceV3 {
                     "file"
                 };
                 if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(path, category) {
+                    // 直接移动 blob 入内存缓存（无需先 clone）：IPC 只发 path
                     if let Ok(mut c) = memory_cache.write() {
                         memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
-                        c.put(path.clone(), blob.clone());
+                        c.put(path.clone(), blob); // moved，不再 clone
                     }
                     batch_payloads.push(ThumbnailReadyPayload {
                         path: path.clone(),
-                        blob,
                     });
 
                     if batch_payloads.len() >= DB_EVENT_BATCH_SIZE {
@@ -375,6 +376,26 @@ impl ThumbnailServiceV3 {
 }
 
 impl ThumbnailServiceV3 {
+    /// 单个缩略图查找：内存缓存优先，回落到 DB。由内建协议的 /thumb/{key} 端点调用。
+    pub fn lookup_thumbnail(&self, key: &str) -> Option<Vec<u8>> {
+        // 1. 内存缓存（O(1)，无 I/O）
+        if let Some(blob) = self.get_from_memory_cache(key) {
+            return Some(blob);
+        }
+        // 2. 回落到数据库
+        let category = if std::path::Path::new(key).is_dir() { "folder" } else { "file" };
+        if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, category) {
+            return Some(blob);
+        }
+        // folder 尝试另一种类型
+        if category == "file" {
+            if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, "folder") {
+                return Some(blob);
+            }
+        }
+        None
+    }
+
     /// 直接从缓存获取（同步）
     pub fn get_cached_thumbnails(&self, paths: Vec<String>) -> Vec<(String, Option<Vec<u8>>)> {
         let mut results = Vec::with_capacity(paths.len());

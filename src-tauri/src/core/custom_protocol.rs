@@ -6,6 +6,7 @@
 //! - 缓存压缩包条目列表，减少重复解析
 
 use crate::commands::ThumbnailState;
+use crate::commands::thumbnail_v3_commands::ThumbnailServiceV3State;
 use crate::core::archive::ArchiveManager;
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
@@ -384,6 +385,16 @@ fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>
 
 /// 处理缩略图请求
 fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
+    // 优先查 ThumbnailServiceV3：内存缓存（O(1)）→ DB
+    // 这是 IPC 去-blob 优化的关锎：前端不再通过 IPC 接收 blob，而是通过此协议 URL 取
+    if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
+        if let Some(data) = v3_state.service.lookup_thumbnail(key) {
+            debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
+            return build_response(data, "image/webp");
+        }
+    }
+
+    // 回落到旧 ThumbnailState DB（兴趣点：只查 DB）
     let Some(thumb_state) = app.try_state::<ThumbnailState>() else {
         warn!("🖼️ Protocol: ThumbnailState 未初始化");
         return build_error_response(
@@ -393,15 +404,14 @@ fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
     };
 
     let db = &thumb_state.db;
-    // 尝试从 'file' 类别加载，失败则尝试 'folder'
     match db.load_thumbnail_by_key_and_category(key, "file") {
         Ok(Some(data)) => {
-            debug!("🖼️ Protocol: 加载文件缩略图成功, key={key}");
+            debug!("🖼️ Protocol: 旧路加载文件缩略图成功, key={key}");
             build_response(data, "image/webp")
         }
         _ => match db.load_thumbnail_by_key_and_category(key, "folder") {
             Ok(Some(data)) => {
-                debug!("🖼️ Protocol: 加载文件夹缩略图成功, key={key}");
+                debug!("🖼️ Protocol: 旧路加载文件夹缩略图成功, key={key}");
                 build_response(data, "image/webp")
             }
             _ => {

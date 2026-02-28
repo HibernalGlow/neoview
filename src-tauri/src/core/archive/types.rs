@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// 预编译的图片扩展名集合（压缩包内部使用）
@@ -80,7 +81,7 @@ impl ArchiveFormat {
 /// 缓存的图片条目
 #[derive(Clone)]
 pub struct CachedImageEntry {
-    pub data: Vec<u8>,
+    pub data: Arc<[u8]>,
     pub last_used: Instant,
 }
 

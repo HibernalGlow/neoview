@@ -145,7 +145,7 @@ pub fn get_cached_image(cache: &ImageCache, key: &str) -> Option<Vec<u8>> {
     if let Ok(mut cache) = cache.lock() {
         if let Some(entry) = cache.get_mut(key) {
             entry.last_used = std::time::Instant::now();
-            return Some(entry.data.clone());
+            return Some(entry.data.as_ref().to_vec());
         }
     }
     None
@@ -157,7 +157,7 @@ pub fn store_cached_image(cache: &ImageCache, key: String, data: Vec<u8>) {
         cache.insert(
             key,
             CachedImageEntry {
-                data,
+                data: Arc::<[u8]>::from(data),
                 last_used: std::time::Instant::now(),
             },
         );

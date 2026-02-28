@@ -419,14 +419,13 @@ fn handle_archive_image(
 
     // 提取图片数据
     let archive_manager = state.archive_manager.lock().unwrap();
-    let data = match archive_manager.load_image_from_archive_binary(&book_path, &entry.path) {
+    let shared = match archive_manager.load_image_from_archive_shared(&book_path, &entry.path) {
         Ok(data) => data,
         Err(e) => {
             error!("📦 Protocol: 提取图片失败: {e}");
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
         }
     };
-    let shared = Arc::<[u8]>::from(data);
     state.archive_image_cache.insert(cache_key, shared.clone());
     let range = parse_byte_range(request, shared.len());
     build_response_from_slice(shared.as_ref(), mime_type, range)

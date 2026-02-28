@@ -42,6 +42,24 @@ pub fn load_image_from_archive_binary(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Vec<u8>, String> {
+    let shared = load_image_from_archive_binary_shared(
+        archive_cache,
+        index_cache,
+        image_cache,
+        archive_path,
+        file_path,
+    )?;
+    Ok(shared.as_ref().to_vec())
+}
+
+/// 从压缩包中加载图片（返回共享二进制，减少复制）
+pub fn load_image_from_archive_binary_shared(
+    archive_cache: &zip_handler::ZipArchiveCache,
+    index_cache: &Arc<ArchiveIndexCache>,
+    image_cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
+    archive_path: &Path,
+    file_path: &str,
+) -> Result<Arc<[u8]>, String> {
     let cache_key = format!(
         "{}::{}",
         normalize_archive_key(archive_path),
@@ -49,7 +67,7 @@ pub fn load_image_from_archive_binary(
     );
     
     // 检查缓存
-    if let Some(cached) = get_cached_image(image_cache, &cache_key) {
+    if let Some(cached) = get_cached_image_shared(image_cache, &cache_key) {
         println!(
             "🎯 Archive image cache hit: {} ({} bytes)",
             file_path,
@@ -65,14 +83,16 @@ pub fn load_image_from_archive_binary(
     if let Some(ext) = Path::new(file_path).extension() {
         if ext.to_string_lossy().to_lowercase() == "jxl" {
             let converted = load_jxl_binary_from_zip(&data)?;
-            store_cached_image(image_cache, cache_key, converted.clone());
-            return Ok(converted);
+            let shared = Arc::<[u8]>::from(converted);
+            store_cached_image_shared(image_cache, cache_key, shared.clone());
+            return Ok(shared);
         }
     }
 
     // 直接返回原始二进制数据
-    store_cached_image(image_cache, cache_key, data.clone());
-    Ok(data)
+    let shared = Arc::<[u8]>::from(data);
+    store_cached_image_shared(image_cache, cache_key, shared.clone());
+    Ok(shared)
 }
 
 /// 从压缩包中加载 JXL 图片并转换为 PNG（返回二进制数据）
@@ -393,10 +413,10 @@ pub fn get_first_image_bytes(
 // 缓存辅助函数
 // ============================================================================
 
-fn get_cached_image(
+fn get_cached_image_shared(
     cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
     key: &str,
-) -> Option<Vec<u8>> {
+) -> Option<Arc<[u8]>> {
     if let Ok(mut cache) = cache.lock() {
         if let Some(entry) = cache.get_mut(key) {
             entry.last_used = std::time::Instant::now();
@@ -406,10 +426,10 @@ fn get_cached_image(
     None
 }
 
-fn store_cached_image(
+fn store_cached_image_shared(
     cache: &Arc<std::sync::Mutex<std::collections::HashMap<String, super::types::CachedImageEntry>>>,
     key: String,
-    data: Vec<u8>,
+    data: Arc<[u8]>,
 ) {
     use super::types::IMAGE_CACHE_LIMIT;
     

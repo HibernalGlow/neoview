@@ -277,6 +277,21 @@ impl ArchiveManager {
         )
     }
 
+    /// 从压缩包中加载图片（返回共享二进制，减少复制）
+    pub fn load_image_from_archive_shared(
+        &self,
+        archive_path: &Path,
+        file_path: &str,
+    ) -> Result<Arc<[u8]>, String> {
+        image_ops::load_image_from_archive_binary_shared(
+            &self.archive_cache,
+            &self.index_cache,
+            &self.cache,
+            archive_path,
+            file_path,
+        )
+    }
+
     /// 从压缩包中加载 JXL 图片并转换为 PNG
     fn load_jxl_binary_from_zip(&self, image_data: &[u8]) -> Result<Vec<u8>, String> {
         image_ops::load_jxl_binary_from_zip(image_data)

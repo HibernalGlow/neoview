@@ -130,10 +130,11 @@ function getAdaptiveDispatchConfig(): DispatchConfig {
 }
 
 // 在飞请求去重：path -> request start timestamp
-const inFlightRequests = new SvelteMap<string, number>();
-const recentRequestedAt = new SvelteMap<string, number>();
-const pendingFileBrowserThumbnails = new SvelteMap<string, string>();
-const lastVisiblePathsByDir = new SvelteMap<string, SvelteSet<string>>();
+// 这些 map 仅在普通函数中访问（非 $effect/$derived），用 plain Map 避免响应式代理开销
+const inFlightRequests = new Map<string, number>();
+const recentRequestedAt = new Map<string, number>();
+const pendingFileBrowserThumbnails = new Map<string, string>();
+const lastVisiblePathsByDir = new Map<string, Set<string>>();
 let fileBrowserFlushTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_VISIBLE_DIR_SNAPSHOTS = 16;
 
@@ -162,8 +163,8 @@ function removeFileBrowserThumbnails(paths: string[]) {
 }
 
 function updateVisibleSnapshot(currentDir: string, paths: string[]): string[] {
-  const previous = lastVisiblePathsByDir.get(currentDir) ?? new SvelteSet<string>();
-  const next = new SvelteSet<string>();
+  const previous = lastVisiblePathsByDir.get(currentDir) ?? new Set<string>();
+  const next = new Set<string>();
   const entered: string[] = [];
 
   for (const path of paths) {

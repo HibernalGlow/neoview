@@ -203,7 +203,7 @@ pub fn run() {
                 PageContentManager::new(Arc::clone(&job_engine), archive_manager_for_pm);
 
             app.manage(PageManagerState {
-                manager: Arc::new(tokio::sync::Mutex::new(page_manager)),
+                manager: Arc::new(tokio::sync::RwLock::new(page_manager)),
             });
 
             // 初始化流管理器状态

@@ -11,11 +11,11 @@ use crate::core::page_manager::{
 };
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 /// 页面管理器状态
 pub struct PageManagerState {
-    pub manager: Arc<Mutex<PageContentManager>>,
+    pub manager: Arc<RwLock<PageContentManager>>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -38,7 +38,7 @@ pub async fn pm_open_book(
     state: State<'_, PageManagerState>,
 ) -> Result<BookInfo, String> {
     log::info!("📖 [PageCommand] open_book: {}", path);
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     manager.open_book(&path).await
 }
 
@@ -46,7 +46,7 @@ pub async fn pm_open_book(
 #[tauri::command]
 pub async fn pm_close_book(state: State<'_, PageManagerState>) -> Result<(), String> {
     log::info!("📖 [PageCommand] close_book");
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     manager.close_book().await;
     Ok(())
 }
@@ -56,7 +56,7 @@ pub async fn pm_close_book(state: State<'_, PageManagerState>) -> Result<(), Str
 pub async fn pm_get_book_info(
     state: State<'_, PageManagerState>,
 ) -> Result<Option<BookInfo>, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     Ok(manager.current_book_info())
 }
 
@@ -75,7 +75,7 @@ pub async fn pm_goto_page(
 ) -> Result<tauri::ipc::Response, String> {
     log::debug!("📄 [PageCommand] goto_page: {}", index);
 
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     let (data, result) = manager.goto_page(index).await?;
 
     log::debug!(
@@ -96,7 +96,7 @@ pub async fn pm_get_page(
 ) -> Result<tauri::ipc::Response, String> {
     log::debug!("📄 [PageCommand] get_page: {}", index);
 
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     let (data, _result) = manager.get_page(index).await?;
 
     Ok(tauri::ipc::Response::new(data))
@@ -120,7 +120,7 @@ pub async fn pm_goto_page_base64(
 ) -> Result<String, String> {
     log::debug!("📄 [PageCommand] goto_page_base64: {}", index);
 
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     let (data, result) = manager.goto_page(index).await?;
 
     log::debug!(
@@ -141,7 +141,7 @@ pub async fn pm_get_page_base64(
 ) -> Result<String, String> {
     log::debug!("📄 [PageCommand] get_page_base64: {}", index);
 
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     let (data, _result) = manager.get_page(index).await?;
 
     Ok(encode_base64_fast(&data))
@@ -153,7 +153,7 @@ pub async fn pm_get_page_info(
     index: usize,
     state: State<'_, PageManagerState>,
 ) -> Result<crate::core::page_manager::PageInfo, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
 
     // 从 PageContentManager 获取页面信息
     manager
@@ -166,7 +166,7 @@ pub async fn pm_get_page_info(
 /// 获取页面管理器统计
 #[tauri::command]
 pub async fn pm_get_stats(state: State<'_, PageManagerState>) -> Result<PageManagerStats, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     Ok(manager.stats().await)
 }
 
@@ -175,7 +175,7 @@ pub async fn pm_get_stats(state: State<'_, PageManagerState>) -> Result<PageMana
 pub async fn pm_get_memory_stats(
     state: State<'_, PageManagerState>,
 ) -> Result<MemoryPoolStats, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     let stats = manager.stats().await;
     Ok(stats.memory)
 }
@@ -186,7 +186,7 @@ pub async fn pm_get_memory_stats(
 #[tauri::command]
 pub async fn pm_clear_cache(state: State<'_, PageManagerState>) -> Result<(), String> {
     log::info!("🧹 [PageCommand] clear_cache");
-    let mut manager = state.manager.lock().await;
+    let mut manager = state.manager.write().await;
     manager.clear_cache().await;
     Ok(())
 }
@@ -195,7 +195,7 @@ pub async fn pm_clear_cache(state: State<'_, PageManagerState>) -> Result<(), St
 #[tauri::command]
 pub async fn pm_trigger_preload(state: State<'_, PageManagerState>) -> Result<(), String> {
     log::debug!("⚡ [PageCommand] trigger_preload");
-    let manager = state.manager.lock().await;
+    let manager = state.manager.write().await;
     manager.trigger_preload().await;
     Ok(())
 }
@@ -221,7 +221,7 @@ pub async fn pm_get_cache_status(
         .checked_add(effective_count)
         .ok_or_else(|| "缓存查询范围溢出".to_string())?;
 
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     let statuses: Vec<bool> = (start_page..end_exclusive)
         .map(|i| manager.is_page_cached(i))
         .collect();
@@ -240,7 +240,7 @@ pub async fn pm_get_video_path(
     state: State<'_, PageManagerState>,
 ) -> Result<String, String> {
     log::info!("🎬 [PageCommand] get_video_path: {}", index);
-    let manager = state.manager.lock().await;
+    let manager = state.manager.write().await;
     manager.get_video_path(index).await
 }
 
@@ -249,7 +249,7 @@ pub async fn pm_get_video_path(
 pub async fn pm_get_temp_stats(
     state: State<'_, PageManagerState>,
 ) -> Result<crate::core::page_manager::TempFileStats, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     Ok(manager.temp_stats())
 }
 
@@ -258,7 +258,7 @@ pub async fn pm_get_temp_stats(
 pub async fn pm_get_large_file_threshold(
     state: State<'_, PageManagerState>,
 ) -> Result<usize, String> {
-    let manager = state.manager.lock().await;
+    let manager = state.manager.read().await;
     Ok(manager.get_large_file_threshold_mb())
 }
 
@@ -274,7 +274,7 @@ pub async fn pm_set_large_file_threshold(
         "⚙️ [PageCommand] set_large_file_threshold: {} MB",
         threshold_mb
     );
-    let manager = state.manager.lock().await;
+    let manager = state.manager.write().await;
     manager.set_large_file_threshold_mb(threshold_mb);
     Ok(())
 }
@@ -318,7 +318,7 @@ pub async fn pm_preload_thumbnails(
 
     // 提前获取所有需要的信息，避免后续锁竞争
     let (book_path, book_type, page_infos) = {
-        let manager = state.manager.lock().await;
+        let manager = state.manager.read().await;
         let book = manager.current_book_info().ok_or("没有打开的书籍")?;
 
         let book_path = book.path.clone();
@@ -366,7 +366,7 @@ pub async fn pm_preload_thumbnails(
 
     // 获取 ArchiveManager 的克隆（用于并行解压）
     let archive_manager = {
-        let manager = state.manager.lock().await;
+        let manager = state.manager.read().await;
         manager.get_archive_manager_clone()
     };
 

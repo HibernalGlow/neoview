@@ -18,6 +18,12 @@ pub struct PageManagerState {
     pub manager: Arc<Mutex<PageContentManager>>,
 }
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PageThumbnailBatchReadyEvent {
+    items: Vec<ThumbnailReadyEvent>,
+}
+
 // ===== 书籍操作命令 =====
 
 /// 打开书籍
@@ -290,6 +296,7 @@ pub async fn pm_preload_thumbnails(
     app: AppHandle,
     state: State<'_, PageManagerState>,
 ) -> Result<Vec<usize>, String> {
+    const EMIT_BATCH_SIZE: usize = 24;
     let size = max_size.unwrap_or(256);
 
     // 提前获取所有需要的信息，避免后续锁竞争
@@ -383,21 +390,34 @@ pub async fn pm_preload_thumbnails(
         .await
         .unwrap_or_default();
 
-        // 推送结果到前端
+        // 推送结果到前端（批量事件，减少 IPC 风暴）
         let success_count = results.len();
+        let mut batch = Vec::with_capacity(EMIT_BATCH_SIZE);
         for (index, item) in results {
             use base64::{engine::general_purpose::STANDARD, Engine as _};
             let data_base64 = STANDARD.encode(&item.data);
 
-            let event = ThumbnailReadyEvent {
+            batch.push(ThumbnailReadyEvent {
                 index,
                 data: format!("data:image/webp;base64,{data_base64}"),
                 width: item.width,
                 height: item.height,
-            };
+            });
 
-            if let Err(e) = app.emit("page-thumbnail-ready", &event) {
-                log::error!("🖼️ 推送缩略图事件失败: {e}");
+            if batch.len() >= EMIT_BATCH_SIZE {
+                let payload = PageThumbnailBatchReadyEvent {
+                    items: std::mem::take(&mut batch),
+                };
+                if let Err(e) = app.emit("page-thumbnail-batch-ready", &payload) {
+                    log::error!("🖼️ 推送批量缩略图事件失败: {e}");
+                }
+            }
+        }
+
+        if !batch.is_empty() {
+            let payload = PageThumbnailBatchReadyEvent { items: batch };
+            if let Err(e) = app.emit("page-thumbnail-batch-ready", &payload) {
+                log::error!("🖼️ 推送批量缩略图事件失败: {e}");
             }
         }
 

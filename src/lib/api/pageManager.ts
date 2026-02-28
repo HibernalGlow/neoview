@@ -309,6 +309,13 @@ export interface ThumbnailReadyEvent {
 }
 
 /**
+ * 缩略图批量就绪事件数据
+ */
+export interface ThumbnailBatchReadyEvent {
+	items: ThumbnailReadyEvent[];
+}
+
+/**
  * 预加载缩略图（异步，结果通过事件推送）
  * 
  * 接受需要生成的页面索引列表，生成后通过 "thumbnail-ready" 事件推送

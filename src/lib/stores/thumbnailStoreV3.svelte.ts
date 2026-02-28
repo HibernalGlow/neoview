@@ -56,9 +56,14 @@ let unlistenThumbnailBatchReady: UnlistenFn | null = null;
 const pendingPathsSet = new Set<string>();
 const pendingPathsOrder: string[] = []; // 保持顺序
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
-const THROTTLE_MS = 8; // 8ms 节流（更快响应）
-const MAX_BATCH_SIZE = 64; // 单次发送上限，避免一次塞入过多路径
+const MIN_THROTTLE_MS = 6;
+const BASE_THROTTLE_MS = 8;
+const MAX_THROTTLE_MS = 20;
+const MIN_BATCH_SIZE = 40;
+const BASE_BATCH_SIZE = 64;
+const MAX_BATCH_SIZE = 80; // 单次发送上限，避免一次塞入过多路径
 const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
+const MIN_PARALLEL_INVOKES = 1;
 const MAX_PARALLEL_INVOKES = 2; // 单轮最多并发请求批次数
 const IN_FLIGHT_TTL_MS = 8000; // 在飞请求超时回收，避免异常时永久占位
 const RECENT_REQUEST_TTL_MS = 220; // 短时请求去重窗口，降低滚动抖动重复请求
@@ -66,6 +71,63 @@ const FILE_BROWSER_FLUSH_MS = 12; // 批量同步到 fileBrowserStore 的刷新�
 // 单次调度内发送批次数上限（0 表示不限，直到队列清空）。
 // 为避免卡住 UI，我们仍按批次顺序发送，每批 await invoke，剩余批次继续循环。
 const MAX_SYNC_DISPATCHES = 0;
+
+// 调度自适应状态（根据请求密度与队列压力动态调整）
+const dispatchTuning = {
+  lastRequestedAt: 0,
+  emaGapMs: 120,
+  burstScore: 0,
+};
+
+interface DispatchConfig {
+  throttleMs: number;
+  batchSize: number;
+  parallelInvokes: number;
+}
+
+function updateDispatchTuning(newPathsCount: number) {
+  const now = Date.now();
+  const gap = dispatchTuning.lastRequestedAt > 0
+    ? now - dispatchTuning.lastRequestedAt
+    : dispatchTuning.emaGapMs;
+  dispatchTuning.lastRequestedAt = now;
+
+  dispatchTuning.emaGapMs = dispatchTuning.emaGapMs * 0.8 + gap * 0.2;
+
+  const rapidSignal = gap < 30 ? 1 : 0;
+  const pressureSignal = Math.min(1, newPathsCount / 96);
+  dispatchTuning.burstScore = Math.max(
+    0,
+    Math.min(3, dispatchTuning.burstScore * 0.85 + rapidSignal * 0.4 + pressureSignal * 0.25)
+  );
+}
+
+function getAdaptiveDispatchConfig(): DispatchConfig {
+  const queuePressure = Math.min(1, pendingPathsOrder.length / MAX_QUEUE_SIZE);
+  const isRapid = dispatchTuning.emaGapMs < 24 || dispatchTuning.burstScore > 1.2;
+
+  if (isRapid || queuePressure > 0.65) {
+    return {
+      throttleMs: MAX_THROTTLE_MS,
+      batchSize: 48,
+      parallelInvokes: MIN_PARALLEL_INVOKES,
+    };
+  }
+
+  if (queuePressure > 0.35) {
+    return {
+      throttleMs: 12,
+      batchSize: 56,
+      parallelInvokes: MAX_PARALLEL_INVOKES,
+    };
+  }
+
+  return {
+    throttleMs: Math.max(MIN_THROTTLE_MS, BASE_THROTTLE_MS),
+    batchSize: Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, BASE_BATCH_SIZE + 8)),
+    parallelInvokes: MAX_PARALLEL_INVOKES,
+  };
+}
 
 // 在飞请求去重：path -> request start timestamp
 const inFlightRequests = new SvelteMap<string, number>();
@@ -299,6 +361,8 @@ export async function requestVisibleThumbnails(
 
   if (uncachedPaths.length === 0) return;
 
+  updateDispatchTuning(uncachedPaths.length);
+
   // 如果目录变化，清空待处理列表
   if (throttleState.dir !== currentDir) {
     pendingPathsSet.clear();
@@ -328,15 +392,16 @@ export async function requestVisibleThumbnails(
 
     let dispatches = 0;
     while (pendingPathsOrder.length > 0 && (MAX_SYNC_DISPATCHES === 0 || dispatches < MAX_SYNC_DISPATCHES)) {
+      const dispatchConfig = getAdaptiveDispatchConfig();
       const tasks: Promise<void>[] = [];
 
       while (
-        tasks.length < MAX_PARALLEL_INVOKES &&
+        tasks.length < dispatchConfig.parallelInvokes &&
         pendingPathsOrder.length > 0 &&
         (MAX_SYNC_DISPATCHES === 0 || dispatches < MAX_SYNC_DISPATCHES)
       ) {
         const batch: string[] = [];
-        while (batch.length < MAX_BATCH_SIZE && pendingPathsOrder.length > 0) {
+        while (batch.length < dispatchConfig.batchSize && pendingPathsOrder.length > 0) {
           const p = pendingPathsOrder.shift();
           if (!p) break;
           if (!pendingPathsSet.has(p)) continue;
@@ -375,10 +440,11 @@ export async function requestVisibleThumbnails(
 
     // 还有待发送的队列，下一帧继续
     if (pendingPathsOrder.length > 0) {
+      const nextConfig = getAdaptiveDispatchConfig();
       throttleState.timer = setTimeout(() => {
         throttleState.timer = null;
         void sendRequest();
-      }, THROTTLE_MS);
+      }, nextConfig.throttleMs);
     } else {
       throttleState.timer = null;
     }
@@ -386,10 +452,11 @@ export async function requestVisibleThumbnails(
 
   // 若当前没有定时器，则启动调度（立即排队，下个 tick 开始发送）
   if (!throttleState.timer) {
+    const initialConfig = getAdaptiveDispatchConfig();
     throttleState.timer = setTimeout(() => {
       throttleState.timer = null;
       void sendRequest();
-    }, THROTTLE_MS);
+    }, initialConfig.throttleMs);
   }
 }
 

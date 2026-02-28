@@ -18,13 +18,25 @@ import { showToast } from '$lib/utils/toast';
 async function decodeBase64ToBlob(base64: string): Promise<Blob> {
 	const { toBytes } = await import('fast-base64');
 	const bytes = await toBytes(base64);
-	return new Blob([bytes]);
+	return new Blob([toOwnedArrayBuffer(bytes)]);
 }
 
 async function decodeBase64(base64: string): Promise<ArrayBuffer> {
 	const { toBytes } = await import('fast-base64');
 	const bytes = await toBytes(base64);
-	return bytes.buffer;
+	return toOwnedArrayBuffer(bytes);
+}
+
+function toOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+	if (
+		bytes.buffer instanceof ArrayBuffer &&
+		bytes.byteOffset === 0 &&
+		bytes.byteLength === bytes.buffer.byteLength
+	) {
+		return bytes.buffer;
+	}
+
+	return bytes.slice().buffer;
 }
 
 function normalizeBinaryPayload(payload: Uint8Array | number[] | ArrayBuffer): Uint8Array {
@@ -173,7 +185,7 @@ export async function gotoPage(index: number): Promise<Blob> {
 	
 	if (pageTransferModeStore.isBinary) {
 		const bytes = await invokePageBinary('pm_goto_page', index);
-		return new Blob([bytes]);
+		return new Blob([toOwnedArrayBuffer(bytes)]);
 	} else {
 		// Base64 传输
 		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
@@ -189,7 +201,7 @@ export async function gotoPage(index: number): Promise<Blob> {
 export async function getPage(index: number): Promise<Blob> {
 	if (pageTransferModeStore.isBinary) {
 		const bytes = await invokePageBinary('pm_get_page', index);
-		return new Blob([bytes]);
+		return new Blob([toOwnedArrayBuffer(bytes)]);
 	} else {
 		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
 		return decodeBase64ToBlob(base64);
@@ -202,7 +214,7 @@ export async function getPage(index: number): Promise<Blob> {
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
 	if (pageTransferModeStore.isBinary) {
 		const bytes = await invokePageBinary('pm_goto_page', index);
-		return Uint8Array.from(bytes).buffer;
+		return toOwnedArrayBuffer(bytes);
 	} else {
 		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
 		return decodeBase64(base64);
@@ -215,7 +227,7 @@ export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
 	if (pageTransferModeStore.isBinary) {
 		const bytes = await invokePageBinary('pm_get_page', index);
-		return Uint8Array.from(bytes).buffer;
+		return toOwnedArrayBuffer(bytes);
 	} else {
 		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
 		return decodeBase64(base64);

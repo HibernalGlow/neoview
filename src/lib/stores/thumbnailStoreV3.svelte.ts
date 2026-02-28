@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { SvelteMap } from 'svelte/reactivity';
 import { fileBrowserStore } from './fileBrowser.svelte';
 import { getThumbUrl } from '$lib/api/imageProtocol';
 
@@ -52,7 +52,7 @@ let unlistenThumbnailReady: UnlistenFn | null = null;
 let unlistenThumbnailBatchReady: UnlistenFn | null = null;
 
 // 节流相关 - 使用 Set 优化 O(1) 查找
-// eslint-disable-next-line -- 非响应式内部状态，普通 Set 比 SvelteSet 更高效
+// eslint-disable-next-line -- 非响应式内部状态，普通 Set 更高效
 const pendingPathsSet = new Set<string>();
 const pendingPathsOrder: string[] = []; // 保持顺序
 const throttleState = { dir: '', timer: null as ReturnType<typeof setTimeout> | null };
@@ -250,10 +250,9 @@ const prefetchState = {
   currentPrefetchCount: 20, // 初始预取数量
 };
 
-// 缩略图就绪事件 payload
+// 缩略图就绪事件 payload（仅含 path，无 blob — 前端通过协议 URL 读取）
 interface ThumbnailReadyPayload {
   path: string;
-  blob?: number[]; // Vec<u8> 转为 number[]
 }
 
 // 批量缩略图就绪事件 payload
@@ -287,24 +286,16 @@ export async function initThumbnailServiceV3(
       size,
     });
 
-    // 处理单个缩略图的公共函数
-    const processThumbnail = (path: string, blob?: number[]) => {
-      // 优先使用自定义协议 URL，避免 IPC 传输大二进制数据和 Blob URL 内存开销
+    // 处理单个缩略图就绪事件：直接使用协议 URL，无需 blob 传输
+    const processThumbnail = (path: string) => {
       const thumbUrl = getThumbUrl(path);
-      
-      // 如果后端传了 blob（例如为了即时显示或某些特殊情况），可以暂存
-      // 但为了极致内存优化，我们优先鼓励使用协议 URL。
-      // 注意：协议 URL 不需要 revoke，因为它指向后端的统一入口。
-      const finalUrl = (blob && blob.length > 0) 
-        ? URL.createObjectURL(new Blob([new Uint8Array(blob)], { type: 'image/webp' }))
-        : thumbUrl;
 
       // 存储到本地缓存（带 LRU + revoke）
-      setThumbnailWithEviction(path, finalUrl);
+      setThumbnailWithEviction(path, thumbUrl);
 
       // 同步到 fileBrowserStore（供 FileItemCard 使用）
       const key = toRelativeKey(path);
-      scheduleFileBrowserThumbnail(key, finalUrl);
+      scheduleFileBrowserThumbnail(key, thumbUrl);
 
       // 该路径已完成，释放在飞占位
       releaseInFlight(path);
@@ -315,7 +306,7 @@ export async function initThumbnailServiceV3(
       'thumbnail-batch-ready',
       (event) => {
         for (const item of event.payload.items) {
-          processThumbnail(item.path, item.blob);
+          processThumbnail(item.path);
         }
       }
     );
@@ -324,7 +315,7 @@ export async function initThumbnailServiceV3(
     unlistenThumbnailReady = await listen<ThumbnailReadyPayload>(
       'thumbnail-ready',
       (event) => {
-        processThumbnail(event.payload.path, event.payload.blob);
+        processThumbnail(event.payload.path);
       }
     );
 
@@ -773,7 +764,7 @@ export async function requestVisibleThumbnailsWithPrefetch(
   // 合并可见路径和预取路径（可见优先）
   const prefetchPaths = allPaths.slice(prefetchStart, prefetchEnd);
   const pathsToRequest = [...visiblePaths];
-  const seen = new SvelteSet(visiblePaths);
+  const seen = new Set(visiblePaths);
   for (const path of prefetchPaths) {
     if (seen.has(path)) continue;
     seen.add(path);
@@ -817,7 +808,7 @@ export async function requestVisibleThumbnailsDeltaWithPrefetch(
   const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
 
   // 仅预取可见区之外的路径
-  const visibleSet = new SvelteSet(visiblePaths);
+  const visibleSet = new Set(visiblePaths);
   const prefetchOnly: string[] = [];
   for (let i = prefetchStart; i < prefetchEnd; i += 1) {
     const path = allPaths[i];
@@ -849,7 +840,7 @@ export async function requestAllThumbnails(
 
   // 去重并过滤已缓存的路径
   const deduped: string[] = [];
-  const seen = new SvelteSet<string>();
+  const seen = new Set<string>();
   for (const p of paths) {
     if (!p || seen.has(p)) continue;
     seen.add(p);
@@ -893,7 +884,7 @@ export async function requestAllThumbnails(
 
     // 分帧发送，避免一次性塞满事件循环
     if (i < deduped.length) {
-      await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS));
+      await new Promise((resolve) => setTimeout(resolve, BASE_THROTTLE_MS));
     }
   }
 }

@@ -196,15 +196,14 @@ fn flush_worker_emit_batch(
 
 /// 检查任务是否应该处理（目录是否匹配）
 fn check_task_validity(task: &GenerateTask, current_dir: &Arc<RwLock<String>>) -> bool {
-    let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        let current = current_dir
-            .read()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_default();
-        task.directory.is_empty() || task.directory == current
-    }));
-    result.unwrap_or(false)
+    if task.directory.is_empty() {
+        return true;
+    }
+    // 持读锁直接比较，不 clone 整个 String
+    match current_dir.read() {
+        Ok(guard) => task.directory == *guard,
+        Err(_) => false,
+    }
 }
 
 /// 处理单个任务
@@ -243,7 +242,7 @@ fn process_task(
         Ok(Ok((blob, save_info))) => {
             ready_payload = Some(handle_success(
                 task,
-                &blob,
+                blob,
                 save_info,
                 memory_cache,
                 memory_cache_bytes,
@@ -271,11 +270,11 @@ fn process_task(
     ready_payload
 }
 
-/// 处理成功生成的缩略图
+/// 处理成功生成的缩略图（接收 owned blob 避免多余 to_vec）
 #[allow(clippy::too_many_arguments)]
 fn handle_success(
     task: &GenerateTask,
-    blob: &[u8],
+    blob: Vec<u8>,
     save_info: Option<(String, i64, i32)>,
     memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: &Arc<AtomicUsize>,
@@ -283,10 +282,17 @@ fn handle_success(
     folder_db_index: &Arc<RwLock<HashSet<String>>>,
     save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
 ) -> ThumbnailReadyPayload {
-    // 更新内存缓存
+    let blob_len = blob.len();
+    // 放入保存队列（如有需要，先 clone 再 move blob 到内存缓存，省一次 to_vec）
+    if let Some((path_key, size, ghash)) = save_info {
+        if let Ok(mut q) = save_queue.lock() {
+            q.insert(path_key, (blob.clone(), size, ghash, Instant::now()));
+        }
+    }
+    // 更新内存缓存（move blob，零拷贝）
     if let Ok(mut cache) = memory_cache.write() {
-        cache.put(task.path.clone(), blob.to_vec());
-        memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+        cache.put(task.path.clone(), blob);
+        memory_cache_bytes.fetch_add(blob_len, Ordering::SeqCst);
     }
     // 更新数据库索引
     if let Ok(mut idx) = db_index.write() {
@@ -298,14 +304,7 @@ fn handle_success(
             idx.insert(task.path.clone());
         }
     }
-    // 放入保存队列
-    if let Some((path_key, size, ghash)) = save_info {
-        if let Ok(mut q) = save_queue.lock() {
-            q.insert(path_key, (blob.to_vec(), size, ghash, Instant::now()));
-        }
-    }
     // IPC 不再传输 blob：前端通过协议 URL /thumb/{key} 直接从内存缓存读取
-    // 卡除了第 3 次 blob.to_vec() 分配 + 全量 JSON 序列化开销
     ThumbnailReadyPayload {
         path: task.path.clone(),
     }

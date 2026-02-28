@@ -233,16 +233,20 @@ impl ThumbnailServiceV3 {
         let mut db_paths: Vec<String> = Vec::new();
         let mut generate_paths: Vec<(String, ThumbnailFileType, usize, u64)> = Vec::new();
 
-        // 持有读锁直接查询：避免 3 次完整 HashSet<String> clone（O(N_cached) 堆分配）
-        // RwLock 读锁并发安全，worker 写锁只在任务完成时短暂获取，不会死锁
+        // 批量预获取所有锁：整个循环共享，消除 2N 次 lock/unlock（N = 可见路径数）
+        // 读锁并发安全：worker 写锁在任务完成时短暂获取，不会死锁
+        let mem_guard = self.memory_cache.read().ok();
+        let sq_guard = self.save_queue.lock().ok();
         let db_guard = self.db_index.read().ok();
         let folder_guard = self.folder_db_index.read().ok();
         let failed_guard = self.failed_index.read().ok();
 
         // 分类每个路径
         for (priority, path) in paths.iter().enumerate() {
-            // 检查内存缓存（不再克隆 blob：前端通过协议 URL 接口读取）
-            if self.has_in_memory_cache(path) {
+            // 检查内存缓存（使用预获取的锁，避免每次循环重新获取）
+            let in_mem = mem_guard.as_ref().map(|c| c.peek(path).is_some()).unwrap_or(false)
+                || sq_guard.as_ref().map(|q| q.contains_key(path)).unwrap_or(false);
+            if in_mem {
                 cached_paths.push(path.clone());
                 continue;
             }
@@ -271,6 +275,13 @@ impl ThumbnailServiceV3 {
                 }
             }
         }
+
+        // 显式释放所有锁，避免后续 load_from_db_async / enqueue_tasks 死锁
+        drop(mem_guard);
+        drop(sq_guard);
+        drop(db_guard);
+        drop(folder_guard);
+        drop(failed_guard);
 
         // 1. 立即批量发送内存缓存命中的（仅发 path，前端通过协议 URL 取数据）
         if !cached_paths.is_empty() {

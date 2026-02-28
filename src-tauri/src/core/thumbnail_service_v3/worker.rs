@@ -94,6 +94,16 @@ fn create_worker_thread(
         let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
 
         while running.load(Ordering::SeqCst) {
+            // 在尝试取任务之前，若 emit_batch 有积压且队列为空，立即 flush。
+            // 解决多 worker 场景下：Worker A 有 1 个 batch item，Worker B 拿走最后一个
+            // 任务后 Worker A 进入 idle 等待，batch 永远不被发射的问题。
+            if !emit_batch.is_empty() {
+                let queue_is_empty = task_queue.0.lock().map(|q| q.is_empty()).unwrap_or(false);
+                if queue_is_empty {
+                    flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
+                }
+            }
+
             let task = {
                 let (queue_lock, queue_cv) = (&task_queue.0, &task_queue.1);
                 let mut guard = match queue_lock.lock() {
@@ -104,23 +114,25 @@ fn create_worker_thread(
                     }
                 };
 
-                while guard.is_empty() && running.load(Ordering::SeqCst) {
-                    match queue_cv.wait_timeout(guard, Duration::from_millis(200)) {
-                        Ok((g, _)) => {
-                            guard = g;
-                        }
-                        Err(poisoned) => {
-                            let (g, _) = poisoned.into_inner();
-                            guard = g;
-                            break;
-                        }
-                    }
-                }
-
-                if !running.load(Ordering::SeqCst) {
+                // 若队列非空，直接取任务（避免短期 Condvar 等待）
+                if !guard.is_empty() {
+                    guard.pop_front()
+                } else if !running.load(Ordering::SeqCst) {
                     None
                 } else {
-                    guard.pop_front()
+                    // 队列为空且仍在运行：短暂等待，超时后释放锁让外层循环检查 emit_batch
+                    match queue_cv.wait_timeout(guard, Duration::from_millis(50)) {
+                        Ok((mut g, _)) => {
+                            if !running.load(Ordering::SeqCst) {
+                                None
+                            } else {
+                                g.pop_front() // None if still empty → outer loop flushes
+                            }
+                        }
+                        Err(poisoned) => {
+                            poisoned.into_inner().0.pop_front()
+                        }
+                    }
                 }
             };
 
@@ -146,7 +158,11 @@ fn create_worker_thread(
                     &request_deduplicator,
                 ) {
                     emit_batch.push(payload);
-                    flush_worker_emit_batch(&app, &mut emit_batch, false, EMIT_BATCH_SIZE);
+                    // 任务处理完后检查队列是否已空：
+                    // 若空则立即强制发射，避免小批量（< EMIT_BATCH_SIZE）永远滞留
+                    // （典型场景：文件夹只有几个压缩包，处理完后队列变空但 batch 不满 16）
+                    let queue_is_empty = task_queue.0.lock().map(|q| q.is_empty()).unwrap_or(false);
+                    flush_worker_emit_batch(&app, &mut emit_batch, queue_is_empty, EMIT_BATCH_SIZE);
                 }
                 active_workers.fetch_sub(1, Ordering::SeqCst);
             } else {

@@ -54,14 +54,14 @@ const navigationBindings: ActionBinding[] = [
 		name: '下一个书籍',
 		category: '导航',
 		description: '切换到排序列表中的下一个书籍/文件夹',
-		bindings: []
+		bindings: [{ type: 'keyboard', key: 'ArrowDown' }]
 	},
 	{
 		action: 'prevBook',
 		name: '上一个书籍',
 		category: '导航',
 		description: '切换到排序列表中的上一个书籍/文件夹',
-		bindings: []
+		bindings: [{ type: 'keyboard', key: 'ArrowUp' }]
 	}
 ];
 

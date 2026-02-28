@@ -11,6 +11,7 @@
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
+	import { bookStore } from '$lib/stores/book.svelte';
 	import { showToast } from '$lib/utils/toast';
 
 	// 读取设置
@@ -226,6 +227,14 @@
 			case 'toggleFullscreen':
 				showActionToast(`${source}: 切换全屏`);
 				toggleFullscreen();
+				break;
+			case 'nextBook':
+				showActionToast(`${source}: 下一本书`);
+				bookStore.openNextBook();
+				break;
+			case 'prevBook':
+				showActionToast(`${source}: 上一本书`);
+				bookStore.openPreviousBook();
 				break;
 		}
 	}

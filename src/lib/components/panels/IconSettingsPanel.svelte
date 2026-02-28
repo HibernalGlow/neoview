@@ -309,14 +309,14 @@
 												<ComponentIcon class="h-4 w-4" />
 											</Button>
 										</Popover.Trigger>
-										<Popover.Content class="w-[300px] p-0" side="left">
+										<Popover.Content class="w-75 p-0" side="left">
 											<Command.Root>
 												<Command.Input
 													placeholder="搜索 Lucide 图标..."
 													value={iconSearchQuery}
 													oninput={(e) => (iconSearchQuery = e.currentTarget.value)}
 												/>
-												<Command.List class="h-[300px] overflow-auto">
+												<Command.List class="h-75 overflow-auto">
 													<Command.Empty>未找到图标</Command.Empty>
 													<Command.Group heading="Icons">
 														{#each filteredIconNames as iconName (iconName)}

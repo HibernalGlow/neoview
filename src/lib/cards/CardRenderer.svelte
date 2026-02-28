@@ -3,7 +3,6 @@
 	 * CardRenderer - 根据卡片 ID 渲染对应组件
 	 * 支持懒加载、Context API、类型安全
 	 */
-	import { setContext } from 'svelte';
 	import { cardConfigStore, type PanelId } from '$lib/stores/cardConfig.svelte';
 	import { cardRegistry } from './registry';
 	import { CollapsibleCard } from '$lib/components/cards';
@@ -123,11 +122,7 @@
 		panelId: PanelId;
 	}
 
-	let { cardId, panelId }: Props = $props();
-
-	// 设置 Context（子组件可通过 getContext 获取）
-	setContext('cardId', cardId);
-	setContext('panelId', panelId);
+	const { cardId, panelId }: Props = $props();
 
 	// 懒加载组件状态
 	let CardComponent = $state<any>(null);

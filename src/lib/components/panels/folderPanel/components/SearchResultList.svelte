@@ -5,6 +5,7 @@
  */
 import type { FsItem } from '$lib/types';
 import type { Readable } from 'svelte/store';
+import { get } from 'svelte/store';
 import { tabSearchResults, tabIsSearching, tabSearchKeyword, tabViewStyle, tabSortConfig, tabThumbnailWidthPercent } from '../stores/folderTabStore';
 import { Loader2, Search, FolderOpen, ArrowUpDown } from '@lucide/svelte';
 import FileItemCard from '$lib/components/panels/file/components/FileItemCard.svelte';
@@ -26,7 +27,7 @@ interface Props {
 	externalSearchKeyword?: Readable<string>;
 }
 
-let { 
+const { 
 	onItemClick = () => {}, 
 	onItemDoubleClick = () => {}, 
 	onItemContextMenu = () => {},
@@ -36,9 +37,9 @@ let {
 }: Props = $props();
 
 // 使用外部 store 或全局 store
-const searchResults = externalSearchResults ?? tabSearchResults;
-const isSearching = externalIsSearching ?? tabIsSearching;
-const searchKeyword = externalSearchKeyword ?? tabSearchKeyword;
+const searchResults = $derived.by(() => externalSearchResults ? get(externalSearchResults) : $tabSearchResults);
+const isSearching = $derived.by(() => externalIsSearching ? get(externalIsSearching) : $tabIsSearching);
+const searchKeyword = $derived.by(() => externalSearchKeyword ? get(externalSearchKeyword) : $tabSearchKeyword);
 const viewStyle = tabViewStyle;
 const sortConfig = tabSortConfig;
 const thumbnailWidthPercent = tabThumbnailWidthPercent;
@@ -82,7 +83,7 @@ function handleScrollToProgress(progress: number) {
 
 // 排序后的结果
 let sortedResults = $derived.by(() => {
-	const results = [...$searchResults];
+	const results = [...searchResults];
 	const { field, order } = $sortConfig;
 	
 	results.sort((a, b) => {
@@ -139,7 +140,7 @@ let viewMode = $derived($viewStyle as 'list' | 'content' | 'banner' | 'thumbnail
 
 // 加载缩略图 - 参考 FolderStack 的优化实现
 $effect(() => {
-	const results = $searchResults;
+	const results = searchResults;
 	if (results.length === 0) return;
 
 	// 过滤出需要缩略图的项目
@@ -195,16 +196,16 @@ $effect(() => {
 		class="flex-1 overflow-auto"
 		onscroll={handleScroll}
 	>
-		{#if $isSearching}
+		{#if isSearching}
 			<div class="flex flex-col items-center justify-center py-12">
 				<Loader2 class="h-8 w-8 animate-spin text-muted-foreground mb-4" />
 				<p class="text-muted-foreground">正在搜索...</p>
 			</div>
-		{:else if $searchResults.length === 0 && $searchKeyword}
+		{:else if searchResults.length === 0 && searchKeyword}
 			<div class="flex flex-col items-center justify-center py-12 text-center">
 				<Search class="h-12 w-12 text-muted-foreground/50 mb-4" />
 				<p class="text-muted-foreground">未找到匹配的文件</p>
-				<p class="text-muted-foreground/70 text-sm mt-1">搜索词: "{$searchKeyword}"</p>
+				<p class="text-muted-foreground/70 text-sm mt-1">搜索词: "{searchKeyword}"</p>
 			</div>
 		{:else if sortedResults.length > 0}
 			<div class="p-2">

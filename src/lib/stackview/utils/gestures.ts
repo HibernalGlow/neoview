@@ -5,7 +5,10 @@
 
 import { zoomIn, zoomOut, resetZoom, setZoomLevel } from '$lib/stores';
 import { keyBindingsStore } from '$lib/stores/keybindings';
+import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
+
+function showActionToast(_message: string): void {}
 
 // ============================================================================
 // 类型定义
@@ -121,7 +124,8 @@ export function createKeyboardHandler(config: GestureConfig): KeyboardHandler {
       return;
     }
 
-    const action = keyBindingsStore.findActionByKeyCombo(e);
+    const keyCombo = generateKeyCombo(e);
+    const action = keyBindingsStore.findActionByKeyCombo(keyCombo);
     
     if (action) {
       e.preventDefault();

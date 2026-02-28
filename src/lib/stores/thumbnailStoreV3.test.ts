@@ -10,11 +10,11 @@ const removeThumbnailsBatchMock = vi.fn();
 const getThumbUrlMock = vi.fn((path: string) => `neoview://${path}`);
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (...args: unknown[]) => invokeMock(...args),
+  invoke: (...args: unknown[]) => invokeMock(...(args as [])),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: (...args: unknown[]) => listenMock(...args),
+  listen: (...args: unknown[]) => listenMock(...(args as [])),
 }));
 
 vi.mock('./fileBrowser.svelte', () => ({
@@ -27,7 +27,7 @@ vi.mock('./fileBrowser.svelte', () => ({
 }));
 
 vi.mock('$lib/api/imageProtocol', () => ({
-  getThumbUrl: (...args: unknown[]) => getThumbUrlMock(...args),
+  getThumbUrl: (key: string) => getThumbUrlMock(key),
 }));
 
 describe('thumbnailStoreV3 request queue', () => {

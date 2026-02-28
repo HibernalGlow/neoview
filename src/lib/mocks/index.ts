@@ -8,8 +8,45 @@ export * from './tauriMock';
 // 重新导出为各个 Tauri 包的格式
 export { invoke, convertFileSrc } from './tauriMock';
 export { listen, emit } from './tauriMock';
-export { dialog } from './tauriMock';
-export { fs } from './tauriMock';
-export { path } from './tauriMock';
-export { window, WebviewWindow, getCurrentWindow } from './tauriMock';
-export { cli, Command } from './tauriMock';
+export { WebviewWindow, getCurrentWindow, Command } from './tauriMock';
+
+export {
+	open,
+	save,
+	message,
+	confirm,
+	readTextFile,
+	writeTextFile,
+	readDir,
+	exists,
+	appDataDir,
+	homeDir,
+	join,
+	dirname,
+	basename,
+	getMatches
+} from './tauriMock';
+
+import {
+	open,
+	save,
+	message,
+	confirm,
+	readTextFile,
+	writeTextFile,
+	readDir,
+	exists,
+	appDataDir,
+	homeDir,
+	join,
+	dirname,
+	basename,
+	getCurrentWindow,
+	getMatches
+} from './tauriMock';
+
+export const dialog = { open, save, message, confirm };
+export const fs = { readTextFile, writeTextFile, readDir, exists };
+export const path = { appDataDir, homeDir, join, dirname, basename };
+export const window = { getCurrentWindow };
+export const cli = { getMatches };

@@ -31,6 +31,10 @@ export const getAllCustomizableIcons = (): IconDefinition[] => {
 
     // Cards
     for (const [id, def] of Object.entries(cardRegistry)) {
+        if (typeof def.icon === 'string') {
+            continue;
+        }
+
         // Find panel title for grouping
         let groupName = '其他';
         if (def.defaultPanel && (PANEL_DEFINITIONS as any)[def.defaultPanel]) {

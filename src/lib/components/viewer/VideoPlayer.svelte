@@ -87,7 +87,7 @@
 	let playbackRate = $state(initialPlaybackRate);
 	let loopMode: LoopMode = $state(initialLoopMode);
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
-	let videoUrl = $state<string>(src || '');
+	let videoUrl = $state<string>('');
 
 	// 进度条预览状态
 	let progressBarComponent = $state<{ getPreviewCanvas: () => HTMLCanvasElement | null; getProgressBarRef: () => HTMLDivElement | null } | null>(null);
@@ -117,10 +117,21 @@
 	
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
-	let subtitleFontSize = $state(settings.subtitle?.fontSize ?? 1.0); // em 单位
-	let subtitleColor = $state(settings.subtitle?.color ?? '#ffffff');
-	let subtitleBgOpacity = $state(settings.subtitle?.bgOpacity ?? 0.7);
-	let subtitleBottom = $state(settings.subtitle?.bottom ?? 5); // 底部距离百分比
+	let subtitleFontSize = $state(1.0); // em 单位
+	let subtitleColor = $state('#ffffff');
+	let subtitleBgOpacity = $state(0.7);
+	let subtitleBottom = $state(5); // 底部距离百分比
+
+	$effect(() => {
+		videoUrl = src || '';
+	});
+
+	$effect(() => {
+		subtitleFontSize = settings.subtitle?.fontSize ?? 1.0;
+		subtitleColor = settings.subtitle?.color ?? '#ffffff';
+		subtitleBgOpacity = settings.subtitle?.bgOpacity ?? 0.7;
+		subtitleBottom = settings.subtitle?.bottom ?? 5;
+	});
 
 	// 自定义字幕渲染状态
 	let currentSubtitleText = $state<string>('');

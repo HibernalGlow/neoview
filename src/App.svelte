@@ -755,6 +755,9 @@
 										class="absolute bottom-full left-0 mb-2 w-64 rounded-lg p-4 shadow-lg"
 										style="background: hsl(var(--card) / 0.95); backdrop-filter: blur(16px); border: 1px solid hsl(var(--border) / 0.5);"
 										onpointerdown={(e) => e.stopPropagation()}
+										role="dialog"
+										aria-label="视频设置面板"
+										tabindex="-1"
 									>
 										<div class="mb-3 flex items-center justify-between">
 											<span class="text-sm font-medium">视频设置</span>

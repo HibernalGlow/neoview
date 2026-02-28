@@ -27,7 +27,7 @@
 <div class="bg-secondary/50 flex items-center gap-1 overflow-x-auto border-b px-2 py-1">
 	{#each tabs as tab (tab.id)}
 		<button
-			class={`group relative flex min-w-[120px] max-w-[200px] items-center gap-2 rounded-t-md px-3 py-1.5 text-sm transition-colors ${activeTab?.id === tab.id ? 'bg-background text-foreground' : 'bg-secondary/50 text-muted-foreground'}`}
+			class={`group relative flex min-w-30 max-w-50 items-center gap-2 rounded-t-md px-3 py-1.5 text-sm transition-colors ${activeTab?.id === tab.id ? 'bg-background text-foreground' : 'bg-secondary/50 text-muted-foreground'}`}
 			onclick={() => handleSwitchTab(tab.id)}
 			title={tab.title}
 		>

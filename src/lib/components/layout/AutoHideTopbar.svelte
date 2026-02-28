@@ -71,6 +71,7 @@
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	role="toolbar"
+	tabindex="0"
 >
 	<div class="bg-background/95 backdrop-blur-sm border-b shadow-lg">
 		<div class="h-12 px-4 flex items-center justify-between gap-4">

@@ -40,7 +40,11 @@
 	}: Props = $props();
 
 	// 可见性状态
-	let isVisible = $state(!autoHide);
+	let isVisible = $state(true);
+
+	$effect(() => {
+		isVisible = !autoHide;
+	});
 	// 隐藏定时器
 	let hideTimer: ReturnType<typeof setTimeout> | null = null;
 

@@ -39,7 +39,11 @@
 	}: Props = $props();
 
 	// 折叠状态
-	let isCollapsed = $state(defaultCollapsed);
+	let isCollapsed = $state(false);
+
+	$effect(() => {
+		isCollapsed = defaultCollapsed;
+	});
 
 	/**
 	 * 切换折叠状态

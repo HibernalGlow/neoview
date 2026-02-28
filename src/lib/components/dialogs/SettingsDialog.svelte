@@ -44,7 +44,7 @@
 
 <Dialog.Root bind:open>
 	<Dialog.Content 
-		class="h-[600px] max-w-4xl" 
+		class="h-150 max-w-4xl" 
 		style="background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
 	>
 		<Dialog.Header>

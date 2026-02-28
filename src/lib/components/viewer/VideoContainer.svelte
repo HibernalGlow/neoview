@@ -40,7 +40,7 @@
 	} = $props();
 
 	// 视频播放器引用
-	let videoPlayerRef: any = null;
+	let videoPlayerRef = $state<any>(null);
 
 	// 视频URL状态
 	let videoUrl = $state<string | null>(null);
@@ -101,12 +101,7 @@
 			}
 
 			// 加载视频数据
-			if (videoPage.data) {
-				// 【优化】直接使用 base64 数据 (data URL)，避免冗余的 fetch 和 Blob URL
-				const mimeType = getVideoMimeType(videoPage.name) || 'video/mp4';
-				const url = `data:${mimeType};base64,${videoPage.data}`;
-				setVideoUrl(url, false);
-			} else if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
+			if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
 				// 【优化】使用 neoview:// 协议直连，避免磁盘解压等待
 				const archivePath = bookStore.currentBook.path;
 				const bookHash = await getBookHash(archivePath);

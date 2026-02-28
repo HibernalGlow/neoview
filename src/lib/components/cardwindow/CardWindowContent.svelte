@@ -4,7 +4,6 @@
 	 * 直接渲染卡片组件，不使用 CollapsibleCard 包装
 	 * 用于独立卡片窗口中的标签页内容
 	 */
-	import { setContext } from 'svelte';
 	import { cardRegistry } from '$lib/cards/registry';
 
 	// 懒加载组件映射
@@ -100,11 +99,7 @@
 		cardId: string;
 	}
 
-	let { cardId }: Props = $props();
-
-	// 设置 Context
-	setContext('cardId', cardId);
-	setContext('panelId', 'cardwindow');
+	const { cardId }: Props = $props();
 
 	// 懒加载组件状态
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

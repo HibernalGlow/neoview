@@ -117,7 +117,7 @@ export function isLandscapeViewport(viewport: ViewportSize): boolean {
  * 切换到下一个缩放模式
  */
 export function cycleZoomMode(current: ZoomMode): ZoomMode {
-	const modes: ZoomMode[] = ['fit', 'width', 'height', 'original'];
+	const modes: ZoomMode[] = ['fit', 'fitWidth', 'fitHeight', 'original'];
 	const currentIndex = modes.indexOf(current);
 	const nextIndex = (currentIndex + 1) % modes.length;
 	return modes[nextIndex];
@@ -129,8 +129,11 @@ export function cycleZoomMode(current: ZoomMode): ZoomMode {
 export function getZoomModeName(mode: ZoomMode): string {
 	switch (mode) {
 		case 'fit': return '适应';
-		case 'width': return '适宽';
-		case 'height': return '适高';
+		case 'fitWidth': return '适宽';
+		case 'fitHeight': return '适高';
+		case 'fill': return '填充';
+		case 'fitLeftAlign': return '左对齐适应';
+		case 'fitRightAlign': return '右对齐适应';
 		case 'original': return '原始';
 		default: return mode;
 	}

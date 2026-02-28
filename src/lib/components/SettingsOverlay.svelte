@@ -41,6 +41,7 @@
 		onclick={handleBackdropClick}
 		role="dialog"
 		aria-modal="true"
+		tabindex="-1"
 	>
 		<!-- 设置窗口（居中 80%，半透明背景以显示模糊效果） -->
 		<div 

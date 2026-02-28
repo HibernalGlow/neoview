@@ -162,33 +162,45 @@
 		>
 			{#if activeTab === 'general'}
 				{#await getPanelPromise('general') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">通用设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'system'}
 				{#await getPanelPromise('system') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">系统设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'view'}
 				{#await getPanelPromise('view') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">视图设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'notify'}
 				{#await getPanelPromise('notify') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">通知设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'viewer' || activeTab === 'image'}
 				{#if activeTab === 'image'}
 					{#await getImagePanelsPromise() then imagePanels}
-						{@const ImagePanel = imagePanels[0].default}
-						{@const ViewerPanel = imagePanels[1].default}
+						{@const ImagePanel = imagePanels[0].default as any}
+						{@const ViewerPanel = imagePanels[1].default as any}
 						<div class="space-y-4 p-6">
 							<div class="rounded-lg border bg-card text-card-foreground p-4">
 								<h3 class="text-base font-semibold">影像</h3>
@@ -196,67 +208,91 @@
 									这里将放置全局影像（图片和视频）相关设置，例如格式支持、默认超分行为等。
 								</p>
 							</div>
-							<svelte:component this={ImagePanel} />
-							<svelte:component this={ViewerPanel} />
+							<ImagePanel />
+							<ViewerPanel />
 						</div>
 					{:catch}
 						<div class="p-6 text-sm text-destructive">影像设置加载失败</div>
 					{/await}
 				{:else}
 					{#await getImagePanelsPromise() then imagePanels}
-						{@const ViewerPanel = imagePanels[1].default}
-						<svelte:component this={ViewerPanel} />
+						{@const ViewerPanel = imagePanels[1].default as any}
+						<ViewerPanel />
 					{:catch}
 						<div class="p-6 text-sm text-destructive">阅读器设置加载失败</div>
 					{/await}
 				{/if}
 			{:else if activeTab === 'bindings'}
 				{#await getPanelPromise('bindings') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">操作绑定加载失败</div>
 				{/await}
 			{:else if activeTab === 'panels'}
 				{#await getPanelPromise('panels') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">边栏管理加载失败</div>
 				{/await}
 			{:else if activeTab === 'cards'}
 				{#await getPanelPromise('cards') then panelModule}
+					{@const PanelComponent = panelModule?.default as any}
 					<div class="p-6">
-						<svelte:component this={panelModule.default} />
+						{#if PanelComponent}
+							<PanelComponent />
+						{/if}
 					</div>
 				{:catch}
 					<div class="p-6 text-sm text-destructive">卡片管理加载失败</div>
 				{/await}
 			{:else if activeTab === 'theme'}
 				{#await getPanelPromise('theme') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">外观设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'book'}
 				{#await getPanelPromise('book') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">书籍设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'performance'}
 				{#await getPanelPromise('performance') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">性能设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'data'}
 				{#await getPanelPromise('data') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">数据设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'about'}
 				{#await getPanelPromise('about') then panelModule}
-					<svelte:component this={panelModule.default} />
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">关于页面加载失败</div>
 				{/await}

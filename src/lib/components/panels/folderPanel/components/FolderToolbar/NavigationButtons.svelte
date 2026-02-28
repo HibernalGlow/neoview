@@ -222,18 +222,15 @@ function executeClearAll() {
 	<DropdownMenu.Root>
 		<Tooltip.Root disabled={!showToolbarTooltip}>
 			<Tooltip.Trigger>
-				<DropdownMenu.Trigger asChild>
-					{#snippet children({ props })}
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
-							disabled={isCleaningInvalid}
-							{...props}
-						>
-							<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />
-						</Button>
-					{/snippet}
+				<DropdownMenu.Trigger>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7 {isCleaningInvalid ? 'animate-pulse' : ''}"
+						disabled={isCleaningInvalid}
+					>
+						<FilterX class="h-4 w-4 {cleanupResult ? (cleanupResult.removed > 0 ? 'text-green-500' : 'text-muted-foreground') : ''}" />
+					</Button>
 				</DropdownMenu.Trigger>
 			</Tooltip.Trigger>
 			<Tooltip.Content>

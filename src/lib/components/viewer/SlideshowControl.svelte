@@ -221,9 +221,10 @@
 
 				<!-- 间隔时间 -->
 				<div class="mb-4">
-					<label class="mb-1 block text-xs text-white/70">切换间隔（秒）</label>
+					<label for="slideshow-interval" class="mb-1 block text-xs text-white/70">切换间隔（秒）</label>
 					<div class="flex items-center gap-2">
 						<input
+							id="slideshow-interval"
 							type="range"
 							min="1"
 							max="30"
@@ -238,7 +239,7 @@
 
 				<!-- 快速设置 -->
 				<div class="mb-4">
-					<label class="mb-1 block text-xs text-white/70">快速设置</label>
+					<p class="mb-1 block text-xs text-white/70">快速设置</p>
 					<div class="flex gap-1">
 						{#each [3, 5, 10, 15, 30] as sec}
 							<button

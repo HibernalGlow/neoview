@@ -7,7 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { keyBindingsStore } from '$lib/stores/keybindings';
-	import { RotateCcw, Plus, X, Keyboard, Mouse, Hand } from '@lucide/svelte';
+	import type { InputBinding } from '$lib/stores/keybindings';
+	import { RotateCcw, X, Keyboard, Mouse, Hand } from '@lucide/svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
 	let searchQuery = $state('');
@@ -176,18 +177,8 @@
 	}
 
 	// 格式化绑定显示
-	function formatBinding(binding: import('$lib/stores/keybindings.svelte.ts').InputBinding): string {
+	function formatBinding(binding: InputBinding): string {
 		return keyBindingsStore.formatBinding(binding);
-	}
-
-	// 获取绑定图标
-	function getBindingIcon(type: string) {
-		switch (type) {
-			case 'keyboard': return Keyboard;
-			case 'mouse': return Mouse;
-			case 'touch': return Hand;
-			default: return Keyboard;
-		}
 	}
 
 	// 重置为默认
@@ -252,8 +243,13 @@
 							<div class="space-y-2 mb-3">
 								{#each binding.bindings as bind, i}
 									<div class="flex items-center gap-2">
-										{@const IconComponent = getBindingIcon(bind.type)}
-										<IconComponent class="h-3 w-3 text-muted-foreground" />
+										{#if bind.type === 'keyboard'}
+											<Keyboard class="h-3 w-3 text-muted-foreground" />
+										{:else if bind.type === 'mouse'}
+											<Mouse class="h-3 w-3 text-muted-foreground" />
+										{:else}
+											<Hand class="h-3 w-3 text-muted-foreground" />
+										{/if}
 										<Badge variant="secondary" class="text-xs">
 											{formatBinding(bind)}
 										</Badge>

@@ -392,11 +392,11 @@
 													</Button>
 												</div>
 											{:else}
-												<Button
+											<Button
 													variant="outline"
 													size="sm"
 													onclick={() => startEditKey(globalIndex)}
-													class="h-9 min-w-[120px] font-mono"
+													class="h-9 min-w-30 font-mono"
 												>
 													{binding.key || '未设置'}
 												</Button>

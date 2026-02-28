@@ -166,13 +166,13 @@
 	class="relative inline-block {className}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
-	onkeydown={handleKeyDown}
 >
 	<!-- 触发器 -->
 	<button
 		type="button"
 		class="inline-flex items-center justify-center"
 		onclick={handleClick}
+		onkeydown={handleKeyDown}
 		aria-expanded={isOpen}
 		aria-haspopup="true"
 	>

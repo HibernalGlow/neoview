@@ -59,7 +59,7 @@
 
 <!-- 触发区域（独立于状态栏，始终存在） -->
 <div
-	class="fixed bottom-0 left-0 right-0 h-4 z-[49]"
+	class="fixed bottom-0 left-0 right-0 h-4 z-49"
 	onmouseenter={handleMouseEnter}
 	role="presentation"
 	aria-label="底部状态栏触发区域"

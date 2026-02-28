@@ -147,13 +147,14 @@
 	<!-- 内容区域 -->
 	<div class="flex-1 overflow-hidden">
 		{#if panelComponent}
+			{@const PanelComponent = panelComponent}
 			{#if panelContent === 'thumbnails'}
 				<!-- 特殊处理缩略图栏 -->
 				<div class="h-full">
-					<svelte:component this={panelComponent} />
+					<PanelComponent />
 				</div>
 			{:else}
-				<svelte:component this={panelComponent} />
+				<PanelComponent />
 			{/if}
 		{:else if panelContent === 'thumbnail'}
 			<div class="p-4 text-center text-muted-foreground">

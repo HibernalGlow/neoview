@@ -250,7 +250,7 @@
 				<img
 					src={thumbnail}
 					alt={item.name}
-					class="max-w-[300px] max-h-[400px] rounded-lg object-contain bg-background border shadow-lg"
+					class="max-w-75 max-h-100 rounded-lg object-contain bg-background border shadow-lg"
 				/>
 			</Tooltip.Content>
 		{/if}

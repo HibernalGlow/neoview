@@ -166,7 +166,13 @@
 	});
 
 	// 追踪上一次的视图模式，用于检测变化
-	let lastViewMode = $state(viewMode);
+	let lastViewMode = $state<'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail'>('list');
+
+	$effect(() => {
+		if (!mounted) {
+			lastViewMode = viewMode;
+		}
+	});
 	
 	// 当 items 或 viewMode 变化时强制刷新 virtualizer
 	$effect(() => {
@@ -509,6 +515,12 @@
 
 		onclick={handleContainerClick}
 		ondblclick={handleContainerDoubleClick}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				handleContainerClick(e as unknown as MouseEvent);
+			}
+		}}
 	>
 		<div style="height: {$virtualizer.getTotalSize()}px; position: relative; width: 100%;">
 			{#each virtualItems as virtualRow (virtualRow.index)}

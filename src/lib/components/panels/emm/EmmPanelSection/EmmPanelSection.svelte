@@ -239,7 +239,7 @@ async function selectDatabaseFile() {
 
 async function selectTranslationDbFile() {
 	try {
-		const selected = await open({ filters: [{ name: 'SQLite Database', extensions: ['sqlite', 'db'] }] });
+		const selected: unknown = await open({ filters: [{ name: 'SQLite Database', extensions: ['sqlite', 'db'] }] });
 		if (selected) {
 			let path = '';
 			if (typeof selected === 'string') path = selected;
@@ -259,7 +259,7 @@ async function selectTranslationDbFile() {
 
 async function selectSettingFile() {
 	try {
-		const selected = await open({ filters: [{ name: 'JSON File', extensions: ['json'] }] });
+		const selected: unknown = await open({ filters: [{ name: 'JSON File', extensions: ['json'] }] });
 		if (selected) {
 			let path = '';
 			if (typeof selected === 'string') path = selected;
@@ -279,7 +279,7 @@ async function selectSettingFile() {
 
 async function selectTranslationDictFile() {
 	try {
-		const selected = await open({ filters: [{ name: 'JSON File', extensions: ['json'] }] });
+		const selected: unknown = await open({ filters: [{ name: 'JSON File', extensions: ['json'] }] });
 		if (selected) {
 			let path = '';
 			if (typeof selected === 'string') path = selected;
@@ -588,13 +588,13 @@ $effect(() => {
 												{#if cell.column.id === 'key'}
 													{@const original = row.original as EMMRawRow}
 													{@const meta = getFieldMeta(original.key)}
-													<Table.Cell class="px-2 py-0.5 align-top text-muted-foreground max-w-[160px] truncate">
+													<Table.Cell class="px-2 py-0.5 align-top text-muted-foreground max-w-40 truncate">
 														<Tooltip.Root><Tooltip.Trigger><span class="inline-block w-full text-left truncate">{meta.label}</span></Tooltip.Trigger><Tooltip.Content><p class="break-all text-[10px]">{original.key}</p></Tooltip.Content></Tooltip.Root>
 													</Table.Cell>
 												{:else}
 													{@const original = row.original as EMMRawRow}
 													{@const meta = getFieldMeta(original.key)}
-													<Table.Cell class="px-2 py-0.5 align-top text-right max-w-[260px] truncate">
+													<Table.Cell class="px-2 py-0.5 align-top text-right max-w-65 truncate">
 														<Tooltip.Root>
 															<Tooltip.Trigger>
 																<span class="inline-block w-full truncate">

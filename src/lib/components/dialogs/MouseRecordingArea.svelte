@@ -240,6 +240,15 @@
 				onmousedown={handleMouseDown}
 				onclick={handleClick}
 				onmouseup={handleMouseUp}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						handleClick(new MouseEvent('click', { button: 0, cancelable: true }));
+					}
+				}}
+				role="button"
+				tabindex="0"
+				aria-label="鼠标操作录制区域"
 			>
 				<!-- 状态指示器 -->
 				<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -323,7 +332,8 @@
 			<div class="flex gap-2">
 				<Button variant="outline" onclick={onCancel}>取消</Button>
 				{#if recordedGesture}
-					<Button onclick={() => onComplete(recordedGesture.gesture, recordedGesture.button, recordedGesture.action)}>
+					{@const gesture = recordedGesture}
+					<Button onclick={() => onComplete(gesture.gesture, gesture.button, gesture.action)}>
 						使用此操作
 					</Button>
 				{/if}

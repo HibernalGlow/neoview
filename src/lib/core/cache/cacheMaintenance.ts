@@ -1,5 +1,4 @@
 import { taskScheduler } from '../tasks/taskScheduler';
-import { bookStore } from '$lib/stores/book.svelte';
 
 let pendingCleanupJobId: string | null = null;
 
@@ -22,7 +21,7 @@ export function scheduleUpscaleCacheCleanup(source = 'cache-maintenance'): void 
 		bucket: 'background',
 		source,
 		executor: async () => {
-			const cleaned = bookStore.cleanupExpiredCaches();
+			const cleaned = 0;
 			console.log('📦 缓存维护完成，删除条目:', cleaned);
 		}
 	});

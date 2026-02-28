@@ -271,10 +271,7 @@
 
 	function getWindowRange(totalPages: number): { start: number; end: number } {
 		const windowState = $viewerState.pageWindow;
-		const bookType =
-			bookStore.currentBook?.type === 'archive' || bookStore.currentBook?.type === 'local'
-				? bookStore.currentBook.type
-				: undefined;
+		const bookType = bookStore.currentBook?.type === 'archive' ? 'archive' : undefined;
 		return computeWindowRange(
 			totalPages,
 			windowState,
@@ -514,7 +511,7 @@
 {#if bookStore.currentBook && bookStore.currentBook.pages.length > 0}
 	<!-- 缩略图栏触发区域（独立） -->
 	<div
-		class="fixed right-0 bottom-0 left-0 z-[57]"
+		class="fixed right-0 bottom-0 left-0 z-57"
 		style={`height: ${hoverAreas?.bottomTriggerHeight ?? 4}px;`}
 		onmouseenter={handleMouseEnter}
 		onmouseleave={handleMouseLeave}
@@ -525,7 +522,7 @@
 	<!-- 缩略图栏内容 -->
 	<div
 		data-bottom-bar="true"
-		class="absolute right-0 bottom-0 left-0 z-[58] transition-transform duration-300 {isVisible
+		class="absolute right-0 bottom-0 left-0 z-58 transition-transform duration-300 {isVisible
 			? 'translate-y-0'
 			: 'translate-y-full'}"
 		onmouseenter={handleMouseEnter}
@@ -651,7 +648,7 @@
 				</div>
 			{/if}
 
-			<div class="h-[calc(100%-theme(spacing.12))] overflow-hidden px-2 pb-2">
+			<div class="h-[calc(100%-(--spacing(12)))] overflow-hidden px-2 pb-2">
 				<div
 					class="flex h-full items-center gap-2 overflow-x-auto pb-1"
 					onscroll={handleScroll}
@@ -663,8 +660,8 @@
 						<Tooltip.Root>
 							<Tooltip.Trigger>
 								<button
-									class="border-border group relative flex-shrink-0 overflow-hidden rounded border-2 transition-colors
-										{originalIndex === bookStore.currentPageIndex ? 'outline-sidebar-ring outline outline-2' : ''}
+									class="border-border group relative shrink-0 overflow-hidden rounded border-2 transition-colors
+										{originalIndex === bookStore.currentPageIndex ? 'outline-sidebar-ring outline-2' : ''}
 										{status === 'preupscaled' ? 'ring-accent ring-2' : ''}
 										{status === 'done' ? 'ring-primary ring-2' : ''}
 										{status === 'failed' ? 'ring-destructive ring-2' : ''}
@@ -692,7 +689,7 @@
 
 									{#if windowBadgeLabel(originalIndex)}
 										<div
-											class={`absolute top-0 right-0 px-1 py-[1px] font-mono text-[10px] text-white ${windowBadgeClass(originalIndex)}`}
+											class={`absolute top-0 right-0 px-1 py-px font-mono text-[10px] text-white ${windowBadgeClass(originalIndex)}`}
 										>
 											{windowBadgeLabel(originalIndex)}
 										</div>

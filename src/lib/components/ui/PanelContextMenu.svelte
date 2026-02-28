@@ -91,7 +91,7 @@
 	<ContextMenu.Trigger />
 	<ContextMenu.Content
 		bind:ref={contextMenuElement}
-		class="min-w-[180px]"
+		class="min-w-45"
 		style="z-index: {zIndex}; {position === 'mouse' && mousePosition ? `position: fixed; left: ${mousePosition.x}px; top: ${mousePosition.y}px;` : ''}"
 	>
 		{#if quickActions.length > 0}

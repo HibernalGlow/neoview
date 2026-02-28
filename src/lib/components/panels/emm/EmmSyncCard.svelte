@@ -69,10 +69,6 @@
 		}
 	}
 
-	function getStatusIcon(valid: boolean) {
-		return valid ? Check : X;
-	}
-
 	function getStatusColor(valid: boolean) {
 		return valid ? 'text-green-500' : 'text-red-500';
 	}
@@ -115,40 +111,44 @@
 	{#if validation}
 		<div class="space-y-1.5 text-xs">
 			<div class="flex items-center gap-2">
-				<svelte:component
-					this={getStatusIcon(validation.mainDatabase.valid)}
-					class="h-3.5 w-3.5 {getStatusColor(validation.mainDatabase.valid)}"
-				/>
+				{#if validation.mainDatabase.valid}
+					<Check class="h-3.5 w-3.5 {getStatusColor(validation.mainDatabase.valid)}" />
+				{:else}
+					<X class="h-3.5 w-3.5 {getStatusColor(validation.mainDatabase.valid)}" />
+				{/if}
 				<span class="text-muted-foreground">主数据库:</span>
 				<span class="truncate flex-1" title={validation.mainDatabase.path}>
 					{validation.mainDatabase.path || '未配置'}
 				</span>
 			</div>
 			<div class="flex items-center gap-2">
-				<svelte:component
-					this={getStatusIcon(validation.translationDatabase.valid)}
-					class="h-3.5 w-3.5 {getStatusColor(validation.translationDatabase.valid)}"
-				/>
+				{#if validation.translationDatabase.valid}
+					<Check class="h-3.5 w-3.5 {getStatusColor(validation.translationDatabase.valid)}" />
+				{:else}
+					<X class="h-3.5 w-3.5 {getStatusColor(validation.translationDatabase.valid)}" />
+				{/if}
 				<span class="text-muted-foreground">翻译数据库:</span>
 				<span class="truncate flex-1" title={validation.translationDatabase.path}>
 					{validation.translationDatabase.path || '未配置'}
 				</span>
 			</div>
 			<div class="flex items-center gap-2">
-				<svelte:component
-					this={getStatusIcon(validation.settingFile.valid)}
-					class="h-3.5 w-3.5 {getStatusColor(validation.settingFile.valid)}"
-				/>
+				{#if validation.settingFile.valid}
+					<Check class="h-3.5 w-3.5 {getStatusColor(validation.settingFile.valid)}" />
+				{:else}
+					<X class="h-3.5 w-3.5 {getStatusColor(validation.settingFile.valid)}" />
+				{/if}
 				<span class="text-muted-foreground">设置文件:</span>
 				<span class="truncate flex-1" title={validation.settingFile.path}>
 					{validation.settingFile.path || '未配置'}
 				</span>
 			</div>
 			<div class="flex items-center gap-2">
-				<svelte:component
-					this={getStatusIcon(validation.translationDict.valid)}
-					class="h-3.5 w-3.5 {getStatusColor(validation.translationDict.valid)}"
-				/>
+				{#if validation.translationDict.valid}
+					<Check class="h-3.5 w-3.5 {getStatusColor(validation.translationDict.valid)}" />
+				{:else}
+					<X class="h-3.5 w-3.5 {getStatusColor(validation.translationDict.valid)}" />
+				{/if}
 				<span class="text-muted-foreground">翻译字典:</span>
 				<span class="truncate flex-1" title={validation.translationDict.path}>
 					{validation.translationDict.path || '未配置'}

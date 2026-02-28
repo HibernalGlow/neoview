@@ -1,4 +1,5 @@
 import { Context } from 'runed';
+import type { ReadableBoxedValues } from 'svelte-toolbelt';
 
 export type Timeout = ReturnType<typeof setTimeout> | undefined;
 
@@ -16,11 +17,11 @@ export class TerminalLoop {
 	}
 }
 
-export type TerminalRootProps = {
+export type TerminalRootProps = ReadableBoxedValues<{
 	delay: number;
 	speed: number;
 	onComplete: () => void;
-};
+}>;
 
 export class TerminalSession {
 	#animations: AnimationState[] = $state([]);
@@ -39,7 +40,7 @@ export class TerminalSession {
 
 			for (let i = 0; i < this.#animations.length; i++) {
 				this.#animations[i].timeout = setTimeout(() => {
-					this.#animations[i].play(this.opts.speed);
+					this.#animations[i].play(this.opts.speed.current);
 
 					// when the most delayed animation is complete call onComplete
 					if (i === this.#animations.length - 1) {
@@ -47,11 +48,11 @@ export class TerminalSession {
 					}
 				}, this.#animations[i].delay);
 			}
-		}, this.opts.delay);
+		}, this.opts.delay.current);
 	}
 
 	onComplete() {
-		this.opts.onComplete?.();
+		this.opts.onComplete.current?.();
 
 		this.loop?.onComplete();
 	}
@@ -66,7 +67,7 @@ export class TerminalSession {
 }
 
 export type AnimationStateProps = {
-	delay: number;
+	delay: ReadableBoxedValues<{ delay: number }>['delay'];
 	play: (speed: number) => void;
 };
 
@@ -79,7 +80,7 @@ export class AnimationState {
 		readonly rootState: TerminalSession,
 		readonly opts: AnimationStateProps
 	) {
-		this.delay = opts.delay;
+		this.delay = opts.delay.current;
 
 		rootState.registerAnimation(this);
 	}

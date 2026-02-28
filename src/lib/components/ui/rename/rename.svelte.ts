@@ -49,10 +49,10 @@ type RenameInputStateProps = WritableBoxedValues<{
 	textRef: HTMLElement | null;
 }> &
 	ReadableBoxedValues<{
+		id: string;
 		blurBehavior?: 'exit' | 'none';
 		fallbackSelectionBehavior: 'start' | 'end' | 'all';
 	}> & {
-		id: string;
 		onSave?: (value: string) => void;
 		onCancel?: () => void;
 		validate: (value: string) => boolean;

@@ -226,16 +226,15 @@
 			{/if}
 		</div>
 		<!-- 调整手柄 -->
-		<div
+		<button
+			type="button"
 			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout(effectiveTreeConfig.layout)
 				? 'top-0 bottom-0 w-2 cursor-ew-resize'
 				: 'right-0 left-0 h-2 cursor-ns-resize'}"
 			style={getResizeHandleStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
 			onmousedown={startTreeResize}
-			role="separator"
-			aria-orientation={isHorizontalLayout(effectiveTreeConfig.layout) ? 'vertical' : 'horizontal'}
-			tabindex="-1"
-		></div>
+			aria-label="调整树视图大小"
+		></button>
 	{/if}
 
 	<!-- 文件列表区域 -->

@@ -26,7 +26,7 @@ let { onNavigate, onCreateTab, homePath = '', externalPath, vertical = false }: 
 
 // 使用外部路径或全局 store 的 currentPath
 import { get } from 'svelte/store';
-let displayPath = $state(externalPath || get(tabCurrentPath));
+let displayPath = $state('');
 
 $effect(() => {
 	// 如果有外部路径，使用它；否则订阅全局 store

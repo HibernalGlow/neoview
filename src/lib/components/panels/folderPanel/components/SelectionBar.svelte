@@ -75,7 +75,7 @@ function handleClose() {
 		<span class="text-primary">{selectedCount}</span> / {totalCount} 
 	</span>
 	
-	<div class="flex-1" />
+	<div class="flex-1"></div>
 	
 	<!-- 操作按钮 -->
 	<div class="flex items-center gap-1">
@@ -165,7 +165,7 @@ function handleClose() {
 			</Tooltip.Content>
 		</Tooltip.Root>
 		
-		<div class="w-px h-5 bg-border mx-1" />
+		<div class="w-px h-5 bg-border mx-1"></div>
 		
 		<!-- 复制 -->
 		{#if onCopy}
@@ -224,7 +224,7 @@ function handleClose() {
 			</Tooltip.Root>
 		{/if}
 		
-		<div class="w-px h-5 bg-border mx-1" />
+		<div class="w-px h-5 bg-border mx-1"></div>
 		
 		<!-- 关闭勾选模式 -->
 		<Tooltip.Root>

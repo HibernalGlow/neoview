@@ -193,19 +193,23 @@
 
 <div class="h-screen w-screen flex flex-col bg-background select-none">
 	<!-- 标题栏 -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div 
 		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 border-b cursor-default"
+		role="banner"
+		aria-label="窗口标题栏"
 		onmousedown={handleTitleBarMouseDown}
 		ondblclick={maximizeWindow}
 	>
 		<div class="flex items-center gap-2 flex-1 min-w-0">
 			<span class="text-sm font-medium truncate">{windowTitle}</span>
 		</div>
-		<div class="flex items-center gap-0.5" onmousedown={(e) => e.stopPropagation()}>
+		<div class="flex items-center gap-0.5" aria-label="窗口操作">
 			<Button 
 				variant="ghost" 
 				size="icon" 
 				class="h-6 w-6 hover:bg-muted" 
+				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={minimizeWindow}
 			>
 				<Minus class="h-3 w-3" />
@@ -214,6 +218,7 @@
 				variant="ghost" 
 				size="icon" 
 				class="h-6 w-6 hover:bg-muted" 
+				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={maximizeWindow}
 			>
 				<Maximize class="h-3 w-3" />
@@ -222,6 +227,7 @@
 				variant="ghost" 
 				size="icon" 
 				class="h-6 w-6 hover:bg-destructive hover:text-destructive-foreground" 
+				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={closeWindow}
 			>
 				<X class="h-3.5 w-3.5" />

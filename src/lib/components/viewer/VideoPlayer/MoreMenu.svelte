@@ -67,8 +67,11 @@
 	{#if showMoreMenu}
 		<div
 			class="absolute bottom-full left-0 mb-2 w-48 rounded-lg bg-black/95 p-2 shadow-lg backdrop-blur-sm"
+			role="menu"
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 			onmousedown={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<!-- 截图 -->
 			<button

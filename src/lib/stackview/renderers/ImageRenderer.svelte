@@ -34,7 +34,7 @@
 
 <img
   src={image.url}
-  alt="Image"
+  alt="预览图"
   class="image-renderer"
   class:is-split={!!image.splitHalf}
   style:transform={getImageTransform(image)}

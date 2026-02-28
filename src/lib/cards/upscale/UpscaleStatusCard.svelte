@@ -179,7 +179,7 @@ let upscaledDimensions = $derived.by(() => {
 	{#if upscaleStore.enabled}
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">模型</span>
-			<span class="font-mono text-[10px] truncate max-w-[120px]" title={actualModelName}>
+			<span class="font-mono text-[10px] truncate max-w-30" title={actualModelName}>
 				{actualModelName}
 				{#if pageFullStatus?.modelName}
 					<span class="text-green-500 ml-1">✓</span>
@@ -238,7 +238,7 @@ let upscaledDimensions = $derived.by(() => {
 				<img
 					src={displayUrl}
 					alt={useUpscaled && hasUpscaled ? '超分图' : '原图'}
-					class="w-full h-auto max-h-[200px] object-contain bg-muted/30"
+					class="w-full h-auto max-h-50 object-contain bg-muted/30"
 				/>
 			</button>
 			<!-- 当前显示状态 -->
@@ -314,15 +314,15 @@ let upscaledDimensions = $derived.by(() => {
 	>
 		<!-- 调整大小手柄 -->
 		<!-- 四边 -->
-		<div class="absolute top-0 left-2 right-2 h-1 cursor-n-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'n')}></div>
-		<div class="absolute bottom-0 left-2 right-2 h-1 cursor-s-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 's')}></div>
-		<div class="absolute left-0 top-2 bottom-2 w-1 cursor-w-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'w')}></div>
-		<div class="absolute right-0 top-2 bottom-2 w-1 cursor-e-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'e')}></div>
+		<button type="button" class="absolute top-0 left-2 right-2 h-1 cursor-n-resize hover:bg-primary/30" aria-label="向上调整大小" onmousedown={(e) => startResize(e, 'n')}></button>
+		<button type="button" class="absolute bottom-0 left-2 right-2 h-1 cursor-s-resize hover:bg-primary/30" aria-label="向下调整大小" onmousedown={(e) => startResize(e, 's')}></button>
+		<button type="button" class="absolute left-0 top-2 bottom-2 w-1 cursor-w-resize hover:bg-primary/30" aria-label="向左调整大小" onmousedown={(e) => startResize(e, 'w')}></button>
+		<button type="button" class="absolute right-0 top-2 bottom-2 w-1 cursor-e-resize hover:bg-primary/30" aria-label="向右调整大小" onmousedown={(e) => startResize(e, 'e')}></button>
 		<!-- 四角 -->
-		<div class="absolute top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'nw')}></div>
-		<div class="absolute top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'ne')}></div>
-		<div class="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'sw')}></div>
-		<div class="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-primary/30" onmousedown={(e) => startResize(e, 'se')}></div>
+		<button type="button" class="absolute top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-primary/30" aria-label="左上角调整大小" onmousedown={(e) => startResize(e, 'nw')}></button>
+		<button type="button" class="absolute top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-primary/30" aria-label="右上角调整大小" onmousedown={(e) => startResize(e, 'ne')}></button>
+		<button type="button" class="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-primary/30" aria-label="左下角调整大小" onmousedown={(e) => startResize(e, 'sw')}></button>
+		<button type="button" class="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-primary/30" aria-label="右下角调整大小" onmousedown={(e) => startResize(e, 'se')}></button>
 
 		<!-- 标题栏 -->
 		<div class="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">

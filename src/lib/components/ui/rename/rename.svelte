@@ -44,9 +44,12 @@
 
 	let inputRef = $state<HTMLInputElement | null>(null);
 	let textRef = $state<HTMLElement | null>(null);
+	const handleSave = (newValue: string) => onSave(newValue);
+	const handleCancel = () => onCancel();
+	const validateValue = (newValue: string) => validate(newValue);
 
 	const rootState = useRenameInput({
-		id,
+		id: box.with(() => id),
 		mode: box.with(
 			() => mode,
 			(v) => (mode = v)
@@ -63,10 +66,10 @@
 			() => textRef,
 			(v) => (textRef = v)
 		),
-		onSave,
-		onCancel,
+		onSave: handleSave,
+		onCancel: handleCancel,
 		blurBehavior: box.with(() => blurBehavior),
-		validate,
+		validate: validateValue,
 		fallbackSelectionBehavior: box.with(() => fallbackSelectionBehavior)
 	});
 

@@ -3,6 +3,7 @@
 	import { cn } from '$lib/utils.js';
 	import { useTerminalRoot } from './terminal.svelte.js';
 	import { onMount } from 'svelte';
+	import { box } from 'svelte-toolbelt';
 	import type { TerminalRootProps } from './types.js';
 
 	let {
@@ -12,8 +13,11 @@
 		children,
 		class: className
 	}: TerminalRootProps = $props();
-
-	const terminal = useTerminalRoot({ delay, speed, onComplete });
+	const terminal = useTerminalRoot({
+		delay: box.with(() => delay),
+		speed: box.with(() => speed),
+		onComplete: box.with(() => onComplete)
+	});
 
 	onMount(() => {
 		// we play here so that we don't play before it is visible (on the server)

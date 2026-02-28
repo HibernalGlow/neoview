@@ -65,6 +65,24 @@
 		onScrollToProgress?.(progress);
 	}
 
+	function handleTrackKeydown(e: KeyboardEvent) {
+		if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			onScrollToProgress?.(Math.max(0, scrollProgress - 0.05));
+		} else if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			onScrollToProgress?.(Math.min(1, scrollProgress + 0.05));
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			onScrollToProgress?.(0);
+			onJumpToIndex?.(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			onScrollToProgress?.(1);
+			onJumpToIndex?.(Math.max(0, totalItems - 1));
+		}
+	}
+
 	function handleThumbMouseDown(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -139,7 +157,6 @@
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
-				autofocus
 			/>
 		{:else}
 			<button
@@ -159,6 +176,7 @@
 			w-[3px] group-hover/slider:w-2.5"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
+		onkeydown={handleTrackKeydown}
 		role="slider"
 		aria-valuenow={currentIndex + 1}
 		aria-valuemin={1}

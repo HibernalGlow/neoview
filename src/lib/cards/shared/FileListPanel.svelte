@@ -4,7 +4,7 @@
 	 * folder、bookmark、history 三个面板的共享基础组件
 	 * 组合 3 张卡片：BreadcrumbTabCard、ToolbarCard、FileListCard
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { get } from 'svelte/store';
 	import { homeDir } from '@tauri-apps/api/path';
 
@@ -42,10 +42,15 @@
 		/** 面板模式（可选，会自动从 initialPath 推断） */
 		mode?: PanelMode;
 	}
-	let { initialPath: propInitialPath, mode }: Props = $props();
+	let { initialPath, mode }: Props = $props();
+	let propInitialPath = $state<string | undefined>(undefined);
+	$effect(() => {
+		propInitialPath = initialPath;
+	});
+	const initialPathSnapshot = untrack(() => propInitialPath);
 
 	// ==================== Context 初始化 ====================
-	const ctx = createFolderContext(propInitialPath);
+	const ctx = createFolderContext(initialPathSnapshot);
 
 	// ==================== 按面板类型获取布局 stores ====================
 	const panelMode: StorePanelMode = ctx.panelMode as StorePanelMode;
@@ -56,7 +61,7 @@
 	const toolbarPosition = layoutStores.toolbarPosition;
 
 	// ==================== 共享操作初始化 ====================
-	const actions = createAllFileActions(ctx, propInitialPath);
+	const actions = createAllFileActions(ctx, initialPathSnapshot);
 
 	// ==================== 标签编辑状态 ====================
 	let tagEditorOpen = $state(false);
@@ -185,10 +190,10 @@
 			>
 				<FolderTabBar homePath={ctx.homePath} />
 				<!-- 拖拽调整宽度的手柄 -->
-				<div
+				<button
+					type="button"
 					class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-					role="separator"
-					tabindex="0"
+					aria-label="调整标签栏宽度"
 					onmousedown={(e) => {
 						e.preventDefault();
 						const startX = e.clientX;
@@ -204,7 +209,7 @@
 						document.addEventListener('mousemove', onMouseMove);
 						document.addEventListener('mouseup', onMouseUp);
 					}}
-				></div>
+				></button>
 			</div>
 		{/if}
 
@@ -300,10 +305,10 @@
 				style="width: {$tabBarWidth}px"
 			>
 				<!-- 拖拽调整宽度的手柄 -->
-				<div
+				<button
+					type="button"
 					class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-					role="separator"
-					tabindex="0"
+					aria-label="调整标签栏宽度"
 					onmousedown={(e) => {
 						e.preventDefault();
 						const startX = e.clientX;
@@ -319,7 +324,7 @@
 						document.addEventListener('mousemove', onMouseMove);
 						document.addEventListener('mouseup', onMouseUp);
 					}}
-				></div>
+				></button>
 				<FolderTabBar homePath={ctx.homePath} />
 			</div>
 		{/if}

@@ -289,7 +289,7 @@ function exportConfig() {
 }
 
 // 导入配置
-let importInput: HTMLInputElement | null = null;
+let importInput = $state<HTMLInputElement | null>(null);
 
 function handleImportClick() {
 	importInput?.click();

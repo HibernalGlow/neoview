@@ -550,7 +550,9 @@
 		}
 	}
 
-	const resetView = () => {
+	let resetView = $state(() => {});
+
+	resetView = () => {
 		manualScale = 1.0;
 		rotation = 0;
 		resetScrollPosition();

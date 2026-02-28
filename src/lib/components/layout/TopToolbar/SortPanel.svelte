@@ -187,6 +187,7 @@
 			{#each mediaPriorityOptions as option}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
+						{@const MediaIcon = option.icon}
 						<Button
 							variant={currentMediaPriority === option.value ? 'default' : 'ghost'}
 							size="sm"
@@ -194,7 +195,7 @@
 							onclick={() => handleMediaPriorityChange(option.value)}
 							oncontextmenu={(e: MouseEvent) => handleMediaPriorityRightClick(e, option.value)}
 						>
-							<svelte:component this={option.icon} class="h-3.5 w-3.5" />
+							<MediaIcon class="h-3.5 w-3.5" />
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
@@ -218,6 +219,7 @@
 			{#each sortCategories as category}
 				<Tooltip.Root>
 					<Tooltip.Trigger>
+						{@const CategoryIcon = category.icon}
 						<Button
 							variant={getCurrentSortCategory() === category.value ? 'default' : 'ghost'}
 							size="sm"
@@ -225,7 +227,7 @@
 							onclick={() => toggleSortDirection(category.value)}
 							oncontextmenu={(e: MouseEvent) => handleSortRightClick(e, category.value)}
 						>
-							<svelte:component this={category.icon} class="h-3 w-3" />
+							<CategoryIcon class="h-3 w-3" />
 							{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
 								{#if isCurrentSortDescending()}
 									<ArrowDown class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />

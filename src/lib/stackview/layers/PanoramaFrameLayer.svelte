@@ -449,25 +449,6 @@
     flex-shrink: 0;
   }
   
-  /* 水平全景：图片高度铺满视口 */
-  .panorama-frame-layer:not(.vertical) .panorama-image {
-    height: 100%;
-    width: auto;
-    max-height: none;
-  }
-  
-  /* 垂直全景：图片宽度铺满视口 */
-  .panorama-frame-layer.vertical .panorama-image {
-    width: 100%;
-    height: auto;
-    max-width: none;
-  }
-  
-  /* 双页模式：每张图最多占50%宽度 */
-  .panorama-frame-layer.double-mode .panorama-image {
-    max-width: 50%;
-  }
-  
   .panorama-frame-layer.empty {
     display: flex;
     align-items: center;

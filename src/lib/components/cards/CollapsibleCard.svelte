@@ -268,16 +268,16 @@ $effect(() => {
 		
 		<!-- 拖拽调整高度/宽度手柄 -->
 		{#if onHeightChange && !hideHeader}
-			<div 
+			<button 
+				type="button"
 				class="{orientation === 'horizontal' ? 'w-2 cursor-ew-resize' : 'h-2 cursor-ns-resize'} hover:bg-primary/20 flex items-center justify-center group"
 				onmousedown={startResize}
 				ondblclick={resetHeight}
-				role="separator"
-				aria-orientation={orientation === 'horizontal' ? 'vertical' : 'horizontal'}
+				aria-label="调整卡片大小"
 				title="拖拽调整大小，双击重置"
 			>
 				<div class="{orientation === 'horizontal' ? 'h-8 w-0.5' : 'w-8 h-0.5'} rounded-full bg-muted-foreground/30 group-hover:bg-primary/50"></div>
-			</div>
+			</button>
 		{/if}
 	{/if}
 

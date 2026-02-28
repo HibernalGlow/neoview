@@ -38,11 +38,13 @@
 		<span class="text-xs text-primary">{Math.round(volume * 100)}%</span>
 	</button>
 	{#if showVolumePanel}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="absolute bottom-full right-0 mb-2 rounded-lg bg-black/95 p-3 shadow-lg"
 			style="min-width: 140px;"
+			role="dialog"
+			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
-			onmousedown={(e) => e.stopPropagation()}>
+			onmousedown={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}>
 			<div class="flex items-center gap-2">
 				<button onclick={onToggleMute} class="shrink-0 p-1 hover:bg-white/20 rounded">
 					{#if isMuted || volume === 0}

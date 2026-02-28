@@ -257,15 +257,16 @@
 </script>
 
 {#if enabled}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="pointer-events-auto absolute"
+    role="group"
+    aria-label="侧栏控制器"
     data-layer="SidebarControlLayer"
     data-layer-id="sidebar-control"
     style:z-index={LayerZIndex.SIDEBAR_CONTROL}
     style:left="{position.x}px"
     style:top="{position.y}px"
-    onclick={(e) => e.stopPropagation()}
     onmousedown={(e) => e.stopPropagation()}
   >
     <div class="border-border/60 bg-background/80 flex items-center gap-0.5 rounded-lg border p-1 shadow-lg backdrop-blur-sm">

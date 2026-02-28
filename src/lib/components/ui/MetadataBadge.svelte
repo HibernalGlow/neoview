@@ -68,7 +68,8 @@
 				class="metadata-badge inline-flex items-center rounded-md border font-medium {sizeClass} {variantClass}"
 			>
 				{#if icon}
-					<svelte:component this={icon} class={iconSize} />
+					{@const IconComp = icon}
+					<IconComp class={iconSize} />
 				{/if}
 				<span>{text}</span>
 			</span>
@@ -80,7 +81,8 @@
 		class="metadata-badge inline-flex items-center rounded-md border font-medium {sizeClass} {variantClass}"
 	>
 		{#if icon}
-			<svelte:component this={icon} class={iconSize} />
+			{@const IconComp = icon}
+			<IconComp class={iconSize} />
 		{/if}
 		<span>{text}</span>
 	</span>

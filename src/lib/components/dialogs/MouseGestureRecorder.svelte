@@ -211,10 +211,14 @@
 							: 'border-blue-500 bg-blue-50'
 						: 'border-muted-foreground/30 bg-muted/30'
 				}"
+				role="button"
+				tabindex="0"
+				aria-label="鼠标手势录制区域"
 				oncontextmenu={(e) => e.preventDefault()}
 				onmousedown={handleMouseDown}
 				onmousemove={handleMouseMove}
 				onmouseup={handleMouseUp}
+				onkeydown={() => {}}
 			>
 				<!-- 状态指示器 -->
 				<div class="absolute inset-0 flex items-center justify-center pointer-events-none">

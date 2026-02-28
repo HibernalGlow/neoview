@@ -241,7 +241,7 @@ namespace 可选值：artist, group, parody, character, female, male, mixed, oth
 		<div class="space-y-2 p-2 rounded border bg-muted/30">
 			<!-- 模型选择 -->
 			<div class="space-y-1">
-				<label class="text-[10px] text-muted-foreground">使用模型</label>
+				<span class="text-[10px] text-muted-foreground">使用模型</span>
 				<Select.Root type="single" value={selectedProviderIndex?.toString() ?? 'default'} onValueChange={(v) => { selectedProviderIndex = v === 'default' ? null : parseInt(v); }}>
 					<Select.Trigger class="h-7 text-xs">
 						<span>{selectedProviderIndex !== null ? providers[selectedProviderIndex]?.name : `默认 (${providers[activeIndex]?.name})`}</span>
@@ -258,7 +258,7 @@ namespace 可选值：artist, group, parody, character, female, male, mixed, oth
 			<!-- 自定义 Prompt -->
 			<div class="space-y-1">
 				<div class="flex items-center justify-between">
-					<label class="text-[10px] text-muted-foreground">自定义 Prompt</label>
+					<span class="text-[10px] text-muted-foreground">自定义 Prompt</span>
 					<button 
 						type="button" 
 						class="text-[10px] text-primary hover:underline"

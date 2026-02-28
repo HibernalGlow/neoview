@@ -183,10 +183,18 @@
 	bind:this={wrapperContainer}
 	class="relative flex h-full w-full"
 	data-hover-wrapper="true"
+	role="button"
+	tabindex="0"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	oncontextmenu={handleContextMenu}
 	onclick={handleContextMenuClose}
+	onkeydown={(e) => {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			handleContextMenuClose();
+		}
+	}}
 >
 	{@render children?.()}
 </div>

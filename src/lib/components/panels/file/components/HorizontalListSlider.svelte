@@ -64,6 +64,26 @@
 		onJumpToIndex?.(newIndex);
 	}
 
+	function handleTrackKeydown(e: KeyboardEvent) {
+		if (e.key === 'Home') {
+			e.preventDefault();
+			onScrollToProgress?.(0);
+			onJumpToIndex?.(0);
+			return;
+		}
+		if (e.key === 'End') {
+			e.preventDefault();
+			onScrollToProgress?.(1);
+			onJumpToIndex?.(Math.max(0, totalItems - 1));
+			return;
+		}
+		if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+		e.preventDefault();
+		const step = e.key === 'ArrowRight' ? 0.05 : -0.05;
+		const adjustedStep = isRtl ? -step : step;
+		onScrollToProgress?.(Math.max(0, Math.min(1, progress + adjustedStep)));
+	}
+
 	function handleThumbMouseDown(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -144,7 +164,6 @@
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
-				autofocus
 			/>
 		{:else}
 			<button
@@ -164,6 +183,7 @@
 			h-[3px] group-hover/slider:h-2.5"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
+		onkeydown={handleTrackKeydown}
 		role="slider"
 		aria-valuenow={currentIndex + 1}
 		aria-valuemin={1}

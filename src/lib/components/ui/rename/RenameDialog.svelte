@@ -26,7 +26,7 @@
 		validate
 	}: Props = $props();
 
-	let inputValue = $state(initialValue);
+	let inputValue = $state('');
 	let error = $state<string | null>(null);
 
 	// 当对话框打开时，重置输入值

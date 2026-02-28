@@ -61,6 +61,7 @@
 						rx="3"
 						width="12"
 						height="16"
+						role="img"
 						fill={cell.count === 0 ? 'hsl(var(--muted))' : 'hsl(var(--primary))'}
 						fill-opacity={getOpacity(cell.count)}
 						class="transition-[fill-opacity] duration-200"

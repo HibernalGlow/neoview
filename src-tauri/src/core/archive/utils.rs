@@ -28,7 +28,11 @@ pub fn is_image_file(path: &str) -> bool {
     Path::new(path)
         .extension()
         .and_then(OsStr::to_str)
-        .map(|ext| ARCHIVE_IMAGE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+        .map(|ext| {
+            ARCHIVE_IMAGE_EXTENSIONS
+                .iter()
+                .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+        })
         .unwrap_or(false)
 }
 
@@ -38,27 +42,46 @@ pub fn is_video_file(path: &str) -> bool {
     Path::new(path)
         .extension()
         .and_then(OsStr::to_str)
-        .map(|ext| ARCHIVE_VIDEO_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
+        .map(|ext| {
+            ARCHIVE_VIDEO_EXTENSIONS
+                .iter()
+                .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+        })
         .unwrap_or(false)
 }
 
 /// 检测图片 MIME 类型
 pub fn detect_image_mime_type(path: &str) -> &'static str {
-    if let Some(ext) = Path::new(path).extension() {
-        match ext.to_string_lossy().to_lowercase().as_str() {
-            "jpg" | "jpeg" => "image/jpeg",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "bmp" => "image/bmp",
-            "webp" => "image/webp",
-            "avif" => "image/avif",
-            "jxl" => "image/jxl",
-            "tiff" | "tif" => "image/tiff",
-            _ => "application/octet-stream",
-        }
-    } else {
-        "application/octet-stream"
+    let Some(ext) = Path::new(path).extension().and_then(OsStr::to_str) else {
+        return "application/octet-stream";
+    };
+
+    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+        return "image/jpeg";
     }
+    if ext.eq_ignore_ascii_case("png") {
+        return "image/png";
+    }
+    if ext.eq_ignore_ascii_case("gif") {
+        return "image/gif";
+    }
+    if ext.eq_ignore_ascii_case("bmp") {
+        return "image/bmp";
+    }
+    if ext.eq_ignore_ascii_case("webp") {
+        return "image/webp";
+    }
+    if ext.eq_ignore_ascii_case("avif") {
+        return "image/avif";
+    }
+    if ext.eq_ignore_ascii_case("jxl") {
+        return "image/jxl";
+    }
+    if ext.eq_ignore_ascii_case("tiff") || ext.eq_ignore_ascii_case("tif") {
+        return "image/tiff";
+    }
+
+    "application/octet-stream"
 }
 
 /// 获取压缩包元数据

@@ -302,12 +302,10 @@ pub fn evict_archive_cache(archive_cache: &ZipArchiveCache, archive_path: &Path)
 
 /// 检查文件是否为支持的 ZIP 压缩包
 pub fn is_supported_archive(path: &Path) -> bool {
-    if let Some(ext) = path.extension() {
-        let ext = ext.to_string_lossy().to_lowercase();
-        matches!(ext.as_str(), "zip" | "cbz")
-    } else {
-        false
-    }
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("zip") || ext.eq_ignore_ascii_case("cbz"))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

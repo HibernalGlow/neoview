@@ -250,6 +250,25 @@ pub fn find_first_image_entry(archive_path: &Path) -> Result<Option<String>, Str
     scan_first_image_entry(archive_path)
 }
 
+#[inline]
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.len() > h.len() {
+        return false;
+    }
+
+    h.windows(n.len()).any(|window| {
+        window
+            .iter()
+            .zip(n.iter())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    })
+}
+
 fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String> {
     let file = File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
 
@@ -278,14 +297,12 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
             continue;
         }
 
-        let name_lower = name.to_lowercase();
-
         if first_image.is_none() {
             first_image = Some(name.clone());
         }
 
         for pattern in &priority_patterns {
-            if name_lower.contains(pattern) {
+            if contains_ascii_case_insensitive(&name, pattern) {
                 debug!("⚡ 快速扫描找到优先图片: {}", name);
                 return Ok(Some(name));
             }
@@ -343,14 +360,12 @@ pub fn scan_archive_images_fast(
             continue;
         }
 
-        let name_lower = name.to_lowercase();
-
         if first_image.is_none() {
             first_image = Some(name.clone());
         }
 
         for pattern in &priority_patterns {
-            if name_lower.contains(pattern) {
+            if contains_ascii_case_insensitive(&name, pattern) {
                 images.push(name.clone());
                 debug!("⚡ 快速扫描找到优先图片: {}", name);
                 return Ok(images);

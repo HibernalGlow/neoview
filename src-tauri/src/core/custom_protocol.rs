@@ -13,6 +13,7 @@ use ahash::AHashMap;
 use log::{debug, error, info, warn};
 use mini_moka::sync::Cache;
 use parking_lot::RwLock;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -222,26 +223,26 @@ impl ProtocolState {
 
 /// 解析协议请求
 #[derive(Debug)]
-pub enum ProtocolRequest {
+pub enum ProtocolRequest<'a> {
     /// 健康检查: `/health`
     Health,
     /// 压缩包内图片: `/image/{book_hash}/{entry_index}`
     ArchiveImage {
-        book_hash: String,
+        book_hash: &'a str,
         book_key: u64,
         entry_index: usize,
     },
     /// 文件夹图片: `/file/{path_hash}`
-    FileImage { path_hash: String },
+    FileImage { path_hash: &'a str },
     /// 缩略图: `/thumb/{key}`
-    Thumbnail { key: String },
+    Thumbnail { key: Cow<'a, str> },
     /// 未知请求
     Unknown,
 }
 
-impl ProtocolRequest {
+impl<'a> ProtocolRequest<'a> {
     /// 从 URI 路径解析请求
-    pub fn parse(path: &str) -> Self {
+    pub fn parse(path: &'a str) -> Self {
         let path = path.trim_start_matches('/');
         let mut parts = path.split('/');
         let head = parts.next();
@@ -262,7 +263,7 @@ impl ProtocolRequest {
                 if let Ok(index) = entry_index.parse::<usize>() {
                     let book_key = ProtocolState::parse_book_key(book_hash);
                     ProtocolRequest::ArchiveImage {
-                        book_hash: book_hash.to_string(),
+                        book_hash,
                         book_key,
                         entry_index: index,
                     }
@@ -278,7 +279,7 @@ impl ProtocolRequest {
                     return ProtocolRequest::Unknown;
                 }
                 ProtocolRequest::FileImage {
-                    path_hash: path_hash.to_string(),
+                    path_hash,
                 }
             }
             Some("thumb") => {
@@ -290,7 +291,7 @@ impl ProtocolRequest {
                 }
                 ProtocolRequest::Thumbnail {
                     key: urlencoding::decode(key)
-                        .map_or_else(|_| key.to_string(), |s| s.to_string()),
+                        .map_or_else(|_| Cow::Borrowed(key), |s| Cow::Owned(s.into_owned())),
                 }
             }
             _ => ProtocolRequest::Unknown,
@@ -376,6 +377,15 @@ fn get_mime_type(path: &str) -> &'static str {
     }
 
     "application/octet-stream"
+}
+
+#[inline]
+fn get_mime_type_from_path(path: &Path) -> &'static str {
+    if let Some(s) = path.to_str() {
+        get_mime_type(s)
+    } else {
+        "application/octet-stream"
+    }
 }
 
 /// 构建成功响应
@@ -544,7 +554,7 @@ fn handle_file_image(
         }
     };
 
-    let mime_type = get_mime_type(&file_path.to_string_lossy());
+    let mime_type = get_mime_type_from_path(file_path.as_ref());
     let bytes = data.as_slice();
     let range = parse_byte_range(request, bytes.len());
     build_response_from_slice(bytes, mime_type, range)
@@ -627,9 +637,9 @@ pub fn handle_protocol_request(
             book_hash,
             book_key,
             entry_index,
-        } => handle_archive_image(&state, request, &book_hash, book_key, entry_index),
-        ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, &path_hash),
-        ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, &key),
+        } => handle_archive_image(&state, request, book_hash, book_key, entry_index),
+        ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, path_hash),
+        ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, key.as_ref()),
         ProtocolRequest::Unknown => {
             warn!("🌐 Protocol: 未知请求路径: {path}");
             build_error_response(StatusCode::NOT_FOUND, "Unknown request")

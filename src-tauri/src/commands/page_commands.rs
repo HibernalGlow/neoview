@@ -346,58 +346,73 @@ pub async fn pm_preload_thumbnails(
         manager.get_archive_manager_clone()
     };
 
-    // 在后台任务中并行生成缩略图 - 使用 spawn_blocking 运行 rayon
+    // 在后台任务中并行生成缩略图（分块）：
+    // - 每块保持并行，利用多核
+    // - 每块完成后立即推送，避免“整批完成才显示”导致首屏缩略图延迟
     tokio::spawn(async move {
         use rayon::prelude::*;
 
-        // 使用 spawn_blocking 运行 CPU 密集型的 rayon 并行任务
-        let results = tokio::task::spawn_blocking(move || {
-            pages_to_load
-                .par_iter()
-                .filter_map(|(index, page_info)| {
-                    // 1. 加载图片数据（从压缩包或文件系统）
-                    let data = match book_type {
-                        crate::core::page_manager::BookType::Archive => {
-                            if let Some(ref am) = archive_manager {
-                                am.load_image_from_archive_binary(
-                                    std::path::Path::new(&book_path),
-                                    &page_info.inner_path,
-                                )
-                                .ok()
-                            } else {
-                                None
+        let mut success_count = 0usize;
+        let chunk_size = parallelism.max(1);
+
+        for chunk in pages_to_load.chunks(chunk_size) {
+            let chunk_items: Vec<_> = chunk
+                .iter()
+                .map(|(index, page_info)| (*index, page_info.inner_path.clone()))
+                .collect();
+
+            let local_book_path = book_path.clone();
+            let local_book_type = book_type;
+            let local_archive_manager = archive_manager.clone();
+
+            // 每块并行计算，完成后立即回推该块结果
+            let results = tokio::task::spawn_blocking(move || {
+                chunk_items
+                    .par_iter()
+                    .filter_map(|(index, inner_path)| {
+                        // 1. 加载图片数据（从压缩包或文件系统）
+                        let data = match local_book_type {
+                            crate::core::page_manager::BookType::Archive => {
+                                if let Some(ref am) = local_archive_manager {
+                                    am.load_image_from_archive_binary(
+                                        std::path::Path::new(&local_book_path),
+                                        inner_path,
+                                    )
+                                    .ok()
+                                } else {
+                                    None
+                                }
                             }
-                        }
-                        _ => std::fs::read(&page_info.inner_path).ok(),
-                    };
+                            _ => std::fs::read(inner_path).ok(),
+                        };
 
-                    let data = data?;
+                        let data = data?;
 
-                    // 2. 生成缩略图（使用 WIC 或 image crate）
-                    let thumbnail = generate_thumbnail_fast(&data, size)?;
+                        // 2. 生成缩略图（使用 WIC 或 image crate）
+                        let thumbnail = generate_thumbnail_fast(&data, size)?;
 
-                    Some((*index, thumbnail))
-                })
-                .collect::<Vec<_>>()
-        })
-        .await
-        .unwrap_or_default();
+                        Some((*index, thumbnail))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .unwrap_or_default();
 
-        // 推送结果到前端
-        let success_count = results.len();
-        for (index, item) in results {
-            use base64::{engine::general_purpose::STANDARD, Engine as _};
-            let data_base64 = STANDARD.encode(&item.data);
+            success_count += results.len();
+            for (index, item) in results {
+                use base64::{engine::general_purpose::STANDARD, Engine as _};
+                let data_base64 = STANDARD.encode(&item.data);
 
-            let event = ThumbnailReadyEvent {
-                index,
-                data: format!("data:image/webp;base64,{data_base64}"),
-                width: item.width,
-                height: item.height,
-            };
+                let event = ThumbnailReadyEvent {
+                    index,
+                    data: format!("data:image/webp;base64,{data_base64}"),
+                    width: item.width,
+                    height: item.height,
+                };
 
-            if let Err(e) = app.emit("page-thumbnail-ready", &event) {
-                log::error!("🖼️ 推送缩略图事件失败: {e}");
+                if let Err(e) = app.emit("page-thumbnail-ready", &event) {
+                    log::error!("🖼️ 推送缩略图事件失败: {e}");
+                }
             }
         }
 

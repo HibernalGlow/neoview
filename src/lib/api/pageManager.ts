@@ -315,6 +315,8 @@ export interface ThumbnailBatchReadyEvent {
 	items: ThumbnailReadyEvent[];
 }
 
+const CACHE_STATUS_CHUNK_SIZE = 2048;
+
 /**
  * 预加载缩略图（异步，结果通过事件推送）
  * 
@@ -346,7 +348,23 @@ export async function preloadThumbnails(
  * @returns 布尔数组，表示每个页面是否已缓存
  */
 export async function getCacheStatus(startPage: number, count: number): Promise<boolean[]> {
-	return invoke<boolean[]>('pm_get_cache_status', { startPage, count });
+	if (count <= 0) return [];
+
+	const statuses: boolean[] = [];
+	let offset = 0;
+
+	while (offset < count) {
+		const chunkCount = Math.min(CACHE_STATUS_CHUNK_SIZE, count - offset);
+		const chunkStart = startPage + offset;
+		const chunk = await invoke<boolean[]>('pm_get_cache_status', {
+			startPage: chunkStart,
+			count: chunkCount
+		});
+		statuses.push(...chunk);
+		offset += chunkCount;
+	}
+
+	return statuses;
 }
 
 /**

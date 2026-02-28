@@ -204,14 +204,25 @@ pub async fn pm_trigger_preload(state: State<'_, PageManagerState>) -> Result<()
 ///
 /// 返回指定范围内每个页面是否在缓存中（轻量级，不加载数据）
 /// 前端可用于智能预加载决策，避免重复请求已缓存的页面
+const PM_CACHE_STATUS_MAX_COUNT: usize = 2048;
+
 #[tauri::command]
 pub async fn pm_get_cache_status(
     start_page: usize,
     count: usize,
     state: State<'_, PageManagerState>,
 ) -> Result<Vec<bool>, String> {
+    if count == 0 {
+        return Ok(vec![]);
+    }
+
+    let effective_count = count.min(PM_CACHE_STATUS_MAX_COUNT);
+    let end_exclusive = start_page
+        .checked_add(effective_count)
+        .ok_or_else(|| "缓存查询范围溢出".to_string())?;
+
     let manager = state.manager.lock().await;
-    let statuses: Vec<bool> = (start_page..start_page + count)
+    let statuses: Vec<bool> = (start_page..end_exclusive)
         .map(|i| manager.is_page_cached(i))
         .collect();
     Ok(statuses)

@@ -15,15 +15,15 @@ tasks:
   tdev:
     desc: Start Tauri development server
     cmds:
-      - yarn tauri dev
+      - pnpm tauri dev
   ydev:
     desc: Start development server
     cmds:
-      - yarn  dev  
+      - pnpm dev  
   buildebug:
     desc: Start Tauri development server
     cmds:
-      - yarn tauri build --debug
+      - pnpm tauri build --debug
   version:show:
     desc: Show versions in package.json, tauri.conf.json and Cargo.toml
     dir: '{{.PROJECT_DIR}}'

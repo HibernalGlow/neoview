@@ -46,6 +46,8 @@ pub struct ThumbnailServiceConfig {
     pub adaptive_scale_down_fail_percent: usize,
     /// 解码阶段并发上限（主要约束 archive/video/folder）
     pub decode_stage_max_active: usize,
+    /// 缩放阶段并发上限（主要约束 image/archive/video）
+    pub scale_stage_max_active: usize,
     /// 编码阶段并发上限（主要约束 image/archive/video）
     pub encode_stage_max_active: usize,
     /// 内存缓存字节预算
@@ -79,6 +81,7 @@ impl Default for ThumbnailServiceConfig {
 
         let adaptive_min_active_workers = (worker_threads / 3).max(2).min(worker_threads);
         let decode_stage_max_active = (worker_threads / 2).max(1);
+        let scale_stage_max_active = ((worker_threads * 3) / 4).max(1);
         let encode_stage_max_active = ((worker_threads * 2) / 3).max(1);
         let memory_cache_byte_budget = if num_cores >= 8 {
             512 * 1024 * 1024
@@ -118,6 +121,7 @@ impl Default for ThumbnailServiceConfig {
             adaptive_scale_down_avg_ms: 160,
             adaptive_scale_down_fail_percent: 18,
             decode_stage_max_active,
+            scale_stage_max_active,
             encode_stage_max_active,
             memory_cache_byte_budget,
             memory_cache_decay_threshold_percent: 85,

@@ -45,6 +45,11 @@ const decodeWaitAvgMs = $derived.by(() => {
   return Math.round(stats.decodeWaitMs / stats.decodeWaitCount);
 });
 
+const scaleWaitAvgMs = $derived.by(() => {
+  if (!stats || stats.scaleWaitCount === 0) return 0;
+  return Math.round(stats.scaleWaitMs / stats.scaleWaitCount);
+});
+
 const encodeWaitAvgMs = $derived.by(() => {
   if (!stats || stats.encodeWaitCount === 0) return 0;
   return Math.round(stats.encodeWaitMs / stats.encodeWaitCount);
@@ -96,6 +101,8 @@ onMount(() => {
       <div class="font-medium">调度等待</div>
       <div class="flex justify-between"><span>Decode 等待次数</span><span class="font-mono">{stats.decodeWaitCount}</span></div>
       <div class="flex justify-between"><span>Decode 平均等待</span><span class="font-mono">{formatMs(decodeWaitAvgMs)}</span></div>
+      <div class="flex justify-between"><span>Scale 等待次数</span><span class="font-mono">{stats.scaleWaitCount}</span></div>
+      <div class="flex justify-between"><span>Scale 平均等待</span><span class="font-mono">{formatMs(scaleWaitAvgMs)}</span></div>
       <div class="flex justify-between"><span>Encode 等待次数</span><span class="font-mono">{stats.encodeWaitCount}</span></div>
       <div class="flex justify-between"><span>Encode 平均等待</span><span class="font-mono">{formatMs(encodeWaitAvgMs)}</span></div>
     </div>

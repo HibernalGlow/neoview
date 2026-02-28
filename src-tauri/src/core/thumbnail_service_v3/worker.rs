@@ -100,6 +100,16 @@ fn needs_encode_limit(task: &GenerateTask) -> bool {
     )
 }
 
+fn needs_scale_limit(task: &GenerateTask) -> bool {
+    matches!(
+        task.file_type,
+        ThumbnailFileType::Archive
+            | ThumbnailFileType::Video
+            | ThumbnailFileType::Image
+            | ThumbnailFileType::Other
+    )
+}
+
 #[derive(Default)]
 struct AdaptiveStats {
     completed: usize,
@@ -180,6 +190,8 @@ pub fn start_workers(
     processed_background: Arc<AtomicUsize>,
     decode_wait_count: Arc<AtomicUsize>,
     decode_wait_ms: Arc<AtomicU64>,
+    scale_wait_count: Arc<AtomicUsize>,
+    scale_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -206,6 +218,7 @@ pub fn start_workers(
             .min(config.worker_threads),
     ));
     let decode_inflight = Arc::new(AtomicUsize::new(0));
+    let scale_inflight = Arc::new(AtomicUsize::new(0));
     let encode_inflight = Arc::new(AtomicUsize::new(0));
     let adaptive_completed = Arc::new(AtomicUsize::new(0));
     let adaptive_failed = Arc::new(AtomicUsize::new(0));
@@ -236,6 +249,7 @@ pub fn start_workers(
             side_boost_quota,
             Arc::clone(&worker_budget),
             Arc::clone(&decode_inflight),
+            Arc::clone(&scale_inflight),
             Arc::clone(&encode_inflight),
             Arc::clone(&adaptive_completed),
             Arc::clone(&adaptive_failed),
@@ -255,6 +269,8 @@ pub fn start_workers(
             Arc::clone(&processed_background),
             Arc::clone(&decode_wait_count),
             Arc::clone(&decode_wait_ms),
+            Arc::clone(&scale_wait_count),
+            Arc::clone(&scale_wait_ms),
             Arc::clone(&encode_wait_count),
             Arc::clone(&encode_wait_ms),
             Arc::clone(&memory_cache),
@@ -285,6 +301,7 @@ fn create_worker_thread(
     side_boost_quota: LaneQuota,
     worker_budget: Arc<AtomicUsize>,
     decode_inflight: Arc<AtomicUsize>,
+    scale_inflight: Arc<AtomicUsize>,
     encode_inflight: Arc<AtomicUsize>,
     adaptive_completed: Arc<AtomicUsize>,
     adaptive_failed: Arc<AtomicUsize>,
@@ -304,6 +321,8 @@ fn create_worker_thread(
     processed_background: Arc<AtomicUsize>,
     decode_wait_count: Arc<AtomicUsize>,
     decode_wait_ms: Arc<AtomicU64>,
+    scale_wait_count: Arc<AtomicUsize>,
+    scale_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -318,6 +337,7 @@ fn create_worker_thread(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         const EMIT_BATCH_SIZE: usize = 16;
+        const STAGE_BACKOFF_MS: u64 = 2;
         log_debug!("🔧 Worker {} started", worker_id);
         let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
         let mut lane_tick: usize = worker_id;
@@ -455,9 +475,8 @@ fn create_worker_thread(
                     && decode_inflight.load(Ordering::Acquire)
                         >= config.decode_stage_max_active.max(1)
                 {
-                    const DECODE_BACKOFF_MS: u64 = 2;
                     decode_wait_count.fetch_add(1, Ordering::Relaxed);
-                    decode_wait_ms.fetch_add(DECODE_BACKOFF_MS, Ordering::Relaxed);
+                    decode_wait_ms.fetch_add(STAGE_BACKOFF_MS, Ordering::Relaxed);
                     queue::requeue_front(
                         &task_queue,
                         task,
@@ -465,7 +484,24 @@ fn create_worker_thread(
                         &queued_prefetch,
                         &queued_background,
                     );
-                    thread::sleep(Duration::from_millis(DECODE_BACKOFF_MS));
+                    thread::sleep(Duration::from_millis(STAGE_BACKOFF_MS));
+                    continue;
+                }
+
+                if needs_scale_limit(&task)
+                    && scale_inflight.load(Ordering::Acquire)
+                        >= config.scale_stage_max_active.max(1)
+                {
+                    scale_wait_count.fetch_add(1, Ordering::Relaxed);
+                    scale_wait_ms.fetch_add(STAGE_BACKOFF_MS, Ordering::Relaxed);
+                    queue::requeue_front(
+                        &task_queue,
+                        task,
+                        &queued_visible,
+                        &queued_prefetch,
+                        &queued_background,
+                    );
+                    thread::sleep(Duration::from_millis(STAGE_BACKOFF_MS));
                     continue;
                 }
 
@@ -473,6 +509,12 @@ fn create_worker_thread(
                 if needs_decode_limit(&task) {
                     decode_inflight.fetch_add(1, Ordering::SeqCst);
                     decode_token_held = true;
+                }
+
+                let mut scale_token_held = false;
+                if needs_scale_limit(&task) {
+                    scale_inflight.fetch_add(1, Ordering::SeqCst);
+                    scale_token_held = true;
                 }
 
                 active_workers.fetch_add(1, Ordering::SeqCst);
@@ -500,6 +542,9 @@ fn create_worker_thread(
 
                 if decode_token_held {
                     decode_inflight.fetch_sub(1, Ordering::SeqCst);
+                }
+                if scale_token_held {
+                    scale_inflight.fetch_sub(1, Ordering::SeqCst);
                 }
 
                 if let Some((blob, save_info)) = generated {

@@ -108,6 +108,8 @@ pub struct CacheStats {
     pub processed_background: usize,
     pub decode_wait_count: usize,
     pub decode_wait_ms: u64,
+    pub scale_wait_count: usize,
+    pub scale_wait_ms: u64,
     pub encode_wait_count: usize,
     pub encode_wait_ms: u64,
     pub window_pruned_tasks: usize,

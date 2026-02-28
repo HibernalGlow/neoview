@@ -269,6 +269,8 @@ export interface CacheStats {
   processedBackground: number;
   decodeWaitCount: number;
   decodeWaitMs: number;
+  scaleWaitCount: number;
+  scaleWaitMs: number;
   encodeWaitCount: number;
   encodeWaitMs: number;
   windowPrunedTasks: number;
@@ -294,6 +296,8 @@ interface RawCacheStats {
   processed_background?: number;
   decode_wait_count?: number;
   decode_wait_ms?: number;
+  scale_wait_count?: number;
+  scale_wait_ms?: number;
   encode_wait_count?: number;
   encode_wait_ms?: number;
   window_pruned_tasks?: number;
@@ -320,6 +324,8 @@ function normalizeCacheStats(raw: RawCacheStats): CacheStats {
     processedBackground: raw.processed_background ?? 0,
     decodeWaitCount: raw.decode_wait_count ?? 0,
     decodeWaitMs: raw.decode_wait_ms ?? 0,
+    scaleWaitCount: raw.scale_wait_count ?? 0,
+    scaleWaitMs: raw.scale_wait_ms ?? 0,
     encodeWaitCount: raw.encode_wait_count ?? 0,
     encodeWaitMs: raw.encode_wait_ms ?? 0,
     windowPrunedTasks: raw.window_pruned_tasks ?? 0,

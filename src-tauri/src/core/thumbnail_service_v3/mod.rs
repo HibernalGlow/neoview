@@ -92,6 +92,8 @@ pub struct ThumbnailServiceV3 {
     /// 解码/编码阶段等待统计
     decode_wait_count: Arc<AtomicUsize>,
     decode_wait_ms: Arc<AtomicU64>,
+    scale_wait_count: Arc<AtomicUsize>,
+    scale_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
     window_pruned_tasks: Arc<AtomicUsize>,
@@ -157,6 +159,8 @@ impl ThumbnailServiceV3 {
             processed_background: Arc::new(AtomicUsize::new(0)),
             decode_wait_count: Arc::new(AtomicUsize::new(0)),
             decode_wait_ms: Arc::new(AtomicU64::new(0)),
+            scale_wait_count: Arc::new(AtomicUsize::new(0)),
+            scale_wait_ms: Arc::new(AtomicU64::new(0)),
             encode_wait_count: Arc::new(AtomicUsize::new(0)),
             encode_wait_ms: Arc::new(AtomicU64::new(0)),
             window_pruned_tasks: Arc::new(AtomicUsize::new(0)),
@@ -201,6 +205,8 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.processed_background),
             Arc::clone(&self.decode_wait_count),
             Arc::clone(&self.decode_wait_ms),
+            Arc::clone(&self.scale_wait_count),
+            Arc::clone(&self.scale_wait_ms),
             Arc::clone(&self.encode_wait_count),
             Arc::clone(&self.encode_wait_ms),
             Arc::clone(&self.memory_cache),
@@ -609,6 +615,8 @@ impl ThumbnailServiceV3 {
         let processed_background = self.processed_background.load(Ordering::Relaxed);
         let decode_wait_count = self.decode_wait_count.load(Ordering::Relaxed);
         let decode_wait_ms = self.decode_wait_ms.load(Ordering::Relaxed);
+        let scale_wait_count = self.scale_wait_count.load(Ordering::Relaxed);
+        let scale_wait_ms = self.scale_wait_ms.load(Ordering::Relaxed);
         let encode_wait_count = self.encode_wait_count.load(Ordering::Relaxed);
         let encode_wait_ms = self.encode_wait_ms.load(Ordering::Relaxed);
         let window_pruned_tasks = self.window_pruned_tasks.load(Ordering::Relaxed);
@@ -637,6 +645,8 @@ impl ThumbnailServiceV3 {
             processed_background,
             decode_wait_count,
             decode_wait_ms,
+            scale_wait_count,
+            scale_wait_ms,
             encode_wait_count,
             encode_wait_ms,
             window_pruned_tasks,

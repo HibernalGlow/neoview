@@ -12,9 +12,8 @@ use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
 use log::{debug, error, warn};
 use mini_moka::sync::Cache;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::borrow::Cow;
-use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -125,13 +124,9 @@ pub struct ProtocolState {
     /// 压缩包图片二进制缓存（避免重复解包读取）
     archive_image_cache: Cache<(u64, usize), Arc<[u8]>>,
     /// 旧缩略图路径缓存（避免重复 DB 查询）
-    legacy_thumb_cache: Mutex<AHashMap<String, Arc<[u8]>>>,
-    /// 旧缩略图缓存插入顺序（用于有界淘汰）
-    legacy_thumb_order: Mutex<VecDeque<String>>,
+    legacy_thumb_cache: Cache<u64, (Arc<str>, Arc<[u8]>)>,
     /// 旧缩略图类别提示缓存（file/folder）
-    legacy_thumb_category_hint: Mutex<AHashMap<String, &'static str>>,
-    /// 类别提示缓存插入顺序（用于有界淘汰）
-    legacy_thumb_hint_order: Mutex<VecDeque<String>>,
+    legacy_thumb_category_hint: Cache<u64, (Arc<str>, &'static str)>,
     /// 旧缩略图未命中缓存（短 TTL，减少重复 DB miss 查询）
     legacy_thumb_miss_cache: Cache<u64, ()>,
 }
@@ -147,6 +142,14 @@ impl ProtocolState {
         let archive_image_cache = Cache::builder()
             .max_capacity(256)
             .time_to_live(Duration::from_secs(180))
+            .build();
+        let legacy_thumb_cache = Cache::builder()
+            .max_capacity(LEGACY_THUMB_CACHE_LIMIT as u64)
+            .time_to_live(Duration::from_secs(180))
+            .build();
+        let legacy_thumb_category_hint = Cache::builder()
+            .max_capacity(LEGACY_THUMB_HINT_LIMIT as u64)
+            .time_to_live(Duration::from_secs(300))
             .build();
         let legacy_thumb_miss_cache = Cache::builder()
             .max_capacity(4096)
@@ -164,60 +167,44 @@ impl ProtocolState {
             archive_manager: shared_archive_manager,
             archive_metadata_cache,
             archive_image_cache,
-            legacy_thumb_cache: Mutex::new(AHashMap::new()),
-            legacy_thumb_order: Mutex::new(VecDeque::new()),
-            legacy_thumb_category_hint: Mutex::new(AHashMap::new()),
-            legacy_thumb_hint_order: Mutex::new(VecDeque::new()),
+            legacy_thumb_cache,
+            legacy_thumb_category_hint,
             legacy_thumb_miss_cache,
         }
     }
 
     #[inline]
     fn get_cached_legacy_thumbnail(&self, key: &str) -> Option<Arc<[u8]>> {
-        self.legacy_thumb_cache.lock().get(key).cloned()
+        let hashed = Self::thumb_key_hash(key);
+        if let Some((cached_key, data)) = self.legacy_thumb_cache.get(&hashed) {
+            if cached_key.as_ref() == key {
+                return Some(data);
+            }
+        }
+        None
     }
 
     fn put_cached_legacy_thumbnail(&self, key: &str, data: Arc<[u8]>) {
-        let mut cache = self.legacy_thumb_cache.lock();
-        let mut order = self.legacy_thumb_order.lock();
-        let key_owned = key.to_string();
-
-        if !cache.contains_key(key) {
-            order.push_back(key_owned.clone());
-        }
-        cache.insert(key_owned, data);
-
-        while cache.len() > LEGACY_THUMB_CACHE_LIMIT {
-            if let Some(oldest) = order.pop_front() {
-                cache.remove(&oldest);
-            } else {
-                break;
-            }
-        }
+        let hashed = Self::thumb_key_hash(key);
+        self.legacy_thumb_cache
+            .insert(hashed, (Arc::<str>::from(key), data));
     }
 
     #[inline]
     fn get_legacy_thumbnail_hint(&self, key: &str) -> Option<&'static str> {
-        self.legacy_thumb_category_hint.lock().get(key).copied()
+        let hashed = Self::thumb_key_hash(key);
+        if let Some((cached_key, category)) = self.legacy_thumb_category_hint.get(&hashed) {
+            if cached_key.as_ref() == key {
+                return Some(category);
+            }
+        }
+        None
     }
 
     fn put_legacy_thumbnail_hint(&self, key: &str, category: &'static str) {
-        let mut hints = self.legacy_thumb_category_hint.lock();
-        let mut order = self.legacy_thumb_hint_order.lock();
-        let key_owned = key.to_string();
-
-        if !hints.contains_key(key) {
-            order.push_back(key_owned.clone());
-        }
-        hints.insert(key_owned, category);
-
-        while hints.len() > LEGACY_THUMB_HINT_LIMIT {
-            if let Some(oldest) = order.pop_front() {
-                hints.remove(&oldest);
-            } else {
-                break;
-            }
-        }
+        let hashed = Self::thumb_key_hash(key);
+        self.legacy_thumb_category_hint
+            .insert(hashed, (Arc::<str>::from(key), category));
     }
 
     #[inline]
@@ -315,10 +302,8 @@ impl ProtocolState {
     pub fn clear_cache(&self) {
         self.archive_metadata_cache.invalidate_all();
         self.archive_image_cache.invalidate_all();
-        self.legacy_thumb_cache.lock().clear();
-        self.legacy_thumb_order.lock().clear();
-        self.legacy_thumb_category_hint.lock().clear();
-        self.legacy_thumb_hint_order.lock().clear();
+        self.legacy_thumb_cache.invalidate_all();
+        self.legacy_thumb_category_hint.invalidate_all();
         self.legacy_thumb_miss_cache.invalidate_all();
     }
 }

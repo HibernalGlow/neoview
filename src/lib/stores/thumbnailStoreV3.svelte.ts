@@ -301,12 +301,51 @@ export async function initThumbnailServiceV3(
       releaseInFlight(path);
     };
 
-    // 监听批量缩略图就绪事件（优化：一次处理多个）
+    // 监听批量缩略图就绪事件：批量处理减少响应式通知次数
     unlistenThumbnailBatchReady = await listen<ThumbnailBatchReadyPayload>(
       'thumbnail-batch-ready',
       (event) => {
-        for (const item of event.payload.items) {
-          processThumbnail(item.path);
+        const items = event.payload.items;
+        if (items.length === 0) return;
+
+        // 单项走快速路径
+        if (items.length === 1) {
+          processThumbnail(items[0].path);
+          return;
+        }
+
+        // 批量：先收集所有 URL，再一次性写入 SvelteMap + fileBrowserStore
+        const entries: [string, string][] = [];
+        const fbEntries: [string, string][] = [];
+        for (const item of items) {
+          const thumbUrl = getThumbUrl(item.path);
+          entries.push([item.path, thumbUrl]);
+          fbEntries.push([toRelativeKey(item.path), thumbUrl]);
+          releaseInFlight(item.path);
+        }
+
+        // 批量写入 SvelteMap（减少 N→1 次响应式通知）
+        const evictedKeys: string[] = [];
+        for (const [path, url] of entries) {
+          const existing = thumbnails.get(path);
+          if (existing && existing !== url) revokeIfObjectUrl(existing);
+          thumbnails.delete(path);
+          thumbnails.set(path, url);
+        }
+        // 统一淘汰
+        while (thumbnails.size > THUMBNAIL_CACHE_LIMIT) {
+          const first = thumbnails.keys().next().value as string | undefined;
+          if (!first) break;
+          const oldUrl = thumbnails.get(first);
+          if (oldUrl) revokeIfObjectUrl(oldUrl);
+          thumbnails.delete(first);
+          evictedKeys.push(toRelativeKey(first));
+        }
+        if (evictedKeys.length > 0) removeFileBrowserThumbnails(evictedKeys);
+
+        // 直接批量同步到 fileBrowserStore（跳过 pending + timer）
+        if (fbEntries.length > 0) {
+          fileBrowserStore.addThumbnailsBatch(new Map(fbEntries));
         }
       }
     );

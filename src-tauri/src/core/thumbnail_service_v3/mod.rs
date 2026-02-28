@@ -375,6 +375,11 @@ impl ThumbnailServiceV3 {
         cache::has_in_memory_cache(&self.memory_cache, &self.save_queue, path)
     }
 
+    /// 从内存缓存 peek（读锁，不更新 LRU 顺序）—— 用于协议处理器
+    fn peek_from_memory_cache(&self, path: &str) -> Option<Vec<u8>> {
+        cache::peek_from_memory_cache(&self.memory_cache, &self.save_queue, path)
+    }
+
     /// 两阶段缓存清理
     pub fn two_phase_cache_cleanup(&self, max_bytes: usize) {
         cache::two_phase_cache_cleanup(
@@ -388,9 +393,10 @@ impl ThumbnailServiceV3 {
 
 impl ThumbnailServiceV3 {
     /// 单个缩略图查找：内存缓存优先，回落到 DB。由内建协议的 /thumb/{key} 端点调用。
+    /// 使用 peek（读锁）而非 get（写锁）：并发 <img> 请求不争抢写锁
     pub fn lookup_thumbnail(&self, key: &str) -> Option<Vec<u8>> {
-        // 1. 内存缓存（O(1)，无 I/O）
-        if let Some(blob) = self.get_from_memory_cache(key) {
+        // 1. 内存缓存（读锁 peek，不更新 LRU 顺序——避免 50+ 并发图片请求争抢写锁）
+        if let Some(blob) = self.peek_from_memory_cache(key) {
             return Some(blob);
         }
         // 2. 回落到数据库

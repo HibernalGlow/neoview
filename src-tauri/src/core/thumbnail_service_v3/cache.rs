@@ -33,6 +33,29 @@ pub fn get_from_memory_cache(
     None
 }
 
+/// 从内存缓存获取（使用读锁 peek，不更新 LRU 顺序）
+/// 用于协议处理器（/thumb/{key}）：并发 <img> 请求无需争抢写锁更新 LRU 顺序
+pub fn peek_from_memory_cache(
+    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    path: &str,
+) -> Option<Vec<u8>> {
+    // 读锁 peek：50 个并发 <img> 加载不会互相阻塞
+    if let Ok(cache) = memory_cache.read() {
+        if let Some(blob) = cache.peek(path) {
+            return Some(blob.clone());
+        }
+    }
+    
+    if let Ok(queue) = save_queue.lock() {
+        if let Some((blob, _, _, _)) = queue.get(path) {
+            return Some(blob.clone());
+        }
+    }
+    
+    None
+}
+
 /// 仅检查内存缓存是否存在（不更新 LRU 顺序，使用读锁）
 pub fn has_in_memory_cache(
     memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,

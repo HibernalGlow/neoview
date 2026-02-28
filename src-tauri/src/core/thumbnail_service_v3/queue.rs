@@ -148,31 +148,34 @@ pub fn enqueue_tasks(
     
     if let Ok(mut queue) = task_queue.0.lock() {
         // 计算每个路径到中心的距离并创建任务
-        let mut new_tasks: Vec<GenerateTask> = paths
-            .into_iter()
-            .filter(|(path, _, _, _)| !queue.queued_paths.contains(path.as_str()))
-            .map(|(path, file_type, original_index, dedup_request_id)| {
-                let center_distance = if original_index >= center {
-                    original_index - center
-                } else {
-                    center - original_index
-                };
-                GenerateTask {
-                    dedup_key: path.clone(),
-                    dedup_request_id,
-                    path,
-                    directory: current_dir.to_string(),
-                    request_epoch,
-                    lane,
-                    file_type,
-                    center_distance,
-                    original_index,
-                }
-            })
-            .collect();
-        
-        // 按优先级排序（中心距离小的优先）
-        new_tasks.sort_by(|a, b| a.priority_cmp(b));
+        let mut new_tasks: Vec<GenerateTask> = Vec::with_capacity(paths.len());
+        let directory = current_dir.to_string();
+        for (path, file_type, original_index, dedup_request_id) in paths {
+            if queue.queued_paths.contains(path.as_str()) {
+                continue;
+            }
+            let center_distance = if original_index >= center {
+                original_index - center
+            } else {
+                center - original_index
+            };
+            new_tasks.push(GenerateTask {
+                dedup_key: path.clone(),
+                dedup_request_id,
+                path,
+                directory: directory.clone(),
+                request_epoch,
+                lane,
+                file_type,
+                center_distance,
+                original_index,
+            });
+        }
+
+        // 可见/预取任务保持优先级排序；后台任务跳过排序降低大批量入队开销
+        if !matches!(lane, TaskLane::Background) {
+            new_tasks.sort_unstable_by(|a, b| a.priority_cmp(b));
+        }
         
         // 插入到队列前端（新任务优先于旧任务）
         for task in new_tasks.into_iter().rev() {

@@ -2,7 +2,7 @@
 //! 包含工作线程启动逻辑、任务处理循环、保存队列刷新线程
 
 use lru::LruCache;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::panic;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -19,18 +19,13 @@ use super::generators::{
     generate_archive_thumbnail_static, generate_file_thumbnail_static,
     generate_folder_thumbnail_static, generate_video_thumbnail_static,
 };
+use super::queue;
 use super::types::{
     GenerateTask, TaskLane, ThumbnailBatchReadyPayload, ThumbnailFileType, ThumbnailReadyPayload,
 };
 use super::{log_debug, log_info};
 
 const LANE_SCHEDULE_LEN: usize = 9;
-
-fn dec_counter(counter: &AtomicUsize) {
-    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
-        Some(v.saturating_sub(1))
-    });
-}
 
 fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, background: usize) -> TaskLane {
     let side_total = prefetch + background;
@@ -61,67 +56,12 @@ fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, backgro
     }
 }
 
-fn pop_task_by_lane(
-    queue: &mut VecDeque<GenerateTask>,
-    preferred: TaskLane,
-    queued_visible: &Arc<AtomicUsize>,
-    queued_prefetch: &Arc<AtomicUsize>,
-    queued_background: &Arc<AtomicUsize>,
-) -> Option<GenerateTask> {
-    let dec_for = |lane: TaskLane| match lane {
-        TaskLane::Visible => dec_counter(queued_visible),
-        TaskLane::Prefetch => dec_counter(queued_prefetch),
-        TaskLane::Background => dec_counter(queued_background),
-    };
-
-    if queue.is_empty() {
-        return None;
-    }
-
-    if let Some(pos) = queue.iter().position(|t| t.lane == preferred) {
-        let task = queue.remove(pos);
-        if let Some(ref t) = task {
-            dec_for(t.lane);
-        }
-        return task;
-    }
-
-    // 配额车道无任务时降级回退，避免空转/饥饿
-    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Visible) {
-        let task = queue.remove(pos);
-        if let Some(ref t) = task {
-            dec_for(t.lane);
-        }
-        return task;
-    }
-    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Prefetch) {
-        let task = queue.remove(pos);
-        if let Some(ref t) = task {
-            dec_for(t.lane);
-        }
-        return task;
-    }
-    if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Background) {
-        let task = queue.remove(pos);
-        if let Some(ref t) = task {
-            dec_for(t.lane);
-        }
-        return task;
-    }
-
-    let task = queue.pop_front();
-    if let Some(ref t) = task {
-        dec_for(t.lane);
-    }
-    task
-}
-
 /// 启动工作线程
 #[allow(clippy::too_many_arguments)]
 pub fn start_workers(
     config: &ThumbnailServiceConfig,
     running: Arc<AtomicBool>,
-    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
+    task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     request_epoch: Arc<AtomicU64>,
     scheduler_paused: Arc<AtomicBool>,
@@ -182,7 +122,7 @@ fn create_worker_thread(
     worker_id: usize,
     folder_depth: u32,
     app: AppHandle,
-    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
+    task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     request_epoch: Arc<AtomicU64>,
     scheduler_paused: Arc<AtomicBool>,
@@ -243,7 +183,7 @@ fn create_worker_thread(
                     let background = queued_background.load(Ordering::Relaxed);
                     let preferred = preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                     lane_tick = lane_tick.wrapping_add(1);
-                    pop_task_by_lane(
+                    queue::pop_task_by_lane_locked(
                         &mut guard,
                         preferred,
                         &queued_visible,
@@ -265,7 +205,7 @@ fn create_worker_thread(
                                 let preferred =
                                     preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                                 lane_tick = lane_tick.wrapping_add(1);
-                                pop_task_by_lane(
+                                queue::pop_task_by_lane_locked(
                                     &mut g,
                                     preferred,
                                     &queued_visible,
@@ -275,7 +215,20 @@ fn create_worker_thread(
                             }
                         }
                         Err(poisoned) => {
-                            poisoned.into_inner().0.pop_front()
+                            let (mut g, _) = poisoned.into_inner();
+                            let visible = queued_visible.load(Ordering::Relaxed);
+                            let prefetch = queued_prefetch.load(Ordering::Relaxed);
+                            let background = queued_background.load(Ordering::Relaxed);
+                            let preferred =
+                                preferred_lane_for_tick(lane_tick, visible, prefetch, background);
+                            lane_tick = lane_tick.wrapping_add(1);
+                            queue::pop_task_by_lane_locked(
+                                &mut g,
+                                preferred,
+                                &queued_visible,
+                                &queued_prefetch,
+                                &queued_background,
+                            )
                         }
                     }
                 }

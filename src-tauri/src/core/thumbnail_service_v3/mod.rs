@@ -28,7 +28,7 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 use crate::core::request_dedup::RequestDeduplicator;
 use lru::LruCache;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -70,7 +70,7 @@ pub struct ThumbnailServiceV3 {
     /// 缩略图生成器
     generator: Arc<ThumbnailGenerator>,
     /// 生成任务队列
-    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
+    task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     /// 当前目录
     current_dir: Arc<RwLock<String>>,
     /// 请求分代号（目录切换时递增，旧任务自动失效）
@@ -132,7 +132,7 @@ impl ThumbnailServiceV3 {
             memory_cache_bytes: Arc::new(AtomicUsize::new(0)),
             db,
             generator,
-            task_queue: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
+            task_queue: Arc::new((Mutex::new(queue::TaskQueueState::default()), Condvar::new())),
             current_dir: Arc::new(RwLock::new(String::new())),
             request_epoch: Arc::new(AtomicU64::new(1)),
             scheduler_paused: Arc::new(AtomicBool::new(false)),
@@ -706,31 +706,18 @@ impl ThumbnailServiceV3 {
             center_distance: 0,
             original_index: 0,
         };
-        if let Ok(mut q) = self.task_queue.0.lock() {
-            let mut dropped_tasks = Vec::new();
-            let mut kept = VecDeque::with_capacity(q.len());
-            while let Some(existing) = q.pop_front() {
-                if existing.path == path {
-                    dropped_tasks.push(existing);
-                } else {
-                    kept.push_back(existing);
-                }
+        let dropped_tasks = queue::replace_path_with_task(&self.task_queue, path, task);
+        for dropped in dropped_tasks {
+            match dropped.lane {
+                TaskLane::Visible => Self::dec_counter(&self.queued_visible),
+                TaskLane::Prefetch => Self::dec_counter(&self.queued_prefetch),
+                TaskLane::Background => Self::dec_counter(&self.queued_background),
             }
-            *q = kept;
-            for dropped in dropped_tasks {
-                match dropped.lane {
-                    TaskLane::Visible => Self::dec_counter(&self.queued_visible),
-                    TaskLane::Prefetch => Self::dec_counter(&self.queued_prefetch),
-                    TaskLane::Background => Self::dec_counter(&self.queued_background),
-                }
-                self.request_deduplicator
-                    .release_with_id(&dropped.dedup_key, dropped.dedup_request_id);
-            }
-            q.push_front(task);
-            self.queued_visible.fetch_add(1, Ordering::Relaxed);
-            self.task_queue.1.notify_all();
-            log_info!("🔄 强制重新生成缩略图: {}", path);
+            self.request_deduplicator
+                .release_with_id(&dropped.dedup_key, dropped.dedup_request_id);
         }
+        self.queued_visible.fetch_add(1, Ordering::Relaxed);
+        log_info!("🔄 强制重新生成缩略图: {}", path);
 
         let _ = app;
     }

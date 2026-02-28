@@ -203,7 +203,6 @@
 
 	function isInteractiveElement(target: EventTarget | null): boolean {
 		if (!(target instanceof HTMLElement)) return false;
-		if (target.closest('[data-blank-collapse="true"]')) return false;
 		return Boolean(
 			target.closest(
 				'button,a,input,textarea,select,label,[role="button"],[role="switch"],[data-sidebar="menu-button"]'
@@ -318,7 +317,7 @@
 				>
 					<Sidebar.Root
 						collapsible="none"
-						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full flex flex-col"
+						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
 						style="width: calc(var(--sidebar-width-icon) + 1px);"
 					>
 						<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
@@ -354,10 +353,12 @@
 							</div>
 						</Sidebar.Header>
 
-						<Sidebar.Content class="h-full flex-1 min-h-0">
-							<Sidebar.Group class="h-full flex-1 min-h-0">
+						<Sidebar.Content>
+							<Sidebar.Group>
 								<Sidebar.GroupContent
-									class="px-0 h-full flex flex-col min-h-0"
+									class="px-0 h-full"
+									onclick={handleBlankAreaClick}
+									ondblclick={handleBlankAreaDoubleClick}
 								>
 									<Sidebar.Menu>
 										{#each rightPanels as panel (panel.id)}
@@ -379,14 +380,6 @@
 											</Sidebar.MenuItem>
 										{/each}
 									</Sidebar.Menu>
-									<button
-										type="button"
-										class="flex-1 w-full bg-transparent"
-										data-blank-collapse="true"
-										onclick={handleBlankAreaClick}
-										ondblclick={handleBlankAreaDoubleClick}
-										aria-label="右侧边栏空白收回区域"
-									></button>
 								</Sidebar.GroupContent>
 							</Sidebar.Group>
 						</Sidebar.Content>

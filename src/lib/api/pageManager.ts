@@ -15,12 +15,6 @@ import { pageTransferModeStore } from '$lib/stores/pageTransferMode.svelte';
 import { showToast } from '$lib/utils/toast';
 
 // Base64 解码（仅在 base64 模式下使用）
-async function decodeBase64ToBlob(base64: string): Promise<Blob> {
-	const { toBytes } = await import('fast-base64');
-	const bytes = await toBytes(base64);
-	return new Blob([toOwnedArrayBuffer(bytes)]);
-}
-
 async function decodeBase64(base64: string): Promise<ArrayBuffer> {
 	const { toBytes } = await import('fast-base64');
 	const bytes = await toBytes(base64);
@@ -67,6 +61,25 @@ async function invokeWithToast<T>(cmd: string, args: Record<string, unknown>): P
 async function invokePageBinary(cmd: 'pm_goto_page' | 'pm_get_page', index: number): Promise<Uint8Array> {
 	const payload = await invokeWithToast<Uint8Array | number[] | ArrayBuffer>(cmd, { index });
 	return normalizeBinaryPayload(payload);
+}
+
+type PageCmd = 'goto' | 'get';
+
+/**
+ * 统一传输入口：根据当前模式选择 binary 或 base64，返回原始字节。
+ * 上层函数只需指定操作（goto/get）和目标格式（Blob/ArrayBuffer）。
+ */
+async function fetchPageData(op: PageCmd, index: number): Promise<ArrayBuffer> {
+	const binaryCmd = op === 'goto' ? 'pm_goto_page' : 'pm_get_page';
+	const base64Cmd = op === 'goto' ? 'pm_goto_page_base64' : 'pm_get_page_base64';
+
+	if (pageTransferModeStore.isBinary) {
+		const bytes = await invokePageBinary(binaryCmd, index);
+		return toOwnedArrayBuffer(bytes);
+	} else {
+		const base64 = await invokeWithToast<string>(base64Cmd, { index });
+		return decodeBase64(base64);
+	}
 }
 
 // ===== 类型定义 =====
@@ -182,15 +195,7 @@ export async function getBookInfo(): Promise<BookInfo | null> {
  */
 export async function gotoPage(index: number): Promise<Blob> {
 	console.log('📄 [PageManager] gotoPage:', index);
-	
-	if (pageTransferModeStore.isBinary) {
-		const bytes = await invokePageBinary('pm_goto_page', index);
-		return new Blob([toOwnedArrayBuffer(bytes)]);
-	} else {
-		// Base64 传输
-		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
-		return decodeBase64ToBlob(base64);
-	}
+	return new Blob([await fetchPageData('goto', index)]);
 }
 
 /**
@@ -199,39 +204,21 @@ export async function gotoPage(index: number): Promise<Blob> {
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
-	if (pageTransferModeStore.isBinary) {
-		const bytes = await invokePageBinary('pm_get_page', index);
-		return new Blob([toOwnedArrayBuffer(bytes)]);
-	} else {
-		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
-		return decodeBase64ToBlob(base64);
-	}
+	return new Blob([await fetchPageData('get', index)]);
 }
 
 /**
  * 跳转到指定页面（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function gotoPageRaw(index: number): Promise<ArrayBuffer> {
-	if (pageTransferModeStore.isBinary) {
-		const bytes = await invokePageBinary('pm_goto_page', index);
-		return toOwnedArrayBuffer(bytes);
-	} else {
-		const base64 = await invokeWithToast<string>('pm_goto_page_base64', { index });
-		return decodeBase64(base64);
-	}
+	return fetchPageData('goto', index);
 }
 
 /**
  * 获取页面数据（返回原始 ArrayBuffer，用于延迟追踪）
  */
 export async function getPageRaw(index: number): Promise<ArrayBuffer> {
-	if (pageTransferModeStore.isBinary) {
-		const bytes = await invokePageBinary('pm_get_page', index);
-		return toOwnedArrayBuffer(bytes);
-	} else {
-		const base64 = await invokeWithToast<string>('pm_get_page_base64', { index });
-		return decodeBase64(base64);
-	}
+	return fetchPageData('get', index);
 }
 
 /**

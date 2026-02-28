@@ -8,7 +8,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
-	import { toggleLeftSidebar, toggleRightSidebar } from '$lib/stores';
+	import { toggleLeftSidebar, toggleRightSidebar, toggleFullscreen } from '$lib/stores';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -21,7 +21,7 @@
 	}
 
 	async function maximizeWindow() {
-		await appWindow.toggleMaximize();
+		await toggleFullscreen();
 	}
 
 	async function closeWindow() {

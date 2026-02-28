@@ -14,7 +14,8 @@
 		leftSidebarPinned,
 		rightSidebarPinned,
 		leftSidebarOpen,
-		rightSidebarOpen
+		rightSidebarOpen,
+		toggleFullscreen
 	} from '$lib/stores/ui.svelte';
 	import { showToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -254,7 +255,7 @@
 	}
 
 	async function maximizeWindow() {
-		await appWindow.toggleMaximize();
+		await toggleFullscreen();
 	}
 
 	async function closeWindow() {

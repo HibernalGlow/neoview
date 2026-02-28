@@ -157,6 +157,13 @@ class WindowManager {
 	async setFullscreen(fullscreen: boolean): Promise<void> {
 		try {
 			const win = getCurrentWindow();
+			if (fullscreen) {
+				const isMaximized = await win.isMaximized();
+				if (isMaximized) {
+					await win.unmaximize();
+					await new Promise((resolve) => setTimeout(resolve, 32));
+				}
+			}
 			await win.setFullscreen(fullscreen);
 		} catch (error) {
 			console.error('设置全屏状态失败:', error);

@@ -1,55 +1,125 @@
 import {
+	Activity,
+	Archive,
+	BarChart3,
+	Bell,
+	BookOpen,
 	Bookmark,
 	Bot,
+	Boxes,
+	Calendar,
 	ChartNoAxesGantt,
+	Clock,
+	Cpu,
+	Crop,
+	Database,
+	Eye,
+	FastForward,
 	File,
 	FileText,
+	Flame,
 	Folder,
+	FolderOpen,
+	Gauge,
+	Globe,
+	HardDrive,
+	Heart,
 	HelpCircle,
 	History,
+	Image,
+	Images,
 	Info,
+	Languages,
+	LayoutGrid,
+	Layers,
+	List,
+	ListChecks,
 	ListMusic,
+	Loader,
+	Mic,
+	Monitor,
+	Network,
+	Palette,
+	PanelLeft,
+	PieChart,
+	Play,
+	RefreshCw,
+	ScanSearch,
 	Settings,
 	Settings2,
+	Sliders,
 	Sparkles,
+	Star,
 	Tag,
-	Timer
+	Tags,
+	TestTube,
+	Timer,
+	TrendingUp,
+	Zap
 } from '@lucide/svelte';
 import type { Component } from 'svelte';
 
-export type IconName =
-	| 'Bookmark'
-	| 'Bot'
-	| 'ChartNoAxesGantt'
-	| 'File'
-	| 'FileText'
-	| 'Folder'
-	| 'HelpCircle'
-	| 'History'
-	| 'Info'
-	| 'ListMusic'
-	| 'Settings'
-	| 'Settings2'
-	| 'Sparkles'
-	| 'Tag'
-	| 'Timer';
-
-export const iconMap: Record<IconName, Component> = {
+// 注意：此 map 包含 PANEL_DEFINITIONS 与 cardRegistry 中所有字符串图标名。
+// 若需要完整的 Lucide 图标选择器，恢复 `import * as Icons from '@lucide/svelte'`。
+export const iconMap: Record<string, Component> = {
+	Activity,
+	Archive,
+	BarChart3,
+	Bell,
+	BookOpen,
 	Bookmark,
 	Bot,
+	Boxes,
+	Calendar,
 	ChartNoAxesGantt,
+	Clock,
+	Cpu,
+	Crop,
+	Database,
+	Eye,
+	FastForward,
 	File,
 	FileText,
+	Flame,
 	Folder,
+	FolderOpen,
+	Gauge,
+	Globe,
+	HardDrive,
+	Heart,
 	HelpCircle,
 	History,
+	Image,
+	Images,
 	Info,
+	Languages,
+	LayoutGrid,
+	Layers,
+	List,
+	ListChecks,
 	ListMusic,
+	Loader,
+	Mic,
+	Monitor,
+	Network,
+	Palette,
+	PanelLeft,
+	PieChart,
+	Play,
+	RefreshCw,
+	ScanSearch,
 	Settings,
 	Settings2,
+	Sliders,
 	Sparkles,
+	Star,
 	Tag,
-	Timer
+	Tags,
+	TestTube,
+	Timer,
+	TrendingUp,
+	Zap
 };
 
+export type IconName = keyof typeof iconMap;
 export const iconNames = Object.keys(iconMap) as IconName[];

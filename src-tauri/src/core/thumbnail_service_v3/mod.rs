@@ -102,6 +102,11 @@ pub struct ThumbnailServiceV3 {
     io_prefetch_runs: Arc<AtomicUsize>,
     io_prefetch_files: Arc<AtomicUsize>,
     io_prefetch_ms: Arc<AtomicU64>,
+    db_read_window: Arc<AtomicUsize>,
+    db_read_last_ms: Arc<AtomicU64>,
+    db_write_window: Arc<AtomicUsize>,
+    db_write_last_ms: Arc<AtomicU64>,
+    db_write_last_items: Arc<AtomicUsize>,
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// 数据库索引 (已有缩略图的路径集合)
@@ -129,6 +134,8 @@ impl ThumbnailServiceV3 {
     ) -> Self {
         let cache_size =
             NonZeroUsize::new(config.memory_cache_size).unwrap_or(NonZeroUsize::new(1024).unwrap());
+        let db_read_window_init = config.db_read_batch_min.max(1);
+        let db_write_window_init = config.db_write_batch_min.max(1);
 
         // 从数据库加载索引
         let (db_index, folder_db_index, failed_index) = db_index::load_indices_from_db(&db);
@@ -169,6 +176,11 @@ impl ThumbnailServiceV3 {
             io_prefetch_runs: Arc::new(AtomicUsize::new(0)),
             io_prefetch_files: Arc::new(AtomicUsize::new(0)),
             io_prefetch_ms: Arc::new(AtomicU64::new(0)),
+            db_read_window: Arc::new(AtomicUsize::new(db_read_window_init)),
+            db_read_last_ms: Arc::new(AtomicU64::new(0)),
+            db_write_window: Arc::new(AtomicUsize::new(db_write_window_init)),
+            db_write_last_ms: Arc::new(AtomicU64::new(0)),
+            db_write_last_items: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
             folder_db_index: Arc::new(RwLock::new(folder_db_index)),
@@ -232,6 +244,12 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.db),
             self.config.db_save_delay_ms,
             self.batch_save_threshold,
+            self.config.db_write_batch_min,
+            self.config.db_write_batch_max,
+            self.config.db_batch_target_ms,
+            Arc::clone(&self.db_write_window),
+            Arc::clone(&self.db_write_last_ms),
+            Arc::clone(&self.db_write_last_items),
         );
         workers_guard.push(flush_handle);
 
@@ -406,56 +424,83 @@ impl ThumbnailServiceV3 {
         let db = Arc::clone(&self.db);
         let memory_cache = Arc::clone(&self.memory_cache);
         let memory_cache_bytes = Arc::clone(&self.memory_cache_bytes);
+        let db_read_window_stats = Arc::clone(&self.db_read_window);
+        let db_read_last_ms_stats = Arc::clone(&self.db_read_last_ms);
+        let read_min = self.config.db_read_batch_min.max(1);
+        let read_max = self.config.db_read_batch_max.max(read_min);
+        let target_ms = self.config.db_batch_target_ms.max(4);
 
         tokio::spawn(async move {
-            const DB_EVENT_BATCH_SIZE: usize = 24;
+            let mut read_window = db_read_window_stats
+                .load(Ordering::Relaxed)
+                .clamp(read_min, read_max);
 
-            // 阶段 1：批量读 DB（无需持锁，I/O 密集）
-            let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(db_paths.len());
-            for path in db_paths.iter() {
-                let likely_folder = is_likely_folder(path);
-                let (primary, secondary) = if likely_folder {
-                    ("folder", "file")
-                } else {
-                    ("file", "folder")
-                };
+            let mut offset = 0usize;
+            while offset < db_paths.len() {
+                let end = (offset + read_window).min(db_paths.len());
+                let chunk_started = Instant::now();
+                let chunk_paths = &db_paths[offset..end];
 
-                let loaded_blob = db
-                    .load_thumbnail_by_key_and_category(path, primary)
-                    .ok()
-                    .flatten()
-                    .or_else(|| {
-                        db.load_thumbnail_by_key_and_category(path, secondary)
-                            .ok()
-                            .flatten()
-                    });
+                let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(chunk_paths.len());
+                for path in chunk_paths {
+                    let likely_folder = is_likely_folder(path);
+                    let (primary, secondary) = if likely_folder {
+                        ("folder", "file")
+                    } else {
+                        ("file", "folder")
+                    };
 
-                if let Some(blob) = loaded_blob {
-                    loaded.push((path.clone(), blob));
-                    let _ = db.update_access_time(path);
+                    let loaded_blob = db
+                        .load_thumbnail_by_key_and_category(path, primary)
+                        .ok()
+                        .flatten()
+                        .or_else(|| {
+                            db.load_thumbnail_by_key_and_category(path, secondary)
+                                .ok()
+                                .flatten()
+                        });
+
+                    if let Some(blob) = loaded_blob {
+                        loaded.push((path.clone(), blob));
+                        let _ = db.update_access_time(path);
+                    }
                 }
-            }
 
-            if loaded.is_empty() {
-                return;
-            }
+                if !loaded.is_empty() {
+                    let mut payloads: Vec<ThumbnailReadyPayload> = Vec::with_capacity(loaded.len());
+                    if let Ok(mut c) = memory_cache.write() {
+                        for (path, blob) in loaded {
+                            memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                            payloads.push(ThumbnailReadyPayload { path: path.clone() });
+                            c.put(path, blob);
+                        }
+                    }
 
-            // 阶段 2：单次写锁批量写入内存缓存（N 路径 1 次锁，而非 N 次锁）
-            let mut payloads: Vec<ThumbnailReadyPayload> = Vec::with_capacity(loaded.len());
-            if let Ok(mut c) = memory_cache.write() {
-                for (path, blob) in loaded {
-                    memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
-                    payloads.push(ThumbnailReadyPayload { path: path.clone() });
-                    c.put(path, blob);
+                    let emit_batch_size = read_window.clamp(8, 64);
+                    for batch in payloads.chunks(emit_batch_size) {
+                        let payload = ThumbnailBatchReadyPayload {
+                            items: batch
+                                .iter()
+                                .map(|p| ThumbnailReadyPayload {
+                                    path: p.path.clone(),
+                                })
+                                .collect(),
+                        };
+                        let _ = app.emit("thumbnail-batch-ready", payload);
+                    }
                 }
-            }
 
-            // 阶段 3：分批发送 IPC 事件（只发 path，前端走协议 URL）
-            for chunk in payloads.chunks(DB_EVENT_BATCH_SIZE) {
-                let payload = ThumbnailBatchReadyPayload {
-                    items: chunk.iter().map(|p| ThumbnailReadyPayload { path: p.path.clone() }).collect(),
-                };
-                let _ = app.emit("thumbnail-batch-ready", payload);
+                let elapsed_ms = chunk_started.elapsed().as_millis() as u64;
+                db_read_last_ms_stats.store(elapsed_ms, Ordering::Relaxed);
+
+                if elapsed_ms > target_ms && read_window > read_min {
+                    read_window = read_window.saturating_sub(4).max(read_min);
+                } else if elapsed_ms < target_ms / 2 && chunk_paths.len() == read_window && read_window < read_max {
+                    read_window = (read_window + 4).min(read_max);
+                }
+
+                db_read_window_stats.store(read_window, Ordering::Relaxed);
+                offset = end;
             }
         });
     }
@@ -625,6 +670,11 @@ impl ThumbnailServiceV3 {
         let io_prefetch_runs = self.io_prefetch_runs.load(Ordering::Relaxed);
         let io_prefetch_files = self.io_prefetch_files.load(Ordering::Relaxed);
         let io_prefetch_ms = self.io_prefetch_ms.load(Ordering::Relaxed);
+        let db_read_window = self.db_read_window.load(Ordering::Relaxed);
+        let db_read_last_ms = self.db_read_last_ms.load(Ordering::Relaxed);
+        let db_write_window = self.db_write_window.load(Ordering::Relaxed);
+        let db_write_last_ms = self.db_write_last_ms.load(Ordering::Relaxed);
+        let db_write_last_items = self.db_write_last_items.load(Ordering::Relaxed);
         let (database_count, database_bytes) = self
             .db
             .get_maintenance_stats()
@@ -655,6 +705,11 @@ impl ThumbnailServiceV3 {
             io_prefetch_runs,
             io_prefetch_files,
             io_prefetch_ms,
+            db_read_window,
+            db_read_last_ms,
+            db_write_window,
+            db_write_last_ms,
+            db_write_last_items,
         }
     }
 

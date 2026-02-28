@@ -291,6 +291,11 @@ pub async fn get_thumbnail_cache_stats_v3(app: AppHandle) -> Result<CacheStats, 
             io_prefetch_runs: 0,
             io_prefetch_files: 0,
             io_prefetch_ms: 0,
+            db_read_window: 0,
+            db_read_last_ms: 0,
+            db_write_window: 0,
+            db_write_last_ms: 0,
+            db_write_last_items: 0,
         })
     }
 }

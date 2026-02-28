@@ -22,6 +22,16 @@ pub struct ThumbnailServiceConfig {
     pub thumbnail_size: u32,
     /// 数据库延迟保存时间 (毫秒)
     pub db_save_delay_ms: u64,
+    /// DB 读批窗口下限
+    pub db_read_batch_min: usize,
+    /// DB 读批窗口上限
+    pub db_read_batch_max: usize,
+    /// DB 写批窗口下限
+    pub db_write_batch_min: usize,
+    /// DB 写批窗口上限
+    pub db_write_batch_max: usize,
+    /// DB 批处理目标耗时（毫秒）
+    pub db_batch_target_ms: u64,
     /// visible 车道加强阈值：visible >= side_total * 此系数 时使用 8:1:1
     pub scheduler_visible_boost_factor: usize,
     /// side 车道加强阈值：side_total > visible * 此系数 时使用 4:3:3
@@ -97,6 +107,11 @@ impl Default for ThumbnailServiceConfig {
             worker_threads,
             thumbnail_size: 256,
             db_save_delay_ms: 2000,
+            db_read_batch_min: 16,
+            db_read_batch_max: 64,
+            db_write_batch_min: 32,
+            db_write_batch_max: 256,
+            db_batch_target_ms: 16,
             scheduler_visible_boost_factor: 1,
             scheduler_side_boost_factor: 2,
             scheduler_visible_boost_quota: LaneQuota {

@@ -748,33 +748,70 @@ pub fn start_flush_thread(
     db: Arc<ThumbnailDb>,
     flush_interval_ms: u64,
     batch_threshold: usize,
+    write_min: usize,
+    write_max: usize,
+    target_ms: u64,
+    db_write_window: Arc<AtomicUsize>,
+    db_write_last_ms: Arc<AtomicU64>,
+    db_write_last_items: Arc<AtomicUsize>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         log_debug!(
             "🔧 SaveQueue flush thread started (batch_threshold={})",
             batch_threshold
         );
+        let write_min = write_min.max(1);
+        let write_max = write_max.max(write_min);
+        let target_ms = target_ms.max(4);
+        let mut write_window = db_write_window
+            .load(Ordering::Relaxed)
+            .max(write_min)
+            .min(write_max);
         let mut last_flush = Instant::now();
         while running.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(500));
-            let (should_flush, _) =
+            let (should_flush, queued_len) =
                 check_flush_condition(&save_queue, &last_flush, flush_interval_ms, batch_threshold);
             if !should_flush {
                 continue;
             }
-            let items = drain_save_queue(&save_queue);
+
+            let dynamic_target = write_window.min(queued_len.max(write_min));
+            let items = drain_save_queue_limited(&save_queue, dynamic_target);
             if items.is_empty() {
                 continue;
             }
+
+            let chunk_started = Instant::now();
+            let item_count = items.len();
             last_flush = Instant::now();
             log_debug!("💾 批量保存 {} 个缩略图到数据库", items.len());
             save_items_to_db(&db, items);
+
+            let elapsed_ms = chunk_started.elapsed().as_millis() as u64;
+            db_write_last_ms.store(elapsed_ms, Ordering::Relaxed);
+            db_write_last_items.store(item_count, Ordering::Relaxed);
+
+            if elapsed_ms > target_ms && write_window > write_min {
+                write_window = write_window.saturating_sub(8).max(write_min);
+            } else if elapsed_ms < target_ms / 2 && dynamic_target == write_window && write_window < write_max {
+                write_window = (write_window + 8).min(write_max);
+            }
+            db_write_window.store(write_window, Ordering::Relaxed);
         }
+
         // 退出前刷新剩余队列
-        let remaining = drain_save_queue(&save_queue);
-        if !remaining.is_empty() {
-            log_debug!("💾 退出前批量保存 {} 个缩略图", remaining.len());
+        loop {
+            let remaining = drain_save_queue_limited(&save_queue, write_window);
+            if remaining.is_empty() {
+                break;
+            }
+            let chunk_started = Instant::now();
+            let remaining_len = remaining.len();
+            log_debug!("💾 退出前批量保存 {} 个缩略图", remaining_len);
             save_items_to_db(&db, remaining);
+            db_write_last_ms.store(chunk_started.elapsed().as_millis() as u64, Ordering::Relaxed);
+            db_write_last_items.store(remaining_len, Ordering::Relaxed);
         }
         log_debug!("🔧 SaveQueue flush thread stopped");
     })
@@ -799,11 +836,24 @@ fn check_flush_condition(
 }
 
 /// 清空保存队列并返回所有项
-fn drain_save_queue(
+fn drain_save_queue_limited(
     save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    max_items: usize,
 ) -> Vec<(String, i64, i32, Vec<u8>)> {
     match save_queue.lock() {
-        Ok(mut q) => q.drain().map(|(k, (b, s, g, _))| (k, s, g, b)).collect(),
+        Ok(mut q) => {
+            if q.is_empty() || max_items == 0 {
+                return Vec::new();
+            }
+            let keys: Vec<String> = q.keys().take(max_items).cloned().collect();
+            let mut drained = Vec::with_capacity(keys.len());
+            for key in keys {
+                if let Some((blob, size, ghash, _)) = q.remove(&key) {
+                    drained.push((key, size, ghash, blob));
+                }
+            }
+            drained
+        }
         Err(_) => Vec::new(),
     }
 }

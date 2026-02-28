@@ -113,6 +113,15 @@ onMount(() => {
       <div class="flex justify-between"><span>预读文件数</span><span class="font-mono">{stats.ioPrefetchFiles}</span></div>
       <div class="flex justify-between"><span>平均预读耗时</span><span class="font-mono">{formatMs(ioPrefetchAvgMs)}</span></div>
     </div>
+
+    <div class="rounded border p-2 space-y-1">
+      <div class="font-medium">DB 批处理窗口</div>
+      <div class="flex justify-between"><span>读窗口</span><span class="font-mono">{stats.dbReadWindow}</span></div>
+      <div class="flex justify-between"><span>读最近耗时</span><span class="font-mono">{formatMs(stats.dbReadLastMs)}</span></div>
+      <div class="flex justify-between"><span>写窗口</span><span class="font-mono">{stats.dbWriteWindow}</span></div>
+      <div class="flex justify-between"><span>写最近耗时</span><span class="font-mono">{formatMs(stats.dbWriteLastMs)}</span></div>
+      <div class="flex justify-between"><span>写最近条目</span><span class="font-mono">{stats.dbWriteLastItems}</span></div>
+    </div>
   {:else}
     <div class="rounded border p-3 text-muted-foreground">未获取到缩略图架构指标</div>
   {/if}

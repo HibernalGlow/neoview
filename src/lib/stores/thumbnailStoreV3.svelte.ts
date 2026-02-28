@@ -279,6 +279,11 @@ export interface CacheStats {
   ioPrefetchRuns: number;
   ioPrefetchFiles: number;
   ioPrefetchMs: number;
+  dbReadWindow: number;
+  dbReadLastMs: number;
+  dbWriteWindow: number;
+  dbWriteLastMs: number;
+  dbWriteLastItems: number;
 }
 
 interface RawCacheStats {
@@ -306,6 +311,11 @@ interface RawCacheStats {
   io_prefetch_runs?: number;
   io_prefetch_files?: number;
   io_prefetch_ms?: number;
+  db_read_window?: number;
+  db_read_last_ms?: number;
+  db_write_window?: number;
+  db_write_last_ms?: number;
+  db_write_last_items?: number;
 }
 
 function normalizeCacheStats(raw: RawCacheStats): CacheStats {
@@ -334,6 +344,11 @@ function normalizeCacheStats(raw: RawCacheStats): CacheStats {
     ioPrefetchRuns: raw.io_prefetch_runs ?? 0,
     ioPrefetchFiles: raw.io_prefetch_files ?? 0,
     ioPrefetchMs: raw.io_prefetch_ms ?? 0,
+    dbReadWindow: raw.db_read_window ?? 0,
+    dbReadLastMs: raw.db_read_last_ms ?? 0,
+    dbWriteWindow: raw.db_write_window ?? 0,
+    dbWriteLastMs: raw.db_write_last_ms ?? 0,
+    dbWriteLastItems: raw.db_write_last_items ?? 0,
   };
 }
 

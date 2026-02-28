@@ -118,6 +118,11 @@ pub struct CacheStats {
     pub io_prefetch_runs: usize,
     pub io_prefetch_files: usize,
     pub io_prefetch_ms: u64,
+    pub db_read_window: usize,
+    pub db_read_last_ms: u64,
+    pub db_write_window: usize,
+    pub db_write_last_ms: u64,
+    pub db_write_last_items: usize,
 }
 
 /// 检测文件类型

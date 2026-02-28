@@ -8,6 +8,7 @@ use super::rar_handler;
 use super::sevenz_handler;
 use crate::core::archive_index::ArchiveIndexCache;
 use crate::core::blob_registry::BlobRegistry;
+use log::debug;
 use std::fs::File;
 use std::io::Cursor;
 use std::path::Path;
@@ -68,7 +69,7 @@ pub fn load_image_from_archive_binary_shared(
     
     // 检查缓存
     if let Some(cached) = get_cached_image_shared(image_cache, &cache_key) {
-        println!(
+        debug!(
             "🎯 Archive image cache hit: {} ({} bytes)",
             file_path,
             cached.len()

@@ -441,29 +441,61 @@ impl ThumbnailServiceV3 {
                 let chunk_started = Instant::now();
                 let chunk_paths = &db_paths[offset..end];
 
-                let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(chunk_paths.len());
+                let mut folder_keys: Vec<String> = Vec::new();
+                let mut file_keys: Vec<String> = Vec::new();
                 for path in chunk_paths {
-                    let likely_folder = is_likely_folder(path);
-                    let (primary, secondary) = if likely_folder {
-                        ("folder", "file")
+                    if is_likely_folder(path) {
+                        folder_keys.push(path.clone());
                     } else {
-                        ("file", "folder")
+                        file_keys.push(path.clone());
+                    }
+                }
+
+                let mut folder_primary = db
+                    .batch_load_thumbnails_by_keys_and_category(&folder_keys, "folder")
+                    .unwrap_or_default();
+                let folder_missing: Vec<String> = folder_keys
+                    .iter()
+                    .filter(|k| !folder_primary.contains_key(k.as_str()))
+                    .cloned()
+                    .collect();
+                let mut folder_secondary = db
+                    .batch_load_thumbnails_by_keys_and_category(&folder_missing, "file")
+                    .unwrap_or_default();
+
+                let mut file_primary = db
+                    .batch_load_thumbnails_by_keys_and_category(&file_keys, "file")
+                    .unwrap_or_default();
+                let file_missing: Vec<String> = file_keys
+                    .iter()
+                    .filter(|k| !file_primary.contains_key(k.as_str()))
+                    .cloned()
+                    .collect();
+                let mut file_secondary = db
+                    .batch_load_thumbnails_by_keys_and_category(&file_missing, "folder")
+                    .unwrap_or_default();
+
+                let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(chunk_paths.len());
+                let mut touched_keys: Vec<String> = Vec::new();
+                for path in chunk_paths {
+                    let loaded_blob = if is_likely_folder(path) {
+                        folder_primary
+                            .remove(path)
+                            .or_else(|| folder_secondary.remove(path))
+                    } else {
+                        file_primary
+                            .remove(path)
+                            .or_else(|| file_secondary.remove(path))
                     };
 
-                    let loaded_blob = db
-                        .load_thumbnail_by_key_and_category(path, primary)
-                        .ok()
-                        .flatten()
-                        .or_else(|| {
-                            db.load_thumbnail_by_key_and_category(path, secondary)
-                                .ok()
-                                .flatten()
-                        });
-
                     if let Some(blob) = loaded_blob {
+                        touched_keys.push(path.clone());
                         loaded.push((path.clone(), blob));
-                        let _ = db.update_access_time(path);
                     }
+                }
+
+                if !touched_keys.is_empty() {
+                    let _ = db.batch_update_access_time(&touched_keys);
                 }
 
                 if !loaded.is_empty() {

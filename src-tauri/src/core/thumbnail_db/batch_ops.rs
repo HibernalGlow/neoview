@@ -1,7 +1,7 @@
 //! 批量操作
 
 use super::ThumbnailDb;
-use rusqlite::{params, Result as SqliteResult};
+use rusqlite::{params, Result as SqliteResult, ToSql};
 use std::collections::HashMap;
 
 impl ThumbnailDb {
@@ -70,6 +70,70 @@ impl ThumbnailDb {
         }
 
         Ok(results)
+    }
+
+    /// 按类别批量加载缩略图（单条 SQL IN 查询）
+    pub fn batch_load_thumbnails_by_keys_and_category(
+        &self,
+        keys: &[String],
+        category: &str,
+    ) -> SqliteResult<HashMap<String, Vec<u8>>> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let mut results = HashMap::new();
+        if keys.is_empty() {
+            return Ok(results);
+        }
+
+        let placeholders = (0..keys.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "SELECT key, value FROM thumbs WHERE category = ?1 AND key IN ({}) AND value IS NOT NULL",
+            placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let mut params_vec: Vec<&dyn ToSql> = Vec::with_capacity(keys.len() + 1);
+        params_vec.push(&category);
+        for key in keys {
+            params_vec.push(key as &dyn ToSql);
+        }
+
+        let mut rows = stmt.query(params_vec.as_slice())?;
+        while let Some(row) = rows.next()? {
+            let key: String = row.get(0)?;
+            let value: Vec<u8> = row.get(1)?;
+            results.insert(key, value);
+        }
+
+        Ok(results)
+    }
+
+    /// 批量更新时间（单条 SQL IN 更新）
+    pub fn batch_update_access_time(&self, keys: &[String]) -> SqliteResult<usize> {
+        self.open()?;
+        if keys.is_empty() {
+            return Ok(0);
+        }
+
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+        let date = Self::current_timestamp_string();
+
+        let placeholders = (0..keys.len()).map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!(
+            "UPDATE thumbs SET date = ?1 WHERE key IN ({})",
+            placeholders
+        );
+
+        let mut params_vec: Vec<&dyn ToSql> = Vec::with_capacity(keys.len() + 1);
+        params_vec.push(&date);
+        for key in keys {
+            params_vec.push(key as &dyn ToSql);
+        }
+
+        conn.execute(&query, params_vec.as_slice())
     }
 
     /// 批量检查失败记录

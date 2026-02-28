@@ -128,7 +128,7 @@ pub struct ProtocolState {
     /// 旧缩略图类别提示缓存（file/folder）
     legacy_thumb_category_hint: Cache<u64, (Arc<str>, &'static str)>,
     /// 旧缩略图未命中缓存（短 TTL，减少重复 DB miss 查询）
-    legacy_thumb_miss_cache: Cache<u64, ()>,
+    legacy_thumb_miss_cache: Cache<u64, Arc<str>>,
 }
 
 impl ProtocolState {
@@ -217,15 +217,17 @@ impl ProtocolState {
 
     #[inline]
     fn is_legacy_thumbnail_known_missing(&self, key: &str) -> bool {
-        self.legacy_thumb_miss_cache
-            .get(&Self::thumb_key_hash(key))
-            .is_some()
+        let hashed = Self::thumb_key_hash(key);
+        if let Some(cached_key) = self.legacy_thumb_miss_cache.get(&hashed) {
+            return cached_key.as_ref() == key;
+        }
+        false
     }
 
     #[inline]
     fn mark_legacy_thumbnail_missing(&self, key: &str) {
         self.legacy_thumb_miss_cache
-            .insert(Self::thumb_key_hash(key), ());
+            .insert(Self::thumb_key_hash(key), Arc::<str>::from(key));
     }
 
     #[inline]
@@ -376,19 +378,21 @@ impl<'a> ProtocolRequest<'a> {
                 if parts.next().is_some() {
                     return ProtocolRequest::Unknown;
                 }
-                if !key.as_bytes().iter().any(|b| *b == b'%' || *b == b'+') {
-                    return ProtocolRequest::Thumbnail {
-                        key: Cow::Borrowed(key),
-                    };
-                }
                 ProtocolRequest::Thumbnail {
-                    key: urlencoding::decode(key)
-                        .map_or_else(|_| Cow::Borrowed(key), |s| Cow::Owned(s.into_owned())),
+                    key: decode_thumb_key(key),
                 }
             }
             _ => ProtocolRequest::Unknown,
         }
     }
+}
+
+#[inline]
+fn decode_thumb_key(key: &str) -> Cow<'_, str> {
+    if !key.as_bytes().iter().any(|b| *b == b'%' || *b == b'+') {
+        return Cow::Borrowed(key);
+    }
+    urlencoding::decode(key).map_or_else(|_| Cow::Borrowed(key), |s| Cow::Owned(s.into_owned()))
 }
 
 /// 根据文件扩展名获取 MIME 类型
@@ -711,7 +715,7 @@ fn handle_health_check() -> Response<Vec<u8>> {
         .header("Content-Type", "text/plain")
         .header("Cache-Control", "no-store")
     .header("Access-Control-Allow-Origin", "*")
-        .body(b"ok".to_vec())
+        .body(Vec::from(&b"ok"[..]))
         .unwrap()
 }
 
@@ -734,23 +738,42 @@ pub fn handle_protocol_request(
         );
     };
 
-    // 解析请求
-    let protocol_request = ProtocolRequest::parse(path);
-
-    match protocol_request {
-        ProtocolRequest::Health => handle_health_check(),
-        ProtocolRequest::ArchiveImage {
-            book_hash,
-            book_key,
-            entry_index,
-        } => handle_archive_image(&state, request, book_hash, book_key, entry_index),
-        ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, path_hash),
-        ProtocolRequest::Thumbnail { key } => handle_thumbnail(&state, app, key.as_ref()),
-        ProtocolRequest::Unknown => {
-            warn!("🌐 Protocol: 未知请求路径: {path}");
-            build_error_response(StatusCode::NOT_FOUND, "Unknown request")
-        }
+    if path == "/health" {
+        return handle_health_check();
     }
+
+    if let Some(rest) = path.strip_prefix("/image/") {
+        if let Some((book_hash, entry_raw)) = rest.split_once('/') {
+            if !book_hash.is_empty() && !entry_raw.is_empty() && !entry_raw.contains('/') {
+                if let Ok(entry_index) = entry_raw.parse::<usize>() {
+                    let book_key = ProtocolState::parse_book_key(book_hash);
+                    return handle_archive_image(&state, request, book_hash, book_key, entry_index);
+                }
+            }
+        }
+        warn!("🌐 Protocol: 非法 image 请求路径: {path}");
+        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+    }
+
+    if let Some(path_hash) = path.strip_prefix("/file/") {
+        if !path_hash.is_empty() && !path_hash.contains('/') {
+            return handle_file_image(&state, request, path_hash);
+        }
+        warn!("🌐 Protocol: 非法 file 请求路径: {path}");
+        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+    }
+
+    if let Some(raw_key) = path.strip_prefix("/thumb/") {
+        if !raw_key.is_empty() && !raw_key.contains('/') {
+            let key = decode_thumb_key(raw_key);
+            return handle_thumbnail(&state, app, key.as_ref());
+        }
+        warn!("🌐 Protocol: 非法 thumb 请求路径: {path}");
+        return build_error_response(StatusCode::NOT_FOUND, "Unknown request");
+    }
+
+    warn!("🌐 Protocol: 未知请求路径: {path}");
+    build_error_response(StatusCode::NOT_FOUND, "Unknown request")
 }
 
 #[cfg(test)]

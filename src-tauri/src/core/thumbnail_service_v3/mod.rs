@@ -81,6 +81,10 @@ pub struct ThumbnailServiceV3 {
     running: Arc<AtomicBool>,
     /// 活跃工作线程数
     active_workers: Arc<AtomicUsize>,
+    /// 各车道待处理队列计数（O(1) backlog）
+    queued_visible: Arc<AtomicUsize>,
+    queued_prefetch: Arc<AtomicUsize>,
+    queued_background: Arc<AtomicUsize>,
     /// 各车道已处理任务计数
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
@@ -134,6 +138,9 @@ impl ThumbnailServiceV3 {
             scheduler_paused: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
+            queued_visible: Arc::new(AtomicUsize::new(0)),
+            queued_prefetch: Arc::new(AtomicUsize::new(0)),
+            queued_background: Arc::new(AtomicUsize::new(0)),
             processed_visible: Arc::new(AtomicUsize::new(0)),
             processed_prefetch: Arc::new(AtomicUsize::new(0)),
             processed_background: Arc::new(AtomicUsize::new(0)),
@@ -165,6 +172,9 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.request_epoch),
             Arc::clone(&self.scheduler_paused),
             Arc::clone(&self.active_workers),
+            Arc::clone(&self.queued_visible),
+            Arc::clone(&self.queued_prefetch),
+            Arc::clone(&self.queued_background),
             Arc::clone(&self.processed_visible),
             Arc::clone(&self.processed_prefetch),
             Arc::clone(&self.processed_background),
@@ -213,6 +223,12 @@ impl ThumbnailServiceV3 {
 }
 
 impl ThumbnailServiceV3 {
+    fn dec_counter(counter: &AtomicUsize) {
+        let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+            Some(v.saturating_sub(1))
+        });
+    }
+
     /// 请求可见区域缩略图（核心方法，不阻塞）
     pub fn request_visible_thumbnails(
         &self,
@@ -313,6 +329,9 @@ impl ThumbnailServiceV3 {
                 center,
                 epoch,
                 lane,
+                &self.queued_visible,
+                &self.queued_prefetch,
+                &self.queued_background,
             );
         }
 
@@ -386,6 +405,11 @@ impl ThumbnailServiceV3 {
     pub fn cancel_requests(&self, dir: &str) {
         let removed_tasks = queue::clear_directory_tasks(&self.task_queue, dir);
         for task in removed_tasks.iter() {
+            match task.lane {
+                TaskLane::Visible => Self::dec_counter(&self.queued_visible),
+                TaskLane::Prefetch => Self::dec_counter(&self.queued_prefetch),
+                TaskLane::Background => Self::dec_counter(&self.queued_background),
+            }
             self.request_deduplicator
                 .release_with_id(&task.dedup_key, task.dedup_request_id);
         }
@@ -510,8 +534,10 @@ impl ThumbnailServiceV3 {
     pub fn get_cache_stats(&self) -> CacheStats {
         let memory_count = self.memory_cache.read().map(|c| c.len()).unwrap_or(0);
         let memory_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);
-        let queue_length = queue::queue_len(&self.task_queue);
-        let (queue_visible, queue_prefetch, queue_background) = queue::queue_lane_lens(&self.task_queue);
+        let queue_visible = self.queued_visible.load(Ordering::Relaxed);
+        let queue_prefetch = self.queued_prefetch.load(Ordering::Relaxed);
+        let queue_background = self.queued_background.load(Ordering::Relaxed);
+        let queue_length = queue_visible + queue_prefetch + queue_background;
         let active_workers = self.active_workers.load(Ordering::SeqCst);
         let processed_visible = self.processed_visible.load(Ordering::Relaxed);
         let processed_prefetch = self.processed_prefetch.load(Ordering::Relaxed);
@@ -692,10 +718,16 @@ impl ThumbnailServiceV3 {
             }
             *q = kept;
             for dropped in dropped_tasks {
+                match dropped.lane {
+                    TaskLane::Visible => Self::dec_counter(&self.queued_visible),
+                    TaskLane::Prefetch => Self::dec_counter(&self.queued_prefetch),
+                    TaskLane::Background => Self::dec_counter(&self.queued_background),
+                }
                 self.request_deduplicator
                     .release_with_id(&dropped.dedup_key, dropped.dedup_request_id);
             }
             q.push_front(task);
+            self.queued_visible.fetch_add(1, Ordering::Relaxed);
             self.task_queue.1.notify_all();
             log_info!("🔄 强制重新生成缩略图: {}", path);
         }

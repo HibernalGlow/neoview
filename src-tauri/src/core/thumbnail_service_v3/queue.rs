@@ -3,6 +3,8 @@
 //! 包含任务队列管理、优先级排序逻辑
 
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::sync::{Condvar, Mutex};
 
 use super::types::{GenerateTask, TaskLane, ThumbnailFileType};
@@ -21,6 +23,9 @@ pub fn enqueue_tasks(
     center: usize,
     request_epoch: u64,
     lane: TaskLane,
+    queued_visible: &Arc<AtomicUsize>,
+    queued_prefetch: &Arc<AtomicUsize>,
+    queued_background: &Arc<AtomicUsize>,
 ) {
     if paths.is_empty() {
         return;
@@ -60,6 +65,17 @@ pub fn enqueue_tasks(
         // 插入到队列前端（新任务优先于旧任务）
         for task in new_tasks.into_iter().rev() {
             queue.push_front(task);
+            match lane {
+                TaskLane::Visible => {
+                    queued_visible.fetch_add(1, Ordering::Relaxed);
+                }
+                TaskLane::Prefetch => {
+                    queued_prefetch.fetch_add(1, Ordering::Relaxed);
+                }
+                TaskLane::Background => {
+                    queued_background.fetch_add(1, Ordering::Relaxed);
+                }
+            }
         }
 
         task_queue.1.notify_all();

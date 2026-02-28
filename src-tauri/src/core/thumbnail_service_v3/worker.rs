@@ -26,18 +26,10 @@ use super::{log_debug, log_info};
 
 const LANE_SCHEDULE_LEN: usize = 9;
 
-fn lane_backlog(queue: &VecDeque<GenerateTask>) -> (usize, usize, usize) {
-    let mut visible = 0usize;
-    let mut prefetch = 0usize;
-    let mut background = 0usize;
-    for task in queue.iter() {
-        match task.lane {
-            TaskLane::Visible => visible += 1,
-            TaskLane::Prefetch => prefetch += 1,
-            TaskLane::Background => background += 1,
-        }
-    }
-    (visible, prefetch, background)
+fn dec_counter(counter: &AtomicUsize) {
+    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+        Some(v.saturating_sub(1))
+    });
 }
 
 fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, background: usize) -> TaskLane {
@@ -69,27 +61,59 @@ fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, backgro
     }
 }
 
-fn pop_task_by_lane(queue: &mut VecDeque<GenerateTask>, preferred: TaskLane) -> Option<GenerateTask> {
+fn pop_task_by_lane(
+    queue: &mut VecDeque<GenerateTask>,
+    preferred: TaskLane,
+    queued_visible: &Arc<AtomicUsize>,
+    queued_prefetch: &Arc<AtomicUsize>,
+    queued_background: &Arc<AtomicUsize>,
+) -> Option<GenerateTask> {
+    let dec_for = |lane: TaskLane| match lane {
+        TaskLane::Visible => dec_counter(queued_visible),
+        TaskLane::Prefetch => dec_counter(queued_prefetch),
+        TaskLane::Background => dec_counter(queued_background),
+    };
+
     if queue.is_empty() {
         return None;
     }
 
     if let Some(pos) = queue.iter().position(|t| t.lane == preferred) {
-        return queue.remove(pos);
+        let task = queue.remove(pos);
+        if let Some(ref t) = task {
+            dec_for(t.lane);
+        }
+        return task;
     }
 
     // 配额车道无任务时降级回退，避免空转/饥饿
     if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Visible) {
-        return queue.remove(pos);
+        let task = queue.remove(pos);
+        if let Some(ref t) = task {
+            dec_for(t.lane);
+        }
+        return task;
     }
     if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Prefetch) {
-        return queue.remove(pos);
+        let task = queue.remove(pos);
+        if let Some(ref t) = task {
+            dec_for(t.lane);
+        }
+        return task;
     }
     if let Some(pos) = queue.iter().position(|t| t.lane == TaskLane::Background) {
-        return queue.remove(pos);
+        let task = queue.remove(pos);
+        if let Some(ref t) = task {
+            dec_for(t.lane);
+        }
+        return task;
     }
 
-    queue.pop_front()
+    let task = queue.pop_front();
+    if let Some(ref t) = task {
+        dec_for(t.lane);
+    }
+    task
 }
 
 /// 启动工作线程
@@ -102,6 +126,9 @@ pub fn start_workers(
     request_epoch: Arc<AtomicU64>,
     scheduler_paused: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
+    queued_visible: Arc<AtomicUsize>,
+    queued_prefetch: Arc<AtomicUsize>,
+    queued_background: Arc<AtomicUsize>,
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
     processed_background: Arc<AtomicUsize>,
@@ -128,6 +155,9 @@ pub fn start_workers(
             Arc::clone(&scheduler_paused),
             Arc::clone(&running),
             Arc::clone(&active_workers),
+            Arc::clone(&queued_visible),
+            Arc::clone(&queued_prefetch),
+            Arc::clone(&queued_background),
             Arc::clone(&processed_visible),
             Arc::clone(&processed_prefetch),
             Arc::clone(&processed_background),
@@ -158,6 +188,9 @@ fn create_worker_thread(
     scheduler_paused: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
+    queued_visible: Arc<AtomicUsize>,
+    queued_prefetch: Arc<AtomicUsize>,
+    queued_background: Arc<AtomicUsize>,
     processed_visible: Arc<AtomicUsize>,
     processed_prefetch: Arc<AtomicUsize>,
     processed_background: Arc<AtomicUsize>,
@@ -205,10 +238,18 @@ fn create_worker_thread(
 
                 // 若队列非空，直接取任务（避免短期 Condvar 等待）
                 if !guard.is_empty() {
-                    let (visible, prefetch, background) = lane_backlog(&guard);
+                    let visible = queued_visible.load(Ordering::Relaxed);
+                    let prefetch = queued_prefetch.load(Ordering::Relaxed);
+                    let background = queued_background.load(Ordering::Relaxed);
                     let preferred = preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                     lane_tick = lane_tick.wrapping_add(1);
-                    pop_task_by_lane(&mut guard, preferred)
+                    pop_task_by_lane(
+                        &mut guard,
+                        preferred,
+                        &queued_visible,
+                        &queued_prefetch,
+                        &queued_background,
+                    )
                 } else if !running.load(Ordering::SeqCst) {
                     None
                 } else {
@@ -218,11 +259,19 @@ fn create_worker_thread(
                             if !running.load(Ordering::SeqCst) {
                                 None
                             } else {
-                                let (visible, prefetch, background) = lane_backlog(&g);
+                                let visible = queued_visible.load(Ordering::Relaxed);
+                                let prefetch = queued_prefetch.load(Ordering::Relaxed);
+                                let background = queued_background.load(Ordering::Relaxed);
                                 let preferred =
                                     preferred_lane_for_tick(lane_tick, visible, prefetch, background);
                                 lane_tick = lane_tick.wrapping_add(1);
-                                pop_task_by_lane(&mut g, preferred) // None if still empty → outer loop flushes
+                                pop_task_by_lane(
+                                    &mut g,
+                                    preferred,
+                                    &queued_visible,
+                                    &queued_prefetch,
+                                    &queued_background,
+                                ) // None if still empty → outer loop flushes
                             }
                         }
                         Err(poisoned) => {

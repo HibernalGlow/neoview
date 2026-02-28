@@ -21,7 +21,7 @@
 	<!-- 颜色卡片 -->
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 		<!-- Primary -->
-		<Card className="p-6 bg-primary text-primary-foreground">
+		<Card class="bg-primary text-primary-foreground p-6">
 			<h3 class="mb-2 text-lg font-semibold">Primary</h3>
 			<p class="text-sm opacity-90">主色调,用于主要操作和强调</p>
 			<div class="mt-4 flex gap-2">
@@ -31,7 +31,7 @@
 		</Card>
 
 		<!-- Secondary -->
-		<Card className="p-6 bg-secondary text-secondary-foreground">
+		<Card class="bg-secondary text-secondary-foreground p-6">
 			<h3 class="mb-2 text-lg font-semibold">Secondary</h3>
 			<p class="text-sm opacity-90">次要色,用于辅助元素</p>
 			<div class="mt-4 flex gap-2">
@@ -41,7 +41,7 @@
 		</Card>
 
 		<!-- Accent -->
-		<Card className="p-6 bg-accent text-accent-foreground">
+		<Card class="bg-accent text-accent-foreground p-6">
 			<h3 class="mb-2 text-lg font-semibold">Accent</h3>
 			<p class="text-sm opacity-90">强调色,用于突出显示</p>
 			<div class="mt-4 flex gap-2">
@@ -51,7 +51,7 @@
 		</Card>
 
 		<!-- Muted -->
-		<Card className="p-6 bg-muted text-muted-foreground">
+		<Card class="bg-muted text-muted-foreground p-6">
 			<h3 class="mb-2 text-lg font-semibold">Muted</h3>
 			<p class="text-sm opacity-90">柔和色,用于背景和禁用状态</p>
 			<div class="mt-4">
@@ -60,7 +60,7 @@
 		</Card>
 
 		<!-- Card -->
-		<Card className="p-6 bg-card text-card-foreground border">
+		<Card class="bg-card text-card-foreground border p-6">
 			<h3 class="mb-2 text-lg font-semibold">Card</h3>
 			<p class="text-muted-foreground text-sm">卡片背景,用于内容容器</p>
 			<div class="mt-4">
@@ -69,7 +69,7 @@
 		</Card>
 
 		<!-- Destructive -->
-		<Card className="p-6 bg-destructive text-primary-foreground">
+		<Card class="bg-destructive text-primary-foreground p-6">
 			<h3 class="mb-2 text-lg font-semibold">Destructive</h3>
 			<p class="text-sm opacity-90">破坏性操作,如删除、警告</p>
 			<div class="mt-4">
@@ -100,12 +100,12 @@
 		<h3 class="text-xl font-semibold">表单元素</h3>
 		<div class="grid max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
 			<div class="space-y-2">
-				<label class="text-sm font-medium">普通输入框</label>
-				<Input placeholder="请输入内容..." />
+				<label class="text-sm font-medium" for="theme-preview-input-normal">普通输入框</label>
+				<Input id="theme-preview-input-normal" placeholder="请输入内容..." />
 			</div>
 			<div class="space-y-2">
-				<label class="text-sm font-medium">禁用输入框</label>
-				<Input placeholder="禁用状态" disabled />
+				<label class="text-sm font-medium" for="theme-preview-input-disabled">禁用输入框</label>
+				<Input id="theme-preview-input-disabled" placeholder="禁用状态" disabled />
 			</div>
 		</div>
 	</div>

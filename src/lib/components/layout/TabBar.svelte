@@ -38,7 +38,7 @@
 						variant="ghost"
 						size="icon"
 						class="hover:bg-destructive h-4 w-4"
-						onclick={(e) => handleCloseTab(tab.id, e)}
+						onclick={(e: MouseEvent) => handleCloseTab(tab.id, e)}
 						title="关闭标签"
 					>
 						<X class="h-3 w-3" />

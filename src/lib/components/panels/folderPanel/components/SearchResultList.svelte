@@ -170,7 +170,7 @@ $effect(() => {
 	itemsNeedingThumbnails.forEach((item) => {
 		if (item.isDir) {
 			// 文件夹
-			thumbnailManager.getThumbnail(item.path, undefined, false, 'normal');
+			thumbnailManager.getThumbnail(item.path);
 		} else {
 			// 文件：检查是否为压缩包
 			const nameLower = item.name.toLowerCase();
@@ -182,7 +182,7 @@ $effect(() => {
 				nameLower.endsWith('.7z') ||
 				nameLower.endsWith('.cb7');
 
-			thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'normal');
+			thumbnailManager.getThumbnail(item.path);
 		}
 	});
 });

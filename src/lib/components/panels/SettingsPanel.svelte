@@ -35,7 +35,12 @@
 			cacheSize: 500,
 			preloadPages: 3,
 			enableGpuAcceleration: true,
-			maxThreads: 4
+			maxThreads: 4,
+			thumbnail: {
+				maxConcurrentLocal: 6,
+				maxConcurrentArchive: 3,
+				maxConcurrentVideo: 2
+			}
 		},
 		// 文件关联
 		fileTypes: {
@@ -240,20 +245,19 @@
 				<div class="space-y-2">
 					<Label>图像缩放模式</Label>
 					<Select.Root
-						selected={{
-							value: settings.display.imageScaling,
-							label:
-								settings.display.imageScaling === 'fit'
-									? '适应窗口'
-									: settings.display.imageScaling === 'width'
-										? '适应宽度'
-										: settings.display.imageScaling === 'height'
-											? '适应高度'
-											: '原始大小'
-						}}
-						onSelectedChange={(v) => v && (settings.display.imageScaling = v.value as any)}
+						type="single"
+						value={settings.display.imageScaling}
+						onValueChange={(v) => v && (settings.display.imageScaling = v as any)}
 					>
-						<Select.Trigger class="w-full" />
+						<Select.Trigger class="w-full">
+							{settings.display.imageScaling === 'fit'
+								? '适应窗口'
+								: settings.display.imageScaling === 'width'
+									? '适应宽度'
+									: settings.display.imageScaling === 'height'
+										? '适应高度'
+										: '原始大小'}
+						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="fit">适应窗口</Select.Item>
 							<Select.Item value="width">适应宽度</Select.Item>
@@ -289,13 +293,13 @@
 				<div class="space-y-2">
 					<Label>鼠标滚轮动作</Label>
 					<Select.Root
-						selected={{
-							value: settings.operation.mouseWheelAction,
-							label: settings.operation.mouseWheelAction === 'zoom' ? '缩放' : '翻页'
-						}}
-						onSelectedChange={(v) => v && (settings.operation.mouseWheelAction = v.value as any)}
+						type="single"
+						value={settings.operation.mouseWheelAction}
+						onValueChange={(v) => v && (settings.operation.mouseWheelAction = v as any)}
 					>
-						<Select.Trigger class="w-full" />
+						<Select.Trigger class="w-full">
+							{settings.operation.mouseWheelAction === 'zoom' ? '缩放' : '翻页'}
+						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="zoom">缩放</Select.Item>
 							<Select.Item value="page">翻页</Select.Item>
@@ -306,18 +310,17 @@
 				<div class="space-y-2">
 					<Label>双击动作</Label>
 					<Select.Root
-						selected={{
-							value: settings.operation.doubleClickAction,
-							label:
-								settings.operation.doubleClickAction === 'fullscreen'
-									? '全屏'
-									: settings.operation.doubleClickAction === 'close'
-										? '关闭'
-										: '无'
-						}}
-						onSelectedChange={(v) => v && (settings.operation.doubleClickAction = v.value as any)}
+						type="single"
+						value={settings.operation.doubleClickAction}
+						onValueChange={(v) => v && (settings.operation.doubleClickAction = v as any)}
 					>
-						<Select.Trigger class="w-full" />
+						<Select.Trigger class="w-full">
+							{settings.operation.doubleClickAction === 'fullscreen'
+								? '全屏'
+								: settings.operation.doubleClickAction === 'close'
+									? '关闭'
+									: '无'}
+						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="fullscreen">全屏</Select.Item>
 							<Select.Item value="close">关闭</Select.Item>
@@ -329,18 +332,17 @@
 				<div class="space-y-2">
 					<Label>右键动作</Label>
 					<Select.Root
-						selected={{
-							value: settings.operation.rightClickAction,
-							label:
-								settings.operation.rightClickAction === 'menu'
-									? '菜单'
-									: settings.operation.rightClickAction === 'back'
-										? '返回'
-										: '无'
-						}}
-						onSelectedChange={(v) => v && (settings.operation.rightClickAction = v.value as any)}
+						type="single"
+						value={settings.operation.rightClickAction}
+						onValueChange={(v) => v && (settings.operation.rightClickAction = v as any)}
 					>
-						<Select.Trigger class="w-full" />
+						<Select.Trigger class="w-full">
+							{settings.operation.rightClickAction === 'menu'
+								? '菜单'
+								: settings.operation.rightClickAction === 'back'
+									? '返回'
+									: '无'}
+						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="menu">菜单</Select.Item>
 							<Select.Item value="back">返回</Select.Item>

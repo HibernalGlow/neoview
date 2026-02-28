@@ -35,6 +35,7 @@
 		: 'translate-y-full'}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
+	role="status"
 >
 	<div class="h-6 bg-secondary/85 backdrop-blur-md flex items-center justify-between px-3 text-xs border-t">
 		<!-- 左侧：书籍信息 -->

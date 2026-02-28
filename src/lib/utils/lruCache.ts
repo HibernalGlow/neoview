@@ -5,7 +5,7 @@
 
 import { LRUCache as BaseLRUCache } from 'lru-cache';
 
-export class LRUCache<K, V> {
+export class LRUCache<K extends {}, V> {
   private cache: BaseLRUCache<K, V>;
   private maxSize: number;
   private hits: number = 0;

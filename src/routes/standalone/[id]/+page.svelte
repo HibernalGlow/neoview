@@ -18,7 +18,7 @@
 
 	onMount(() => {
 		// 从URL参数获取窗口ID
-		const pathSegments = $page.url.split('/');
+		const pathSegments = $page.url.pathname.split('/');
 		windowId = pathSegments[pathSegments.length - 1];
 		
 		// 根据窗口ID设置标题和内容
@@ -114,11 +114,13 @@
 		}
 	}
 
-	$: getPanelComponent().then(Component => {
-		panelComponent = Component;
-	});
+	let panelComponent = $state<any>(null);
 
-	let panelComponent: any = null;
+	$effect(() => {
+		void getPanelComponent().then((Component) => {
+			panelComponent = Component;
+		});
+	});
 </script>
 
 <svelte:head>

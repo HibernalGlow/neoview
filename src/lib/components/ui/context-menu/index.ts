@@ -22,6 +22,8 @@ export {
 	Sub,
 	Root,
 	Item,
+	ItemRow,
+	ItemIcon,
 	GroupHeading,
 	Label,
 	Group,

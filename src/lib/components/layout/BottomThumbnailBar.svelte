@@ -271,12 +271,16 @@
 
 	function getWindowRange(totalPages: number): { start: number; end: number } {
 		const windowState = $viewerState.pageWindow;
+		const bookType =
+			bookStore.currentBook?.type === 'archive' || bookStore.currentBook?.type === 'local'
+				? bookStore.currentBook.type
+				: undefined;
 		return computeWindowRange(
 			totalPages,
 			windowState,
 			bookStore.currentPageIndex,
 			$bottomThumbnailBarHeight,
-			bookStore.currentBook?.type
+			bookType
 		);
 	}
 

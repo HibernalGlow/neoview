@@ -3,8 +3,8 @@
 	 * NeoView - Settings Dialog
 	 * 设置对话框
 	 */
-	import { Dialog } from '$lib/components/ui/dialog';
-	import { Tabs } from '$lib/components/ui/tabs';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, Paintbrush, PanelLeft } from '@lucide/svelte';
 	import KeyBindingPanel from './KeyBindingPanel.svelte';

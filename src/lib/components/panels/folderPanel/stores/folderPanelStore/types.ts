@@ -61,6 +61,22 @@ export interface SearchSettings {
 	searchInPath: boolean;
 }
 
+/** 排序配置 */
+export interface SortConfig {
+	field: FolderSortField;
+	order: FolderSortOrder;
+}
+
+/** 文件夹树配置 */
+export interface FolderTreeConfig {
+	visible: boolean;
+	layout: 'top' | 'left';
+	size: number;
+}
+
+/** 历史记录兼容别名 */
+export type HistoryRecord = FolderHistoryEntry;
+
 // ============ 主状态类型 ============
 
 /** 文件夹面板状态 */

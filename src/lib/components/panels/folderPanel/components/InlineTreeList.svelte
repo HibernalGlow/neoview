@@ -107,7 +107,7 @@ function loadThumbnails(items: FsItem[], path: string) {
 	itemsNeedingThumbnails.forEach((item) => {
 		if (item.isDir) {
 			// 文件夹
-			thumbnailManager.getThumbnail(item.path, undefined, false, 'immediate');
+			thumbnailManager.getThumbnail(item.path);
 		} else {
 			// 文件：检查是否为压缩包
 			const nameLower = item.name.toLowerCase();
@@ -119,7 +119,7 @@ function loadThumbnails(items: FsItem[], path: string) {
 				nameLower.endsWith('.7z') ||
 				nameLower.endsWith('.cb7');
 
-			thumbnailManager.getThumbnail(item.path, undefined, isArchive, 'immediate');
+			thumbnailManager.getThumbnail(item.path);
 		}
 	});
 }

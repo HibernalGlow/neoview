@@ -6,7 +6,7 @@
 		ref = $bindable(null),
 		class: className,
 		...restProps
-	}: PopoverPrimitive.TriggerProps = $props();
+	} = $props<any>();
 </script>
 
 <PopoverPrimitive.Trigger

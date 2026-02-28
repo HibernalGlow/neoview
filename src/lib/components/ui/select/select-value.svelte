@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { Select as SelectPrimitive } from "bits-ui";
-	import { cn, type WithoutChild } from "$lib/utils.js";
+	import { cn } from "$lib/utils.js";
 
 	let {
 		ref = $bindable(null),
@@ -8,15 +7,18 @@
 		placeholder,
 		children,
 		...restProps
-	}: WithoutChild<SelectPrimitive.ValueProps> = $props();
+	} = $props<any>();
 </script>
 
-<SelectPrimitive.Value
-	bind:ref
+<span
+	bind:this={ref}
 	data-slot="select-value"
 	class={cn("flex-1 text-left", className)}
-	{placeholder}
 	{...restProps}
 >
-	{@render children?.()}
-</SelectPrimitive.Value>
+	{#if children}
+		{@render children()}
+	{:else}
+		{placeholder}
+	{/if}
+</span>

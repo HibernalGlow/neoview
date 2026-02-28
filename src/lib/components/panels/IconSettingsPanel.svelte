@@ -279,18 +279,15 @@
 								<div class="flex items-center justify-end gap-1">
 									<!-- Emoji Picker -->
 									<Popover.Root>
-										<Popover.Trigger asChild>
-											{#snippet children({ props })}
-												<Button
-													{...props}
-													variant="ghost"
-													size="icon"
-													class="h-8 w-8 rounded-lg transition-colors hover:bg-amber-500/10 hover:text-amber-600"
-													title="选择 Emoji"
-												>
-													<Smile class="h-4 w-4" />
-												</Button>
-											{/snippet}
+										<Popover.Trigger>
+											<Button
+												variant="ghost"
+												size="icon"
+												class="h-8 w-8 rounded-lg transition-colors hover:bg-amber-500/10 hover:text-amber-600"
+												title="选择 Emoji"
+											>
+												<Smile class="h-4 w-4" />
+											</Button>
 										</Popover.Trigger>
 										<Popover.Content
 											class="w-auto border-none bg-transparent p-0 shadow-none"
@@ -302,18 +299,15 @@
 
 									<!-- Lucide Picker -->
 									<Popover.Root>
-										<Popover.Trigger asChild>
-											{#snippet children({ props })}
-												<Button
-													{...props}
-													variant="ghost"
-													size="icon"
-													class="h-8 w-8 rounded-lg transition-colors hover:bg-blue-500/10 hover:text-blue-600"
-													title="选择图标"
-												>
-													<ComponentIcon class="h-4 w-4" />
-												</Button>
-											{/snippet}
+										<Popover.Trigger>
+											<Button
+												variant="ghost"
+												size="icon"
+												class="h-8 w-8 rounded-lg transition-colors hover:bg-blue-500/10 hover:text-blue-600"
+												title="选择图标"
+											>
+												<ComponentIcon class="h-4 w-4" />
+											</Button>
 										</Popover.Trigger>
 										<Popover.Content class="w-[300px] p-0" side="left">
 											<Command.Root>

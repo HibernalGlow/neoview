@@ -84,6 +84,7 @@
 
 	// 卡片显示/隐藏状态
 	let showProjectCard = $state(true);
+	let loading = $state(false);
 	// 背景图片URL
 	let backgroundImageUrl = $state<string | null>(null);
 	// 背景视频URL
@@ -661,7 +662,7 @@
 			{:else if !backgroundVideoUrl}
 				<!-- 网点背景 (仅当没有图片和视频时显示) -->
 				<div
-					class="pointer-events-none absolute inset-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] [background-size:20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
+					class="pointer-events-none absolute inset-0 h-full w-full bg-[radial-gradient(#00000026_1px,transparent_1px)] bg-size-[20px_20px] dark:bg-[radial-gradient(#ffffff26_1px,transparent_1px)]"
 					style="z-index: -5;"
 				></div>
 			{/if}
@@ -753,7 +754,7 @@
 									<div
 										class="absolute bottom-full left-0 mb-2 w-64 rounded-lg p-4 shadow-lg"
 										style="background: hsl(var(--card) / 0.95); backdrop-filter: blur(16px); border: 1px solid hsl(var(--border) / 0.5);"
-										onclick={(e) => e.stopPropagation()}
+										onpointerdown={(e) => e.stopPropagation()}
 									>
 										<div class="mb-3 flex items-center justify-between">
 											<span class="text-sm font-medium">视频设置</span>

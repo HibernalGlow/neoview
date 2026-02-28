@@ -65,9 +65,11 @@
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let showTimeout: number | undefined;
-	// 全局缩略图缓存快照
-	let thumbnailSnapshot = $state<Map<number, ThumbnailEntry>>(new Map());
+	// 版本计数器：每次缩略图更新自增，触发 Svelte 响应式重绘（避免全量 Map 拷贝）
+	let thumbnailVersion = $state(0);
 	let unsubscribeThumbnailCache: (() => void) | null = null;
+	// rAF 句柄：批量合并同帧内的版本自增，避免快速批量到来时触发多次重绘
+	let thumbnailVersionRaf: number | null = null;
 	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
 	let resizeStartY = 0;
@@ -83,9 +85,10 @@
 	let thumbnailScrollProgress = $state(0);
 
 	// 从全局缓存获取缩略图（优先 thumbnailCacheStore，fallback 到 thumbnailStoreV3）
+	// 读取 thumbnailVersion 让 Svelte 追踪该函数的响应式依赖（版本自增时重新执行）
 	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
-		// 优先从 thumbnailCacheStore 获取
-		const cached = thumbnailSnapshot.get(pageIndex);
+		void thumbnailVersion; // 建立响应式依赖
+		const cached = thumbnailCacheStore.getThumbnail(pageIndex);
 		if (cached) return cached;
 		
 		// Fallback: 检查 thumbnailStoreV3（FileItem 的缩略图系统）
@@ -95,7 +98,7 @@
 			const v3Url = getThumbnailUrl(pagePath);
 			if (v3Url) {
 				// 返回虚拟 ThumbnailEntry
-				return { url: v3Url, width: 120, height: 120 };
+				return { url: v3Url, width: 120, height: 120, timestamp: Date.now() };
 			}
 		}
 		return null;
@@ -388,11 +391,15 @@
 		// 初始化缩略图服务
 		await thumbnailService.init();
 
-		// 订阅全局缩略图缓存
+		// 订阅全局缩略图缓存（仅递增版本号，避免全量 Map 拷贝）
 		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
-			thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
+			if (!thumbnailVersionRaf) {
+				thumbnailVersionRaf = requestAnimationFrame(() => {
+					thumbnailVersionRaf = null;
+					thumbnailVersion += 1;
+				});
+			}
 		});
-		thumbnailSnapshot = thumbnailCacheStore.getAllThumbnails();
 
 		// 初始化时触发缩略图加载
 		scheduleLoadVisibleThumbnails();
@@ -405,6 +412,10 @@
 		if (unsubscribeThumbnailCache) {
 			unsubscribeThumbnailCache();
 			unsubscribeThumbnailCache = null;
+		}
+		if (thumbnailVersionRaf) {
+			cancelAnimationFrame(thumbnailVersionRaf);
+			thumbnailVersionRaf = null;
 		}
 		if (loadThumbnailsDebounce) {
 			clearTimeout(loadThumbnailsDebounce);

@@ -61,11 +61,11 @@ pub fn load_image_from_archive_binary_shared(
     archive_path: &Path,
     file_path: &str,
 ) -> Result<Arc<[u8]>, String> {
-    let cache_key = format!(
-        "{}::{}",
-        normalize_archive_key(archive_path),
-        file_path
-    );
+    let normalized_archive = normalize_archive_key(archive_path);
+    let mut cache_key = String::with_capacity(normalized_archive.len() + 2 + file_path.len());
+    cache_key.push_str(&normalized_archive);
+    cache_key.push_str("::");
+    cache_key.push_str(file_path);
     
     // 检查缓存
     if let Some(cached) = get_cached_image_shared(image_cache, &cache_key) {
@@ -82,7 +82,7 @@ pub fn load_image_from_archive_binary_shared(
 
     // 对于 JXL 格式，需要先解码再重新编码为通用格式
     if let Some(ext) = Path::new(file_path).extension() {
-        if ext.to_string_lossy().to_lowercase() == "jxl" {
+        if ext.to_string_lossy().eq_ignore_ascii_case("jxl") {
             let converted = load_jxl_binary_from_zip(&data)?;
             let shared = Arc::<[u8]>::from(converted);
             store_cached_image_shared(image_cache, cache_key, shared.clone());

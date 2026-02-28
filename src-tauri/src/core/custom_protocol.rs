@@ -15,7 +15,7 @@ use mini_moka::sync::Cache;
 use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tauri::http::{Request, Response, StatusCode};
 use tauri::Manager;
 
@@ -95,6 +95,7 @@ impl Default for PathRegistry {
 #[derive(Clone, Debug)]
 pub struct CachedArchiveEntry {
     pub path: String,
+    pub mime_type: &'static str,
 }
 
 /// 缓存的压缩包元数据
@@ -102,7 +103,6 @@ pub struct CachedArchiveEntry {
 struct CachedArchiveMetadata {
     /// 图片和视频条目（按 entry_index 直接索引）
     image_entries: Vec<Option<CachedArchiveEntry>>,
-    pub cached_at: Instant,
 }
 
 /// Custom Protocol 状态
@@ -177,19 +177,21 @@ impl ProtocolState {
             .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
 
         // 过滤并缓存可查看条目（图片和视频）
-        let max_entry_index = entries.iter().map(|e| e.entry_index).max().unwrap_or(0);
-        let mut image_entries = vec![None; max_entry_index.saturating_add(1)];
+        let mut image_entries = vec![None; entries.len()];
         for e in entries {
             if e.is_image || e.is_video {
+                if e.entry_index >= image_entries.len() {
+                    image_entries.resize(e.entry_index + 1, None);
+                }
                 image_entries[e.entry_index] = Some(CachedArchiveEntry {
-                        path: e.path.clone(),
-                    });
+                    mime_type: get_mime_type(&e.path),
+                    path: e.path,
+                });
             }
         }
 
         let metadata = Arc::new(CachedArchiveMetadata {
             image_entries,
-            cached_at: Instant::now(),
         });
 
         // 存入缓存
@@ -238,27 +240,54 @@ impl ProtocolRequest {
     /// 从 URI 路径解析请求
     pub fn parse(path: &str) -> Self {
         let path = path.trim_start_matches('/');
-        let parts: Vec<&str> = path.split('/').collect();
+        let mut parts = path.split('/');
+        let head = parts.next();
 
-        match parts.as_slice() {
-            ["health"] => ProtocolRequest::Health,
-            ["image", book_hash, entry_index] => {
+        match head {
+            Some("health") if parts.next().is_none() => ProtocolRequest::Health,
+            Some("image") => {
+                let Some(book_hash) = parts.next() else {
+                    return ProtocolRequest::Unknown;
+                };
+                let Some(entry_index) = parts.next() else {
+                    return ProtocolRequest::Unknown;
+                };
+                if parts.next().is_some() {
+                    return ProtocolRequest::Unknown;
+                }
+
                 if let Ok(index) = entry_index.parse::<usize>() {
                     ProtocolRequest::ArchiveImage {
-                        book_hash: (*book_hash).to_string(),
+                        book_hash: book_hash.to_string(),
                         entry_index: index,
                     }
                 } else {
                     ProtocolRequest::Unknown
                 }
             }
-            ["file", path_hash] => ProtocolRequest::FileImage {
-                path_hash: (*path_hash).to_string(),
-            },
-            ["thumb", key] => ProtocolRequest::Thumbnail {
-                key: urlencoding::decode(key)
-                    .map_or_else(|_| (*key).to_string(), |s| s.to_string()),
-            },
+            Some("file") => {
+                let Some(path_hash) = parts.next() else {
+                    return ProtocolRequest::Unknown;
+                };
+                if parts.next().is_some() {
+                    return ProtocolRequest::Unknown;
+                }
+                ProtocolRequest::FileImage {
+                    path_hash: path_hash.to_string(),
+                }
+            }
+            Some("thumb") => {
+                let Some(key) = parts.next() else {
+                    return ProtocolRequest::Unknown;
+                };
+                if parts.next().is_some() {
+                    return ProtocolRequest::Unknown;
+                }
+                ProtocolRequest::Thumbnail {
+                    key: urlencoding::decode(key)
+                        .map_or_else(|_| key.to_string(), |s| s.to_string()),
+                }
+            }
             _ => ProtocolRequest::Unknown,
         }
     }
@@ -266,37 +295,82 @@ impl ProtocolRequest {
 
 /// 根据文件扩展名获取 MIME 类型
 fn get_mime_type(path: &str) -> &'static str {
-    let ext = Path::new(path)
+    let Some(ext) = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
-        .map(str::to_lowercase)
-        .unwrap_or_default();
+    else {
+        return "application/octet-stream";
+    };
 
-    match ext.as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "avif" => "image/avif",
-        "bmp" => "image/bmp",
-        "ico" => "image/x-icon",
-        "tiff" | "tif" => "image/tiff",
-        "jxl" => "image/jxl",
-        "svg" => "image/svg+xml",
-        // 视频格式
-        "mp4" | "m4v" | "nov" => "video/mp4",
-        "webm" => "video/webm",
-        "mkv" => "video/x-matroska",
-        "avi" => "video/x-msvideo",
-        "mov" => "video/quicktime",
-        "wmv" => "video/x-ms-wmv",
-        "flv" => "video/x-flv",
-        "ogg" | "ogv" => "video/ogg",
-        "3gp" => "video/3gpp",
-        "3g2" => "video/3gpp2",
-        "mpg" | "mpeg" => "video/mpeg",
-        _ => "application/octet-stream",
+    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+        return "image/jpeg";
     }
+    if ext.eq_ignore_ascii_case("png") {
+        return "image/png";
+    }
+    if ext.eq_ignore_ascii_case("gif") {
+        return "image/gif";
+    }
+    if ext.eq_ignore_ascii_case("webp") {
+        return "image/webp";
+    }
+    if ext.eq_ignore_ascii_case("avif") {
+        return "image/avif";
+    }
+    if ext.eq_ignore_ascii_case("bmp") {
+        return "image/bmp";
+    }
+    if ext.eq_ignore_ascii_case("ico") {
+        return "image/x-icon";
+    }
+    if ext.eq_ignore_ascii_case("tiff") || ext.eq_ignore_ascii_case("tif") {
+        return "image/tiff";
+    }
+    if ext.eq_ignore_ascii_case("jxl") {
+        return "image/jxl";
+    }
+    if ext.eq_ignore_ascii_case("svg") {
+        return "image/svg+xml";
+    }
+
+    if ext.eq_ignore_ascii_case("mp4")
+        || ext.eq_ignore_ascii_case("m4v")
+        || ext.eq_ignore_ascii_case("nov")
+    {
+        return "video/mp4";
+    }
+    if ext.eq_ignore_ascii_case("webm") {
+        return "video/webm";
+    }
+    if ext.eq_ignore_ascii_case("mkv") {
+        return "video/x-matroska";
+    }
+    if ext.eq_ignore_ascii_case("avi") {
+        return "video/x-msvideo";
+    }
+    if ext.eq_ignore_ascii_case("mov") {
+        return "video/quicktime";
+    }
+    if ext.eq_ignore_ascii_case("wmv") {
+        return "video/x-ms-wmv";
+    }
+    if ext.eq_ignore_ascii_case("flv") {
+        return "video/x-flv";
+    }
+    if ext.eq_ignore_ascii_case("ogg") || ext.eq_ignore_ascii_case("ogv") {
+        return "video/ogg";
+    }
+    if ext.eq_ignore_ascii_case("3gp") {
+        return "video/3gpp";
+    }
+    if ext.eq_ignore_ascii_case("3g2") {
+        return "video/3gpp2";
+    }
+    if ext.eq_ignore_ascii_case("mpg") || ext.eq_ignore_ascii_case("mpeg") {
+        return "video/mpeg";
+    }
+
+    "application/octet-stream"
 }
 
 /// 构建成功响应
@@ -420,7 +494,7 @@ fn handle_archive_image(
     };
 
     let cache_key = (book_key, entry_index);
-    let mime_type = get_mime_type(&entry.path);
+    let mime_type = entry.mime_type;
     if let Some(cached) = state.archive_image_cache.get(&cache_key) {
         let range = parse_byte_range(request, cached.len());
         return build_response_from_slice(cached.as_ref(), mime_type, range);

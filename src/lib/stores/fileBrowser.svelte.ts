@@ -301,6 +301,21 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder, p
     return order === 'asc' ? result : result.reverse();
   }
 
+  // 评分排序：O(N) 预先构建评分 Map，避免 comparator 内 O(N log N) 次缓存查找
+  if (field === 'rating') {
+    const defRating = getDefaultRating();
+    const ratingMap = new Map<string, number>();
+    for (const item of items) {
+      const rInfo = ratingCache.getRatingSync(item.path);
+      ratingMap.set(item.path, getSortableRating(rInfo ?? {}, defRating));
+    }
+    return [...items].sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      const diff = (ratingMap.get(a.path) ?? 0) - (ratingMap.get(b.path) ?? 0);
+      return order === 'asc' ? diff : -diff;
+    });
+  }
+
   return [...items].sort((a, b) => {
     // 文件夹始终在前面
     if (a.isDir !== b.isDir) {
@@ -328,16 +343,6 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder, p
           comparison = a.name.localeCompare(b.name);
         }
         break;
-      case 'rating': {
-        // 评分排序：从 ratingCache 获取评分
-        const defRating = getDefaultRating();
-        const rInfoA = ratingCache.getRatingSync(a.path);
-        const rInfoB = ratingCache.getRatingSync(b.path);
-        const rA = getSortableRating(rInfoA ?? {}, defRating);
-        const rB = getSortableRating(rInfoB ?? {}, defRating);
-        comparison = rA - rB;
-        break;
-      }
     }
 
     return order === 'asc' ? comparison : -comparison;

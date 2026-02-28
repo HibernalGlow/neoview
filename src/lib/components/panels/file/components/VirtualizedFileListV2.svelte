@@ -212,8 +212,10 @@
 	// Thumbnail loading for visible items - V3 版本
 	// 复刻 NeeView 架构：后端为主，前端只通知可见区域
 	// 优化：增加 debounce 到 32ms（2帧），减少快速滚动时的请求频率
-	const thumbnailCandidatePaths = $derived.by(() => {
+	// 一次遍历同时生成 路径数组（供预取）和 Set（供 O(1) 可见区域过滤）
+	const thumbnailCandidates = $derived.by(() => {
 		const paths: string[] = [];
+		const set = new Set<string>();
 		for (const item of items) {
 			if (!item) continue;
 			const effectivePath = item.targetPath || item.path;
@@ -224,10 +226,15 @@
 				ARCHIVE_REGEX.test(effectivePath.toLowerCase())
 			) {
 				paths.push(item.path);
+				set.add(item.path);
 			}
 		}
-		return paths;
+		return { paths, set };
 	});
+
+	// 保留原有名称以兼容 scheduleStablePrefetch 调用（zero-cost，只是别名）
+	const thumbnailCandidatePaths = $derived(thumbnailCandidates.paths);
+	const thumbnailCandidateSet = $derived(thumbnailCandidates.set);
 
 	function collectVisiblePathsCenterFirst(startIndex: number, endIndex: number): string[] {
 		const center = Math.floor((startIndex + endIndex) / 2);
@@ -240,29 +247,17 @@
 
 			if (left >= startIndex) {
 				const item = items[left];
-				if (item) {
-					const effectivePath = item.targetPath || item.path;
-					if (
-						(item.isDir || item.isImage || isVideoFile(effectivePath) || ARCHIVE_REGEX.test(effectivePath.toLowerCase())) &&
-						!seen.has(item.path)
-					) {
-						seen.add(item.path);
-						result.push(item.path);
-					}
+				if (item && thumbnailCandidateSet.has(item.path) && !seen.has(item.path)) {
+					seen.add(item.path);
+					result.push(item.path);
 				}
 			}
 
 			if (right <= endIndex && right !== left) {
 				const item = items[right];
-				if (item) {
-					const effectivePath = item.targetPath || item.path;
-					if (
-						(item.isDir || item.isImage || isVideoFile(effectivePath) || ARCHIVE_REGEX.test(effectivePath.toLowerCase())) &&
-						!seen.has(item.path)
-					) {
-						seen.add(item.path);
-						result.push(item.path);
-					}
+				if (item && thumbnailCandidateSet.has(item.path) && !seen.has(item.path)) {
+					seen.add(item.path);
+					result.push(item.path);
 				}
 			}
 		}

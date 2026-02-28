@@ -25,6 +25,7 @@ pub const PROTOCOL_NAME: &str = "neoview";
 const LEGACY_THUMB_CACHE_LIMIT: usize = 512;
 const LEGACY_THUMB_HINT_LIMIT: usize = 1024;
 const ARCHIVE_PREHEAT_IMAGE_COUNT: usize = 3;
+const ARCHIVE_PREHEAT_FOLLOWUP_DELAY_MS: u64 = 120;
 
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
@@ -310,40 +311,85 @@ impl ProtocolState {
                 return;
             }
 
-            for (entry_index, entry_path, mime_type) in preheat_images {
-                let cache_key = (book_key, entry_index);
-                if archive_image_cache.get(&cache_key).is_some() {
-                    continue;
-                }
-
-                let image_data = match archive_manager
-                    .load_image_from_archive_shared_with_hint(&book_path, &entry_path, Some(entry_index))
+            let (first_index, first_path, first_mime) = preheat_images[0].clone();
+            let first_cache_key = (book_key, first_index);
+            if archive_image_cache.get(&first_cache_key).is_none() {
+                match archive_manager
+                    .load_image_from_archive_shared_with_hint(&book_path, &first_path, Some(first_index))
                 {
-                    Ok(data) => data,
+                    Ok(data) => {
+                        archive_image_cache.insert(
+                            first_cache_key,
+                            CachedProtocolImage {
+                                data,
+                                mime_type: first_mime,
+                            },
+                        );
+                        debug!(
+                            "📦 Protocol preheat: 首图预热完成, path={}, entry={}",
+                            book_path.display(),
+                            first_index
+                        );
+                    }
                     Err(err) => {
                         debug!(
-                            "📦 Protocol preheat: 图片加载失败, path={}, entry={}, err={}",
+                            "📦 Protocol preheat: 首图加载失败, path={}, entry={}, err={}",
                             book_path.display(),
-                            entry_index,
+                            first_index,
                             err
                         );
+                    }
+                }
+            }
+
+            if preheat_images.len() <= 1 {
+                return;
+            }
+
+            let followups: Vec<(usize, String, &'static str)> =
+                preheat_images.into_iter().skip(1).collect();
+            let archive_manager_bg = Arc::clone(&archive_manager);
+            let archive_image_cache_bg = archive_image_cache.clone();
+            let book_path_bg = book_path.clone();
+
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(ARCHIVE_PREHEAT_FOLLOWUP_DELAY_MS));
+
+                for (entry_index, entry_path, mime_type) in followups {
+                    let cache_key = (book_key, entry_index);
+                    if archive_image_cache_bg.get(&cache_key).is_some() {
                         continue;
                     }
-                };
 
-                archive_image_cache.insert(
-                    cache_key,
-                    CachedProtocolImage {
-                        data: image_data,
-                        mime_type,
-                    },
-                );
-                debug!(
-                    "📦 Protocol preheat: 图片预热完成, path={}, entry={}",
-                    book_path.display(),
-                    entry_index
-                );
-            }
+                    let image_data = match archive_manager_bg
+                        .load_image_from_archive_shared_with_hint(&book_path_bg, &entry_path, Some(entry_index))
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            debug!(
+                                "📦 Protocol preheat: 跟进图加载失败, path={}, entry={}, err={}",
+                                book_path_bg.display(),
+                                entry_index,
+                                err
+                            );
+                            continue;
+                        }
+                    };
+
+                    archive_image_cache_bg.insert(
+                        cache_key,
+                        CachedProtocolImage {
+                            data: image_data,
+                            mime_type,
+                        },
+                    );
+                    debug!(
+                        "📦 Protocol preheat: 跟进图预热完成, path={}, entry={}",
+                        book_path_bg.display(),
+                        entry_index
+                    );
+                }
+            });
         });
     }
 

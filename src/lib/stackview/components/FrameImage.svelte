@@ -7,6 +7,7 @@
   - 样式统一
   - 根据 loadModeStore 切换 img/canvas 渲染
   - 颜色滤镜应用（支持仅黑白模式）
+  - 图像裁剪（四边百分比裁剪 + 自动去黑边/白边）
 -->
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
@@ -14,6 +15,7 @@
   import { stackImageLoader } from '../utils/stackImageLoader';
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
+  import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -44,10 +46,20 @@
   let isBlackAndWhite = $state(false);
   // 上一次检测的 URL
   let lastCheckedUrl = '';
+  // 图像裁剪设置
+  let trimSettings = $state<ImageTrimSettings | null>(null);
   
   $effect(() => {
     const unsubscribe = filterStore.subscribe((s) => {
       filterSettings = s;
+    });
+    return unsubscribe;
+  });
+  
+  // 订阅裁剪设置
+  $effect(() => {
+    const unsubscribe = imageTrimStore.subscribe((s) => {
+      trimSettings = s;
     });
     return unsubscribe;
   });
@@ -99,6 +111,12 @@
     return url;
   });
   
+  // 合成最终 clip-path（裁剪 + 页面分割）
+  let effectiveClipPath = $derived.by(() => {
+    const trimClip = trimSettings ? trimToClipPath(trimSettings) : '';
+    return mergeClipPaths(trimClip, clipPath);
+  });
+  
   // 是否使用 Canvas 渲染
   let useCanvas = $derived(loadModeStore.isCanvasMode);
   
@@ -118,9 +136,9 @@
     url={displayUrl}
     {alt}
     {transform}
-    {clipPath}
+    clipPath={effectiveClipPath}
     style={combinedStyle}
-    class="{className} {clipPath ? 'is-split' : ''}"
+    class="{className} {effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}"
     {onload}
   />
 {:else}
@@ -129,9 +147,9 @@
     src={displayUrl}
     {alt}
     class="frame-image {className}"
-    class:is-split={!!clipPath}
+    class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
     style:transform={transform || undefined}
-    style:clip-path={clipPath || undefined}
+    style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
     style:filter={filterCss || undefined}
     style={style || undefined}
     onload={onload}

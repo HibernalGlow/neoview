@@ -37,6 +37,7 @@
 		time: () => import('./info/TimeCard.svelte'),
 		sidebarControl: () => import('./info/SidebarControlCard.svelte'),
 		colorFilter: () => import('./info/ColorFilterCard.svelte'),
+		imageTrim: () => import('./info/ImageTrimCard.svelte'),
 		pageTransition: () => import('./info/PageTransitionCard.svelte'),
 		ambientBackground: () => import('./info/AmbientBackgroundCard.svelte'),
 		preloadStatus: () => import('./info/PreloadStatusCard.svelte'),

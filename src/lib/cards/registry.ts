@@ -218,6 +218,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'control',
 		canHide: true,
 	},
+	'imageTrim': {
+		id: 'imageTrim',
+		title: '图像裁剪',
+		icon: 'Crop',
+		defaultPanel: 'control',
+		canHide: true,
+	},
 	'pageTransition': {
 		id: 'pageTransition',
 		title: '翻页动画',

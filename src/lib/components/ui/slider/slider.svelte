@@ -6,38 +6,60 @@
 		ref = $bindable(null),
 		value = $bindable(),
 		orientation = "horizontal",
+		onValueChange,
 		class: className,
 		...restProps
 	}: {
 		ref?: HTMLElement | null;
 		value?: number | number[];
 		orientation?: "horizontal" | "vertical";
+		onValueChange?: (value: any) => void;
 		class?: string;
 		[key: string]: any;
 	} = $props();
 
+	function normalizeValue(input: number | number[] | undefined): number[] {
+		return Array.isArray(input) ? input : [input ?? 0];
+	}
+
+	function isSameArray(a: number[], b: number[]): boolean {
+		if (a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++) {
+			if (a[i] !== b[i]) return false;
+		}
+		return true;
+	}
+
 	// Svelte 5 内部代理状态，处理 bits-ui 必须使用数组的问题
-	let proxyValue = $state(Array.isArray(value) ? value : [value ?? 0]);
+	let proxyValue = $state(normalizeValue(value));
 
 	// 监听外部 prop 变化同步到内部代理
 	$effect(() => {
-		const target = Array.isArray(value) ? value : [value ?? 0];
-		// 仅在值真正不同时更新，避免死循环
-		if (JSON.stringify(proxyValue) !== JSON.stringify(target)) {
+		const target = normalizeValue(value);
+		if (!isSameArray(proxyValue, target)) {
 			proxyValue = target;
 		}
 	});
 
-	// 监听内部代理变化同步回外部 prop
-	$effect(() => {
-		if (Array.isArray(value)) {
-			value = proxyValue;
-		} else if (typeof value === "number" || value === undefined) {
-			if (value !== proxyValue[0]) {
-				value = proxyValue[0];
-			}
+	function handleValueChange(next: number) {
+		const nextArray = [next];
+		if (!isSameArray(proxyValue, nextArray)) {
+			proxyValue = [...nextArray];
 		}
-	});
+
+		if (Array.isArray(value)) {
+			if (!isSameArray(value, nextArray)) {
+				value = [...nextArray];
+			}
+			onValueChange?.([...nextArray]);
+		} else if (typeof value === "number" || value === undefined) {
+			const single = next;
+			if (value !== single) {
+				value = single;
+			}
+			onValueChange?.(single);
+		}
+	}
 </script>
 
 <!--
@@ -46,7 +68,8 @@ get along, so we shut typescript up by casting `value` to `never`.
 -->
 <SliderPrimitive.Root
 	bind:ref
-	bind:value={proxyValue as never}
+	value={proxyValue as never}
+	onValueChange={handleValueChange}
 	data-slot="slider"
 	type="single"
 	{orientation}

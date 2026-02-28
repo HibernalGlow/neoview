@@ -108,19 +108,14 @@ export class SettingsManager {
   }
 
   updateNestedSettings<K extends keyof NeoViewSettings>(category: K, updates: Partial<NeoViewSettings[K]>) {
-    console.log('📝 updateNestedSettings 调用:', {
-      category,
-      updates,
-      before: this.settings[category]
-    });
-
     const current = (this.settings[category] ?? {}) as object;
-    this.settings[category] = { ...current, ...updates } as NeoViewSettings[K];
+    const next = { ...current, ...updates } as NeoViewSettings[K];
 
-    console.log('✅ updateNestedSettings 完成:', {
-      category,
-      after: this.settings[category]
-    });
+    if (JSON.stringify(current) === JSON.stringify(next)) {
+      return;
+    }
+
+    this.settings[category] = next;
 
     this.saveSettings();
     this.notifyListeners();
@@ -163,6 +158,7 @@ export class SettingsManager {
 
   addListener(callback: (s: NeoViewSettings) => void) {
     this.listeners.add(callback);
+    return () => this.removeListener(callback);
   }
 
   removeListener(cb: (s: NeoViewSettings) => void) {
@@ -255,12 +251,7 @@ export class SettingsManager {
   private saveSettings() {
     try {
       const settingsStr = JSON.stringify(this.settings);
-      console.log('💾 保存设置到 localStorage:', {
-        size: settingsStr.length,
-        enableSuperResolution: this.settings.image.enableSuperResolution
-      });
       localStorage.setItem('neoview-settings', settingsStr);
-      console.log('✅ 设置保存成功');
     } catch (err) {
       console.error('❌ saveSettings failed:', err);
     }

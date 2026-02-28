@@ -14,13 +14,20 @@ let infoOverlayWidth = $state<number | undefined>(undefined);
 let infoOverlayHeight = $state<number | undefined>(undefined);
 
 $effect(() => {
-	const s = settingsManager.getSettings();
-	const overlay = s.view?.infoOverlay;
-	infoOverlayEnabled = overlay?.enabled ?? false;
-	infoOverlayOpacity = overlay?.opacity ?? 0.85;
-	infoOverlayShowBorder = overlay?.showBorder ?? false;
-	infoOverlayWidth = overlay?.width;
-	infoOverlayHeight = overlay?.height;
+	const syncFromSettings = () => {
+		const s = settingsManager.getSettings();
+		const overlay = s.view?.infoOverlay;
+		infoOverlayEnabled = overlay?.enabled ?? false;
+		infoOverlayOpacity = overlay?.opacity ?? 0.85;
+		infoOverlayShowBorder = overlay?.showBorder ?? false;
+		infoOverlayWidth = overlay?.width;
+		infoOverlayHeight = overlay?.height;
+	};
+
+	syncFromSettings();
+	const listener = () => syncFromSettings();
+	settingsManager.addListener(listener);
+	return () => settingsManager.removeListener(listener);
 });
 
 function updateInfoOverlay(partial: {
@@ -47,6 +54,21 @@ function updateInfoOverlay(partial: {
 	if (partial.height !== undefined) {
 		if (partial.height <= 0) delete (next as any).height;
 		else (next as any).height = Math.max(32, Math.min(600, partial.height));
+	}
+
+	const prevWidth = (prev as any).width;
+	const nextWidth = (next as any).width;
+	const prevHeight = (prev as any).height;
+	const nextHeight = (next as any).height;
+	const unchanged =
+		prev.enabled === next.enabled &&
+		prev.opacity === next.opacity &&
+		prev.showBorder === next.showBorder &&
+		prevWidth === nextWidth &&
+		prevHeight === nextHeight;
+
+	if (unchanged) {
+		return;
 	}
 
 	infoOverlayEnabled = next.enabled;

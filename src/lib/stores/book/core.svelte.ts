@@ -36,6 +36,8 @@ import { isArchivePath } from './streamingLoader.svelte';
 import { renderSwitchToastTemplate } from './toast';
 import { pageFrameStore } from '../pageFrame.svelte';
 import { cleanupBookResources } from '$lib/core/bookCleanup';
+import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+import { folderPanelActions, isBookCandidate, normalizePath as normalizeFolderPath } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
 export type { SwitchToastContext };
 
@@ -533,9 +535,6 @@ class BookStore {
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
     
-    const { folderTabActions } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
-    const { isBookCandidate, normalizePath: normalizeFolderPath } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
-    
     const activeTab = folderTabActions.getActiveTab();
     
     // 直接读取 UI 已排好序的缓存列表，不做任何二次排序
@@ -570,7 +569,6 @@ class BookStore {
     
     // 降级：缓存为空或缓存中无 book 候选时，异步加载
     if (!targetPath) {
-      const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
       const sortOptions = {
         sortField: (activeTab?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
         sortOrder: (activeTab?.sortOrder || 'asc') as 'asc' | 'desc'

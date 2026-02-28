@@ -107,6 +107,11 @@ folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
 folderTreeSize: number;
 }
 
+/** 共享显示设置 */
+export interface SharedDisplaySettings {
+thumbnailWidthPercent: number;
+}
+
 // ============ 标签页状态类型 ============
 
 /** 单个标签页的完整状态 */
@@ -178,7 +183,8 @@ TABS: 'neoview-folder-tabs',
 RECENTLY_CLOSED: 'neoview-recently-closed-tabs',
 SHARED_TREE: 'neoview-folder-tree-shared',
 SHARED_SORT: 'neoview-folder-sort-shared',
-SHARED_TAB_BAR: 'neoview-tab-bar-shared'
+SHARED_TAB_BAR: 'neoview-tab-bar-shared',
+SHARED_DISPLAY: 'neoview-display-shared'
 } as const;
 
 export const VIRTUAL_PATHS = {

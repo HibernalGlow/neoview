@@ -9,6 +9,7 @@ FolderTabState,
 FolderTabsState,
 RecentlyClosedTab,
 SharedFolderTreeSettings,
+SharedDisplaySettings,
 SharedSortSettings,
 SortSource,
 PanelLayoutSettings,
@@ -112,6 +113,33 @@ try {
 localStorage.setItem(STORAGE_KEYS.SHARED_TREE, JSON.stringify(settings));
 } catch (e) {
 console.error('[FolderTabStore] Failed to save shared tree settings:', e);
+}
+}
+
+/** 加载共享显示设置 */
+export function loadSharedDisplaySettings(): SharedDisplaySettings {
+try {
+const saved = localStorage.getItem(STORAGE_KEYS.SHARED_DISPLAY);
+if (saved) {
+const parsed = JSON.parse(saved);
+return {
+thumbnailWidthPercent: Math.max(10, Math.min(90, parsed.thumbnailWidthPercent ?? 20))
+};
+}
+} catch (e) {
+console.error('[FolderTabStore] Failed to load shared display settings:', e);
+}
+return {
+thumbnailWidthPercent: 20
+};
+}
+
+/** 保存共享显示设置 */
+export function saveSharedDisplaySettings(settings: SharedDisplaySettings): void {
+try {
+localStorage.setItem(STORAGE_KEYS.SHARED_DISPLAY, JSON.stringify(settings));
+} catch (e) {
+console.error('[FolderTabStore] Failed to save shared display settings:', e);
 }
 }
 

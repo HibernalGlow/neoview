@@ -2,6 +2,13 @@
 //! 
 //! 包含 ThumbnailServiceConfig 结构体及其默认实现
 
+#[derive(Clone, Copy)]
+pub struct LaneQuota {
+    pub visible: usize,
+    pub prefetch: usize,
+    pub background: usize,
+}
+
 /// 配置参数
 #[derive(Clone)]
 pub struct ThumbnailServiceConfig {
@@ -19,6 +26,12 @@ pub struct ThumbnailServiceConfig {
     pub scheduler_visible_boost_factor: usize,
     /// side 车道加强阈值：side_total > visible * 此系数 时使用 4:3:3
     pub scheduler_side_boost_factor: usize,
+    /// visible 强势场景配额
+    pub scheduler_visible_boost_quota: LaneQuota,
+    /// 默认场景配额
+    pub scheduler_default_quota: LaneQuota,
+    /// side 强势场景配额
+    pub scheduler_side_boost_quota: LaneQuota,
 }
 
 impl Default for ThumbnailServiceConfig {
@@ -50,6 +63,21 @@ impl Default for ThumbnailServiceConfig {
             db_save_delay_ms: 2000,
             scheduler_visible_boost_factor: 1,
             scheduler_side_boost_factor: 2,
+            scheduler_visible_boost_quota: LaneQuota {
+                visible: 8,
+                prefetch: 1,
+                background: 1,
+            },
+            scheduler_default_quota: LaneQuota {
+                visible: 6,
+                prefetch: 2,
+                background: 1,
+            },
+            scheduler_side_boost_quota: LaneQuota {
+                visible: 4,
+                prefetch: 3,
+                background: 3,
+            },
         }
     }
 }

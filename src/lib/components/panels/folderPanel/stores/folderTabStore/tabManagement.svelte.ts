@@ -10,6 +10,7 @@ FolderTabState,
 FolderTabsState,
 RecentlyClosedTab,
 SharedFolderTreeSettings,
+SharedDisplaySettings,
 SharedSortSettings,
 TabBarLayout,
 BreadcrumbPosition,
@@ -27,6 +28,7 @@ saveTabsState,
 loadRecentlyClosedTabs,
 saveRecentlyClosedTabs,
 loadSharedTreeSettings,
+loadSharedDisplaySettings,
 loadSharedSortSettings,
 getSortSettingsForNewTab,
 loadPerPanelLayoutSettings,
@@ -37,6 +39,7 @@ savePerPanelLayoutSettings
 
 // 加载共享设置
 const sharedTreeSettings = loadSharedTreeSettings();
+const sharedDisplaySettings = loadSharedDisplaySettings();
 const sharedSortSettings = loadSharedSortSettings();
 let perPanelLayoutSettings = loadPerPanelLayoutSettings();
 
@@ -100,7 +103,7 @@ historyIndex: -1,
 homePath,
 stackLayers: [],
 stackActiveIndex: 0,
-thumbnailWidthPercent: 20,
+thumbnailWidthPercent: sharedDisplaySettings.thumbnailWidthPercent,
 bannerWidthPercent: 50,
 pendingFocusPath: null
 };
@@ -172,6 +175,10 @@ return newState;
 
 export function getSharedTreeSettings(): SharedFolderTreeSettings {
 return sharedTreeSettings;
+}
+
+export function getSharedDisplaySettings(): SharedDisplaySettings {
+return sharedDisplaySettings;
 }
 
 export function getSharedSortSettings(): SharedSortSettings {

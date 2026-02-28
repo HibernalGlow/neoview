@@ -14,7 +14,7 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 use crate::core::request_dedup::RequestDeduplicator;
 
-use super::config::ThumbnailServiceConfig;
+use super::config::{LaneQuota, ThumbnailServiceConfig};
 use super::generators::{
     generate_archive_thumbnail_static, generate_file_thumbnail_static,
     generate_folder_thumbnail_static, generate_video_thumbnail_static,
@@ -25,7 +25,36 @@ use super::types::{
 };
 use super::{log_debug, log_info};
 
-const LANE_SCHEDULE_LEN: usize = 9;
+fn lane_from_quota_tick(tick: usize, quota: LaneQuota) -> TaskLane {
+    let visible_slots = quota.visible;
+    let prefetch_slots = quota.prefetch;
+    let background_slots = quota.background;
+    let total = visible_slots + prefetch_slots + background_slots;
+
+    if total == 0 {
+        return TaskLane::Visible;
+    }
+
+    let slot = tick % total;
+    if slot < visible_slots {
+        return TaskLane::Visible;
+    }
+    if slot < visible_slots + prefetch_slots {
+        return TaskLane::Prefetch;
+    }
+    TaskLane::Background
+}
+
+fn backlog_is_empty(
+    queued_visible: &Arc<AtomicUsize>,
+    queued_prefetch: &Arc<AtomicUsize>,
+    queued_background: &Arc<AtomicUsize>,
+) -> bool {
+    queued_visible.load(Ordering::Relaxed)
+        + queued_prefetch.load(Ordering::Relaxed)
+        + queued_background.load(Ordering::Relaxed)
+        == 0
+}
 
 fn preferred_lane_for_tick(
     tick: usize,
@@ -34,33 +63,24 @@ fn preferred_lane_for_tick(
     background: usize,
     visible_boost_factor: usize,
     side_boost_factor: usize,
+    visible_boost_quota: LaneQuota,
+    default_quota: LaneQuota,
+    side_boost_quota: LaneQuota,
 ) -> TaskLane {
     let side_total = prefetch + background;
 
     // visible 积压明显时，提升前台配额（8:1:1）
     if visible > 0 && visible >= side_total.saturating_mul(visible_boost_factor.max(1)) {
-        return match tick % 10 {
-            0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 => TaskLane::Visible,
-            7 => TaskLane::Prefetch,
-            _ => TaskLane::Background,
-        };
+        return lane_from_quota_tick(tick, visible_boost_quota);
     }
 
     // 后台/预取积压明显时，放宽为 4:3:3 提升总体吞吐
     if side_total > visible.saturating_mul(side_boost_factor.max(1)) {
-        return match tick % 10 {
-            0 | 3 | 6 | 9 => TaskLane::Visible,
-            1 | 4 | 7 => TaskLane::Prefetch,
-            _ => TaskLane::Background,
-        };
+        return lane_from_quota_tick(tick, side_boost_quota);
     }
 
     // 默认 6:2:1 时间片配额（visible:prefetch:background）
-    match tick % LANE_SCHEDULE_LEN {
-        0 | 1 | 2 | 4 | 5 | 7 => TaskLane::Visible,
-        3 | 6 => TaskLane::Prefetch,
-        _ => TaskLane::Background,
-    }
+    lane_from_quota_tick(tick, default_quota)
 }
 
 /// 启动工作线程
@@ -93,12 +113,18 @@ pub fn start_workers(
     let mut workers = Vec::new();
     let visible_boost_factor = config.scheduler_visible_boost_factor;
     let side_boost_factor = config.scheduler_side_boost_factor;
+    let visible_boost_quota = config.scheduler_visible_boost_quota;
+    let default_quota = config.scheduler_default_quota;
+    let side_boost_quota = config.scheduler_side_boost_quota;
     for i in 0..config.worker_threads {
         let handle = create_worker_thread(
             i,
             config.folder_search_depth,
             visible_boost_factor,
             side_boost_factor,
+            visible_boost_quota,
+            default_quota,
+            side_boost_quota,
             app.clone(),
             Arc::clone(&task_queue),
             Arc::clone(&current_dir),
@@ -134,6 +160,9 @@ fn create_worker_thread(
     folder_depth: u32,
     visible_boost_factor: usize,
     side_boost_factor: usize,
+    visible_boost_quota: LaneQuota,
+    default_quota: LaneQuota,
+    side_boost_quota: LaneQuota,
     app: AppHandle,
     task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
@@ -161,7 +190,7 @@ fn create_worker_thread(
         const EMIT_BATCH_SIZE: usize = 16;
         log_debug!("🔧 Worker {} started", worker_id);
         let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
-        let mut lane_tick: usize = worker_id % LANE_SCHEDULE_LEN;
+        let mut lane_tick: usize = worker_id;
 
         while running.load(Ordering::SeqCst) {
             if scheduler_paused.load(Ordering::Acquire) {
@@ -173,7 +202,11 @@ fn create_worker_thread(
             // 解决多 worker 场景下：Worker A 有 1 个 batch item，Worker B 拿走最后一个
             // 任务后 Worker A 进入 idle 等待，batch 永远不被发射的问题。
             if !emit_batch.is_empty() {
-                let queue_is_empty = task_queue.0.lock().map(|q| q.is_empty()).unwrap_or(false);
+                let queue_is_empty = backlog_is_empty(
+                    &queued_visible,
+                    &queued_prefetch,
+                    &queued_background,
+                );
                 if queue_is_empty {
                     flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
                 }
@@ -201,6 +234,9 @@ fn create_worker_thread(
                         background,
                         visible_boost_factor,
                         side_boost_factor,
+                        visible_boost_quota,
+                        default_quota,
+                        side_boost_quota,
                     );
                     lane_tick = lane_tick.wrapping_add(1);
                     queue::pop_task_by_lane_locked(
@@ -229,6 +265,9 @@ fn create_worker_thread(
                                     background,
                                     visible_boost_factor,
                                     side_boost_factor,
+                                    visible_boost_quota,
+                                    default_quota,
+                                    side_boost_quota,
                                 );
                                 lane_tick = lane_tick.wrapping_add(1);
                                 queue::pop_task_by_lane_locked(
@@ -252,6 +291,9 @@ fn create_worker_thread(
                                 background,
                                 visible_boost_factor,
                                 side_boost_factor,
+                                visible_boost_quota,
+                                default_quota,
+                                side_boost_quota,
                             );
                             lane_tick = lane_tick.wrapping_add(1);
                             queue::pop_task_by_lane_locked(
@@ -302,7 +344,11 @@ fn create_worker_thread(
                     // 任务处理完后检查队列是否已空：
                     // 若空则立即强制发射，避免小批量（< EMIT_BATCH_SIZE）永远滞留
                     // （典型场景：文件夹只有几个压缩包，处理完后队列变空但 batch 不满 16）
-                    let queue_is_empty = task_queue.0.lock().map(|q| q.is_empty()).unwrap_or(false);
+                    let queue_is_empty = backlog_is_empty(
+                        &queued_visible,
+                        &queued_prefetch,
+                        &queued_background,
+                    );
                     flush_worker_emit_batch(&app, &mut emit_batch, queue_is_empty, EMIT_BATCH_SIZE);
                 }
                 active_workers.fetch_sub(1, Ordering::SeqCst);

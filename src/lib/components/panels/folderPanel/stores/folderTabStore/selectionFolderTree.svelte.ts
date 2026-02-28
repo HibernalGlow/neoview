@@ -6,13 +6,14 @@
 import { SvelteSet } from 'svelte/reactivity';
 import type { FsItem } from '$lib/types';
 import type { FolderStackLayer, FolderTabState } from './types';
-import { store, updateActiveTab, getActiveTab, getSharedTreeSettings } from './tabManagement.svelte';
-import { saveSharedTreeSettings } from './utils.svelte';
+import { store, updateActiveTab, getActiveTab, getSharedTreeSettings, getSharedDisplaySettings } from './tabManagement.svelte';
+import { saveSharedTreeSettings, saveSharedDisplaySettings } from './utils.svelte';
 import { isVirtualPath, saveTabsState } from './utils.svelte';
 
 // ============ 内部状态 ============
 
 const sharedTreeSettings = getSharedTreeSettings();
+const sharedDisplaySettings = getSharedDisplaySettings();
 
 // ============ 选择操作 ============
 
@@ -237,10 +238,21 @@ stackActiveIndex: index
 /** 设置缩略图宽度百分比 */
 export function setThumbnailWidthPercent(percent: number): void {
 const clampedPercent = Math.max(10, Math.min(90, percent));
-updateActiveTab((tab) => ({
-...tab,
-thumbnailWidthPercent: clampedPercent
-}));
+
+sharedDisplaySettings.thumbnailWidthPercent = clampedPercent;
+saveSharedDisplaySettings(sharedDisplaySettings);
+
+store.update(($store) => {
+const tabs = $store.tabs.map((tab) => {
+if (!isVirtualPath(tab.currentPath) && !isVirtualPath(tab.homePath)) {
+return { ...tab, thumbnailWidthPercent: clampedPercent };
+}
+return tab;
+});
+const newState = { ...$store, tabs };
+requestAnimationFrame(() => saveTabsState(newState));
+return newState;
+});
 }
 
 /** 设置横幅视图宽度百分比 */

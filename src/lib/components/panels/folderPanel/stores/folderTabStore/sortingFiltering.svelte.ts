@@ -331,3 +331,42 @@ updateActiveTab((tab) => ({ ...tab, loading }));
 export function setError(error: string | null): void {
 updateActiveTab((tab) => ({ ...tab, error, loading: false }));
 }
+
+// ============ 已排序列表缓存（供切换书籍直读，不再二次排序） ============
+
+let _cachedSortedState: {
+	items: FsItem[];
+	path: string;
+	source: string;
+	updatedAt: number;
+} = {
+	items: [],
+	path: '',
+	source: 'init',
+	updatedAt: 0
+};
+
+/** UI 组件排序完成后调用，将结果缓存起来 */
+export function setCachedSortedItems(items: FsItem[], path = '', source = 'unknown'): void {
+	_cachedSortedState = {
+		items,
+		path,
+		source,
+		updatedAt: Date.now()
+	};
+}
+
+/** 读取 UI 已排好序的列表（切换书籍时使用） */
+export function getCachedSortedItems(): FsItem[] {
+	return _cachedSortedState.items;
+}
+
+/** 读取 UI 已排好序列表的元信息 */
+export function getCachedSortedMeta(): { path: string; source: string; updatedAt: number; count: number } {
+	return {
+		path: _cachedSortedState.path,
+		source: _cachedSortedState.source,
+		updatedAt: _cachedSortedState.updatedAt,
+		count: _cachedSortedState.items.length
+	};
+}

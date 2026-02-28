@@ -532,43 +532,90 @@ class BookStore {
 
   private async openAdjacentBook(direction: 'next' | 'previous') {
     const currentPath = this.state.currentBook?.path ?? null;
-    const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
-    const { folderTabActions } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
     
-    // 计算书籍所在的父目录（用于按该目录的规则解析排序）
+    const { folderTabActions } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
+    const { isBookCandidate, normalizePath: normalizeFolderPath } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
+    
     const activeTab = folderTabActions.getActiveTab();
-    let parentDirOfBook: string | null = null;
-    if (currentPath) {
-      const normalized = currentPath.replace(/\\/g, '/');
-      const lastSlash = normalized.lastIndexOf('/');
-      if (lastSlash > 0) {
-        parentDirOfBook = normalized.substring(0, lastSlash);
+    
+    // 直接读取 UI 已排好序的缓存列表，不做任何二次排序
+    const cachedMeta = folderTabActions.getCachedSortedMeta();
+    const cachedSorted = folderTabActions.getCachedSortedItems();
+    let targetPath: string | null = null;
+    const activeTabPath = activeTab?.currentPath || '';
+    const canUseCache =
+      cachedSorted.length > 0 &&
+      !!activeTabPath &&
+      normalizeFolderPath(cachedMeta.path) === normalizeFolderPath(activeTabPath);
+    
+    if (canUseCache) {
+      const bookItems = cachedSorted.filter(isBookCandidate);
+      
+      if (bookItems.length > 0) {
+        const normalizedCurrent = currentPath ? normalizeFolderPath(currentPath) : null;
+        let currentIndex = bookItems.findIndex(item => 
+          normalizedCurrent && normalizeFolderPath(item.path) === normalizedCurrent
+        );
+
+        if (currentIndex === -1) {
+          currentIndex = direction === 'next' ? -1 : bookItems.length;
+        }
+        
+        const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+        if (targetIndex >= 0 && targetIndex < bookItems.length) {
+          targetPath = bookItems[targetIndex].path;
+        }
       }
     }
-
-    // 用规则引擎解析书籍父目录的有效排序（临时规则 > 文件夹记忆 > 默认）
-    // 而非使用文件夹面板当前浏览路径的排序，避免面板切换到其他目录时排序错位
-    let resolvedSort = activeTab && parentDirOfBook
-      ? folderTabActions.resolveSortForTab(activeTab, parentDirOfBook)
-      : null;
-    // 若无法解析（没有 activeTab 或父目录），降级到 tab 当前排序
-    if (!resolvedSort && activeTab) {
-      resolvedSort = { sortField: activeTab.sortField, sortOrder: activeTab.sortOrder, source: activeTab.sortSource ?? 'global-default' };
+    
+    // 降级：缓存为空或缓存中无 book 候选时，异步加载
+    if (!targetPath) {
+      const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
+      const sortOptions = {
+        sortField: (activeTab?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
+        sortOrder: (activeTab?.sortOrder || 'asc') as 'asc' | 'desc'
+      };
+      targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction, sortOptions);
     }
-    const sortOptions = {
-      sortField: (resolvedSort?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
-      sortOrder: (resolvedSort?.sortOrder || 'asc') as 'asc' | 'desc'
-    };
-    console.log('[openAdjacentBook] 使用排序设置（父目录规则引擎解析）', { parentDirOfBook, resolvedSort, sortOptions });
     
-    let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction, sortOptions);
-    
+    // 最终回退
     if (!targetPath) {
       targetPath = fileBrowserStore.findAdjacentBookPath(currentPath, direction);
     }
     
     if (!targetPath) return;
+    
+    // ★ 切换书后同步文件夹面板到目标书的父目录
+    this.syncFolderPanelToBookParent(targetPath, folderTabActions, normalizeFolderPath);
+    
     await this.openBook(targetPath);
+  }
+
+  /**
+   * 同步文件夹面板到指定书籍的父目录
+   * 确保面板显示的是书籍的兄弟列表，而不是书籍内部的文件
+   */
+  private syncFolderPanelToBookParent(
+    bookPath: string,
+    folderTabActions: { getActiveTab: () => any; setPath: (path: string, addToHistory?: boolean) => void; selectItem: (path: string) => void; focusOnPath: (path: string) => void },
+    normalizePath: (path: string) => string
+  ) {
+    try {
+      const normalized = bookPath.replace(/\\/g, '/');
+      const lastSep = normalized.lastIndexOf('/');
+      if (lastSep <= 0) return;
+      const parentDir = normalized.substring(0, lastSep);
+      
+      const activeTab = folderTabActions.getActiveTab();
+      const currentTabPath = activeTab?.currentPath || '';
+
+      if (normalizePath(currentTabPath) === normalizePath(parentDir)) {
+        folderTabActions.selectItem(bookPath);
+      } else {
+        folderTabActions.setPath(parentDir, false);
+        folderTabActions.focusOnPath(bookPath);
+      }
+    } catch {}
   }
 
   async openNextBook() {

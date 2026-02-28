@@ -118,7 +118,10 @@ function sortItems(items: FsItem[], field: FolderSortField, order: FolderSortOrd
 
 // 传入 currentPath 以支持随机排序种子记忆
 const sortedItems = derived([tabItems, tabSortConfig, tabCurrentPath], ([$items, $config, $path]) => {
-	return sortItems($items, $config.field, $config.order, $path);
+	const sorted = sortItems($items, $config.field, $config.order, $path);
+	// 将排好序的列表缓存，供切换书籍时直接读取（不再二次排序）
+	folderTabActions.setCachedSortedItems(sorted, $path, 'FolderList');
+	return sorted;
 });
 import { Loader2, FolderOpen, AlertCircle } from '@lucide/svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';

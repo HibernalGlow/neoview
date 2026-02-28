@@ -161,7 +161,7 @@ const lower = path.toLowerCase();
 return videoExtensions.some((ext) => lower.endsWith(ext));
 }
 
-function isBookCandidate(item: FsItem): boolean {
+export function isBookCandidate(item: FsItem): boolean {
 // 文件夹、压缩包和视频都可以作为书籍打开
 return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path);
 }
@@ -340,6 +340,64 @@ selectedItemPath: entry.selectedItemPath
 },
 
 reset,
+
+/**
+ * 直接从当前已排好序的列表中查找相邻书籍。
+ * 不需要传排序参数——列表已经是用户看到的排序顺序。
+ * 如果当前面板显示的不是书籍所在目录，返回 null。
+ */
+getAdjacentBookFromCurrentList(currentBookPath: string | null, direction: 'next' | 'previous'): string | null {
+	const currentState = get(state);
+	if (!currentState.items.length) return null;
+
+	// 当前面板的排好序列表
+	const sorted = sortItems(currentState.items, currentState.sortField, currentState.sortOrder, currentState.currentPath);
+	const bookItems = sorted.filter(isBookCandidate);
+	if (bookItems.length === 0) return null;
+
+	const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
+	const normalizedPanelPath = currentState.currentPath ? normalizePath(currentState.currentPath) : null;
+
+	// 推断书籍的父目录
+	let expectedParentDir: string | null = null;
+	if (currentBookPath) {
+		const normalized = currentBookPath.replace(/\\/g, '/');
+		const lastSlash = normalized.lastIndexOf('/');
+		if (lastSlash > 0) {
+			expectedParentDir = normalizePath(normalized.substring(0, lastSlash));
+		}
+	}
+
+	// 只在面板显示的是书籍所在目录（或书籍本身路径的父目录）时才可用
+	const panelShowsBookDir = normalizedPanelPath && expectedParentDir && normalizedPanelPath === expectedParentDir;
+	const panelShowsBookItself = normalizedPanelPath && normalizedCurrent && normalizedPanelPath === normalizedCurrent;
+	if (!panelShowsBookDir && !panelShowsBookItself) {
+		// 面板不在书籍所在目录，让调用方降级到异步方法
+		return null;
+	}
+
+	// 如果面板显示的是 book 自身（文件夹作为 book 打开），需要找父目录——这里列表不对，返回 null
+	if (panelShowsBookItself && !panelShowsBookDir) {
+		return null;
+	}
+
+	let currentIndex = bookItems.findIndex(item => normalizedCurrent && normalizePath(item.path) === normalizedCurrent);
+	if (currentIndex === -1) {
+		currentIndex = direction === 'next' ? -1 : bookItems.length;
+	}
+	const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+	if (targetIndex < 0 || targetIndex >= bookItems.length) return null;
+
+	console.log('[getAdjacentBookFromCurrentList] 找到目标', {
+		direction,
+		currentIndex,
+		targetIndex,
+		targetName: bookItems[targetIndex].name,
+		sortField: currentState.sortField,
+		sortOrder: currentState.sortOrder
+	});
+	return bookItems[targetIndex].path;
+},
 
 findAdjacentBookPath(currentBookPath: string | null, direction: 'next' | 'previous'): string | null {
 const currentState = get(state);

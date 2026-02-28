@@ -117,6 +117,7 @@ toggleShowMigrationBar
 
 export {
 sortItems,
+isBookCandidate,
 folderPanelActions,
 folderPanelState
 } from './core.svelte';

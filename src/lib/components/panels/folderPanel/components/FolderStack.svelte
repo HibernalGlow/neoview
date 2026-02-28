@@ -154,7 +154,12 @@
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
 		const _ = collectTagVersion; // 依赖触发
 		const skipFolderFirst = isVirtualPath(layer.path);
-		return sortItems(layer.items, effectiveSortConfig.field, effectiveSortConfig.order, skipFolderFirst, layer.path);
+		const sorted = sortItems(layer.items, effectiveSortConfig.field, effectiveSortConfig.order, skipFolderFirst, layer.path);
+		// 当前活动层的排序结果缓存，供切换书籍时直接读取（不二次排序）
+		if (!skipGlobalStore && layer === stackState.activeLayer) {
+			folderTabActions.setCachedSortedItems(sorted, layer.path, `FolderStack:${tabId}`);
+		}
+		return sorted;
 	}
 
 	// ============ 导航处理 ============

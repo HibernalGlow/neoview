@@ -528,7 +528,21 @@ function createFileBrowserStore() {
           useVisibleItemsOverride: false
         }));
 
+        const STREAM_APPLY_DEBOUNCE_MS = 48;
+        let applyTimer: ReturnType<typeof setTimeout> | null = null;
+        let hasPendingApply = false;
+
+        const clearApplyTimer = () => {
+          if (applyTimer) {
+            clearTimeout(applyTimer);
+            applyTimer = null;
+          }
+          hasPendingApply = false;
+        };
+
         const applyItems = (items: FsItem[]) => {
+          if (version !== streamVersion) return;
+
           const sortedItems = sortItems(
             items,
             currentState.sortField,
@@ -557,22 +571,41 @@ function createFileBrowserStore() {
           }
         };
 
+        const scheduleApplyItems = (immediate = false) => {
+          if (immediate) {
+            clearApplyTimer();
+            applyItems(collected);
+            return;
+          }
+
+          hasPendingApply = true;
+          if (applyTimer) return;
+
+          applyTimer = setTimeout(() => {
+            applyTimer = null;
+            if (!hasPendingApply) return;
+            hasPendingApply = false;
+            applyItems(collected);
+          }, STREAM_APPLY_DEBOUNCE_MS);
+        };
+
         try {
           activeStream = await FileSystemAPI.streamDirectory(
             parentPath,
             {
               onBatch: (batch) => {
                 if (version !== streamVersion) return;
-                collected = collected.concat(batch.items);
-                applyItems(collected);
+                collected.push(...batch.items);
+                scheduleApplyItems(false);
               },
               onError: (err) => {
                 if (version !== streamVersion) return;
+                clearApplyTimer();
                 update(state => ({ ...state, error: err.message, loading: false }));
               },
               onComplete: () => {
                 if (version !== streamVersion) return;
-                applyItems(collected);
+                scheduleApplyItems(true);
               }
             },
             {
@@ -582,9 +615,12 @@ function createFileBrowserStore() {
             }
           );
         } catch (err) {
+          clearApplyTimer();
           console.error('navigateToPath failed:', err);
           update(state => ({ ...state, error: String(err), loading: false }));
           throw err;
+        } finally {
+          clearApplyTimer();
         }
       })();
 

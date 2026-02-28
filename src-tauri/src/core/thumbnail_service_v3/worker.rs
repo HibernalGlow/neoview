@@ -5,7 +5,7 @@ use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -27,7 +27,7 @@ use super::{log_debug, log_info};
 pub fn start_workers(
     config: &ThumbnailServiceConfig,
     running: Arc<AtomicBool>,
-    task_queue: Arc<Mutex<VecDeque<GenerateTask>>>,
+    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     active_workers: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -72,7 +72,7 @@ fn create_worker_thread(
     worker_id: usize,
     folder_depth: u32,
     app: AppHandle,
-    task_queue: Arc<Mutex<VecDeque<GenerateTask>>>,
+    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     running: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
@@ -89,7 +89,36 @@ fn create_worker_thread(
     thread::spawn(move || {
         log_debug!("🔧 Worker {} started", worker_id);
         while running.load(Ordering::SeqCst) {
-            let task = task_queue.lock().ok().and_then(|mut q| q.pop_front());
+            let task = {
+                let (queue_lock, queue_cv) = (&task_queue.0, &task_queue.1);
+                let mut guard = match queue_lock.lock() {
+                    Ok(g) => g,
+                    Err(_) => {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                };
+
+                while guard.is_empty() && running.load(Ordering::SeqCst) {
+                    match queue_cv.wait_timeout(guard, Duration::from_millis(200)) {
+                        Ok((g, _)) => {
+                            guard = g;
+                        }
+                        Err(poisoned) => {
+                            let (g, _) = poisoned.into_inner();
+                            guard = g;
+                            break;
+                        }
+                    }
+                }
+
+                if !running.load(Ordering::SeqCst) {
+                    None
+                } else {
+                    guard.pop_front()
+                }
+            };
+
             if let Some(task) = task {
                 let should_process = check_task_validity(&task, &current_dir);
                 if !should_process {
@@ -113,8 +142,6 @@ fn create_worker_thread(
                     &request_deduplicator,
                 );
                 active_workers.fetch_sub(1, Ordering::SeqCst);
-            } else {
-                thread::sleep(Duration::from_millis(10));
             }
         }
         log_debug!("🔧 Worker {} stopped", worker_id);

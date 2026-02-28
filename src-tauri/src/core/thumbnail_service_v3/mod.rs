@@ -31,7 +31,7 @@ use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter};
@@ -70,7 +70,7 @@ pub struct ThumbnailServiceV3 {
     /// 缩略图生成器
     generator: Arc<ThumbnailGenerator>,
     /// 生成任务队列
-    task_queue: Arc<Mutex<VecDeque<GenerateTask>>>,
+    task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     /// 当前目录
     current_dir: Arc<RwLock<String>>,
     /// 是否正在运行
@@ -120,7 +120,7 @@ impl ThumbnailServiceV3 {
             memory_cache_bytes: Arc::new(AtomicUsize::new(0)),
             db,
             generator,
-            task_queue: Arc::new(Mutex::new(VecDeque::new())),
+            task_queue: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
             current_dir: Arc::new(RwLock::new(String::new())),
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
@@ -185,6 +185,7 @@ impl ThumbnailServiceV3 {
     /// 停止工作线程
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
+        self.task_queue.1.notify_all();
         let mut workers = self.workers.lock().unwrap();
         for handle in workers.drain(..) {
             let _ = handle.join();
@@ -208,7 +209,7 @@ impl ThumbnailServiceV3 {
         {
             if let Ok(mut dir) = self.current_dir.write() {
                 if *dir != current_dir {
-                    if let Ok(mut q) = self.task_queue.lock() {
+                    if let Ok(mut q) = self.task_queue.0.lock() {
                         let old_tasks: Vec<GenerateTask> = q.drain(..).collect();
                         let old_len = old_tasks.len();
                         for task in old_tasks {
@@ -532,7 +533,7 @@ impl ThumbnailServiceV3 {
             center_distance: 0,
             original_index: 0,
         };
-        if let Ok(mut q) = self.task_queue.lock() {
+        if let Ok(mut q) = self.task_queue.0.lock() {
             let mut dropped_tasks = Vec::new();
             let mut kept = VecDeque::with_capacity(q.len());
             while let Some(existing) = q.pop_front() {
@@ -548,6 +549,7 @@ impl ThumbnailServiceV3 {
                     .release_with_id(&dropped.dedup_key, dropped.dedup_request_id);
             }
             q.push_front(task);
+            self.task_queue.1.notify_all();
             log_info!("🔄 强制重新生成缩略图: {}", path);
         }
 

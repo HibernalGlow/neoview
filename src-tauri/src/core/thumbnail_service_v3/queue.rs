@@ -3,7 +3,7 @@
 //! 包含任务队列管理、优先级排序逻辑
 
 use std::collections::{HashSet, VecDeque};
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
 
 use super::types::{GenerateTask, ThumbnailFileType};
 
@@ -15,7 +15,7 @@ use super::types::{GenerateTask, ThumbnailFileType};
 /// - current_dir: 当前目录
 /// - center: 中心索引（用于计算优先级）
 pub fn enqueue_tasks(
-    task_queue: &Mutex<VecDeque<GenerateTask>>,
+    task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar),
     paths: Vec<(String, ThumbnailFileType, usize, u64)>,
     current_dir: &str,
     center: usize,
@@ -24,7 +24,7 @@ pub fn enqueue_tasks(
         return;
     }
     
-    if let Ok(mut queue) = task_queue.lock() {
+    if let Ok(mut queue) = task_queue.0.lock() {
         // 收集已有路径用于去重
         let existing: HashSet<_> = queue.iter().map(|t| t.path.clone()).collect();
         
@@ -57,6 +57,8 @@ pub fn enqueue_tasks(
         for task in new_tasks.into_iter().rev() {
             queue.push_front(task);
         }
+
+        task_queue.1.notify_all();
     }
 }
 
@@ -69,10 +71,10 @@ pub fn enqueue_tasks(
 /// # 返回
 /// 被清除的任务数量
 pub fn clear_directory_tasks(
-    task_queue: &Mutex<VecDeque<GenerateTask>>,
+    task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar),
     dir: &str,
 ) -> Vec<GenerateTask> {
-    if let Ok(mut queue) = task_queue.lock() {
+    if let Ok(mut queue) = task_queue.0.lock() {
         let mut removed = Vec::new();
         let mut kept = VecDeque::with_capacity(queue.len());
         while let Some(task) = queue.pop_front() {
@@ -83,32 +85,34 @@ pub fn clear_directory_tasks(
             }
         }
         *queue = kept;
+        task_queue.1.notify_all();
         return removed;
     }
     Vec::new()
 }
 
 /// 获取下一个任务（从队列前端取出）
-pub fn pop_task(task_queue: &Mutex<VecDeque<GenerateTask>>) -> Option<GenerateTask> {
-    if let Ok(mut queue) = task_queue.lock() {
+pub fn pop_task(task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar)) -> Option<GenerateTask> {
+    if let Ok(mut queue) = task_queue.0.lock() {
         return queue.pop_front();
     }
     None
 }
 
 /// 获取队列长度
-pub fn queue_len(task_queue: &Mutex<VecDeque<GenerateTask>>) -> usize {
-    task_queue.lock().map(|q| q.len()).unwrap_or(0)
+pub fn queue_len(task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar)) -> usize {
+    task_queue.0.lock().map(|q| q.len()).unwrap_or(0)
 }
 
 /// 清空整个队列
 /// 
 /// # 返回
 /// 被清除的任务数量
-pub fn clear_queue(task_queue: &Mutex<VecDeque<GenerateTask>>) -> usize {
-    if let Ok(mut queue) = task_queue.lock() {
+pub fn clear_queue(task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar)) -> usize {
+    if let Ok(mut queue) = task_queue.0.lock() {
         let count = queue.len();
         queue.clear();
+        task_queue.1.notify_all();
         return count;
     }
     0

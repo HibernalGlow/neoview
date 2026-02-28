@@ -12,7 +12,11 @@
  */
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { preloadThumbnails, type ThumbnailReadyEvent } from '$lib/api/pageManager';
+import {
+	preloadThumbnails,
+	type ThumbnailBatchReadyEvent,
+	type ThumbnailReadyEvent
+} from '$lib/api/pageManager';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
@@ -46,6 +50,7 @@ let isInitialized = false;
 
 // 事件监听器
 let eventUnlisten: UnlistenFn | null = null;
+let batchEventUnlisten: UnlistenFn | null = null;
 
 // 当前预加载请求版本（用于取消旧请求）
 let preloadVersion = 0;
@@ -68,13 +73,18 @@ let isWaitingForMainImage = false;
 function handleThumbnailReady(event: ThumbnailReadyEvent): void {
 	const { index, data, width, height } = event;
 
-	console.log(`🖼️ ThumbnailService: Received thumbnail for page ${index}, ${width}x${height}`);
-
 	// 写入缓存
 	thumbnailCacheStore.setThumbnail(index, data, width, height);
 
 	// 清除加载状态
 	loadingIndices.delete(index);
+}
+
+function handleThumbnailBatchReady(event: ThumbnailBatchReadyEvent): void {
+	for (const item of event.items) {
+		thumbnailCacheStore.setThumbnail(item.index, item.data, item.width, item.height);
+		loadingIndices.delete(item.index);
+	}
 }
 
 // ===========================================================================
@@ -418,8 +428,17 @@ export async function initThumbnailService(): Promise<void> {
 			handleThumbnailReady(event.payload);
 		});
 
+		batchEventUnlisten = await listen<ThumbnailBatchReadyEvent>(
+			'page-thumbnail-batch-ready',
+			(event) => {
+				handleThumbnailBatchReady(event.payload);
+			}
+		);
+
 		isInitialized = true;
-		console.log('🖼️ ThumbnailService: Initialized with backend event listener (page-thumbnail-ready)');
+		console.log(
+			'🖼️ ThumbnailService: Initialized with backend event listeners (page-thumbnail-ready + page-thumbnail-batch-ready)'
+		);
 	} catch (error) {
 		console.error('Failed to initialize ThumbnailService:', error);
 	}
@@ -432,6 +451,10 @@ export function destroyThumbnailService(): void {
 	if (eventUnlisten) {
 		eventUnlisten();
 		eventUnlisten = null;
+	}
+	if (batchEventUnlisten) {
+		batchEventUnlisten();
+		batchEventUnlisten = null;
 	}
 	cancelLoading();
 	loadingIndices.clear();

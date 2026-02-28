@@ -106,6 +106,12 @@ pub async fn pm_get_page(
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 
+fn encode_base64_fast(data: &[u8]) -> String {
+    let mut output = String::with_capacity(data.len().div_ceil(3) * 4);
+    STANDARD.encode_string(data, &mut output);
+    output
+}
+
 /// 跳转到指定页面（Base64 编码，用于 postMessage 优化）
 #[tauri::command]
 pub async fn pm_goto_page_base64(
@@ -124,7 +130,7 @@ pub async fn pm_goto_page_base64(
         result.cache_hit
     );
 
-    Ok(STANDARD.encode(&data))
+    Ok(encode_base64_fast(&data))
 }
 
 /// 获取页面数据（Base64 编码，用于 postMessage 优化）
@@ -138,7 +144,7 @@ pub async fn pm_get_page_base64(
     let mut manager = state.manager.lock().await;
     let (data, _result) = manager.get_page(index).await?;
 
-    Ok(STANDARD.encode(&data))
+    Ok(encode_base64_fast(&data))
 }
 
 /// 获取页面信息（元数据，不含图片数据）

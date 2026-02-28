@@ -88,6 +88,7 @@ pub fn run() {
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_clipboard_x::init())
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         // 🚀 注册 Custom Protocol (neoview://)
         // 绕过 invoke 序列化开销，直接传输二进制数据
         .register_uri_scheme_protocol(PROTOCOL_NAME, |ctx, request| {

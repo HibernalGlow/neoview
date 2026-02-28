@@ -5,7 +5,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Condvar, Mutex};
 
-use super::types::{GenerateTask, ThumbnailFileType};
+use super::types::{GenerateTask, TaskLane, ThumbnailFileType};
 
 /// 将新任务添加到队列（带去重和优先级排序）
 /// 
@@ -20,6 +20,7 @@ pub fn enqueue_tasks(
     current_dir: &str,
     center: usize,
     request_epoch: u64,
+    lane: TaskLane,
 ) {
     if paths.is_empty() {
         return;
@@ -45,6 +46,7 @@ pub fn enqueue_tasks(
                     path,
                     directory: current_dir.to_string(),
                     request_epoch,
+                    lane,
                     file_type,
                     center_distance,
                     original_index,

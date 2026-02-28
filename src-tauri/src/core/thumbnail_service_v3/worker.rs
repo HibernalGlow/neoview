@@ -32,6 +32,7 @@ pub fn start_workers(
     task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     request_epoch: Arc<AtomicU64>,
+    scheduler_paused: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
@@ -53,6 +54,7 @@ pub fn start_workers(
             Arc::clone(&task_queue),
             Arc::clone(&current_dir),
             Arc::clone(&request_epoch),
+            Arc::clone(&scheduler_paused),
             Arc::clone(&running),
             Arc::clone(&active_workers),
             Arc::clone(&memory_cache),
@@ -79,6 +81,7 @@ fn create_worker_thread(
     task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
     request_epoch: Arc<AtomicU64>,
+    scheduler_paused: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -97,6 +100,11 @@ fn create_worker_thread(
         let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
 
         while running.load(Ordering::SeqCst) {
+            if scheduler_paused.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(20));
+                continue;
+            }
+
             // 在尝试取任务之前，若 emit_batch 有积压且队列为空，立即 flush。
             // 解决多 worker 场景下：Worker A 有 1 个 batch item，Worker B 拿走最后一个
             // 任务后 Worker A 进入 idle 等待，batch 永远不被发射的问题。

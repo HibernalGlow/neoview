@@ -20,6 +20,17 @@ pub enum ThumbnailFileType {
     Other,
 }
 
+/// 任务调度车道（参考 NeeView/OpenComic 的前台/预取/后台分级）
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskLane {
+    /// 当前视口内，最高优先级
+    Visible,
+    /// 预取区域，次优先级
+    Prefetch,
+    /// 后台任务（维护/批量），最低优先级
+    Background,
+}
+
 /// 生成任务
 #[derive(Clone)]
 pub struct GenerateTask {
@@ -27,6 +38,8 @@ pub struct GenerateTask {
     pub directory: String,
     /// 请求分代号：目录切换时递增，worker 仅处理当前代任务
     pub request_epoch: u64,
+    /// 调度车道
+    pub lane: TaskLane,
     pub file_type: ThumbnailFileType,
     /// 去重键（通常为 path）
     pub dedup_key: String,
@@ -41,11 +54,23 @@ pub struct GenerateTask {
 impl GenerateTask {
     /// 比较优先级：中心距离越小优先级越高
     pub fn priority_cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // 先按中心距离升序（距离小的优先）
-        match self.center_distance.cmp(&other.center_distance) {
+        // 先按车道优先级（visible > prefetch > background）
+        let lane_rank = |lane: TaskLane| match lane {
+            TaskLane::Visible => 0usize,
+            TaskLane::Prefetch => 1usize,
+            TaskLane::Background => 2usize,
+        };
+
+        match lane_rank(self.lane).cmp(&lane_rank(other.lane)) {
             std::cmp::Ordering::Equal => {
-                // 距离相同时，按原始索引排序
-                self.original_index.cmp(&other.original_index)
+                // 再按中心距离升序（距离小的优先）
+                match self.center_distance.cmp(&other.center_distance) {
+                    std::cmp::Ordering::Equal => {
+                        // 距离相同时，按原始索引排序
+                        self.original_index.cmp(&other.original_index)
+                    }
+                    other_order => other_order,
+                }
             }
             other_order => other_order,
         }

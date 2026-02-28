@@ -20,7 +20,7 @@ pub mod worker;
 pub use config::ThumbnailServiceConfig;
 pub use types::{
     detect_file_type, is_archive_file, is_likely_folder, CacheStats, ThumbnailBatchReadyPayload,
-    ThumbnailFileType, ThumbnailReadyPayload,
+    TaskLane, ThumbnailFileType, ThumbnailReadyPayload,
 };
 
 // 内部使用
@@ -75,6 +75,8 @@ pub struct ThumbnailServiceV3 {
     current_dir: Arc<RwLock<String>>,
     /// 请求分代号（目录切换时递增，旧任务自动失效）
     request_epoch: Arc<AtomicU64>,
+    /// 调度总开关（pause/resume）
+    scheduler_paused: Arc<AtomicBool>,
     /// 是否正在运行
     running: Arc<AtomicBool>,
     /// 活跃工作线程数
@@ -125,6 +127,7 @@ impl ThumbnailServiceV3 {
             task_queue: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
             current_dir: Arc::new(RwLock::new(String::new())),
             request_epoch: Arc::new(AtomicU64::new(1)),
+            scheduler_paused: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
@@ -153,6 +156,7 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.task_queue),
             Arc::clone(&self.current_dir),
             Arc::clone(&self.request_epoch),
+            Arc::clone(&self.scheduler_paused),
             Arc::clone(&self.active_workers),
             Arc::clone(&self.memory_cache),
             Arc::clone(&self.memory_cache_bytes),
@@ -291,7 +295,14 @@ impl ThumbnailServiceV3 {
         // 3. 入队生成任务
         if !generate_paths.is_empty() {
             let epoch = self.request_epoch.load(Ordering::Acquire);
-            queue::enqueue_tasks(&self.task_queue, generate_paths, &current_dir, center, epoch);
+            queue::enqueue_tasks(
+                &self.task_queue,
+                generate_paths,
+                &current_dir,
+                center,
+                epoch,
+                TaskLane::Visible,
+            );
         }
 
         // 内存压力检查
@@ -643,6 +654,7 @@ impl ThumbnailServiceV3 {
             path: path.to_string(),
             directory: current_dir.to_string(),
             request_epoch: self.request_epoch.load(Ordering::Acquire),
+            lane: TaskLane::Visible,
             file_type,
             center_distance: 0,
             original_index: 0,
@@ -673,6 +685,17 @@ impl ThumbnailServiceV3 {
     /// 检查内存压力
     pub fn check_memory_pressure(&self, max_bytes: usize) {
         cache::check_memory_pressure(&self.memory_cache, &self.memory_cache_bytes, max_bytes);
+    }
+
+    /// 暂停调度：worker 不消费任务，但保持线程存活
+    pub fn pause_scheduler(&self) {
+        self.scheduler_paused.store(true, Ordering::Release);
+    }
+
+    /// 恢复调度并唤醒 worker
+    pub fn resume_scheduler(&self) {
+        self.scheduler_paused.store(false, Ordering::Release);
+        self.task_queue.1.notify_all();
     }
 }
 

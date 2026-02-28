@@ -32,6 +32,20 @@ pub struct ThumbnailServiceConfig {
     pub scheduler_default_quota: LaneQuota,
     /// side 强势场景配额
     pub scheduler_side_boost_quota: LaneQuota,
+    /// 自适应并发下限
+    pub adaptive_min_active_workers: usize,
+    /// 自适应控制周期（毫秒）
+    pub adaptive_tick_ms: u64,
+    /// backlog 达到该值且耗时健康时尝试扩并发
+    pub adaptive_scale_up_backlog: usize,
+    /// 扩并发耗时阈值（毫秒）
+    pub adaptive_scale_up_avg_ms: u64,
+    /// 缩并发耗时阈值（毫秒）
+    pub adaptive_scale_down_avg_ms: u64,
+    /// 缩并发失败率阈值（百分比，0-100）
+    pub adaptive_scale_down_fail_percent: usize,
+    /// 重任务并发上限（archive/video/folder）
+    pub heavy_task_max_active: usize,
 }
 
 impl Default for ThumbnailServiceConfig {
@@ -54,6 +68,9 @@ impl Default for ThumbnailServiceConfig {
         } else {
             512
         };
+
+        let adaptive_min_active_workers = (worker_threads / 3).max(2).min(worker_threads);
+        let heavy_task_max_active = (worker_threads / 2).max(1);
         
         Self {
             folder_search_depth: 3,  // 允许递归3层查找子文件夹中的图片
@@ -78,6 +95,13 @@ impl Default for ThumbnailServiceConfig {
                 prefetch: 3,
                 background: 3,
             },
+            adaptive_min_active_workers,
+            adaptive_tick_ms: 500,
+            adaptive_scale_up_backlog: 24,
+            adaptive_scale_up_avg_ms: 40,
+            adaptive_scale_down_avg_ms: 160,
+            adaptive_scale_down_fail_percent: 18,
+            heavy_task_max_active,
         }
     }
 }

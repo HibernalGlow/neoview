@@ -294,3 +294,30 @@ pub fn clear_queue(task_queue: &(Mutex<TaskQueueState>, Condvar)) -> usize {
     }
     0
 }
+
+/// 将任务重新放回其车道队首（用于限流回退）
+pub fn requeue_front(
+    task_queue: &(Mutex<TaskQueueState>, Condvar),
+    task: GenerateTask,
+    queued_visible: &Arc<AtomicUsize>,
+    queued_prefetch: &Arc<AtomicUsize>,
+    queued_background: &Arc<AtomicUsize>,
+) {
+    if let Ok(mut queue) = task_queue.0.lock() {
+        queue.queued_paths.insert(task.path.clone());
+        let lane = task.lane;
+        lane_queue_mut(&mut queue, lane).push_front(task);
+        match lane {
+            TaskLane::Visible => {
+                queued_visible.fetch_add(1, Ordering::Relaxed);
+            }
+            TaskLane::Prefetch => {
+                queued_prefetch.fetch_add(1, Ordering::Relaxed);
+            }
+            TaskLane::Background => {
+                queued_background.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        task_queue.1.notify_one();
+    }
+}

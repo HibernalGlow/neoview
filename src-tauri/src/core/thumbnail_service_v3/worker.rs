@@ -83,6 +83,75 @@ fn preferred_lane_for_tick(
     lane_from_quota_tick(tick, default_quota)
 }
 
+fn is_heavy_task(task: &GenerateTask) -> bool {
+    matches!(
+        task.file_type,
+        ThumbnailFileType::Archive | ThumbnailFileType::Video | ThumbnailFileType::Folder
+    )
+}
+
+#[derive(Default)]
+struct AdaptiveStats {
+    completed: usize,
+    failed: usize,
+    total_elapsed_ms: u128,
+}
+
+fn start_adaptive_control_thread(
+    config: ThumbnailServiceConfig,
+    running: Arc<AtomicBool>,
+    queued_visible: Arc<AtomicUsize>,
+    queued_prefetch: Arc<AtomicUsize>,
+    queued_background: Arc<AtomicUsize>,
+    worker_budget: Arc<AtomicUsize>,
+    adaptive_completed: Arc<AtomicUsize>,
+    adaptive_failed: Arc<AtomicUsize>,
+    adaptive_total_elapsed_ms: Arc<AtomicU64>,
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        while running.load(Ordering::SeqCst) {
+            thread::sleep(Duration::from_millis(config.adaptive_tick_ms.max(100)));
+
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
+
+            let completed = adaptive_completed.swap(0, Ordering::AcqRel);
+            let failed = adaptive_failed.swap(0, Ordering::AcqRel);
+            let elapsed = adaptive_total_elapsed_ms.swap(0, Ordering::AcqRel);
+            let backlog = queued_visible.load(Ordering::Relaxed)
+                + queued_prefetch.load(Ordering::Relaxed)
+                + queued_background.load(Ordering::Relaxed);
+
+            if completed == 0 {
+                if backlog > config.adaptive_scale_up_backlog {
+                    let current = worker_budget.load(Ordering::Relaxed);
+                    if current < config.worker_threads {
+                        worker_budget.store(current + 1, Ordering::Relaxed);
+                    }
+                }
+                continue;
+            }
+
+            let avg_ms = elapsed / completed as u64;
+            let fail_percent = (failed * 100) / completed.max(1);
+            let current = worker_budget.load(Ordering::Relaxed);
+
+            let should_scale_down = avg_ms >= config.adaptive_scale_down_avg_ms
+                || fail_percent >= config.adaptive_scale_down_fail_percent;
+            let should_scale_up = backlog >= config.adaptive_scale_up_backlog
+                && avg_ms <= config.adaptive_scale_up_avg_ms
+                && fail_percent <= config.adaptive_scale_down_fail_percent / 2;
+
+            if should_scale_down && current > config.adaptive_min_active_workers {
+                worker_budget.store(current - 1, Ordering::Relaxed);
+            } else if should_scale_up && current < config.worker_threads {
+                worker_budget.store(current + 1, Ordering::Relaxed);
+            }
+        }
+    })
+}
+
 /// 启动工作线程
 #[allow(clippy::too_many_arguments)]
 pub fn start_workers(
@@ -116,15 +185,45 @@ pub fn start_workers(
     let visible_boost_quota = config.scheduler_visible_boost_quota;
     let default_quota = config.scheduler_default_quota;
     let side_boost_quota = config.scheduler_side_boost_quota;
+    let worker_budget = Arc::new(AtomicUsize::new(
+        config
+            .adaptive_min_active_workers
+            .max(1)
+            .min(config.worker_threads),
+    ));
+    let heavy_inflight = Arc::new(AtomicUsize::new(0));
+    let adaptive_completed = Arc::new(AtomicUsize::new(0));
+    let adaptive_failed = Arc::new(AtomicUsize::new(0));
+    let adaptive_total_elapsed_ms = Arc::new(AtomicU64::new(0));
+
+    let adaptive_handle = start_adaptive_control_thread(
+        config.clone(),
+        Arc::clone(&running),
+        Arc::clone(&queued_visible),
+        Arc::clone(&queued_prefetch),
+        Arc::clone(&queued_background),
+        Arc::clone(&worker_budget),
+        Arc::clone(&adaptive_completed),
+        Arc::clone(&adaptive_failed),
+        Arc::clone(&adaptive_total_elapsed_ms),
+    );
+    workers.push(adaptive_handle);
+
     for i in 0..config.worker_threads {
         let handle = create_worker_thread(
             i,
             config.folder_search_depth,
+            config.clone(),
             visible_boost_factor,
             side_boost_factor,
             visible_boost_quota,
             default_quota,
             side_boost_quota,
+            Arc::clone(&worker_budget),
+            Arc::clone(&heavy_inflight),
+            Arc::clone(&adaptive_completed),
+            Arc::clone(&adaptive_failed),
+            Arc::clone(&adaptive_total_elapsed_ms),
             app.clone(),
             Arc::clone(&task_queue),
             Arc::clone(&current_dir),
@@ -158,11 +257,17 @@ pub fn start_workers(
 fn create_worker_thread(
     worker_id: usize,
     folder_depth: u32,
+    config: ThumbnailServiceConfig,
     visible_boost_factor: usize,
     side_boost_factor: usize,
     visible_boost_quota: LaneQuota,
     default_quota: LaneQuota,
     side_boost_quota: LaneQuota,
+    worker_budget: Arc<AtomicUsize>,
+    heavy_inflight: Arc<AtomicUsize>,
+    adaptive_completed: Arc<AtomicUsize>,
+    adaptive_failed: Arc<AtomicUsize>,
+    adaptive_total_elapsed_ms: Arc<AtomicU64>,
     app: AppHandle,
     task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
@@ -210,6 +315,11 @@ fn create_worker_thread(
                 if queue_is_empty {
                     flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
                 }
+            }
+
+            if active_workers.load(Ordering::Acquire) >= worker_budget.load(Ordering::Acquire) {
+                thread::sleep(Duration::from_millis(2));
+                continue;
             }
 
             let task = {
@@ -315,6 +425,27 @@ fn create_worker_thread(
                     request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
                     continue;
                 }
+
+                if is_heavy_task(&task)
+                    && heavy_inflight.load(Ordering::Acquire) >= config.heavy_task_max_active.max(1)
+                {
+                    queue::requeue_front(
+                        &task_queue,
+                        task,
+                        &queued_visible,
+                        &queued_prefetch,
+                        &queued_background,
+                    );
+                    thread::sleep(Duration::from_millis(2));
+                    continue;
+                }
+
+                let mut heavy_token_held = false;
+                if is_heavy_task(&task) {
+                    heavy_inflight.fetch_add(1, Ordering::SeqCst);
+                    heavy_token_held = true;
+                }
+
                 active_workers.fetch_add(1, Ordering::SeqCst);
                 match task.lane {
                     TaskLane::Visible => {
@@ -327,6 +458,9 @@ fn create_worker_thread(
                         processed_background.fetch_add(1, Ordering::Relaxed);
                     }
                 }
+
+                let started = Instant::now();
+                let mut task_succeeded = false;
                 if let Some(payload) = process_task(
                     &task,
                     &generator,
@@ -350,8 +484,20 @@ fn create_worker_thread(
                         &queued_background,
                     );
                     flush_worker_emit_batch(&app, &mut emit_batch, queue_is_empty, EMIT_BATCH_SIZE);
+                    task_succeeded = true;
                 }
                 active_workers.fetch_sub(1, Ordering::SeqCst);
+
+                if heavy_token_held {
+                    heavy_inflight.fetch_sub(1, Ordering::SeqCst);
+                }
+
+                let elapsed_ms = started.elapsed().as_millis() as u64;
+                adaptive_total_elapsed_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
+                adaptive_completed.fetch_add(1, Ordering::Relaxed);
+                if !task_succeeded {
+                    adaptive_failed.fetch_add(1, Ordering::Relaxed);
+                }
             } else {
                 flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
             }

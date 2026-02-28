@@ -203,6 +203,10 @@
 
 	function handlePinContextMenu(e: MouseEvent) {
 		e.preventDefault();
+		collapseSidebar();
+	}
+
+	function collapseSidebar() {
 		leftSidebarPinned.set(false);
 		localSidebarOpen = false;
 		leftSidebarOpen.set(false);
@@ -366,6 +370,17 @@
 											</Sidebar.MenuItem>
 										{/each}
 									</Sidebar.Menu>
+									<div class="px-2 pt-2 pb-1">
+										<button
+											type="button"
+											class="group h-12 w-full rounded-md bg-transparent transition-colors hover:bg-accent/80"
+											onclick={collapseSidebar}
+											title="收回左侧边栏"
+											aria-label="收回左侧边栏"
+										>
+											<span class="text-[10px] text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/80">收回</span>
+										</button>
+									</div>
 								</Sidebar.GroupContent>
 							</Sidebar.Group>
 						</Sidebar.Content>

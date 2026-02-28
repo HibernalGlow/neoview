@@ -535,13 +535,31 @@ class BookStore {
     const { folderPanelActions } = await import('$lib/components/panels/folderPanel/stores/folderPanelStore');
     const { folderTabActions } = await import('$lib/components/panels/folderPanel/stores/folderTabStore');
     
-    // 从 folderTabStore 获取当前活动标签页的排序设置
+    // 计算书籍所在的父目录（用于按该目录的规则解析排序）
     const activeTab = folderTabActions.getActiveTab();
+    let parentDirOfBook: string | null = null;
+    if (currentPath) {
+      const normalized = currentPath.replace(/\\/g, '/');
+      const lastSlash = normalized.lastIndexOf('/');
+      if (lastSlash > 0) {
+        parentDirOfBook = normalized.substring(0, lastSlash);
+      }
+    }
+
+    // 用规则引擎解析书籍父目录的有效排序（临时规则 > 文件夹记忆 > 默认）
+    // 而非使用文件夹面板当前浏览路径的排序，避免面板切换到其他目录时排序错位
+    let resolvedSort = activeTab && parentDirOfBook
+      ? folderTabActions.resolveSortForTab(activeTab, parentDirOfBook)
+      : null;
+    // 若无法解析（没有 activeTab 或父目录），降级到 tab 当前排序
+    if (!resolvedSort && activeTab) {
+      resolvedSort = { sortField: activeTab.sortField, sortOrder: activeTab.sortOrder, source: activeTab.sortSource ?? 'global-default' };
+    }
     const sortOptions = {
-      sortField: (activeTab?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
-      sortOrder: (activeTab?.sortOrder || 'asc') as 'asc' | 'desc'
+      sortField: (resolvedSort?.sortField || 'name') as 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount',
+      sortOrder: (resolvedSort?.sortOrder || 'asc') as 'asc' | 'desc'
     };
-    console.log('[openAdjacentBook] 使用排序设置（来自 folderTabStore）', sortOptions);
+    console.log('[openAdjacentBook] 使用排序设置（父目录规则引擎解析）', { parentDirOfBook, resolvedSort, sortOptions });
     
     let targetPath = await folderPanelActions.findAdjacentBookPathAsync(currentPath, direction, sortOptions);
     

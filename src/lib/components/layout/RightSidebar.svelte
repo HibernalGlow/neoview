@@ -19,6 +19,8 @@
 		rightSidebarHorizontalPos,
 		rightSidebarHeight,
 		rightSidebarCustomHeight,
+		enableBlankAreaCollapse,
+		blankAreaCollapseMode,
 		showDragHandle,
 		type PanelId
 	} from '$lib/stores';
@@ -199,6 +201,28 @@
 		rightSidebarOpen.set(false);
 	}
 
+	function isInteractiveElement(target: EventTarget | null): boolean {
+		if (!(target instanceof HTMLElement)) return false;
+		if (target.closest('[data-blank-collapse="true"]')) return false;
+		return Boolean(
+			target.closest(
+				'button,a,input,textarea,select,label,[role="button"],[role="switch"],[data-sidebar="menu-button"]'
+			)
+		);
+	}
+
+	function handleBlankAreaClick(e: MouseEvent) {
+		if (!$enableBlankAreaCollapse || $blankAreaCollapseMode !== 'single') return;
+		if (isInteractiveElement(e.target)) return;
+		collapseSidebar();
+	}
+
+	function handleBlankAreaDoubleClick(e: MouseEvent) {
+		if (!$enableBlankAreaCollapse || $blankAreaCollapseMode !== 'double') return;
+		if (isInteractiveElement(e.target)) return;
+		collapseSidebar();
+	}
+
 	// 悬停显示/隐藏逻辑 - 使用 HoverWrapper 管理
 	function handleVisibilityChange(visible: boolean) {
 		// 锁定隐藏时，不响应悬停
@@ -294,7 +318,7 @@
 				>
 					<Sidebar.Root
 						collapsible="none"
-						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
+						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full flex flex-col"
 						style="width: calc(var(--sidebar-width-icon) + 1px);"
 					>
 						<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
@@ -330,9 +354,11 @@
 							</div>
 						</Sidebar.Header>
 
-						<Sidebar.Content>
-							<Sidebar.Group>
-								<Sidebar.GroupContent class="px-0">
+						<Sidebar.Content class="h-full flex-1 min-h-0">
+							<Sidebar.Group class="h-full flex-1 min-h-0">
+								<Sidebar.GroupContent
+									class="px-0 h-full flex flex-col min-h-0"
+								>
 									<Sidebar.Menu>
 										{#each rightPanels as panel (panel.id)}
 											<Sidebar.MenuItem>
@@ -353,17 +379,14 @@
 											</Sidebar.MenuItem>
 										{/each}
 									</Sidebar.Menu>
-									<div class="px-2 pt-2 pb-1">
-										<button
-											type="button"
-											class="group h-12 w-full rounded-md bg-transparent transition-colors hover:bg-accent/80"
-											onclick={collapseSidebar}
-											title="收回右侧边栏"
-											aria-label="收回右侧边栏"
-										>
-											<span class="text-[10px] text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/80">收回</span>
-										</button>
-									</div>
+									<button
+										type="button"
+										class="flex-1 w-full bg-transparent"
+										data-blank-collapse="true"
+										onclick={handleBlankAreaClick}
+										ondblclick={handleBlankAreaDoubleClick}
+										aria-label="右侧边栏空白收回区域"
+									></button>
 								</Sidebar.GroupContent>
 							</Sidebar.Group>
 						</Sidebar.Content>

@@ -13,8 +13,11 @@
 		rightSidebarCustomHeight,
 		rightSidebarVerticalAlign,
 		rightSidebarHorizontalPos,
+		enableBlankAreaCollapse,
+		blankAreaCollapseMode,
 		type SidebarHeightPreset,
 		type SidebarVerticalAlign,
+		type SidebarBlankClickMode,
 		getSidebarHeightPercent
 	} from '$lib/stores/sidebarConfig.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -28,6 +31,7 @@
 	} from '@lucide/svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Label } from '$lib/components/ui/label';
+	import { Button } from '$lib/components/ui/button';
 	import { showDragHandle } from '$lib/stores/sidebarConfig.svelte';
 
 	let settings = $state(settingsManager.getSettings());
@@ -87,6 +91,10 @@
 		}
 	}
 
+	function setBlankMode(mode: SidebarBlankClickMode) {
+		sidebarConfigStore.setBlankAreaCollapseMode(mode);
+	}
+
 	const leftCurrentHeight = $derived(getSidebarHeightPercent($leftSidebarHeight, $leftSidebarCustomHeight));
 	const rightCurrentHeight = $derived(getSidebarHeightPercent($rightSidebarHeight, $rightSidebarCustomHeight));
 	
@@ -108,6 +116,38 @@
 				onCheckedChange={(v) => sidebarConfigStore.setShowDragHandle(v)} 
 			/>
 		</div>
+	</div>
+
+	<div class="bg-accent/10 rounded-lg border border-border/30 p-2.5 space-y-2">
+		<div class="flex items-center justify-between gap-2">
+			<Label for="blank-area-collapse" class="text-[10px] cursor-pointer">空白区点击收回侧边栏</Label>
+			<Switch
+				id="blank-area-collapse"
+				checked={$enableBlankAreaCollapse}
+				onCheckedChange={(v) => sidebarConfigStore.setEnableBlankAreaCollapse(v)}
+			/>
+		</div>
+		<div class="flex items-center gap-1.5" class:opacity-40={!$enableBlankAreaCollapse}>
+			<Button
+				variant={$blankAreaCollapseMode === 'single' ? 'default' : 'outline'}
+				size="sm"
+				class="h-6 px-2 text-[10px]"
+				onclick={() => setBlankMode('single')}
+				disabled={!$enableBlankAreaCollapse}
+			>
+				单击
+			</Button>
+			<Button
+				variant={$blankAreaCollapseMode === 'double' ? 'default' : 'outline'}
+				size="sm"
+				class="h-6 px-2 text-[10px]"
+				onclick={() => setBlankMode('double')}
+				disabled={!$enableBlankAreaCollapse}
+			>
+				双击
+			</Button>
+		</div>
+		<p class="text-[9px] text-muted-foreground/70">仅点击侧边栏空白区域生效，点击图标/按钮不会触发收回。</p>
 	</div>
 
 	<div class="grid grid-cols-2 gap-x-6 gap-y-4">

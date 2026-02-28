@@ -21,6 +21,9 @@ export type SidebarHeightPreset = 'full' | '2/3' | 'half' | '1/3' | 'custom';
 // 侧边栏垂直对齐
 export type SidebarVerticalAlign = number; // 0 (top) to 100 (bottom)
 
+// 侧边栏空白区点击收回模式
+export type SidebarBlankClickMode = 'single' | 'double';
+
 // 面板 ID 类型
 export type PanelId =
 	| 'folder'
@@ -297,6 +300,8 @@ export interface SidebarConfigState {
 	rightSidebarVerticalAlign: SidebarVerticalAlign;
 	rightSidebarHorizontalPos: number; // X轴位置 0-100 (0=贴边, 100=中心)
 	showDragHandle: boolean; // 是否显示拖拽手柄
+	enableBlankAreaCollapse: boolean;
+	blankAreaCollapseMode: SidebarBlankClickMode;
 }
 
 // 从 PANEL_DEFINITIONS 自动生成默认面板配置
@@ -333,7 +338,9 @@ const initialState: SidebarConfigState = {
 	rightSidebarCustomHeight: 100,
 	rightSidebarVerticalAlign: 0,
 	rightSidebarHorizontalPos: 0,
-	showDragHandle: false
+	showDragHandle: false,
+	enableBlankAreaCollapse: true,
+	blankAreaCollapseMode: 'single'
 };
 
 // 从 localStorage 加载配置
@@ -388,9 +395,14 @@ function saveToStorage(state: SidebarConfigState) {
 			leftSidebarHeight: state.leftSidebarHeight,
 			leftSidebarCustomHeight: state.leftSidebarCustomHeight,
 			leftSidebarVerticalAlign: state.leftSidebarVerticalAlign,
+			leftSidebarHorizontalPos: state.leftSidebarHorizontalPos,
 			rightSidebarHeight: state.rightSidebarHeight,
 			rightSidebarCustomHeight: state.rightSidebarCustomHeight,
-			rightSidebarVerticalAlign: state.rightSidebarVerticalAlign
+			rightSidebarVerticalAlign: state.rightSidebarVerticalAlign,
+			rightSidebarHorizontalPos: state.rightSidebarHorizontalPos,
+			showDragHandle: state.showDragHandle,
+			enableBlankAreaCollapse: state.enableBlankAreaCollapse,
+			blankAreaCollapseMode: state.blankAreaCollapseMode
 		};
 		localStorage.setItem('neoview-sidebar-config', JSON.stringify(toSave));
 	} catch (e) {
@@ -545,6 +557,14 @@ function createSidebarConfigStore() {
 			update(state => ({ ...state, showDragHandle: show }));
 		},
 
+		setEnableBlankAreaCollapse(enabled: boolean) {
+			update(state => ({ ...state, enableBlankAreaCollapse: enabled }));
+		},
+
+		setBlankAreaCollapseMode(mode: SidebarBlankClickMode) {
+			update(state => ({ ...state, blankAreaCollapseMode: mode }));
+		},
+
 		// 切换侧边栏
 		toggleLeftSidebar() {
 			update(state => ({ ...state, leftSidebarOpen: !state.leftSidebarOpen }));
@@ -671,6 +691,8 @@ export const rightSidebarCustomHeight = derived(sidebarConfigStore, $state => $s
 export const rightSidebarVerticalAlign = derived(sidebarConfigStore, $state => $state.rightSidebarVerticalAlign);
 export const rightSidebarHorizontalPos = derived(sidebarConfigStore, $state => $state.rightSidebarHorizontalPos);
 export const showDragHandle = derived(sidebarConfigStore, $state => $state.showDragHandle);
+export const enableBlankAreaCollapse = derived(sidebarConfigStore, $state => $state.enableBlankAreaCollapse);
+export const blankAreaCollapseMode = derived(sidebarConfigStore, $state => $state.blankAreaCollapseMode);
 
 // 高度预设到百分比的映射
 export const SIDEBAR_HEIGHT_PRESETS: Record<SidebarHeightPreset, number> = {

@@ -42,6 +42,8 @@ export {
 	rightSidebarVerticalAlign,
 	rightSidebarHorizontalPos,
 	showDragHandle,
+	enableBlankAreaCollapse,
+	blankAreaCollapseMode,
 	SIDEBAR_HEIGHT_PRESETS,
 	getSidebarHeightPercent,
 	getVerticalAlignStyle,
@@ -50,7 +52,8 @@ export {
 	type PanelConfig,
 	type SidebarConfigState,
 	type SidebarHeightPreset,
-	type SidebarVerticalAlign
+	type SidebarVerticalAlign,
+	type SidebarBlankClickMode
 } from './sidebarConfig.svelte';
 
 // 兼容性别名

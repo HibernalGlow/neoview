@@ -585,10 +585,12 @@ class BookStore {
     
     if (!targetPath) return;
     
-    // ★ 切换书后同步文件夹面板到目标书的父目录
-    this.syncFolderPanelToBookParent(targetPath, folderTabActions, normalizeFolderPath);
-    
     await this.openBook(targetPath);
+
+    // ★ 先开书，再异步同步侧栏，降低切换路径上的主线程压力
+    setTimeout(() => {
+      this.syncFolderPanelToBookParent(targetPath, folderTabActions, normalizeFolderPath);
+    }, 0);
   }
 
   /**
@@ -611,6 +613,7 @@ class BookStore {
 
       if (normalizePath(currentTabPath) === normalizePath(parentDir)) {
         folderTabActions.selectItem(bookPath);
+        folderTabActions.focusOnPath(bookPath);
       } else {
         folderTabActions.setPath(parentDir, false);
         folderTabActions.focusOnPath(bookPath);

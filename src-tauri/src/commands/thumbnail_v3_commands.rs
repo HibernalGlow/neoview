@@ -176,8 +176,10 @@ pub async fn preload_directory_thumbnails_v3(
     use std::collections::VecDeque;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::Instant;
 
     let max_depth = depth.unwrap_or(1);
+    let prefetch_started = Instant::now();
 
     fn prefetch_metadata_chunked(paths: &[PathBuf], chunk_size: usize, workers: usize) {
         if paths.is_empty() {
@@ -240,6 +242,9 @@ pub async fn preload_directory_thumbnails_v3(
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state
             .service
+            .record_io_prefetch_stats(paths.len(), prefetch_started.elapsed().as_millis() as u64);
+        state
+            .service
             .request_visible_thumbnails(&app, paths, dir, None, TaskLane::Background);
     }
 
@@ -278,6 +283,12 @@ pub async fn get_thumbnail_cache_stats_v3(app: AppHandle) -> Result<CacheStats, 
             decode_wait_ms: 0,
             encode_wait_count: 0,
             encode_wait_ms: 0,
+            window_pruned_tasks: 0,
+            cache_decay_evicted_entries: 0,
+            cache_decay_evicted_bytes: 0,
+            io_prefetch_runs: 0,
+            io_prefetch_files: 0,
+            io_prefetch_ms: 0,
         })
     }
 }

@@ -94,6 +94,12 @@ pub struct ThumbnailServiceV3 {
     decode_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
+    window_pruned_tasks: Arc<AtomicUsize>,
+    cache_decay_evicted_entries: Arc<AtomicUsize>,
+    cache_decay_evicted_bytes: Arc<AtomicU64>,
+    io_prefetch_runs: Arc<AtomicUsize>,
+    io_prefetch_files: Arc<AtomicUsize>,
+    io_prefetch_ms: Arc<AtomicU64>,
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// 数据库索引 (已有缩略图的路径集合)
@@ -153,6 +159,12 @@ impl ThumbnailServiceV3 {
             decode_wait_ms: Arc::new(AtomicU64::new(0)),
             encode_wait_count: Arc::new(AtomicUsize::new(0)),
             encode_wait_ms: Arc::new(AtomicU64::new(0)),
+            window_pruned_tasks: Arc::new(AtomicUsize::new(0)),
+            cache_decay_evicted_entries: Arc::new(AtomicUsize::new(0)),
+            cache_decay_evicted_bytes: Arc::new(AtomicU64::new(0)),
+            io_prefetch_runs: Arc::new(AtomicUsize::new(0)),
+            io_prefetch_files: Arc::new(AtomicUsize::new(0)),
+            io_prefetch_ms: Arc::new(AtomicU64::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
             folder_db_index: Arc::new(RwLock::new(folder_db_index)),
@@ -272,6 +284,7 @@ impl ThumbnailServiceV3 {
                 &current_dir,
                 &requested_paths,
             );
+            let dropped_len = dropped.len();
             for task in dropped {
                 match task.lane {
                     TaskLane::Visible => Self::dec_counter(&self.queued_visible),
@@ -281,6 +294,8 @@ impl ThumbnailServiceV3 {
                 self.request_deduplicator
                     .release_with_id(&task.dedup_key, task.dedup_request_id);
             }
+            self.window_pruned_tasks
+                .fetch_add(dropped_len, Ordering::Relaxed);
         }
 
         // 批量分类路径
@@ -471,12 +486,24 @@ impl ThumbnailServiceV3 {
 
     /// 两阶段缓存清理
     pub fn two_phase_cache_cleanup(&self, max_bytes: usize) {
-        cache::two_phase_cache_cleanup(
+        let stats = cache::two_phase_cache_cleanup(
             &self.memory_cache,
             &self.memory_cache_bytes,
             &self.config,
             max_bytes,
         );
+        if stats.evicted_entries > 0 {
+            self.cache_decay_evicted_entries
+                .fetch_add(stats.evicted_entries, Ordering::Relaxed);
+            self.cache_decay_evicted_bytes
+                .fetch_add(stats.evicted_bytes, Ordering::Relaxed);
+        }
+    }
+
+    pub fn record_io_prefetch_stats(&self, files: usize, elapsed_ms: u64) {
+        self.io_prefetch_runs.fetch_add(1, Ordering::Relaxed);
+        self.io_prefetch_files.fetch_add(files, Ordering::Relaxed);
+        self.io_prefetch_ms.fetch_add(elapsed_ms, Ordering::Relaxed);
     }
 }
 
@@ -584,6 +611,12 @@ impl ThumbnailServiceV3 {
         let decode_wait_ms = self.decode_wait_ms.load(Ordering::Relaxed);
         let encode_wait_count = self.encode_wait_count.load(Ordering::Relaxed);
         let encode_wait_ms = self.encode_wait_ms.load(Ordering::Relaxed);
+        let window_pruned_tasks = self.window_pruned_tasks.load(Ordering::Relaxed);
+        let cache_decay_evicted_entries = self.cache_decay_evicted_entries.load(Ordering::Relaxed);
+        let cache_decay_evicted_bytes = self.cache_decay_evicted_bytes.load(Ordering::Relaxed);
+        let io_prefetch_runs = self.io_prefetch_runs.load(Ordering::Relaxed);
+        let io_prefetch_files = self.io_prefetch_files.load(Ordering::Relaxed);
+        let io_prefetch_ms = self.io_prefetch_ms.load(Ordering::Relaxed);
         let (database_count, database_bytes) = self
             .db
             .get_maintenance_stats()
@@ -606,6 +639,12 @@ impl ThumbnailServiceV3 {
             decode_wait_ms,
             encode_wait_count,
             encode_wait_ms,
+            window_pruned_tasks,
+            cache_decay_evicted_entries,
+            cache_decay_evicted_bytes,
+            io_prefetch_runs,
+            io_prefetch_files,
+            io_prefetch_ms,
         }
     }
 

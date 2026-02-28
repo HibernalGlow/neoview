@@ -290,6 +290,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'control',
 		canHide: true,
 	},
+	'thumbnailArchMetrics': {
+		id: 'thumbnailArchMetrics',
+		title: '缩略图架构指标',
+		icon: 'Gauge',
+		defaultPanel: 'properties',
+		canHide: true,
+	},
 	'emmRawData': {
 		id: 'emmRawData',
 		title: 'EMM 数据库记录',

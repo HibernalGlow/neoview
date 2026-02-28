@@ -110,6 +110,12 @@ pub struct CacheStats {
     pub decode_wait_ms: u64,
     pub encode_wait_count: usize,
     pub encode_wait_ms: u64,
+    pub window_pruned_tasks: usize,
+    pub cache_decay_evicted_entries: usize,
+    pub cache_decay_evicted_bytes: u64,
+    pub io_prefetch_runs: usize,
+    pub io_prefetch_files: usize,
+    pub io_prefetch_ms: u64,
 }
 
 /// 检测文件类型

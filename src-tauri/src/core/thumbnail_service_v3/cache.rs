@@ -10,6 +10,12 @@ use std::time::Instant;
 
 use super::{log_debug, ThumbnailServiceConfig};
 
+#[derive(Default, Clone, Copy)]
+pub struct CacheCleanupStats {
+    pub evicted_entries: usize,
+    pub evicted_bytes: u64,
+}
+
 /// 从内存缓存获取（使用写锁因为 LRU 需要更新访问顺序）
 pub fn get_from_memory_cache(
     memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -116,13 +122,17 @@ pub fn two_phase_cache_cleanup(
     memory_cache_bytes: &Arc<AtomicUsize>,
     config: &ThumbnailServiceConfig,
     max_bytes: usize,
-) {
+) -> CacheCleanupStats {
     let budget = config.memory_cache_byte_budget.min(max_bytes);
     let current_bytes = memory_cache_bytes.load(Ordering::SeqCst);
     let decay_threshold = budget.saturating_mul(config.memory_cache_decay_threshold_percent.max(1)) / 100;
 
+    let mut stats = CacheCleanupStats::default();
+
     if current_bytes >= decay_threshold {
         if let Ok(mut cache) = memory_cache.write() {
+            let bytes_before: usize = cache.iter().map(|(_, v)| v.len()).sum();
+            let len_before = cache.len();
             let cache_len = cache.len();
             if cache_len > 0 {
                 let drop_percent = config.memory_cache_decay_drop_percent.max(1);
@@ -144,6 +154,8 @@ pub fn two_phase_cache_cleanup(
             }
 
             memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
+            stats.evicted_entries = len_before.saturating_sub(cache.len());
+            stats.evicted_bytes = bytes_before.saturating_sub(new_bytes) as u64;
             log_debug!(
                 "🧹 字节预算清理完成: {} 条, {} bytes (budget={} bytes)",
                 cache.len(),
@@ -152,4 +164,6 @@ pub fn two_phase_cache_cleanup(
             );
         }
     }
+
+    stats
 }

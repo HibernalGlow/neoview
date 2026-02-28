@@ -51,6 +51,7 @@
 		favoriteTags: () => import('./properties/FavoriteTagsCard.svelte'),
 		emmSync: () => import('./properties/EmmSyncCard.svelte'),
 		thumbnailMaintenance: () => import('./properties/ThumbnailMaintenanceCard.svelte'),
+		thumbnailArchMetrics: () => import('./properties/ThumbnailArchitectureMetricsCard.svelte'),
 		emmRawData: () => import('./properties/EmmRawDataCard.svelte'),
 		emmConfig: () => import('./properties/EmmConfigCard.svelte'),
 		fileListTagDisplay: () => import('./properties/FileListTagDisplayCard.svelte'),

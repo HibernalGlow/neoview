@@ -43,6 +43,7 @@
 		favoriteTags: () => import('$lib/cards/properties/FavoriteTagsCard.svelte'),
 		emmSync: () => import('$lib/cards/properties/EmmSyncCard.svelte'),
 		thumbnailMaintenance: () => import('$lib/cards/properties/ThumbnailMaintenanceCard.svelte'),
+		thumbnailArchMetrics: () => import('$lib/cards/properties/ThumbnailArchitectureMetricsCard.svelte'),
 		emmRawData: () => import('$lib/cards/properties/EmmRawDataCard.svelte'),
 		emmConfig: () => import('$lib/cards/properties/EmmConfigCard.svelte'),
 		fileListTagDisplay: () => import('$lib/cards/properties/FileListTagDisplayCard.svelte'),

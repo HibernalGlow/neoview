@@ -267,6 +267,68 @@ export interface CacheStats {
   processedVisible: number;
   processedPrefetch: number;
   processedBackground: number;
+  decodeWaitCount: number;
+  decodeWaitMs: number;
+  encodeWaitCount: number;
+  encodeWaitMs: number;
+  windowPrunedTasks: number;
+  cacheDecayEvictedEntries: number;
+  cacheDecayEvictedBytes: number;
+  ioPrefetchRuns: number;
+  ioPrefetchFiles: number;
+  ioPrefetchMs: number;
+}
+
+interface RawCacheStats {
+  memory_count?: number;
+  memory_bytes?: number;
+  database_count?: number;
+  database_bytes?: number;
+  queue_length?: number;
+  queue_visible?: number;
+  queue_prefetch?: number;
+  queue_background?: number;
+  active_workers?: number;
+  processed_visible?: number;
+  processed_prefetch?: number;
+  processed_background?: number;
+  decode_wait_count?: number;
+  decode_wait_ms?: number;
+  encode_wait_count?: number;
+  encode_wait_ms?: number;
+  window_pruned_tasks?: number;
+  cache_decay_evicted_entries?: number;
+  cache_decay_evicted_bytes?: number;
+  io_prefetch_runs?: number;
+  io_prefetch_files?: number;
+  io_prefetch_ms?: number;
+}
+
+function normalizeCacheStats(raw: RawCacheStats): CacheStats {
+  return {
+    memoryCount: raw.memory_count ?? 0,
+    memoryBytes: raw.memory_bytes ?? 0,
+    databaseCount: raw.database_count ?? 0,
+    databaseBytes: raw.database_bytes ?? 0,
+    queueLength: raw.queue_length ?? 0,
+    queueVisible: raw.queue_visible ?? 0,
+    queuePrefetch: raw.queue_prefetch ?? 0,
+    queueBackground: raw.queue_background ?? 0,
+    activeWorkers: raw.active_workers ?? 0,
+    processedVisible: raw.processed_visible ?? 0,
+    processedPrefetch: raw.processed_prefetch ?? 0,
+    processedBackground: raw.processed_background ?? 0,
+    decodeWaitCount: raw.decode_wait_count ?? 0,
+    decodeWaitMs: raw.decode_wait_ms ?? 0,
+    encodeWaitCount: raw.encode_wait_count ?? 0,
+    encodeWaitMs: raw.encode_wait_ms ?? 0,
+    windowPrunedTasks: raw.window_pruned_tasks ?? 0,
+    cacheDecayEvictedEntries: raw.cache_decay_evicted_entries ?? 0,
+    cacheDecayEvictedBytes: raw.cache_decay_evicted_bytes ?? 0,
+    ioPrefetchRuns: raw.io_prefetch_runs ?? 0,
+    ioPrefetchFiles: raw.io_prefetch_files ?? 0,
+    ioPrefetchMs: raw.io_prefetch_ms ?? 0,
+  };
 }
 
 /**
@@ -581,7 +643,8 @@ export async function getCacheStats(): Promise<CacheStats | null> {
   if (!initialized) return null;
 
   try {
-    return await invoke<CacheStats>('get_thumbnail_cache_stats_v3');
+    const raw = await invoke<RawCacheStats>('get_thumbnail_cache_stats_v3');
+    return normalizeCacheStats(raw);
   } catch (error) {
     console.error('❌ getCacheStats failed:', error);
     return null;

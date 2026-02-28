@@ -12,7 +12,6 @@ use tauri::{AppHandle, Emitter};
 
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
-use crate::core::request_dedup::RequestDeduplicator;
 
 use super::config::ThumbnailServiceConfig;
 use super::generators::{
@@ -38,7 +37,6 @@ pub fn start_workers(
     folder_db_index: Arc<RwLock<HashSet<String>>>,
     failed_index: Arc<RwLock<HashSet<String>>>,
     save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
-    request_deduplicator: Arc<RequestDeduplicator>,
     app: AppHandle,
 ) -> Vec<JoinHandle<()>> {
     let mut workers = Vec::new();
@@ -59,7 +57,6 @@ pub fn start_workers(
             Arc::clone(&folder_db_index),
             Arc::clone(&failed_index),
             Arc::clone(&save_queue),
-            Arc::clone(&request_deduplicator),
         );
         workers.push(handle);
     }
@@ -84,7 +81,6 @@ fn create_worker_thread(
     folder_db_index: Arc<RwLock<HashSet<String>>>,
     failed_index: Arc<RwLock<HashSet<String>>>,
     save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
-    request_deduplicator: Arc<RequestDeduplicator>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         log_debug!("🔧 Worker {} started", worker_id);
@@ -94,7 +90,6 @@ fn create_worker_thread(
                 let should_process = check_task_validity(&task, &current_dir);
                 if !should_process {
                     log_debug!("⏭️ 跳过非当前目录任务: {}", task.path);
-                    request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
                     continue;
                 }
                 active_workers.fetch_add(1, Ordering::SeqCst);
@@ -110,7 +105,6 @@ fn create_worker_thread(
                     &folder_db_index,
                     &failed_index,
                     &save_queue,
-                    &request_deduplicator,
                 );
                 active_workers.fetch_sub(1, Ordering::SeqCst);
             } else {
@@ -148,7 +142,6 @@ fn process_task(
     folder_db_index: &Arc<RwLock<HashSet<String>>>,
     failed_index: &Arc<RwLock<HashSet<String>>>,
     save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
-    request_deduplicator: &Arc<RequestDeduplicator>,
 ) {
     let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| match task.file_type {
         ThumbnailFileType::Folder => {
@@ -192,8 +185,6 @@ fn process_task(
             }
         }
     }
-
-    request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
 }
 
 /// 处理成功生成的缩略图

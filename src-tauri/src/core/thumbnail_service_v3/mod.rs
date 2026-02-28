@@ -26,7 +26,6 @@ pub use types::{
 // 内部使用
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
-use crate::core::request_dedup::RequestDeduplicator;
 use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
@@ -91,8 +90,6 @@ pub struct ThumbnailServiceV3 {
     last_flush: Arc<Mutex<Instant>>,
     /// 批量保存阈值
     batch_save_threshold: usize,
-    /// 请求去重器
-    request_deduplicator: Arc<RequestDeduplicator>,
 }
 
 impl ThumbnailServiceV3 {
@@ -131,7 +128,6 @@ impl ThumbnailServiceV3 {
             save_queue: Arc::new(Mutex::new(HashMap::new())),
             last_flush: Arc::new(Mutex::new(Instant::now())),
             batch_save_threshold: 50,
-            request_deduplicator: Arc::new(RequestDeduplicator::new()),
         }
     }
 
@@ -158,7 +154,6 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.folder_db_index),
             Arc::clone(&self.failed_index),
             Arc::clone(&self.save_queue),
-            Arc::clone(&self.request_deduplicator),
             app,
         );
 
@@ -209,12 +204,8 @@ impl ThumbnailServiceV3 {
             if let Ok(mut dir) = self.current_dir.write() {
                 if *dir != current_dir {
                     if let Ok(mut q) = self.task_queue.lock() {
-                        let old_tasks: Vec<GenerateTask> = q.drain(..).collect();
-                        let old_len = old_tasks.len();
-                        for task in old_tasks {
-                            self.request_deduplicator
-                                .release_with_id(&task.dedup_key, task.dedup_request_id);
-                        }
+                        let old_len = q.len();
+                        q.clear();
                         log_debug!(
                             "📂 目录切换: {} -> {} (清空 {} 个任务)",
                             *dir,
@@ -230,7 +221,7 @@ impl ThumbnailServiceV3 {
         // 批量分类路径
         let mut cached_paths: Vec<(String, Vec<u8>)> = Vec::new();
         let mut db_paths: Vec<String> = Vec::new();
-        let mut generate_paths: Vec<(String, ThumbnailFileType, usize, u64)> = Vec::new();
+        let mut generate_paths: Vec<(String, ThumbnailFileType, usize)> = Vec::new();
 
         // 读取索引快照
         let (db_idx_snap, folder_idx_snap, failed_snap) = {
@@ -269,9 +260,7 @@ impl ThumbnailServiceV3 {
                 db_paths.push(path.clone());
             } else {
                 let file_type = detect_file_type(path);
-                if let Some(request_id) = self.request_deduplicator.try_acquire(path) {
-                    generate_paths.push((path.clone(), file_type, priority, request_id));
-                }
+                generate_paths.push((path.clone(), file_type, priority));
             }
         }
 
@@ -304,9 +293,6 @@ impl ThumbnailServiceV3 {
         let memory_cache_bytes = Arc::clone(&self.memory_cache_bytes);
 
         tokio::spawn(async move {
-            const DB_EVENT_BATCH_SIZE: usize = 24;
-            let mut batch_payloads: Vec<ThumbnailReadyPayload> = Vec::with_capacity(DB_EVENT_BATCH_SIZE);
-
             for path in db_paths.iter() {
                 let category = if std::path::Path::new(path).is_dir() || !path.contains('.') {
                     "folder"
@@ -318,38 +304,23 @@ impl ThumbnailServiceV3 {
                         memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
                         c.put(path.clone(), blob.clone());
                     }
-                    batch_payloads.push(ThumbnailReadyPayload {
-                        path: path.clone(),
-                        blob,
-                    });
-
-                    if batch_payloads.len() >= DB_EVENT_BATCH_SIZE {
-                        let payload = ThumbnailBatchReadyPayload {
-                            items: std::mem::take(&mut batch_payloads),
-                        };
-                        let _ = app.emit("thumbnail-batch-ready", payload);
-                    }
+                    let _ = app.emit(
+                        "thumbnail-ready",
+                        ThumbnailReadyPayload {
+                            path: path.clone(),
+                            blob,
+                        },
+                    );
                     let _ = db.update_access_time(path);
                 }
-            }
-
-            if !batch_payloads.is_empty() {
-                let payload = ThumbnailBatchReadyPayload {
-                    items: batch_payloads,
-                };
-                let _ = app.emit("thumbnail-batch-ready", payload);
             }
         });
     }
 
     /// 取消指定目录的请求
     pub fn cancel_requests(&self, dir: &str) {
-        let removed_tasks = queue::clear_directory_tasks(&self.task_queue, dir);
-        for task in removed_tasks.iter() {
-            self.request_deduplicator
-                .release_with_id(&task.dedup_key, task.dedup_request_id);
-        }
-        log_debug!("🚫 取消 {} 个任务 (目录: {})", removed_tasks.len(), dir);
+        let removed = queue::clear_directory_tasks(&self.task_queue, dir);
+        log_debug!("🚫 取消 {} 个任务 (目录: {})", removed, dir);
     }
 
     /// 从内存缓存获取
@@ -517,15 +488,8 @@ impl ThumbnailServiceV3 {
 
     /// 强制重新生成缩略图
     pub fn regenerate_thumbnail(&self, app: &AppHandle, path: &str, current_dir: &str) {
-        let Some(request_id) = self.request_deduplicator.try_acquire(path) else {
-            log_debug!("🔄 跳过重复重建请求: {}", path);
-            return;
-        };
-
         let file_type = detect_file_type(path);
         let task = GenerateTask {
-            dedup_key: path.to_string(),
-            dedup_request_id: request_id,
             path: path.to_string(),
             directory: current_dir.to_string(),
             file_type,
@@ -533,25 +497,10 @@ impl ThumbnailServiceV3 {
             original_index: 0,
         };
         if let Ok(mut q) = self.task_queue.lock() {
-            let mut dropped_tasks = Vec::new();
-            let mut kept = VecDeque::with_capacity(q.len());
-            while let Some(existing) = q.pop_front() {
-                if existing.path == path {
-                    dropped_tasks.push(existing);
-                } else {
-                    kept.push_back(existing);
-                }
-            }
-            *q = kept;
-            for dropped in dropped_tasks {
-                self.request_deduplicator
-                    .release_with_id(&dropped.dedup_key, dropped.dedup_request_id);
-            }
+            q.retain(|t| t.path != path);
             q.push_front(task);
             log_info!("🔄 强制重新生成缩略图: {}", path);
         }
-
-        let _ = app;
     }
 
     /// 检查内存压力

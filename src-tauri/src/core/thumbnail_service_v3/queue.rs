@@ -16,7 +16,7 @@ use super::types::{GenerateTask, ThumbnailFileType};
 /// - center: 中心索引（用于计算优先级）
 pub fn enqueue_tasks(
     task_queue: &Mutex<VecDeque<GenerateTask>>,
-    paths: Vec<(String, ThumbnailFileType, usize, u64)>,
+    paths: Vec<(String, ThumbnailFileType, usize)>,
     current_dir: &str,
     center: usize,
 ) {
@@ -31,16 +31,14 @@ pub fn enqueue_tasks(
         // 计算每个路径到中心的距离并创建任务
         let mut new_tasks: Vec<GenerateTask> = paths
             .into_iter()
-            .filter(|(path, _, _, _)| !existing.contains(path))
-            .map(|(path, file_type, original_index, dedup_request_id)| {
+            .filter(|(path, _, _)| !existing.contains(path))
+            .map(|(path, file_type, original_index)| {
                 let center_distance = if original_index >= center {
                     original_index - center
                 } else {
                     center - original_index
                 };
                 GenerateTask {
-                    dedup_key: path.clone(),
-                    dedup_request_id,
                     path,
                     directory: current_dir.to_string(),
                     file_type,
@@ -71,21 +69,14 @@ pub fn enqueue_tasks(
 pub fn clear_directory_tasks(
     task_queue: &Mutex<VecDeque<GenerateTask>>,
     dir: &str,
-) -> Vec<GenerateTask> {
+) -> usize {
     if let Ok(mut queue) = task_queue.lock() {
-        let mut removed = Vec::new();
-        let mut kept = VecDeque::with_capacity(queue.len());
-        while let Some(task) = queue.pop_front() {
-            if task.directory == dir {
-                removed.push(task);
-            } else {
-                kept.push_back(task);
-            }
-        }
-        *queue = kept;
-        return removed;
+        let before = queue.len();
+        queue.retain(|task| task.directory != dir);
+        let after = queue.len();
+        return before - after;
     }
-    Vec::new()
+    0
 }
 
 /// 获取下一个任务（从队列前端取出）

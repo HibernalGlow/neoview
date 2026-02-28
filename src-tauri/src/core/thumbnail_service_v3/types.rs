@@ -26,10 +26,6 @@ pub struct GenerateTask {
     pub path: String,
     pub directory: String,
     pub file_type: ThumbnailFileType,
-    /// 去重键（通常为 path）
-    pub dedup_key: String,
-    /// 去重请求 ID（用于 release_with_id）
-    pub dedup_request_id: u64,
     /// 距离中心的距离（越小优先级越高）
     pub center_distance: usize,
     /// 原始索引（用于平局时保持原顺序）

@@ -691,61 +691,62 @@ function createFileBrowserStore() {
     },
     addThumbnail: (path: string, thumbnail: string) =>
       update(state => {
-        // blob URL 和 data URL 直接使用，不需要转换
+        // blob/data/协议 URL 直接使用，减少 toAssetUrl 分支与 convertFileSrc 调用
         const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
           ? thumbnail
-          : (toAssetUrl(thumbnail) || thumbnail) as string;
+          : thumbnail.startsWith('http:') || thumbnail.startsWith('neoview:')
+            ? thumbnail
+            : (toAssetUrl(thumbnail) || thumbnail) as string;
 
         const current = state.thumbnails.get(path);
         if (current === normalized) {
           return state;
         }
 
-        const newThumbnails = new Map(state.thumbnails);
-        newThumbnails.set(path, normalized);
-        return { ...state, thumbnails: newThumbnails };
+        // 就地更新，避免每次单项更新都复制整个 thumbnails Map
+        state.thumbnails.set(path, normalized);
+        return { ...state };
       }),
     addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) =>
       update(state => {
         if (thumbnailsBatch.size === 0) return state;
 
         let changed = false;
-        const newThumbnails = new Map(state.thumbnails);
 
         for (const [path, thumbnail] of thumbnailsBatch.entries()) {
           const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
             ? thumbnail
-            : (toAssetUrl(thumbnail) || thumbnail) as string;
+            : thumbnail.startsWith('http:') || thumbnail.startsWith('neoview:')
+              ? thumbnail
+              : (toAssetUrl(thumbnail) || thumbnail) as string;
 
-          if (newThumbnails.get(path) === normalized) continue;
-          newThumbnails.set(path, normalized);
+          if (state.thumbnails.get(path) === normalized) continue;
+          state.thumbnails.set(path, normalized);
           changed = true;
         }
 
-        return changed ? { ...state, thumbnails: newThumbnails } : state;
+        return changed ? { ...state } : state;
       }),
     removeThumbnail: (path: string) =>
       update(state => {
         if (!state.thumbnails.has(path)) {
           return state;
         }
-        const newThumbnails = new Map(state.thumbnails);
-        newThumbnails.delete(path);
-        return { ...state, thumbnails: newThumbnails };
+        state.thumbnails.delete(path);
+        return { ...state };
       }),
     removeThumbnailsBatch: (paths: string[]) =>
       update(state => {
         if (paths.length === 0) return state;
 
         let changed = false;
-        const newThumbnails = new Map(state.thumbnails);
         for (const path of paths) {
-          if (!newThumbnails.has(path)) continue;
-          newThumbnails.delete(path);
+          if (!state.thumbnails.has(path)) continue;
+          state.thumbnails.delete(path);
           changed = true;
         }
 
-        return changed ? { ...state, thumbnails: newThumbnails } : state;
+        return changed ? { ...state } : state;
       }),
     setThumbnails: (thumbnails: Map<string, string>) =>
       update(state => ({ ...state, thumbnails: new Map(thumbnails) })),

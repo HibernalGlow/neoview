@@ -408,9 +408,21 @@ impl ThumbnailServiceV3 {
         };
 
         if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, primary) {
+            if let Ok(mut c) = self.memory_cache.write() {
+                if c.peek(key).is_none() {
+                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    c.put(key.to_string(), blob.clone());
+                }
+            }
             return Some(blob);
         }
         if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, secondary) {
+            if let Ok(mut c) = self.memory_cache.write() {
+                if c.peek(key).is_none() {
+                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    c.put(key.to_string(), blob.clone());
+                }
+            }
             return Some(blob);
         }
         None
@@ -419,6 +431,7 @@ impl ThumbnailServiceV3 {
     /// 直接从缓存获取（同步）
     pub fn get_cached_thumbnails(&self, paths: Vec<String>) -> Vec<(String, Option<Vec<u8>>)> {
         let mut results = Vec::with_capacity(paths.len());
+        let mut db_loaded_for_cache: Vec<(String, Vec<u8>)> = Vec::new();
         for path in paths {
             let blob = self.get_from_memory_cache(&path);
             if blob.is_some() {
@@ -445,15 +458,24 @@ impl ThumbnailServiceV3 {
                 });
 
             if let Some(blob) = loaded {
-                if let Ok(mut c) = self.memory_cache.write() {
-                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
-                    c.put(path.clone(), blob.clone());
-                }
+                db_loaded_for_cache.push((path.clone(), blob.clone()));
                 results.push((path, Some(blob)));
             } else {
                 results.push((path, None));
             }
         }
+
+        if !db_loaded_for_cache.is_empty() {
+            if let Ok(mut c) = self.memory_cache.write() {
+                for (path, blob) in db_loaded_for_cache {
+                    if c.peek(path.as_str()).is_none() {
+                        self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                        c.put(path, blob);
+                    }
+                }
+            }
+        }
+
         results
     }
 

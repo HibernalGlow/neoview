@@ -34,7 +34,7 @@ function setThumbnailWithEviction(path: string, url: string) {
 
 // 路径转换：统一使用正斜杠作为 key
 function toRelativeKey(path: string): string {
-  return path.replace(/\\/g, '/');
+  return path.includes('\\') ? path.replace(/\\/g, '/') : path;
 }
 
 // 是否已初始化
@@ -126,7 +126,7 @@ function getAdaptiveDispatchConfig(): DispatchConfig {
 // 这些 map 仅在普通函数中访问（非 $effect/$derived），用 plain Map 避免响应式代理开销
 const inFlightRequests = new Map<string, number>();
 const recentRequestedAt = new Map<string, number>();
-const pendingFileBrowserThumbnails = new Map<string, string>();
+let pendingFileBrowserThumbnails = new Map<string, string>();
 const lastVisiblePathsByDir = new Map<string, Set<string>>();
 let fileBrowserFlushTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_VISIBLE_DIR_SNAPSHOTS = 16;
@@ -137,8 +137,8 @@ function flushFileBrowserThumbnails() {
     return;
   }
 
-  const batch = new Map(pendingFileBrowserThumbnails);
-  pendingFileBrowserThumbnails.clear();
+  const batch = pendingFileBrowserThumbnails;
+  pendingFileBrowserThumbnails = new Map<string, string>();
   fileBrowserFlushTimer = null;
   fileBrowserStore.addThumbnailsBatch(batch);
 }

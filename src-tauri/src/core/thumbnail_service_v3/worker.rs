@@ -27,11 +27,18 @@ use super::{log_debug, log_info};
 
 const LANE_SCHEDULE_LEN: usize = 9;
 
-fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, background: usize) -> TaskLane {
+fn preferred_lane_for_tick(
+    tick: usize,
+    visible: usize,
+    prefetch: usize,
+    background: usize,
+    visible_boost_factor: usize,
+    side_boost_factor: usize,
+) -> TaskLane {
     let side_total = prefetch + background;
 
     // visible 积压明显时，提升前台配额（8:1:1）
-    if visible > 0 && visible >= side_total {
+    if visible > 0 && visible >= side_total.saturating_mul(visible_boost_factor.max(1)) {
         return match tick % 10 {
             0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 => TaskLane::Visible,
             7 => TaskLane::Prefetch,
@@ -40,7 +47,7 @@ fn preferred_lane_for_tick(tick: usize, visible: usize, prefetch: usize, backgro
     }
 
     // 后台/预取积压明显时，放宽为 4:3:3 提升总体吞吐
-    if side_total > visible.saturating_mul(2) {
+    if side_total > visible.saturating_mul(side_boost_factor.max(1)) {
         return match tick % 10 {
             0 | 3 | 6 | 9 => TaskLane::Visible,
             1 | 4 | 7 => TaskLane::Prefetch,
@@ -84,10 +91,14 @@ pub fn start_workers(
     app: AppHandle,
 ) -> Vec<JoinHandle<()>> {
     let mut workers = Vec::new();
+    let visible_boost_factor = config.scheduler_visible_boost_factor;
+    let side_boost_factor = config.scheduler_side_boost_factor;
     for i in 0..config.worker_threads {
         let handle = create_worker_thread(
             i,
             config.folder_search_depth,
+            visible_boost_factor,
+            side_boost_factor,
             app.clone(),
             Arc::clone(&task_queue),
             Arc::clone(&current_dir),
@@ -121,6 +132,8 @@ pub fn start_workers(
 fn create_worker_thread(
     worker_id: usize,
     folder_depth: u32,
+    visible_boost_factor: usize,
+    side_boost_factor: usize,
     app: AppHandle,
     task_queue: Arc<(Mutex<queue::TaskQueueState>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
@@ -181,7 +194,14 @@ fn create_worker_thread(
                     let visible = queued_visible.load(Ordering::Relaxed);
                     let prefetch = queued_prefetch.load(Ordering::Relaxed);
                     let background = queued_background.load(Ordering::Relaxed);
-                    let preferred = preferred_lane_for_tick(lane_tick, visible, prefetch, background);
+                    let preferred = preferred_lane_for_tick(
+                        lane_tick,
+                        visible,
+                        prefetch,
+                        background,
+                        visible_boost_factor,
+                        side_boost_factor,
+                    );
                     lane_tick = lane_tick.wrapping_add(1);
                     queue::pop_task_by_lane_locked(
                         &mut guard,
@@ -202,8 +222,14 @@ fn create_worker_thread(
                                 let visible = queued_visible.load(Ordering::Relaxed);
                                 let prefetch = queued_prefetch.load(Ordering::Relaxed);
                                 let background = queued_background.load(Ordering::Relaxed);
-                                let preferred =
-                                    preferred_lane_for_tick(lane_tick, visible, prefetch, background);
+                                let preferred = preferred_lane_for_tick(
+                                    lane_tick,
+                                    visible,
+                                    prefetch,
+                                    background,
+                                    visible_boost_factor,
+                                    side_boost_factor,
+                                );
                                 lane_tick = lane_tick.wrapping_add(1);
                                 queue::pop_task_by_lane_locked(
                                     &mut g,
@@ -219,8 +245,14 @@ fn create_worker_thread(
                             let visible = queued_visible.load(Ordering::Relaxed);
                             let prefetch = queued_prefetch.load(Ordering::Relaxed);
                             let background = queued_background.load(Ordering::Relaxed);
-                            let preferred =
-                                preferred_lane_for_tick(lane_tick, visible, prefetch, background);
+                            let preferred = preferred_lane_for_tick(
+                                lane_tick,
+                                visible,
+                                prefetch,
+                                background,
+                                visible_boost_factor,
+                                side_boost_factor,
+                            );
                             lane_tick = lane_tick.wrapping_add(1);
                             queue::pop_task_by_lane_locked(
                                 &mut g,

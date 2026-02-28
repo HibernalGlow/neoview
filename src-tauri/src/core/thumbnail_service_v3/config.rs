@@ -15,6 +15,10 @@ pub struct ThumbnailServiceConfig {
     pub thumbnail_size: u32,
     /// 数据库延迟保存时间 (毫秒)
     pub db_save_delay_ms: u64,
+    /// visible 车道加强阈值：visible >= side_total * 此系数 时使用 8:1:1
+    pub scheduler_visible_boost_factor: usize,
+    /// side 车道加强阈值：side_total > visible * 此系数 时使用 4:3:3
+    pub scheduler_side_boost_factor: usize,
 }
 
 impl Default for ThumbnailServiceConfig {
@@ -44,6 +48,8 @@ impl Default for ThumbnailServiceConfig {
             worker_threads,
             thumbnail_size: 256,
             db_save_delay_ms: 2000,
+            scheduler_visible_boost_factor: 1,
+            scheduler_side_boost_factor: 2,
         }
     }
 }

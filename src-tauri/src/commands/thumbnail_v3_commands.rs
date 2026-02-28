@@ -173,30 +173,68 @@ pub async fn preload_directory_thumbnails_v3(
     dir: String,
     depth: Option<u32>,
 ) -> Result<(), String> {
-    use std::path::Path;
+    use std::collections::VecDeque;
+    use std::path::PathBuf;
+    use std::sync::Arc;
 
     let max_depth = depth.unwrap_or(1);
 
-    // 收集目录下的所有文件
-    fn collect_paths(dir: &str, depth: u32, max_depth: u32, paths: &mut Vec<String>) {
-        if depth > max_depth {
+    fn prefetch_metadata_chunked(paths: &[PathBuf], chunk_size: usize, workers: usize) {
+        if paths.is_empty() {
             return;
         }
-
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                paths.push(path.to_string_lossy().to_string());
-
-                if path.is_dir() && depth < max_depth {
-                    collect_paths(&path.to_string_lossy(), depth + 1, max_depth, paths);
-                }
+        let shared = Arc::new(paths.to_vec());
+        std::thread::scope(|scope| {
+            for worker_id in 0..workers.max(1) {
+                let shared_paths = Arc::clone(&shared);
+                scope.spawn(move || {
+                    let mut index = worker_id * chunk_size;
+                    let stride = workers.max(1) * chunk_size;
+                    while index < shared_paths.len() {
+                        let end = (index + chunk_size).min(shared_paths.len());
+                        for path in &shared_paths[index..end] {
+                            let _ = std::fs::metadata(path);
+                        }
+                        index = index.saturating_add(stride);
+                    }
+                });
             }
-        }
+        });
     }
 
     let mut paths = Vec::new();
-    collect_paths(&dir, 0, max_depth, &mut paths);
+    let mut queue: VecDeque<(PathBuf, u32)> = VecDeque::new();
+    queue.push_back((PathBuf::from(&dir), 0));
+
+    while let Some((current_dir, current_depth)) = queue.pop_front() {
+        if current_depth > max_depth {
+            continue;
+        }
+
+        let mut entries: Vec<_> = match std::fs::read_dir(&current_dir) {
+            Ok(iter) => iter.flatten().collect(),
+            Err(_) => continue,
+        };
+
+        entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+        let mut files_in_dir = Vec::new();
+        for entry in entries {
+            let path = entry.path();
+            paths.push(path.to_string_lossy().to_string());
+
+            if path.is_file() {
+                files_in_dir.push(path.clone());
+            }
+
+            if path.is_dir() && current_depth < max_depth {
+                queue.push_back((path, current_depth + 1));
+            }
+        }
+
+        // 小块并发预读元数据，预热目录级 I/O 缓存
+        prefetch_metadata_chunked(&files_in_dir, 16, 3);
+    }
 
     // 请求预加载（无中心索引，使用默认顺序）
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {

@@ -117,59 +117,39 @@ pub fn two_phase_cache_cleanup(
     config: &ThumbnailServiceConfig,
     max_bytes: usize,
 ) {
+    let budget = config.memory_cache_byte_budget.min(max_bytes);
     let current_bytes = memory_cache_bytes.load(Ordering::SeqCst);
-    let cache_len = memory_cache.read().map(|c| c.len()).unwrap_or(0);
-    let limit = config.memory_cache_size;
-    
-    // 阈值计算
-    let tolerance_150 = limit * 150 / 100; // 150% 触发第一阶段
-    let tolerance_120 = limit * 120 / 100; // 120% 触发第二阶段
-    
-    // 阶段1：超过 150% 容量时，清理无效条目
-    if cache_len >= tolerance_150 {
-        log_debug!("🧹 两阶段清理 - 阶段1: {} 条 >= {}（150%）", cache_len, tolerance_150);
-        
-        // LRU 缓存自动维护有效性，这里主要清理内存中可能的无效引用
-        // 在 Rust 中，LRU 不需要显式清理无效引用，但我们可以触发一次 GC
+    let decay_threshold = budget.saturating_mul(config.memory_cache_decay_threshold_percent.max(1)) / 100;
+
+    if current_bytes >= decay_threshold {
         if let Ok(mut cache) = memory_cache.write() {
-            // 移除一些最老的条目（模拟 NeeView 的无效条目清理）
-            let remove_count = cache_len.saturating_sub(tolerance_120);
-            for _ in 0..remove_count {
-                cache.pop_lru();
+            let cache_len = cache.len();
+            if cache_len > 0 {
+                let drop_percent = config.memory_cache_decay_drop_percent.max(1);
+                let mut drop_count = cache_len.saturating_mul(drop_percent) / 100;
+                if drop_count == 0 {
+                    drop_count = 1;
+                }
+                for _ in 0..drop_count {
+                    if cache.pop_lru().is_none() {
+                        break;
+                    }
+                }
             }
-            
-            let new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
-            memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
-            
-            log_debug!("✅ 阶段1清理完成: {} 条, {} bytes", cache.len(), new_bytes);
-        }
-    }
-    
-    // 阶段2：超过 120% 容量或内存超限时，强制清理到限制
-    let cache_len_after = memory_cache.read().map(|c| c.len()).unwrap_or(0);
-    let current_bytes_after = memory_cache_bytes.load(Ordering::SeqCst);
-    
-    if cache_len_after >= tolerance_120 || current_bytes_after > max_bytes {
-        log_debug!("🧹 两阶段清理 - 阶段2: {} 条 >= {} 或 {} bytes > {} bytes", 
-                  cache_len_after, tolerance_120, current_bytes_after, max_bytes);
-        
-        if let Ok(mut cache) = memory_cache.write() {
-            // 清理到限制大小
-            let erase_count = cache.len().saturating_sub(limit);
-            for _ in 0..erase_count {
-                cache.pop_lru();
-            }
-            
-            // 如果仍然超过内存限制，继续清理
+
             let mut new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
-            while new_bytes > max_bytes && cache.len() > 0 {
+            while new_bytes > budget && !cache.is_empty() {
                 cache.pop_lru();
                 new_bytes = cache.iter().map(|(_, v)| v.len()).sum();
             }
-            
+
             memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
-            
-            log_debug!("✅ 阶段2清理完成: {} 条, {} bytes", cache.len(), new_bytes);
+            log_debug!(
+                "🧹 字节预算清理完成: {} 条, {} bytes (budget={} bytes)",
+                cache.len(),
+                new_bytes,
+                budget
+            );
         }
     }
 }

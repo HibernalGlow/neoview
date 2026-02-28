@@ -251,6 +251,7 @@ impl ThumbnailServiceV3 {
         center_index: Option<usize>,
         lane: TaskLane,
     ) {
+        let requested_paths: HashSet<String> = paths.iter().cloned().collect();
         let center = center_index.unwrap_or(paths.len() / 2);
 
         // 更新当前目录
@@ -261,6 +262,24 @@ impl ThumbnailServiceV3 {
                     log_debug!("📂 目录切换: {} -> {} (epoch={})", *dir, current_dir, next_epoch);
                     *dir = current_dir.clone();
                 }
+            }
+        }
+
+        if !requested_paths.is_empty() && !matches!(lane, TaskLane::Background) {
+            let dropped = queue::prune_lane_directory_except(
+                &self.task_queue,
+                lane,
+                &current_dir,
+                &requested_paths,
+            );
+            for task in dropped {
+                match task.lane {
+                    TaskLane::Visible => Self::dec_counter(&self.queued_visible),
+                    TaskLane::Prefetch => Self::dec_counter(&self.queued_prefetch),
+                    TaskLane::Background => Self::dec_counter(&self.queued_background),
+                }
+                self.request_deduplicator
+                    .release_with_id(&task.dedup_key, task.dedup_request_id);
             }
         }
 

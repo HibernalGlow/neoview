@@ -89,6 +89,23 @@ fn split_lane_by_path(
     *queue = kept;
 }
 
+fn prune_lane_by_directory_except(
+    queue: &mut VecDeque<GenerateTask>,
+    dir: &str,
+    keep_paths: &HashSet<String>,
+    removed: &mut Vec<GenerateTask>,
+) {
+    let mut kept = VecDeque::with_capacity(queue.len());
+    while let Some(task) = queue.pop_front() {
+        if task.directory == dir && !keep_paths.contains(task.path.as_str()) {
+            removed.push(task);
+        } else {
+            kept.push_back(task);
+        }
+    }
+    *queue = kept;
+}
+
 fn pop_for_preferred_lane(state: &mut TaskQueueState, preferred: TaskLane) -> Option<GenerateTask> {
     match preferred {
         TaskLane::Visible => state
@@ -218,6 +235,28 @@ pub fn clear_directory_tasks(
             queue.queued_paths.remove(task.path.as_str());
         }
         task_queue.1.notify_all();
+        return removed;
+    }
+    Vec::new()
+}
+
+/// 针对同目录同车道做窗口化裁剪：保留 keep_paths，其余旧窗口任务批量移除
+pub fn prune_lane_directory_except(
+    task_queue: &(Mutex<TaskQueueState>, Condvar),
+    lane: TaskLane,
+    dir: &str,
+    keep_paths: &HashSet<String>,
+) -> Vec<GenerateTask> {
+    if let Ok(mut queue) = task_queue.0.lock() {
+        let mut removed = Vec::new();
+        let lane_queue = lane_queue_mut(&mut queue, lane);
+        prune_lane_by_directory_except(lane_queue, dir, keep_paths, &mut removed);
+        for task in removed.iter() {
+            queue.queued_paths.remove(task.path.as_str());
+        }
+        if !removed.is_empty() {
+            task_queue.1.notify_all();
+        }
         return removed;
     }
     Vec::new()

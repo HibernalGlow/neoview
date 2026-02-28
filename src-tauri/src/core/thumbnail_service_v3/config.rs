@@ -48,6 +48,12 @@ pub struct ThumbnailServiceConfig {
     pub decode_stage_max_active: usize,
     /// 编码阶段并发上限（主要约束 image/archive/video）
     pub encode_stage_max_active: usize,
+    /// 内存缓存字节预算
+    pub memory_cache_byte_budget: usize,
+    /// 热度衰减触发阈值（预算百分比）
+    pub memory_cache_decay_threshold_percent: usize,
+    /// 每次热度衰减清理比例（百分比）
+    pub memory_cache_decay_drop_percent: usize,
 }
 
 impl Default for ThumbnailServiceConfig {
@@ -74,6 +80,13 @@ impl Default for ThumbnailServiceConfig {
         let adaptive_min_active_workers = (worker_threads / 3).max(2).min(worker_threads);
         let decode_stage_max_active = (worker_threads / 2).max(1);
         let encode_stage_max_active = ((worker_threads * 2) / 3).max(1);
+        let memory_cache_byte_budget = if num_cores >= 8 {
+            512 * 1024 * 1024
+        } else if num_cores >= 4 {
+            256 * 1024 * 1024
+        } else {
+            128 * 1024 * 1024
+        };
         
         Self {
             folder_search_depth: 3,  // 允许递归3层查找子文件夹中的图片
@@ -106,6 +119,9 @@ impl Default for ThumbnailServiceConfig {
             adaptive_scale_down_fail_percent: 18,
             decode_stage_max_active,
             encode_stage_max_active,
+            memory_cache_byte_budget,
+            memory_cache_decay_threshold_percent: 85,
+            memory_cache_decay_drop_percent: 12,
         }
     }
 }

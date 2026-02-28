@@ -210,6 +210,7 @@ impl ThumbnailServiceV3 {
         paths: Vec<String>,
         current_dir: String,
         center_index: Option<usize>,
+        lane: TaskLane,
     ) {
         let center = center_index.unwrap_or(paths.len() / 2);
 
@@ -301,7 +302,7 @@ impl ThumbnailServiceV3 {
                 &current_dir,
                 center,
                 epoch,
-                TaskLane::Visible,
+                lane,
             );
         }
 

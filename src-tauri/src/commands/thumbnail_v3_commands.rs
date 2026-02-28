@@ -15,7 +15,9 @@ use super::thumbnail_commands::ThumbnailState;
 use crate::core::blob_registry::BlobRegistry;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::{ThumbnailGenerator, ThumbnailGeneratorConfig};
-use crate::core::thumbnail_service_v3::{CacheStats, ThumbnailServiceConfig, ThumbnailServiceV3};
+use crate::core::thumbnail_service_v3::{
+    CacheStats, TaskLane, ThumbnailServiceConfig, ThumbnailServiceV3,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
@@ -108,6 +110,7 @@ pub async fn request_visible_thumbnails_v3(
     paths: Vec<String>,
     current_dir: String,
     center_index: Option<usize>,
+    lane: Option<String>,
 ) -> Result<(), String> {
     // 安全获取 State（使用 try_state 避免 panic）
     let state = match app.try_state::<ThumbnailServiceV3State>() {
@@ -117,10 +120,16 @@ pub async fn request_visible_thumbnails_v3(
             return Ok(());
         }
     };
+    let lane = match lane.as_deref() {
+        Some("prefetch") => TaskLane::Prefetch,
+        Some("background") => TaskLane::Background,
+        _ => TaskLane::Visible,
+    };
+
     // 不阻塞，直接返回，传递中心索引用于优先级排序
     state
         .service
-        .request_visible_thumbnails(&app, paths, current_dir, center_index);
+        .request_visible_thumbnails(&app, paths, current_dir, center_index, lane);
     Ok(())
 }
 
@@ -193,7 +202,7 @@ pub async fn preload_directory_thumbnails_v3(
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         state
             .service
-            .request_visible_thumbnails(&app, paths, dir, None);
+            .request_visible_thumbnails(&app, paths, dir, None, TaskLane::Background);
     }
 
     Ok(())

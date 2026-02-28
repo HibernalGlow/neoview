@@ -445,6 +445,7 @@ export async function requestVisibleThumbnails(
               paths: batch,
               currentDir: throttleState.dir,
               centerIndex: center,
+              lane: 'visible',
             })
           )
             .then(() => undefined)
@@ -846,7 +847,54 @@ export async function requestVisibleThumbnailsDeltaWithPrefetch(
   }
 
   if (prefetchOnly.length === 0) return;
-  await requestVisibleThumbnails(prefetchOnly, currentDir, centerIndex);
+  await requestThumbnailsByLane(prefetchOnly, currentDir, centerIndex, 'prefetch');
+}
+
+type ThumbnailLane = 'visible' | 'prefetch' | 'background';
+
+async function requestThumbnailsByLane(
+  paths: string[],
+  currentDir: string,
+  centerIndex: number,
+  lane: ThumbnailLane
+): Promise<void> {
+  if (paths.length === 0) return;
+
+  for (let i = 0; i < paths.length;) {
+    const tasks: Promise<void>[] = [];
+
+    for (let slot = 0; slot < MAX_PARALLEL_INVOKES && i < paths.length; slot += 1) {
+      const batch = paths.slice(i, i + MAX_BATCH_SIZE);
+      i += MAX_BATCH_SIZE;
+
+      markInFlight(batch);
+      markRecentlyRequested(batch);
+
+      tasks.push(
+        Promise.resolve(
+          invoke('request_visible_thumbnails_v3', {
+            paths: batch,
+            currentDir,
+            centerIndex,
+            lane,
+          })
+        )
+          .then(() => undefined)
+          .catch((error) => {
+            for (const p of batch) releaseInFlight(p);
+            console.error(`❌ requestThumbnailsByLane(${lane}) failed:`, error);
+          })
+      );
+    }
+
+    if (tasks.length > 0) {
+      await Promise.all(tasks);
+    }
+
+    if (i < paths.length) {
+      await new Promise((resolve) => setTimeout(resolve, BASE_THROTTLE_MS));
+    }
+  }
 }
 
 /**
@@ -897,6 +945,7 @@ export async function requestAllThumbnails(
             paths: batch,
             currentDir,
             centerIndex: effectiveCenter,
+            lane: 'background',
           })
         )
           .then(() => undefined)

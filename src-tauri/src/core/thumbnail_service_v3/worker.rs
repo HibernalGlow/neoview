@@ -19,7 +19,9 @@ use super::generators::{
     generate_archive_thumbnail_static, generate_file_thumbnail_static,
     generate_folder_thumbnail_static, generate_video_thumbnail_static,
 };
-use super::types::{GenerateTask, ThumbnailFileType, ThumbnailReadyPayload};
+use super::types::{
+    GenerateTask, ThumbnailBatchReadyPayload, ThumbnailFileType, ThumbnailReadyPayload,
+};
 use super::{log_debug, log_info};
 
 /// 启动工作线程
@@ -87,7 +89,10 @@ fn create_worker_thread(
     request_deduplicator: Arc<RequestDeduplicator>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
+        const EMIT_BATCH_SIZE: usize = 16;
         log_debug!("🔧 Worker {} started", worker_id);
+        let mut emit_batch: Vec<ThumbnailReadyPayload> = Vec::with_capacity(EMIT_BATCH_SIZE);
+
         while running.load(Ordering::SeqCst) {
             let task = {
                 let (queue_lock, queue_cv) = (&task_queue.0, &task_queue.1);
@@ -127,9 +132,8 @@ fn create_worker_thread(
                     continue;
                 }
                 active_workers.fetch_add(1, Ordering::SeqCst);
-                process_task(
+                if let Some(payload) = process_task(
                     &task,
-                    &app,
                     &generator,
                     &db,
                     folder_depth,
@@ -140,12 +144,38 @@ fn create_worker_thread(
                     &failed_index,
                     &save_queue,
                     &request_deduplicator,
-                );
+                ) {
+                    emit_batch.push(payload);
+                    flush_worker_emit_batch(&app, &mut emit_batch, false, EMIT_BATCH_SIZE);
+                }
                 active_workers.fetch_sub(1, Ordering::SeqCst);
+            } else {
+                flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
             }
         }
+
+        flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
         log_debug!("🔧 Worker {} stopped", worker_id);
     })
+}
+
+fn flush_worker_emit_batch(
+    app: &AppHandle,
+    emit_batch: &mut Vec<ThumbnailReadyPayload>,
+    force: bool,
+    batch_size: usize,
+) {
+    if emit_batch.is_empty() {
+        return;
+    }
+    if !force && emit_batch.len() < batch_size {
+        return;
+    }
+
+    let payload = ThumbnailBatchReadyPayload {
+        items: std::mem::take(emit_batch),
+    };
+    let _ = app.emit("thumbnail-batch-ready", payload);
 }
 
 /// 检查任务是否应该处理（目录是否匹配）
@@ -165,7 +195,6 @@ fn check_task_validity(task: &GenerateTask, current_dir: &Arc<RwLock<String>>) -
 #[allow(clippy::too_many_arguments)]
 fn process_task(
     task: &GenerateTask,
-    app: &AppHandle,
     generator: &Arc<ThumbnailGenerator>,
     db: &Arc<ThumbnailDb>,
     folder_depth: u32,
@@ -176,7 +205,9 @@ fn process_task(
     failed_index: &Arc<RwLock<HashSet<String>>>,
     save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
     request_deduplicator: &Arc<RequestDeduplicator>,
-) {
+) -> Option<ThumbnailReadyPayload> {
+    let mut ready_payload: Option<ThumbnailReadyPayload> = None;
+
     let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| match task.file_type {
         ThumbnailFileType::Folder => {
             generate_folder_thumbnail_static(generator, db, &task.path, folder_depth)
@@ -194,7 +225,7 @@ fn process_task(
 
     match gen_result {
         Ok(Ok((blob, save_info))) => {
-            handle_success(
+            ready_payload = Some(handle_success(
                 task,
                 &blob,
                 save_info,
@@ -203,8 +234,7 @@ fn process_task(
                 db_index,
                 folder_db_index,
                 save_queue,
-                app,
-            );
+            ));
         }
         Ok(Err(e)) => {
             log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
@@ -221,6 +251,8 @@ fn process_task(
     }
 
     request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
+
+    ready_payload
 }
 
 /// 处理成功生成的缩略图
@@ -234,8 +266,7 @@ fn handle_success(
     db_index: &Arc<RwLock<HashSet<String>>>,
     folder_db_index: &Arc<RwLock<HashSet<String>>>,
     save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
-    app: &AppHandle,
-) {
+) -> ThumbnailReadyPayload {
     // 更新内存缓存
     if let Ok(mut cache) = memory_cache.write() {
         cache.put(task.path.clone(), blob.to_vec());
@@ -257,14 +288,10 @@ fn handle_success(
             q.insert(path_key, (blob.to_vec(), size, ghash, Instant::now()));
         }
     }
-    // 发送到前端
-    let _ = app.emit(
-        "thumbnail-ready",
-        ThumbnailReadyPayload {
-            path: task.path.clone(),
-            blob: blob.to_vec(),
-        },
-    );
+    ThumbnailReadyPayload {
+        path: task.path.clone(),
+        blob: blob.to_vec(),
+    }
 }
 
 /// 启动保存队列刷新线程

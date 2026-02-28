@@ -15,6 +15,7 @@ pub fn register_book_path(path: String, state: State<'_, ProtocolState>) -> Resu
         return Err(format!("路径不存在: {path}"));
     }
     let hash = state.path_registry.register(&path_buf);
+    state.preheat_archive_on_register(&hash, &path_buf);
     log::debug!("📝 注册路径: {} -> {}", path, hash);
     Ok(hash)
 }

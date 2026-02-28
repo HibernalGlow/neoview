@@ -252,6 +252,98 @@ impl ProtocolState {
         })
     }
 
+    /// 预热压缩包首图链路：元数据 + 首图二进制
+    /// 用于“点击压缩包后首图尽快出现”场景
+    pub fn preheat_archive_on_register(&self, book_hash: &str, book_path: &Path) {
+        if !ArchiveManager::is_supported_archive(book_path) {
+            return;
+        }
+
+        let archive_manager = Arc::clone(&self.archive_manager);
+        let archive_metadata_cache = self.archive_metadata_cache.clone();
+        let archive_image_cache = self.archive_image_cache.clone();
+        let book_hash = book_hash.to_string();
+        let book_path = book_path.to_path_buf();
+
+        std::thread::spawn(move || {
+            let book_key = ProtocolState::parse_book_key(&book_hash);
+
+            let entries = match archive_manager.list_contents(&book_path) {
+                Ok(entries) => entries,
+                Err(err) => {
+                    debug!(
+                        "📦 Protocol preheat: list_contents 失败, path={}, err={}",
+                        book_path.display(),
+                        err
+                    );
+                    return;
+                }
+            };
+
+            let mut image_entries = vec![None; entries.len()];
+            let mut first_image: Option<(usize, String, &'static str)> = None;
+
+            for entry in entries {
+                if !(entry.is_image || entry.is_video) {
+                    continue;
+                }
+
+                if entry.entry_index >= image_entries.len() {
+                    image_entries.resize(entry.entry_index + 1, None);
+                }
+
+                let mime_type = get_mime_type(&entry.path);
+                if entry.is_image && first_image.is_none() {
+                    first_image = Some((entry.entry_index, entry.path.clone(), mime_type));
+                }
+
+                image_entries[entry.entry_index] = Some(CachedArchiveEntry {
+                    path: entry.path,
+                    mime_type,
+                });
+            }
+
+            archive_metadata_cache.insert(book_key, Arc::new(CachedArchiveMetadata { image_entries }));
+
+            let Some((entry_index, entry_path, mime_type)) = first_image else {
+                return;
+            };
+
+            let cache_key = (book_key, entry_index);
+            if archive_image_cache.get(&cache_key).is_some() {
+                return;
+            }
+
+            let image_data = match archive_manager
+                .load_image_from_archive_shared_with_hint(&book_path, &entry_path, Some(entry_index))
+            {
+                Ok(data) => data,
+                Err(err) => {
+                    debug!(
+                        "📦 Protocol preheat: 首图加载失败, path={}, entry={}, err={}",
+                        book_path.display(),
+                        entry_index,
+                        err
+                    );
+                    return;
+                }
+            };
+
+            archive_image_cache.insert(
+                cache_key,
+                CachedProtocolImage {
+                    data: image_data,
+                    mime_type,
+                },
+            );
+            debug!(
+                "📦 Protocol preheat: 首图预热完成, path={}, entry={}",
+                book_path.display(),
+                entry_index
+            );
+        });
+    }
+
     /// 获取或缓存压缩包元数据
     fn get_or_cache_metadata(
         &self,

@@ -253,14 +253,20 @@ fn process_task(
         }
         Ok(Err(e)) => {
             log_debug!("⚠️ 生成缩略图失败: {} - {}", task.path, e);
-            if let Ok(mut idx) = failed_index.write() {
-                idx.insert(task.path.clone());
+            // 文件夹失败不加入 failed_index：子文件可能尚未生成缩略图，需要允许重试
+            if !matches!(task.file_type, ThumbnailFileType::Folder) {
+                if let Ok(mut idx) = failed_index.write() {
+                    idx.insert(task.path.clone());
+                }
             }
         }
         Err(_) => {
             log_debug!("⚠️ 生成缩略图时 panic: {}", task.path);
-            if let Ok(mut idx) = failed_index.write() {
-                idx.insert(task.path.clone());
+            // 文件夹 panic 也不加入永久失败列表，允许后续重试
+            if !matches!(task.file_type, ThumbnailFileType::Folder) {
+                if let Ok(mut idx) = failed_index.write() {
+                    idx.insert(task.path.clone());
+                }
             }
         }
     }

@@ -39,7 +39,7 @@ impl Default for ThumbnailServiceConfig {
         };
         
         Self {
-            folder_search_depth: 1,  // 优化：限制扫描深度为1，减少I/O
+            folder_search_depth: 3,  // 允许递归3层查找子文件夹中的图片
             memory_cache_size,
             worker_threads,
             thumbnail_size: 256,

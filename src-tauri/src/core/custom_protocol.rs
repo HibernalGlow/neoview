@@ -13,7 +13,6 @@ use ahash::AHashMap;
 use log::{debug, error, info, warn};
 use mini_moka::sync::Cache;
 use parking_lot::RwLock;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -105,8 +104,8 @@ pub struct CachedArchiveEntry {
 /// 缓存的压缩包元数据
 #[derive(Clone, Debug)]
 struct CachedArchiveMetadata {
-    /// 图片和视频条目 (key: entry_index)
-    image_entries: HashMap<usize, CachedArchiveEntry>,
+    /// 图片和视频条目（按 entry_index 直接索引）
+    image_entries: Vec<Option<CachedArchiveEntry>>,
     pub cached_at: Instant,
 }
 
@@ -117,10 +116,10 @@ pub struct ProtocolState {
     /// 内存映射缓存
     pub mmap_cache: MmapCache,
     /// 压缩包管理器
-    pub archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
+    pub archive_manager: Arc<ArchiveManager>,
     /// 压缩包元数据缓存（避免重复列出内容）
     /// 参考 Spacedrive 的 file_metadata_cache
-    archive_metadata_cache: Cache<String, CachedArchiveMetadata>,
+    archive_metadata_cache: Cache<String, Arc<CachedArchiveMetadata>>,
     /// 压缩包图片二进制缓存（避免重复解包读取）
     archive_image_cache: Cache<String, Arc<[u8]>>,
 }
@@ -138,10 +137,15 @@ impl ProtocolState {
             .time_to_live(Duration::from_secs(180))
             .build();
 
+        let shared_archive_manager = {
+            let manager = archive_manager.lock().unwrap();
+            Arc::new(manager.clone())
+        };
+
         Self {
             path_registry: PathRegistry::new(),
             mmap_cache: MmapCache::default(),
-            archive_manager,
+            archive_manager: shared_archive_manager,
             archive_metadata_cache,
             archive_image_cache,
         }
@@ -152,7 +156,7 @@ impl ProtocolState {
         &self,
         book_hash: &str,
         book_path: &Path,
-    ) -> Result<CachedArchiveMetadata, String> {
+    ) -> Result<Arc<CachedArchiveMetadata>, String> {
         // 先检查缓存
         if let Some(cached) = self.archive_metadata_cache.get(&book_hash.to_string()) {
             debug!("📦 Protocol: 使用缓存的元数据, hash={}", book_hash);
@@ -160,32 +164,30 @@ impl ProtocolState {
         }
 
         // 缓存未命中，从压缩包读取
-        let archive_manager = self.archive_manager.lock().unwrap();
-        let entries = archive_manager
+        let entries = self
+            .archive_manager
             .list_contents(book_path)
             .map_err(|e| format!("列出压缩包内容失败: {}", e))?;
 
         // 过滤并缓存可查看条目（图片和视频）
-        let mut image_entries = HashMap::new();
+        let max_entry_index = entries.iter().map(|e| e.entry_index).max().unwrap_or(0);
+        let mut image_entries = vec![None; max_entry_index.saturating_add(1)];
         for e in entries {
             if e.is_image || e.is_video {
-                image_entries.insert(
-                    e.entry_index,
-                    CachedArchiveEntry {
+                image_entries[e.entry_index] = Some(CachedArchiveEntry {
                         name: e.name.clone(),
                         path: e.path.clone(),
                         is_image: e.is_image,
                         is_video: e.is_video,
                         entry_index: e.entry_index,
-                    },
-                );
+                    });
             }
         }
 
-        let metadata = CachedArchiveMetadata {
+        let metadata = Arc::new(CachedArchiveMetadata {
             image_entries,
             cached_at: Instant::now(),
-        };
+        });
 
         // 存入缓存
         self.archive_metadata_cache
@@ -401,7 +403,11 @@ fn handle_archive_image(
     };
 
     // 查找指定索引的条目
-    let Some(entry) = metadata.image_entries.get(&entry_index) else {
+    let Some(entry) = metadata
+        .image_entries
+        .get(entry_index)
+        .and_then(|entry| entry.as_ref())
+    else {
         warn!(
             "📦 Protocol: 无法找到条目索引, index={}, entries_cached={}",
             entry_index,
@@ -418,8 +424,10 @@ fn handle_archive_image(
     }
 
     // 提取图片数据
-    let archive_manager = state.archive_manager.lock().unwrap();
-    let shared = match archive_manager.load_image_from_archive_shared(&book_path, &entry.path) {
+    let shared = match state
+        .archive_manager
+        .load_image_from_archive_shared(&book_path, &entry.path)
+    {
         Ok(data) => data,
         Err(e) => {
             error!("📦 Protocol: 提取图片失败: {e}");

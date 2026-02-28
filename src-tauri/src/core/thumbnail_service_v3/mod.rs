@@ -81,6 +81,10 @@ pub struct ThumbnailServiceV3 {
     running: Arc<AtomicBool>,
     /// 活跃工作线程数
     active_workers: Arc<AtomicUsize>,
+    /// 各车道已处理任务计数
+    processed_visible: Arc<AtomicUsize>,
+    processed_prefetch: Arc<AtomicUsize>,
+    processed_background: Arc<AtomicUsize>,
     /// 工作线程句柄
     workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
     /// 数据库索引 (已有缩略图的路径集合)
@@ -130,6 +134,9 @@ impl ThumbnailServiceV3 {
             scheduler_paused: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
+            processed_visible: Arc::new(AtomicUsize::new(0)),
+            processed_prefetch: Arc::new(AtomicUsize::new(0)),
+            processed_background: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
             db_index: Arc::new(RwLock::new(db_index)),
             folder_db_index: Arc::new(RwLock::new(folder_db_index)),
@@ -158,6 +165,9 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.request_epoch),
             Arc::clone(&self.scheduler_paused),
             Arc::clone(&self.active_workers),
+            Arc::clone(&self.processed_visible),
+            Arc::clone(&self.processed_prefetch),
+            Arc::clone(&self.processed_background),
             Arc::clone(&self.memory_cache),
             Arc::clone(&self.memory_cache_bytes),
             Arc::clone(&self.db),
@@ -501,7 +511,11 @@ impl ThumbnailServiceV3 {
         let memory_count = self.memory_cache.read().map(|c| c.len()).unwrap_or(0);
         let memory_bytes = self.memory_cache_bytes.load(Ordering::SeqCst);
         let queue_length = queue::queue_len(&self.task_queue);
+        let (queue_visible, queue_prefetch, queue_background) = queue::queue_lane_lens(&self.task_queue);
         let active_workers = self.active_workers.load(Ordering::SeqCst);
+        let processed_visible = self.processed_visible.load(Ordering::Relaxed);
+        let processed_prefetch = self.processed_prefetch.load(Ordering::Relaxed);
+        let processed_background = self.processed_background.load(Ordering::Relaxed);
         let (database_count, database_bytes) = self
             .db
             .get_maintenance_stats()
@@ -513,7 +527,13 @@ impl ThumbnailServiceV3 {
             database_count,
             database_bytes,
             queue_length,
+            queue_visible,
+            queue_prefetch,
+            queue_background,
             active_workers,
+            processed_visible,
+            processed_prefetch,
+            processed_background,
         }
     }
 

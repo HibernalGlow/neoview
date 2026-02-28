@@ -108,6 +108,24 @@ pub fn queue_len(task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar)) -> usize
     task_queue.0.lock().map(|q| q.len()).unwrap_or(0)
 }
 
+/// 获取各调度车道的队列长度 (visible, prefetch, background)
+pub fn queue_lane_lens(task_queue: &(Mutex<VecDeque<GenerateTask>>, Condvar)) -> (usize, usize, usize) {
+    if let Ok(queue) = task_queue.0.lock() {
+        let mut visible = 0usize;
+        let mut prefetch = 0usize;
+        let mut background = 0usize;
+        for task in queue.iter() {
+            match task.lane {
+                TaskLane::Visible => visible += 1,
+                TaskLane::Prefetch => prefetch += 1,
+                TaskLane::Background => background += 1,
+            }
+        }
+        return (visible, prefetch, background);
+    }
+    (0, 0, 0)
+}
+
 /// 清空整个队列
 /// 
 /// # 返回

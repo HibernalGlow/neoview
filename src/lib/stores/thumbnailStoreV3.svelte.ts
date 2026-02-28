@@ -260,7 +260,13 @@ export interface CacheStats {
   databaseCount: number;
   databaseBytes: number;
   queueLength: number;
+  queueVisible: number;
+  queuePrefetch: number;
+  queueBackground: number;
   activeWorkers: number;
+  processedVisible: number;
+  processedPrefetch: number;
+  processedBackground: number;
 }
 
 /**

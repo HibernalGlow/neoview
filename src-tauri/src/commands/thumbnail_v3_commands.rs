@@ -229,7 +229,13 @@ pub async fn get_thumbnail_cache_stats_v3(app: AppHandle) -> Result<CacheStats, 
             database_count: 0,
             database_bytes: 0,
             queue_length: 0,
+            queue_visible: 0,
+            queue_prefetch: 0,
+            queue_background: 0,
             active_workers: 0,
+            processed_visible: 0,
+            processed_prefetch: 0,
+            processed_background: 0,
         })
     }
 }

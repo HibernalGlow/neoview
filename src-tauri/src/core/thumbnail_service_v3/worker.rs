@@ -68,6 +68,9 @@ pub fn start_workers(
     request_epoch: Arc<AtomicU64>,
     scheduler_paused: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
+    processed_visible: Arc<AtomicUsize>,
+    processed_prefetch: Arc<AtomicUsize>,
+    processed_background: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
@@ -91,6 +94,9 @@ pub fn start_workers(
             Arc::clone(&scheduler_paused),
             Arc::clone(&running),
             Arc::clone(&active_workers),
+            Arc::clone(&processed_visible),
+            Arc::clone(&processed_prefetch),
+            Arc::clone(&processed_background),
             Arc::clone(&memory_cache),
             Arc::clone(&memory_cache_bytes),
             Arc::clone(&db),
@@ -118,6 +124,9 @@ fn create_worker_thread(
     scheduler_paused: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
+    processed_visible: Arc<AtomicUsize>,
+    processed_prefetch: Arc<AtomicUsize>,
+    processed_background: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
@@ -194,6 +203,17 @@ fn create_worker_thread(
                     continue;
                 }
                 active_workers.fetch_add(1, Ordering::SeqCst);
+                match task.lane {
+                    TaskLane::Visible => {
+                        processed_visible.fetch_add(1, Ordering::Relaxed);
+                    }
+                    TaskLane::Prefetch => {
+                        processed_prefetch.fetch_add(1, Ordering::Relaxed);
+                    }
+                    TaskLane::Background => {
+                        processed_background.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
                 if let Some(payload) = process_task(
                     &task,
                     &generator,

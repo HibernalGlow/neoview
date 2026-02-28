@@ -99,7 +99,13 @@ pub struct CacheStats {
     pub database_count: i64,
     pub database_bytes: i64,
     pub queue_length: usize,
+    pub queue_visible: usize,
+    pub queue_prefetch: usize,
+    pub queue_background: usize,
     pub active_workers: usize,
+    pub processed_visible: usize,
+    pub processed_prefetch: usize,
+    pub processed_background: usize,
 }
 
 /// 检测文件类型

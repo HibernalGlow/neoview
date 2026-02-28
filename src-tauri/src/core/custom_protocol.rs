@@ -25,7 +25,7 @@ pub const PROTOCOL_NAME: &str = "neoview";
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
     /// 哈希 -> 路径映射
-    hash_to_path: RwLock<AHashMap<String, PathBuf>>,
+    hash_to_path: RwLock<AHashMap<String, Arc<PathBuf>>>,
     /// 路径 -> 哈希映射（反向查找）
     path_to_hash: RwLock<AHashMap<PathBuf, String>>,
 }
@@ -53,17 +53,19 @@ impl PathRegistry {
 
         // 注册
         {
+            let path_buf = path.to_path_buf();
+            let shared_path = Arc::new(path_buf.clone());
             let mut hash_to_path = self.hash_to_path.write();
             let mut path_to_hash = self.path_to_hash.write();
-            hash_to_path.insert(hash.clone(), path.to_path_buf());
-            path_to_hash.insert(path.to_path_buf(), hash.clone());
+            hash_to_path.insert(hash.clone(), shared_path);
+            path_to_hash.insert(path_buf, hash.clone());
         }
 
         hash
     }
 
     /// 根据哈希获取路径
-    pub fn get_path(&self, hash: &str) -> Option<PathBuf> {
+    pub fn get_path(&self, hash: &str) -> Option<Arc<PathBuf>> {
         let hash_to_path = self.hash_to_path.read();
         hash_to_path.get(hash).cloned()
     }
@@ -226,6 +228,7 @@ pub enum ProtocolRequest {
     /// 压缩包内图片: `/image/{book_hash}/{entry_index}`
     ArchiveImage {
         book_hash: String,
+        book_key: u64,
         entry_index: usize,
     },
     /// 文件夹图片: `/file/{path_hash}`
@@ -257,8 +260,10 @@ impl ProtocolRequest {
                 }
 
                 if let Ok(index) = entry_index.parse::<usize>() {
+                    let book_key = ProtocolState::parse_book_key(book_hash);
                     ProtocolRequest::ArchiveImage {
                         book_hash: book_hash.to_string(),
+                        book_key,
                         entry_index: index,
                     }
                 } else {
@@ -455,6 +460,7 @@ fn handle_archive_image(
     state: &ProtocolState,
     request: &Request<Vec<u8>>,
     book_hash: &str,
+    book_key: u64,
     entry_index: usize,
 ) -> Response<Vec<u8>> {
     // 从注册表获取路径
@@ -470,8 +476,7 @@ fn handle_archive_image(
     );
 
     // 使用缓存的元数据（参考 Spacedrive 的 get_or_init_lru_entry）
-    let book_key = ProtocolState::parse_book_key(book_hash);
-    let metadata = match state.get_or_cache_metadata(book_key, book_hash, &book_path) {
+    let metadata = match state.get_or_cache_metadata(book_key, book_hash, book_path.as_ref()) {
         Ok(m) => m,
         Err(e) => {
             error!("📦 Protocol: 获取元数据失败: {e}");
@@ -503,7 +508,7 @@ fn handle_archive_image(
     // 提取图片数据
     let shared = match state
         .archive_manager
-        .load_image_from_archive_shared_with_hint(&book_path, &entry.path, Some(entry_index))
+        .load_image_from_archive_shared_with_hint(book_path.as_ref(), &entry.path, Some(entry_index))
     {
         Ok(data) => data,
         Err(e) => {
@@ -531,7 +536,7 @@ fn handle_file_image(
     debug!("📁 Protocol: 加载文件图片, path={}", file_path.display());
 
     // 使用内存映射读取
-    let data = match state.mmap_cache.get_or_create(&file_path) {
+    let data = match state.mmap_cache.get_or_create(file_path.as_ref()) {
         Ok(mmap) => mmap,
         Err(e) => {
             error!("📁 Protocol: 读取文件失败: {e}");
@@ -620,8 +625,9 @@ pub fn handle_protocol_request(
         ProtocolRequest::Health => handle_health_check(),
         ProtocolRequest::ArchiveImage {
             book_hash,
+            book_key,
             entry_index,
-        } => handle_archive_image(&state, request, &book_hash, entry_index),
+        } => handle_archive_image(&state, request, &book_hash, book_key, entry_index),
         ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, &path_hash),
         ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, &key),
         ProtocolRequest::Unknown => {
@@ -641,9 +647,11 @@ mod tests {
         match ProtocolRequest::parse("/image/abc123/5") {
             ProtocolRequest::ArchiveImage {
                 book_hash,
+                book_key,
                 entry_index,
             } => {
                 assert_eq!(book_hash, "abc123");
+                assert_eq!(book_key, ProtocolState::parse_book_key("abc123"));
                 assert_eq!(entry_index, 5);
             }
             _ => panic!("解析失败"),
@@ -693,8 +701,14 @@ mod tests {
         assert_ne!(hash1, hash2);
 
         // 验证可以通过哈希获取路径
-        assert_eq!(registry.get_path(&hash1), Some(path1.clone()));
-        assert_eq!(registry.get_path(&hash2), Some(path2.clone()));
+        assert_eq!(
+            registry.get_path(&hash1).as_deref().cloned(),
+            Some(path1.clone())
+        );
+        assert_eq!(
+            registry.get_path(&hash2).as_deref().cloned(),
+            Some(path2.clone())
+        );
 
         // 验证重复注册返回相同哈希
         let hash1_again = registry.register(&path1);

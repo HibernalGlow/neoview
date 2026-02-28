@@ -44,8 +44,6 @@ use zip::ZipArchive;
 /// 压缩包管理器
 #[derive(Clone)]
 pub struct ArchiveManager {
-    /// 支持的图片格式
-    image_extensions: Vec<String>,
     /// 图片缓存
     cache: cache::ImageCache,
     /// 压缩包文件缓存（避免重复打开）
@@ -60,18 +58,6 @@ impl ArchiveManager {
     /// 创建新的压缩包管理器
     pub fn new() -> Self {
         Self {
-            image_extensions: vec![
-                "jpg".to_string(),
-                "jpeg".to_string(),
-                "png".to_string(),
-                "gif".to_string(),
-                "bmp".to_string(),
-                "webp".to_string(),
-                "avif".to_string(),
-                "jxl".to_string(),
-                "tiff".to_string(),
-                "tif".to_string(),
-            ],
             cache: Arc::new(Mutex::new(HashMap::new())),
             archive_cache: Arc::new(Mutex::new(HashMap::new())),
             blob_registry: Arc::new(BlobRegistry::new(512)),
@@ -82,18 +68,6 @@ impl ArchiveManager {
     /// 创建使用共享 BlobRegistry 的压缩包管理器
     pub fn with_shared_blob_registry(blob_registry: Arc<BlobRegistry>) -> Self {
         Self {
-            image_extensions: vec![
-                "jpg".to_string(),
-                "jpeg".to_string(),
-                "png".to_string(),
-                "gif".to_string(),
-                "bmp".to_string(),
-                "webp".to_string(),
-                "avif".to_string(),
-                "jxl".to_string(),
-                "tiff".to_string(),
-                "tif".to_string(),
-            ],
             cache: Arc::new(Mutex::new(HashMap::new())),
             archive_cache: Arc::new(Mutex::new(HashMap::new())),
             blob_registry,
@@ -104,18 +78,6 @@ impl ArchiveManager {
     /// 创建带自定义 blob 缓存大小的压缩包管理器
     pub fn with_blob_cache_size(blob_cache_size: usize) -> Self {
         Self {
-            image_extensions: vec![
-                "jpg".to_string(),
-                "jpeg".to_string(),
-                "png".to_string(),
-                "gif".to_string(),
-                "bmp".to_string(),
-                "webp".to_string(),
-                "avif".to_string(),
-                "jxl".to_string(),
-                "tiff".to_string(),
-                "tif".to_string(),
-            ],
             cache: Arc::new(Mutex::new(HashMap::new())),
             archive_cache: Arc::new(Mutex::new(HashMap::new())),
             index_cache: Arc::new(ArchiveIndexCache::new(100)),

@@ -269,7 +269,6 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
             .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
         let name = entry.name().to_string();
-        let name_lower = name.to_lowercase();
 
         if entry.is_dir() {
             continue;
@@ -278,6 +277,8 @@ fn scan_first_image_entry(archive_path: &Path) -> Result<Option<String>, String>
         if !is_image_file(&name) {
             continue;
         }
+
+        let name_lower = name.to_lowercase();
 
         if first_image.is_none() {
             first_image = Some(name.clone());
@@ -333,7 +334,6 @@ pub fn scan_archive_images_fast(
             .map_err(|e| format!("读取压缩包条目失败: {}", e))?;
 
         let name = entry.name().to_string();
-        let name_lower = name.to_lowercase();
 
         if entry.is_dir() {
             continue;
@@ -342,6 +342,8 @@ pub fn scan_archive_images_fast(
         if !is_image_file(&name) {
             continue;
         }
+
+        let name_lower = name.to_lowercase();
 
         if first_image.is_none() {
             first_image = Some(name.clone());

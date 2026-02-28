@@ -14,6 +14,7 @@ pub struct TaskQueueState {
     pub visible: VecDeque<GenerateTask>,
     pub prefetch: VecDeque<GenerateTask>,
     pub background: VecDeque<GenerateTask>,
+    pub queued_paths: HashSet<String>,
 }
 
 impl TaskQueueState {
@@ -118,6 +119,7 @@ pub fn pop_task_by_lane_locked(
     let task = pop_for_preferred_lane(queue, preferred);
     if let Some(ref t) = task {
         dec_lane_counter(t.lane, queued_visible, queued_prefetch, queued_background);
+        queue.queued_paths.remove(t.path.as_str());
     }
     task
 }
@@ -145,20 +147,10 @@ pub fn enqueue_tasks(
     }
     
     if let Ok(mut queue) = task_queue.0.lock() {
-        // 收集已有路径用于去重：用 &str 引用而非 String clone，避免 O(N) 内存分配
-        let existing_visible: HashSet<&str> = queue.visible.iter().map(|t| t.path.as_str()).collect();
-        let existing_prefetch: HashSet<&str> = queue.prefetch.iter().map(|t| t.path.as_str()).collect();
-        let existing_background: HashSet<&str> = queue.background.iter().map(|t| t.path.as_str()).collect();
-        
         // 计算每个路径到中心的距离并创建任务
         let mut new_tasks: Vec<GenerateTask> = paths
             .into_iter()
-            .filter(|(path, _, _, _)| {
-                let key = path.as_str();
-                !existing_visible.contains(key)
-                    && !existing_prefetch.contains(key)
-                    && !existing_background.contains(key)
-            })
+            .filter(|(path, _, _, _)| !queue.queued_paths.contains(path.as_str()))
             .map(|(path, file_type, original_index, dedup_request_id)| {
                 let center_distance = if original_index >= center {
                     original_index - center
@@ -184,6 +176,7 @@ pub fn enqueue_tasks(
         
         // 插入到队列前端（新任务优先于旧任务）
         for task in new_tasks.into_iter().rev() {
+            queue.queued_paths.insert(task.path.clone());
             lane_queue_mut(&mut queue, lane).push_front(task);
             match lane {
                 TaskLane::Visible => {
@@ -219,6 +212,9 @@ pub fn clear_directory_tasks(
         split_lane_by_directory(&mut queue.visible, dir, &mut removed);
         split_lane_by_directory(&mut queue.prefetch, dir, &mut removed);
         split_lane_by_directory(&mut queue.background, dir, &mut removed);
+        for task in removed.iter() {
+            queue.queued_paths.remove(task.path.as_str());
+        }
         task_queue.1.notify_all();
         return removed;
     }
@@ -269,6 +265,10 @@ pub fn replace_path_with_task(
         remove_path_from_lane(&mut queue.visible, path, &mut removed);
         remove_path_from_lane(&mut queue.prefetch, path, &mut removed);
         remove_path_from_lane(&mut queue.background, path, &mut removed);
+        for dropped in removed.iter() {
+            queue.queued_paths.remove(dropped.path.as_str());
+        }
+        queue.queued_paths.insert(task.path.clone());
         lane_queue_mut(&mut queue, task.lane).push_front(task);
         task_queue.1.notify_all();
         return removed;
@@ -286,6 +286,7 @@ pub fn clear_queue(task_queue: &(Mutex<TaskQueueState>, Condvar)) -> usize {
         queue.visible.clear();
         queue.prefetch.clear();
         queue.background.clear();
+        queue.queued_paths.clear();
         task_queue.1.notify_all();
         return count;
     }

@@ -216,6 +216,8 @@
 
 	function isInteractiveElement(target: EventTarget | null): boolean {
 		if (!(target instanceof HTMLElement)) return false;
+		// 空白收回按钮本身放行，不当作交互元素过滤
+		if (target.closest('[data-blank-collapse="true"]')) return false;
 		return Boolean(
 			target.closest(
 				'button,a,input,textarea,select,label,[role="button"],[role="switch"],[data-sidebar="menu-button"]'
@@ -372,11 +374,7 @@
 
 						<Sidebar.Content>
 							<Sidebar.Group>
-								<Sidebar.GroupContent
-									class="px-0 h-full"
-									onclick={handleBlankAreaClick}
-									ondblclick={handleBlankAreaDoubleClick}
-								>
+								<Sidebar.GroupContent class="px-0 h-full min-h-0 flex flex-col">
 									<Sidebar.Menu>
 										{#each leftPanels as panel (panel.id)}
 											<Sidebar.MenuItem>
@@ -397,6 +395,14 @@
 											</Sidebar.MenuItem>
 										{/each}
 									</Sidebar.Menu>
+									<button
+										type="button"
+										class="w-full flex-1 min-h-0 bg-transparent"
+										data-blank-collapse="true"
+										onclick={handleBlankAreaClick}
+										ondblclick={handleBlankAreaDoubleClick}
+										aria-label="收回左侧边栏"
+									></button>
 								</Sidebar.GroupContent>
 							</Sidebar.Group>
 						</Sidebar.Content>

@@ -253,7 +253,7 @@ async function prefetchAllThumbnails() {
 			size="sm"
 			class="h-7 px-2"
 			disabled={prefetching || items.length === 0}
-			on:click={() => void prefetchAllThumbnails()}
+			onclick={() => void prefetchAllThumbnails()}
 		>
 			<Sparkles class="h-3 w-3" />
 		</Button>

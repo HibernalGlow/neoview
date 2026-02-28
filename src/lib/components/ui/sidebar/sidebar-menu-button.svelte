@@ -83,7 +83,7 @@
 {:else}
 	<Tooltip.Root>
 		<Tooltip.Trigger>
-			{#snippet child({ props })}
+			{#snippet child({ props }: { props: any })}
 				{@render Button({ props })}
 			{/snippet}
 		</Tooltip.Trigger>

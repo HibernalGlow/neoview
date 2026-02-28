@@ -74,7 +74,7 @@
         class={className} 
         {...rest} 
     />
-{:else if fallback}
+{:else if fallback && typeof fallback !== 'string'}
     {@const FallbackComp = fallback}
     <FallbackComp 
         class={className} 

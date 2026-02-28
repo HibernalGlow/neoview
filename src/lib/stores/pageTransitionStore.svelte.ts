@@ -194,5 +194,3 @@ export const pageTransitionStore = {
   },
 };
 
-// 导出类型
-export type { PageTransitionSettings };

@@ -194,14 +194,14 @@ pub fn start_workers(
     scale_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
-    memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
     generator: Arc<ThumbnailGenerator>,
     db_index: Arc<RwLock<HashSet<String>>>,
     folder_db_index: Arc<RwLock<HashSet<String>>>,
     failed_index: Arc<RwLock<HashSet<String>>>,
-    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     request_deduplicator: Arc<RequestDeduplicator>,
     app: AppHandle,
 ) -> Vec<JoinHandle<()>> {
@@ -325,14 +325,14 @@ fn create_worker_thread(
     scale_wait_ms: Arc<AtomicU64>,
     encode_wait_count: Arc<AtomicUsize>,
     encode_wait_ms: Arc<AtomicU64>,
-    memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
     db: Arc<ThumbnailDb>,
     generator: Arc<ThumbnailGenerator>,
     db_index: Arc<RwLock<HashSet<String>>>,
     folder_db_index: Arc<RwLock<HashSet<String>>>,
     failed_index: Arc<RwLock<HashSet<String>>>,
-    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     request_deduplicator: Arc<RequestDeduplicator>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
@@ -707,12 +707,13 @@ fn handle_success(
     task: &GenerateTask,
     blob: Vec<u8>,
     save_info: Option<(String, i64, i32)>,
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     memory_cache_bytes: &Arc<AtomicUsize>,
     db_index: &Arc<RwLock<HashSet<String>>>,
     folder_db_index: &Arc<RwLock<HashSet<String>>>,
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
 ) -> ThumbnailReadyPayload {
+    let blob = Arc::<[u8]>::from(blob);
     let blob_len = blob.len();
     // 放入保存队列（如有需要，先 clone 再 move blob 到内存缓存，省一次 to_vec）
     if let Some((path_key, size, ghash)) = save_info {
@@ -744,7 +745,7 @@ fn handle_success(
 /// 启动保存队列刷新线程
 pub fn start_flush_thread(
     running: Arc<AtomicBool>,
-    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     db: Arc<ThumbnailDb>,
     flush_interval_ms: u64,
     batch_threshold: usize,
@@ -819,7 +820,7 @@ pub fn start_flush_thread(
 
 /// 检查是否应该刷新保存队列
 fn check_flush_condition(
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     last_flush: &Instant,
     flush_interval_ms: u64,
     batch_threshold: usize,
@@ -837,9 +838,9 @@ fn check_flush_condition(
 
 /// 清空保存队列并返回所有项
 fn drain_save_queue_limited(
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     max_items: usize,
-) -> Vec<(String, i64, i32, Vec<u8>)> {
+) -> Vec<(String, i64, i32, Arc<[u8]>)> {
     match save_queue.lock() {
         Ok(mut q) => {
             if q.is_empty() || max_items == 0 {
@@ -859,8 +860,13 @@ fn drain_save_queue_limited(
 }
 
 /// 保存项到数据库
-fn save_items_to_db(db: &Arc<ThumbnailDb>, items: Vec<(String, i64, i32, Vec<u8>)>) {
-    if let Err(e) = db.save_thumbnails_batch(&items) {
+fn save_items_to_db(db: &Arc<ThumbnailDb>, items: Vec<(String, i64, i32, Arc<[u8]>)>) {
+    let batch: Vec<(String, i64, i32, Vec<u8>)> = items
+        .iter()
+        .map(|(pk, sz, gh, blob)| (pk.clone(), *sz, *gh, blob.as_ref().to_vec()))
+        .collect();
+
+    if let Err(e) = db.save_thumbnails_batch(&batch) {
         log_debug!("⚠️ 批量保存失败: {}, 回退到逐个保存", e);
         for (pk, sz, gh, blob) in items {
             let _ = db.save_thumbnail(&pk, sz, gh, &blob);

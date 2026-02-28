@@ -18,10 +18,10 @@ pub struct CacheCleanupStats {
 
 /// 从内存缓存获取（使用写锁因为 LRU 需要更新访问顺序）
 pub fn get_from_memory_cache(
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     path: &str,
-) -> Option<Vec<u8>> {
+) -> Option<Arc<[u8]>> {
     // 先检查内存缓存（LRU.get 需要写锁来更新访问顺序）
     if let Ok(mut cache) = memory_cache.write() {
         if let Some(blob) = cache.get(path) {
@@ -42,10 +42,10 @@ pub fn get_from_memory_cache(
 /// 从内存缓存获取（使用读锁 peek，不更新 LRU 顺序）
 /// 用于协议处理器（/thumb/{key}）：并发 <img> 请求无需争抢写锁更新 LRU 顺序
 pub fn peek_from_memory_cache(
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     path: &str,
-) -> Option<Vec<u8>> {
+) -> Option<Arc<[u8]>> {
     // 读锁 peek：50 个并发 <img> 加载不会互相阻塞
     if let Ok(cache) = memory_cache.read() {
         if let Some(blob) = cache.peek(path) {
@@ -64,8 +64,8 @@ pub fn peek_from_memory_cache(
 
 /// 仅检查内存缓存是否存在（不更新 LRU 顺序，使用读锁）
 pub fn has_in_memory_cache(
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
-    save_queue: &Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
+    save_queue: &Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     path: &str,
 ) -> bool {
     if let Ok(cache) = memory_cache.read() {
@@ -85,7 +85,7 @@ pub fn has_in_memory_cache(
 
 /// 检查内存压力并自动清理（当超过阈值时清理一半缓存）
 pub fn check_memory_pressure(
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     memory_cache_bytes: &Arc<AtomicUsize>,
     max_bytes: usize,
 ) {
@@ -118,7 +118,7 @@ pub fn check_memory_pressure(
 /// 
 /// max_bytes: 缓存大小限制（字节）
 pub fn two_phase_cache_cleanup(
-    memory_cache: &Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     memory_cache_bytes: &Arc<AtomicUsize>,
     config: &ThumbnailServiceConfig,
     max_bytes: usize,

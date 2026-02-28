@@ -62,7 +62,7 @@ pub struct ThumbnailServiceV3 {
     /// 配置
     config: ThumbnailServiceConfig,
     /// 内存缓存 (LRU)
-    memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
+    memory_cache: Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
     /// 内存缓存大小（字节）
     memory_cache_bytes: Arc<AtomicUsize>,
     /// 数据库
@@ -116,7 +116,7 @@ pub struct ThumbnailServiceV3 {
     /// 失败记录索引
     failed_index: Arc<RwLock<HashSet<String>>>,
     /// 保存队列（延迟批量保存到数据库）
-    save_queue: Arc<Mutex<HashMap<String, (Vec<u8>, i64, i32, Instant)>>>,
+    save_queue: Arc<Mutex<HashMap<String, (Arc<[u8]>, i64, i32, Instant)>>>,
     /// 最后一次保存队列刷新时间
     last_flush: Arc<Mutex<Instant>>,
     /// 批量保存阈值
@@ -475,7 +475,7 @@ impl ThumbnailServiceV3 {
                     .batch_load_thumbnails_by_keys_and_category(&file_missing, "folder")
                     .unwrap_or_default();
 
-                let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(chunk_paths.len());
+                let mut loaded: Vec<(String, Arc<[u8]>)> = Vec::with_capacity(chunk_paths.len());
                 let mut touched_keys: Vec<String> = Vec::new();
                 for path in chunk_paths {
                     let loaded_blob = if is_likely_folder(path) {
@@ -490,7 +490,7 @@ impl ThumbnailServiceV3 {
 
                     if let Some(blob) = loaded_blob {
                         touched_keys.push(path.clone());
-                        loaded.push((path.clone(), blob));
+                        loaded.push((path.clone(), Arc::<[u8]>::from(blob)));
                     }
                 }
 
@@ -553,7 +553,7 @@ impl ThumbnailServiceV3 {
     }
 
     /// 从内存缓存获取
-    fn get_from_memory_cache(&self, path: &str) -> Option<Vec<u8>> {
+    fn get_from_memory_cache(&self, path: &str) -> Option<Arc<[u8]>> {
         cache::get_from_memory_cache(&self.memory_cache, &self.save_queue, path)
     }
 
@@ -563,7 +563,7 @@ impl ThumbnailServiceV3 {
     }
 
     /// 从内存缓存 peek（读锁，不更新 LRU 顺序）—— 用于协议处理器
-    fn peek_from_memory_cache(&self, path: &str) -> Option<Vec<u8>> {
+    fn peek_from_memory_cache(&self, path: &str) -> Option<Arc<[u8]>> {
         cache::peek_from_memory_cache(&self.memory_cache, &self.save_queue, path)
     }
 
@@ -593,7 +593,7 @@ impl ThumbnailServiceV3 {
 impl ThumbnailServiceV3 {
     /// 单个缩略图查找：内存缓存优先，回落到 DB。由内建协议的 /thumb/{key} 端点调用。
     /// 使用 peek（读锁）而非 get（写锁）：并发 <img> 请求不争抢写锁
-    pub fn lookup_thumbnail(&self, key: &str) -> Option<Vec<u8>> {
+    pub fn lookup_thumbnail(&self, key: &str) -> Option<Arc<[u8]>> {
         // 1. 内存缓存（读锁 peek，不更新 LRU 顺序——避免 50+ 并发图片请求争抢写锁）
         if let Some(blob) = self.peek_from_memory_cache(key) {
             return Some(blob);
@@ -607,6 +607,7 @@ impl ThumbnailServiceV3 {
         };
 
         if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, primary) {
+            let blob = Arc::<[u8]>::from(blob);
             if let Ok(mut c) = self.memory_cache.write() {
                 if c.peek(key).is_none() {
                     self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
@@ -616,6 +617,7 @@ impl ThumbnailServiceV3 {
             return Some(blob);
         }
         if let Ok(Some(blob)) = self.db.load_thumbnail_by_key_and_category(key, secondary) {
+            let blob = Arc::<[u8]>::from(blob);
             if let Ok(mut c) = self.memory_cache.write() {
                 if c.peek(key).is_none() {
                     self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
@@ -629,8 +631,8 @@ impl ThumbnailServiceV3 {
 
     /// 直接从缓存获取（同步）
     pub fn get_cached_thumbnails(&self, paths: Vec<String>) -> Vec<(String, Option<Vec<u8>>)> {
-        let mut results = Vec::with_capacity(paths.len());
-        let mut db_loaded_for_cache: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut results: Vec<(String, Option<Arc<[u8]>>)> = Vec::with_capacity(paths.len());
+        let mut db_loaded_for_cache: Vec<(String, Arc<[u8]>)> = Vec::new();
         for path in paths {
             let blob = self.get_from_memory_cache(&path);
             if blob.is_some() {
@@ -657,6 +659,7 @@ impl ThumbnailServiceV3 {
                 });
 
             if let Some(blob) = loaded {
+                let blob = Arc::<[u8]>::from(blob);
                 db_loaded_for_cache.push((path.clone(), blob.clone()));
                 results.push((path, Some(blob)));
             } else {
@@ -676,6 +679,9 @@ impl ThumbnailServiceV3 {
         }
 
         results
+            .into_iter()
+            .map(|(path, blob)| (path, blob.map(|b| b.as_ref().to_vec())))
+            .collect()
     }
 
     /// 获取缓存统计

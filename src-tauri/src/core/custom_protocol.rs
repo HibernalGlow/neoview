@@ -390,7 +390,7 @@ fn handle_thumbnail(app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
     if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
         if let Some(data) = v3_state.service.lookup_thumbnail(key) {
             debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
-            return build_response(data, "image/webp");
+            return build_response(data.as_ref().to_vec(), "image/webp");
         }
     }
 

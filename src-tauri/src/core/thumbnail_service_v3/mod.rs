@@ -265,12 +265,18 @@ impl ThumbnailServiceV3 {
         let failed_guard = self.failed_index.read().ok();
 
         // 分类每个路径
-        for (priority, path) in paths.iter().enumerate() {
+        for (priority, path) in paths.into_iter().enumerate() {
             // 检查内存缓存（使用预获取的锁，避免每次循环重新获取）
-            let in_mem = mem_guard.as_ref().map(|c| c.peek(path).is_some()).unwrap_or(false)
-                || sq_guard.as_ref().map(|q| q.contains_key(path)).unwrap_or(false);
+            let in_mem = mem_guard
+                .as_ref()
+                .map(|c| c.peek(path.as_str()).is_some())
+                .unwrap_or(false)
+                || sq_guard
+                    .as_ref()
+                    .map(|q| q.contains_key(path.as_str()))
+                    .unwrap_or(false);
             if in_mem {
-                cached_paths.push(path.clone());
+                cached_paths.push(path);
                 continue;
             }
             // 检查失败索引（&str 查询，HashSet<String> 支持 Borrow<str>）
@@ -290,11 +296,11 @@ impl ThumbnailServiceV3 {
                 .unwrap_or(false);
 
             if in_db || in_folder {
-                db_paths.push(path.clone());
+                db_paths.push(path);
             } else {
-                let file_type = detect_file_type(path);
-                if let Some(request_id) = self.request_deduplicator.try_acquire(path) {
-                    generate_paths.push((path.clone(), file_type, priority, request_id));
+                let file_type = detect_file_type(path.as_str());
+                if let Some(request_id) = self.request_deduplicator.try_acquire(path.as_str()) {
+                    generate_paths.push((path, file_type, priority, request_id));
                 }
             }
         }

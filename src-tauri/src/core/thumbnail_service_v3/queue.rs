@@ -57,22 +57,6 @@ fn dec_lane_counter(
     }
 }
 
-fn find_first_by_path(queue: &VecDeque<GenerateTask>, path: &str) -> Option<usize> {
-    queue.iter().position(|t| t.path == path)
-}
-
-fn remove_path_from_lane(
-    queue: &mut VecDeque<GenerateTask>,
-    path: &str,
-    removed: &mut Vec<GenerateTask>,
-) {
-    while let Some(pos) = find_first_by_path(queue, path) {
-        if let Some(task) = queue.remove(pos) {
-            removed.push(task);
-        }
-    }
-}
-
 fn split_lane_by_directory(
     queue: &mut VecDeque<GenerateTask>,
     dir: &str,
@@ -81,6 +65,22 @@ fn split_lane_by_directory(
     let mut kept = VecDeque::with_capacity(queue.len());
     while let Some(task) = queue.pop_front() {
         if task.directory == dir {
+            removed.push(task);
+        } else {
+            kept.push_back(task);
+        }
+    }
+    *queue = kept;
+}
+
+fn split_lane_by_path(
+    queue: &mut VecDeque<GenerateTask>,
+    path: &str,
+    removed: &mut Vec<GenerateTask>,
+) {
+    let mut kept = VecDeque::with_capacity(queue.len());
+    while let Some(task) = queue.pop_front() {
+        if task.path == path {
             removed.push(task);
         } else {
             kept.push_back(task);
@@ -176,22 +176,21 @@ pub fn enqueue_tasks(
         if !matches!(lane, TaskLane::Background) {
             new_tasks.sort_unstable_by(|a, b| a.priority_cmp(b));
         }
+
+        for task in new_tasks.iter() {
+            queue.queued_paths.insert(task.path.clone());
+        }
+
+        let lane_counter = match lane {
+            TaskLane::Visible => queued_visible,
+            TaskLane::Prefetch => queued_prefetch,
+            TaskLane::Background => queued_background,
+        };
         
         // 插入到队列前端（新任务优先于旧任务）
         for task in new_tasks.into_iter().rev() {
-            queue.queued_paths.insert(task.path.clone());
             lane_queue_mut(&mut queue, lane).push_front(task);
-            match lane {
-                TaskLane::Visible => {
-                    queued_visible.fetch_add(1, Ordering::Relaxed);
-                }
-                TaskLane::Prefetch => {
-                    queued_prefetch.fetch_add(1, Ordering::Relaxed);
-                }
-                TaskLane::Background => {
-                    queued_background.fetch_add(1, Ordering::Relaxed);
-                }
-            }
+            lane_counter.fetch_add(1, Ordering::Relaxed);
         }
 
         task_queue.1.notify_all();
@@ -265,9 +264,9 @@ pub fn replace_path_with_task(
 ) -> Vec<GenerateTask> {
     if let Ok(mut queue) = task_queue.0.lock() {
         let mut removed = Vec::new();
-        remove_path_from_lane(&mut queue.visible, path, &mut removed);
-        remove_path_from_lane(&mut queue.prefetch, path, &mut removed);
-        remove_path_from_lane(&mut queue.background, path, &mut removed);
+        split_lane_by_path(&mut queue.visible, path, &mut removed);
+        split_lane_by_path(&mut queue.prefetch, path, &mut removed);
+        split_lane_by_path(&mut queue.background, path, &mut removed);
         for dropped in removed.iter() {
             queue.queued_paths.remove(dropped.path.as_str());
         }

@@ -16,6 +16,8 @@ use parking_lot::RwLock;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 use std::time::Duration;
 use tauri::http::{Request, Response, StatusCode};
 use tauri::Manager;
@@ -24,6 +26,8 @@ use tauri::Manager;
 pub const PROTOCOL_NAME: &str = "neoview";
 const LEGACY_THUMB_CACHE_LIMIT: usize = 512;
 const LEGACY_THUMB_HINT_LIMIT: usize = 1024;
+const ARCHIVE_PREFETCH_INFLIGHT_LIMIT: usize = 4096;
+const ARCHIVE_PREFETCH_MAX_ACTIVE: usize = 4;
 
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
@@ -135,6 +139,10 @@ pub struct ProtocolState {
     legacy_thumb_category_hint: Cache<u64, (Arc<str>, &'static str)>,
     /// 旧缩略图未命中缓存（短 TTL，减少重复 DB miss 查询）
     legacy_thumb_miss_cache: Cache<u64, Arc<str>>,
+    /// 原图预取去重缓存（短 TTL，避免重复预取同一页）
+    archive_prefetch_inflight: Cache<(u64, usize), ()>,
+    /// 原图预取活跃任务数（并发闸门）
+    archive_prefetch_active: Arc<AtomicUsize>,
 }
 
 impl ProtocolState {
@@ -161,6 +169,10 @@ impl ProtocolState {
             .max_capacity(4096)
             .time_to_live(Duration::from_secs(30))
             .build();
+        let archive_prefetch_inflight = Cache::builder()
+            .max_capacity(ARCHIVE_PREFETCH_INFLIGHT_LIMIT as u64)
+            .time_to_live(Duration::from_secs(10))
+            .build();
 
         let shared_archive_manager = {
             let manager = archive_manager.lock().unwrap();
@@ -176,6 +188,86 @@ impl ProtocolState {
             legacy_thumb_cache,
             legacy_thumb_category_hint,
             legacy_thumb_miss_cache,
+            archive_prefetch_inflight,
+            archive_prefetch_active: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn try_schedule_archive_prefetch_neighbors(
+        &self,
+        book_hash: &str,
+        book_key: u64,
+        current_index: usize,
+    ) {
+        let Some(book_path) = self.path_registry.get_path(book_hash) else {
+            return;
+        };
+        let Some(metadata) = self.archive_metadata_cache.get(&book_key) else {
+            return;
+        };
+
+        let mut targets = Vec::with_capacity(3);
+        if let Some(next) = current_index.checked_add(1) {
+            targets.push(next);
+        }
+        if let Some(next2) = current_index.checked_add(2) {
+            targets.push(next2);
+        }
+        if current_index > 0 {
+            targets.push(current_index - 1);
+        }
+
+        for target_index in targets {
+            let Some(entry) = metadata
+                .image_entries
+                .get(target_index)
+                .and_then(|entry| entry.as_ref())
+            else {
+                continue;
+            };
+
+            let cache_key = (book_key, target_index);
+            if self.archive_image_cache.get(&cache_key).is_some() {
+                continue;
+            }
+            if self.archive_prefetch_inflight.get(&cache_key).is_some() {
+                continue;
+            }
+
+            self.archive_prefetch_inflight.insert(cache_key, ());
+
+            let prev_active = self.archive_prefetch_active.fetch_add(1, Ordering::AcqRel);
+            if prev_active >= ARCHIVE_PREFETCH_MAX_ACTIVE {
+                self.archive_prefetch_active.fetch_sub(1, Ordering::AcqRel);
+                self.archive_prefetch_inflight.invalidate(&cache_key);
+                continue;
+            }
+
+            let manager = Arc::clone(&self.archive_manager);
+            let image_cache = self.archive_image_cache.clone();
+            let inflight = self.archive_prefetch_inflight.clone();
+            let active_counter = Arc::clone(&self.archive_prefetch_active);
+            let entry_path = entry.path.clone();
+            let mime_type = entry.mime_type;
+            let book_path_buf: PathBuf = book_path.as_ref().clone();
+
+            thread::spawn(move || {
+                if let Ok(data) = manager.load_image_from_archive_shared_with_hint(
+                    &book_path_buf,
+                    &entry_path,
+                    Some(target_index),
+                ) {
+                    image_cache.insert(
+                        cache_key,
+                        CachedProtocolImage {
+                            data,
+                            mime_type,
+                        },
+                    );
+                }
+                inflight.invalidate(&cache_key);
+                active_counter.fetch_sub(1, Ordering::AcqRel);
+            });
         }
     }
 
@@ -313,6 +405,7 @@ impl ProtocolState {
         self.legacy_thumb_cache.invalidate_all();
         self.legacy_thumb_category_hint.invalidate_all();
         self.legacy_thumb_miss_cache.invalidate_all();
+        self.archive_prefetch_inflight.invalidate_all();
     }
 }
 
@@ -588,6 +681,7 @@ fn handle_archive_image(
 ) -> Response<Vec<u8>> {
     let cache_key = (book_key, entry_index);
     if let Some(cached) = state.archive_image_cache.get(&cache_key) {
+        state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
         return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
     }
 
@@ -646,6 +740,7 @@ fn handle_archive_image(
             mime_type,
         },
     );
+    state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
     build_response_from_slice(request, shared.as_ref(), mime_type)
 }
 

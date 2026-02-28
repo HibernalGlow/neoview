@@ -121,6 +121,8 @@ pub struct ProtocolState {
     /// 压缩包元数据缓存（避免重复列出内容）
     /// 参考 Spacedrive 的 file_metadata_cache
     archive_metadata_cache: Cache<String, CachedArchiveMetadata>,
+    /// 压缩包图片二进制缓存（避免重复解包读取）
+    archive_image_cache: Cache<String, Arc<[u8]>>,
 }
 
 impl ProtocolState {
@@ -131,12 +133,17 @@ impl ProtocolState {
             .max_capacity(100)
             .time_to_live(Duration::from_secs(300)) // 5分钟过期
             .build();
+        let archive_image_cache = Cache::builder()
+            .max_capacity(256)
+            .time_to_live(Duration::from_secs(180))
+            .build();
 
         Self {
             path_registry: PathRegistry::new(),
             mmap_cache: MmapCache::default(),
             archive_manager,
             archive_metadata_cache,
+            archive_image_cache,
         }
     }
 
@@ -201,6 +208,7 @@ impl ProtocolState {
     /// 清空所有缓存
     pub fn clear_cache(&self) {
         self.archive_metadata_cache.invalidate_all();
+        self.archive_image_cache.invalidate_all();
     }
 }
 
@@ -293,10 +301,65 @@ fn build_response(data: Vec<u8>, mime_type: &str) -> Response<Vec<u8>> {
         .status(StatusCode::OK)
         .header("Content-Type", mime_type)
         .header("Content-Length", data.len().to_string())
+        .header("Accept-Ranges", "bytes")
         .header("Cache-Control", "max-age=3600, immutable")
         .header("Access-Control-Allow-Origin", "*")
         .body(data)
         .unwrap()
+}
+
+fn parse_byte_range(request: &Request<Vec<u8>>, total_len: usize) -> Option<(usize, usize)> {
+    if total_len == 0 {
+        return None;
+    }
+
+    let header = request.headers().get("Range")?;
+    let value = header.to_str().ok()?;
+    let range = value.strip_prefix("bytes=")?;
+    let (start_raw, end_raw) = range.split_once('-')?;
+
+    if start_raw.is_empty() {
+        return None;
+    }
+
+    let start = start_raw.parse::<usize>().ok()?;
+    if start >= total_len {
+        return None;
+    }
+
+    let end = if end_raw.is_empty() {
+        total_len.saturating_sub(1)
+    } else {
+        end_raw.parse::<usize>().ok()?.min(total_len.saturating_sub(1))
+    };
+
+    if end < start {
+        return None;
+    }
+
+    Some((start, end))
+}
+
+fn build_response_from_slice(
+    bytes: &[u8],
+    mime_type: &str,
+    range: Option<(usize, usize)>,
+) -> Response<Vec<u8>> {
+    if let Some((start, end)) = range {
+        let body = bytes[start..=end].to_vec();
+        return Response::builder()
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header("Content-Type", mime_type)
+            .header("Content-Length", body.len().to_string())
+            .header("Content-Range", format!("bytes {}-{}/{}", start, end, bytes.len()))
+            .header("Accept-Ranges", "bytes")
+            .header("Cache-Control", "max-age=3600, immutable")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(body)
+            .unwrap();
+    }
+
+    build_response(bytes.to_vec(), mime_type)
 }
 
 /// 构建错误响应
@@ -312,6 +375,7 @@ fn build_error_response(status: StatusCode, message: &str) -> Response<Vec<u8>> 
 /// 处理压缩包图片请求
 fn handle_archive_image(
     state: &ProtocolState,
+    request: &Request<Vec<u8>>,
     book_hash: &str,
     entry_index: usize,
 ) -> Response<Vec<u8>> {
@@ -346,6 +410,13 @@ fn handle_archive_image(
         return build_error_response(StatusCode::NOT_FOUND, "Entry not found");
     };
 
+    let cache_key = format!("{}:{}", book_hash, entry_index);
+    let mime_type = get_mime_type(&entry.name);
+    if let Some(cached) = state.archive_image_cache.get(&cache_key) {
+        let range = parse_byte_range(request, cached.len());
+        return build_response_from_slice(cached.as_ref(), mime_type, range);
+    }
+
     // 提取图片数据
     let archive_manager = state.archive_manager.lock().unwrap();
     let data = match archive_manager.load_image_from_archive_binary(&book_path, &entry.path) {
@@ -355,13 +426,18 @@ fn handle_archive_image(
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
         }
     };
-
-    let mime_type = get_mime_type(&entry.name);
-    build_response(data, mime_type)
+    let shared = Arc::<[u8]>::from(data);
+    state.archive_image_cache.insert(cache_key, shared.clone());
+    let range = parse_byte_range(request, shared.len());
+    build_response_from_slice(shared.as_ref(), mime_type, range)
 }
 
 /// 处理文件图片请求
-fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>> {
+fn handle_file_image(
+    state: &ProtocolState,
+    request: &Request<Vec<u8>>,
+    path_hash: &str,
+) -> Response<Vec<u8>> {
     // 从注册表获取路径
     let Some(file_path) = state.path_registry.get_path(path_hash) else {
         warn!("📁 Protocol: 未找到文件路径, hash={path_hash}");
@@ -372,7 +448,7 @@ fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>
 
     // 使用内存映射读取
     let data = match state.mmap_cache.get_or_create(&file_path) {
-        Ok(mmap) => mmap.as_slice().to_vec(),
+        Ok(mmap) => mmap,
         Err(e) => {
             error!("📁 Protocol: 读取文件失败: {e}");
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
@@ -380,7 +456,9 @@ fn handle_file_image(state: &ProtocolState, path_hash: &str) -> Response<Vec<u8>
     };
 
     let mime_type = get_mime_type(&file_path.to_string_lossy());
-    build_response(data, mime_type)
+    let bytes = data.as_slice();
+    let range = parse_byte_range(request, bytes.len());
+    build_response_from_slice(bytes, mime_type, range)
 }
 
 /// 处理缩略图请求
@@ -459,8 +537,8 @@ pub fn handle_protocol_request(
         ProtocolRequest::ArchiveImage {
             book_hash,
             entry_index,
-        } => handle_archive_image(&state, &book_hash, entry_index),
-        ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, &path_hash),
+        } => handle_archive_image(&state, request, &book_hash, entry_index),
+        ProtocolRequest::FileImage { path_hash } => handle_file_image(&state, request, &path_hash),
         ProtocolRequest::Thumbnail { key } => handle_thumbnail(app, &key),
         ProtocolRequest::Unknown => {
             warn!("🌐 Protocol: 未知请求路径: {path}");

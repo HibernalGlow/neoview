@@ -25,6 +25,8 @@ pub enum ThumbnailFileType {
 pub struct GenerateTask {
     pub path: String,
     pub directory: String,
+    /// 请求分代号：目录切换时递增，worker 仅处理当前代任务
+    pub request_epoch: u64,
     pub file_type: ThumbnailFileType,
     /// 去重键（通常为 path）
     pub dedup_key: String,

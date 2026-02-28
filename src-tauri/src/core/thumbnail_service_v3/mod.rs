@@ -30,7 +30,7 @@ use crate::core::request_dedup::RequestDeduplicator;
 use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::JoinHandle;
 use std::time::Instant;
@@ -73,6 +73,8 @@ pub struct ThumbnailServiceV3 {
     task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     /// 当前目录
     current_dir: Arc<RwLock<String>>,
+    /// 请求分代号（目录切换时递增，旧任务自动失效）
+    request_epoch: Arc<AtomicU64>,
     /// 是否正在运行
     running: Arc<AtomicBool>,
     /// 活跃工作线程数
@@ -122,6 +124,7 @@ impl ThumbnailServiceV3 {
             generator,
             task_queue: Arc::new((Mutex::new(VecDeque::new()), Condvar::new())),
             current_dir: Arc::new(RwLock::new(String::new())),
+            request_epoch: Arc::new(AtomicU64::new(1)),
             running: Arc::new(AtomicBool::new(false)),
             active_workers: Arc::new(AtomicUsize::new(0)),
             workers: Arc::new(Mutex::new(Vec::new())),
@@ -149,6 +152,7 @@ impl ThumbnailServiceV3 {
             Arc::clone(&self.running),
             Arc::clone(&self.task_queue),
             Arc::clone(&self.current_dir),
+            Arc::clone(&self.request_epoch),
             Arc::clone(&self.active_workers),
             Arc::clone(&self.memory_cache),
             Arc::clone(&self.memory_cache_bytes),
@@ -209,20 +213,8 @@ impl ThumbnailServiceV3 {
         {
             if let Ok(mut dir) = self.current_dir.write() {
                 if *dir != current_dir {
-                    if let Ok(mut q) = self.task_queue.0.lock() {
-                        let old_tasks: Vec<GenerateTask> = q.drain(..).collect();
-                        let old_len = old_tasks.len();
-                        for task in old_tasks {
-                            self.request_deduplicator
-                                .release_with_id(&task.dedup_key, task.dedup_request_id);
-                        }
-                        log_debug!(
-                            "📂 目录切换: {} -> {} (清空 {} 个任务)",
-                            *dir,
-                            current_dir,
-                            old_len
-                        );
-                    }
+                    let next_epoch = self.request_epoch.fetch_add(1, Ordering::AcqRel) + 1;
+                    log_debug!("📂 目录切换: {} -> {} (epoch={})", *dir, current_dir, next_epoch);
                     *dir = current_dir.clone();
                 }
             }
@@ -298,7 +290,8 @@ impl ThumbnailServiceV3 {
 
         // 3. 入队生成任务
         if !generate_paths.is_empty() {
-            queue::enqueue_tasks(&self.task_queue, generate_paths, &current_dir, center);
+            let epoch = self.request_epoch.load(Ordering::Acquire);
+            queue::enqueue_tasks(&self.task_queue, generate_paths, &current_dir, center, epoch);
         }
 
         // 内存压力检查
@@ -649,6 +642,7 @@ impl ThumbnailServiceV3 {
             dedup_request_id: request_id,
             path: path.to_string(),
             directory: current_dir.to_string(),
+            request_epoch: self.request_epoch.load(Ordering::Acquire),
             file_type,
             center_distance: 0,
             original_index: 0,

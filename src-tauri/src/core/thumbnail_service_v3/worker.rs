@@ -4,7 +4,7 @@
 use lru::LruCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -31,6 +31,7 @@ pub fn start_workers(
     running: Arc<AtomicBool>,
     task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
+    request_epoch: Arc<AtomicU64>,
     active_workers: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
     memory_cache_bytes: Arc<AtomicUsize>,
@@ -51,6 +52,7 @@ pub fn start_workers(
             app.clone(),
             Arc::clone(&task_queue),
             Arc::clone(&current_dir),
+            Arc::clone(&request_epoch),
             Arc::clone(&running),
             Arc::clone(&active_workers),
             Arc::clone(&memory_cache),
@@ -76,6 +78,7 @@ fn create_worker_thread(
     app: AppHandle,
     task_queue: Arc<(Mutex<VecDeque<GenerateTask>>, Condvar)>,
     current_dir: Arc<RwLock<String>>,
+    request_epoch: Arc<AtomicU64>,
     running: Arc<AtomicBool>,
     active_workers: Arc<AtomicUsize>,
     memory_cache: Arc<RwLock<LruCache<String, Vec<u8>>>>,
@@ -137,9 +140,9 @@ fn create_worker_thread(
             };
 
             if let Some(task) = task {
-                let should_process = check_task_validity(&task, &current_dir);
+                let should_process = check_task_validity(&task, &current_dir, &request_epoch);
                 if !should_process {
-                    log_debug!("⏭️ 跳过非当前目录任务: {}", task.path);
+                    log_debug!("⏭️ 跳过过期/非当前目录任务: {}", task.path);
                     request_deduplicator.release_with_id(&task.dedup_key, task.dedup_request_id);
                     continue;
                 }
@@ -195,7 +198,14 @@ fn flush_worker_emit_batch(
 }
 
 /// 检查任务是否应该处理（目录是否匹配）
-fn check_task_validity(task: &GenerateTask, current_dir: &Arc<RwLock<String>>) -> bool {
+fn check_task_validity(
+    task: &GenerateTask,
+    current_dir: &Arc<RwLock<String>>,
+    request_epoch: &Arc<AtomicU64>,
+) -> bool {
+    if task.request_epoch != request_epoch.load(Ordering::Acquire) {
+        return false;
+    }
     if task.directory.is_empty() {
         return true;
     }

@@ -19,6 +19,7 @@ pub fn enqueue_tasks(
     paths: Vec<(String, ThumbnailFileType, usize, u64)>,
     current_dir: &str,
     center: usize,
+    request_epoch: u64,
 ) {
     if paths.is_empty() {
         return;
@@ -43,6 +44,7 @@ pub fn enqueue_tasks(
                     dedup_request_id,
                     path,
                     directory: current_dir.to_string(),
+                    request_epoch,
                     file_type,
                     center_distance,
                     original_index,

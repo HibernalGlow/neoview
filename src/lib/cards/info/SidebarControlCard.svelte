@@ -167,7 +167,7 @@
 			size="sm"
 			class="h-8 gap-1 text-xs"
 			onclick={toggleLeftOpen}
-			oncontextmenu={(e) => {
+			oncontextmenu={(e: MouseEvent) => {
 				e.preventDefault();
 				toggleLeftPinned();
 			}}
@@ -189,7 +189,7 @@
 			size="sm"
 			class="h-8 gap-1 text-xs"
 			onclick={toggleRightOpen}
-			oncontextmenu={(e) => {
+			oncontextmenu={(e: MouseEvent) => {
 				e.preventDefault();
 				toggleRightPinned();
 			}}

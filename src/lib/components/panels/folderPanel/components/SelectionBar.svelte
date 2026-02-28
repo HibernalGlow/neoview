@@ -133,7 +133,7 @@ function handleClose() {
 					variant={isChainSelectMode ? 'default' : 'ghost'}
 					size="sm"
 					class="h-7 px-2"
-					onclick={(e) => {
+					onclick={(e: MouseEvent) => {
 					toggleChainSelectMode($activeTabId);
 				}}
 				>

@@ -187,7 +187,7 @@
 
 	async function pushLayer(path: string): Promise<void> {
 		const currentPath = stackState.activeLayer?.path || '';
-		const isChild = currentPath && isChildPath(path, currentPath);
+		const isChild = Boolean(currentPath && isChildPath(path, currentPath));
 		await stackState.pushLayer(path, isChild);
 	}
 

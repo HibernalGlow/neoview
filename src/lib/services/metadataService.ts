@@ -196,7 +196,7 @@ class MetadataServiceImpl {
 
     if (!metadata) {
       // 从后端获取
-      metadata = await this.getMetadata({ path, innerPath, pageIndex });
+      metadata = (await this.getMetadata({ path, innerPath, pageIndex })) ?? undefined;
     }
 
     // 检查是否仍是最新请求（处理竞态条件）

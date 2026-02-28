@@ -233,7 +233,7 @@
 		onmousedown={(e) => e.stopPropagation()}
 	>
 		<div
-			class="bg-popover/80 backdrop-blur-md text-popover-foreground min-w-[180px] overflow-hidden rounded-md border shadow-md"
+			class="bg-popover/80 backdrop-blur-md text-popover-foreground min-w-45 overflow-hidden rounded-md border shadow-md"
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
@@ -241,7 +241,7 @@
 				<div class="flex flex-row items-center justify-between gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -260,7 +260,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -279,7 +279,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -298,7 +298,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -317,7 +317,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -340,7 +340,7 @@
 					{#if item.isDir}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -359,7 +359,7 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -378,7 +378,7 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -397,7 +397,7 @@
 					{:else}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -416,7 +416,7 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -435,7 +435,7 @@
 
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -455,7 +455,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -474,7 +474,7 @@
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{

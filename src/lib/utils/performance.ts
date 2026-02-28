@@ -144,7 +144,7 @@ export function throttle<T extends (...args: any[]) => any>(
   delay: number
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
-  let timeoutId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
   
   return (...args: Parameters<T>) => {
     const now = Date.now();
@@ -171,7 +171,7 @@ export function debounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number
 ): (...args: Parameters<T>) => void {
-  let timeoutId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
   
   return (...args: Parameters<T>) => {
     if (timeoutId) {
@@ -217,7 +217,7 @@ export function createBatchProcessor<T>(
   delay: number = 16
 ) {
   let batch: T[] = [];
-  let timeoutId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
   
   return {
     add(item: T) {
@@ -293,7 +293,7 @@ export function isLowPerformanceDevice(): boolean {
   
   return (
     hardwareConcurrency <= 2 ||
-    (memory && memory.limit <= 1024) // 1GB 或更少
+    Boolean(memory && memory.limit <= 1024) // 1GB 或更少
   );
 }
 

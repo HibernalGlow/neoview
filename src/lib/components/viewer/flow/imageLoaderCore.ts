@@ -373,11 +373,17 @@ export class ImageLoaderCore {
 			} else {
 				// 缓存异常，走正常加载流程
 				const result = await this.loadPage(pageIndex, LoadPriority.LOW);
+				if (!result.blob) {
+					throw new Error(`页面 ${pageIndex} 缺少可用 Blob`);
+				}
 				blob = result.blob;
 			}
 		} else {
 			// 缓存中没有，需要加载（低优先级）
 			const result = await this.loadPage(pageIndex, LoadPriority.LOW);
+			if (!result.blob) {
+				throw new Error(`页面 ${pageIndex} 缺少可用 Blob`);
+			}
 			blob = result.blob;
 		}
 		

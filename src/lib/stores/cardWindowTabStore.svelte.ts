@@ -13,7 +13,7 @@ export interface CardTab {
 	id: string;
 	cardId: string;
 	title: string;
-	icon?: Component;
+	icon?: Component | string;
 	order: number;
 }
 

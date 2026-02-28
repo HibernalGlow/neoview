@@ -6,6 +6,7 @@
 	 */
 	import { X, Plus, GripVertical } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { cardRegistry } from '$lib/cards/registry';
 	import type { CardTab } from '$lib/stores/cardWindowTabStore.svelte';
 	import TabContextMenu from './TabContextMenu.svelte';
@@ -44,7 +45,7 @@
 
 	// 获取所有可用卡片（按分类分组）
 	const cardGroups = $derived.by(() => {
-		const groups: Record<string, { id: string; title: string; icon: typeof Plus }[]> = {};
+		const groups: Record<string, { id: string; title: string; icon?: string | object }[]> = {};
 		
 		for (const [id, def] of Object.entries(cardRegistry)) {
 			const panel = def.defaultPanel;
@@ -169,7 +170,7 @@
 		{@const isActive = tab.id === activeTabId}
 		{@const isDragging = tab.id === draggedTabId}
 		{@const isDragOver = tab.id === dragOverTabId}
-		{@const Icon = tab.icon}
+		{@const iconFallback = tab.icon}
 		
 		<div
 			class="group relative flex items-center gap-1 px-2 py-1 rounded-t text-xs cursor-pointer transition-all
@@ -194,9 +195,7 @@
 			<GripVertical class="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab" />
 			
 			<!-- 图标 -->
-			{#if Icon}
-				<Icon class="h-3.5 w-3.5 shrink-0" />
-			{/if}
+			<Icon name={tab.cardId} fallback={iconFallback as any} class="h-3.5 w-3.5 shrink-0" />
 			
 			<!-- 标题 -->
 			<span class="truncate max-w-24">{tab.title}</span>
@@ -226,9 +225,8 @@
 				<DropdownMenu.Group>
 					<DropdownMenu.Label>{panelNames[panelId] || panelId}</DropdownMenu.Label>
 					{#each cards as card}
-						{@const CardIcon = card.icon}
 						<DropdownMenu.Item onclick={() => onAddCard(card.id)}>
-							<CardIcon class="h-4 w-4 mr-2" />
+							<Icon name={card.id} fallback={card.icon as any} class="h-4 w-4 mr-2" />
 							{card.title}
 						</DropdownMenu.Item>
 					{/each}

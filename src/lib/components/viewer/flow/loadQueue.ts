@@ -100,7 +100,7 @@ export class LoadQueueManager {
 						}
 						await task.executor();
 					},
-					{ priority, id: queueId, signal: controller.signal }
+					{ priority, signal: controller.signal }
 				)
 				.then(() => {
 					if (!task.settled) {
@@ -135,7 +135,6 @@ export class LoadQueueManager {
 		const task = this.tasksByPage.get(pageIndex);
 		if (task && task.priority < newPriority) {
 			task.priority = newPriority;
-			this.queue.setPriority(task.queueId, newPriority);
 		}
 	}
 

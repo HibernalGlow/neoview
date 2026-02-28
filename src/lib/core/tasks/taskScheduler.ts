@@ -143,7 +143,6 @@ export class TaskScheduler {
 					return result;
 				},
 				{
-					id: snapshot.id,
 					priority: this.toQueuePriority(bucket, snapshot.priority),
 					signal: controller.signal
 				}

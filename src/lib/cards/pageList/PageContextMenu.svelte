@@ -90,7 +90,7 @@ function getArchiveInfo(pageItem: PageItem): { isArchive: boolean; archivePath?:
 	const book = bookStore.currentBook;
 	
 	// 检查当前书籍是否是压缩包
-	if (book?.isArchive && book.path) {
+	if (book?.type === 'archive' && book.path) {
 		// 从当前页面获取 innerPath
 		const page = book.pages?.[pageItem.index];
 		if (page?.innerPath) {
@@ -226,7 +226,7 @@ function handleDelete() {
 		onmousedown={(e) => e.stopPropagation()}
 	>
 		<div
-			class=" backdrop-blur-md text-popover-foreground min-w-[160px] overflow-hidden rounded-md border shadow-md"
+			class=" backdrop-blur-md text-popover-foreground min-w-40 overflow-hidden rounded-md border shadow-md"
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
@@ -234,7 +234,7 @@ function handleDelete() {
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -254,7 +254,7 @@ function handleDelete() {
 					{#if onDelete}
 						<Tooltip.Root delayDuration={400}>
 							<Tooltip.Trigger>
-								{#snippet child({ props: tooltipProps })}
+								{#snippet child({ props: tooltipProps }: { props: any })}
 									<button
 										{...mergeProps(
 											{
@@ -277,7 +277,7 @@ function handleDelete() {
 				<div class="flex flex-row items-center justify-start gap-1 p-1">
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -296,7 +296,7 @@ function handleDelete() {
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{
@@ -315,7 +315,7 @@ function handleDelete() {
 
 					<Tooltip.Root delayDuration={400}>
 						<Tooltip.Trigger>
-							{#snippet child({ props: tooltipProps })}
+							{#snippet child({ props: tooltipProps }: { props: any })}
 								<button
 									{...mergeProps(
 										{

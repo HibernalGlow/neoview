@@ -427,7 +427,7 @@ class BookStore {
       // 通知后端以触发预加载
       await bookApi.navigateToPage(newIndex);
 
-      this.state.currentBook.currentPage = newIndex;
+      book.currentPage = newIndex;
       await this.syncInfoPanelBookInfo();
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);
@@ -475,7 +475,7 @@ class BookStore {
       // 通知后端以触发预加载
       await bookApi.navigateToPage(newIndex);
 
-      this.state.currentBook.currentPage = newIndex;
+      book.currentPage = newIndex;
       await this.syncInfoPanelBookInfo();
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);

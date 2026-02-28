@@ -53,7 +53,7 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger onclick={(e) => e.stopPropagation()}>
+	<DropdownMenu.Trigger onclick={(e: MouseEvent) => e.stopPropagation()}>
 		<span class="inline-flex items-center gap-0.5 rounded bg-accent {classes.badge} text-accent-foreground cursor-pointer hover:bg-accent/80 transition-colors">
 			<Star class="{classes.star} {effectiveRating !== null ? 'fill-current' : ''}" />
 			{#if effectiveRating !== null}

@@ -74,8 +74,11 @@ export interface FolderTreeConfig {
 	size: number;
 }
 
-/** 历史记录兼容别名 */
-export type HistoryRecord = FolderHistoryEntry;
+/** 历史记录列表（用于前进/后退面板） */
+export interface HistoryRecord {
+	previous: FolderHistoryEntry[];
+	next: FolderHistoryEntry[];
+}
 
 // ============ 主状态类型 ============
 

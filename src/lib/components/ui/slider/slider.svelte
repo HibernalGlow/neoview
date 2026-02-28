@@ -8,7 +8,13 @@
 		orientation = "horizontal",
 		class: className,
 		...restProps
-	}: WithoutChildrenOrChild<Omit<SliderPrimitive.RootProps, "value">> & { value?: number | number[] } = $props();
+	}: {
+		ref?: HTMLElement | null;
+		value?: number | number[];
+		orientation?: "horizontal" | "vertical";
+		class?: string;
+		[key: string]: any;
+	} = $props();
 
 	// Svelte 5 内部代理状态，处理 bits-ui 必须使用数组的问题
 	let proxyValue = $state(Array.isArray(value) ? value : [value ?? 0]);
@@ -40,11 +46,12 @@ get along, so we shut typescript up by casting `value` to `never`.
 -->
 <SliderPrimitive.Root
 	bind:ref
-	bind:value={value as never}
+	bind:value={proxyValue as never}
 	data-slot="slider"
+	type="single"
 	{orientation}
 	class={cn(
-		"relative flex w-full touch-none select-none items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col data-[disabled]:opacity-50",
+		"relative flex w-full touch-none select-none items-center data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col data-disabled:opacity-50",
 		className
 	)}
 	{...restProps}

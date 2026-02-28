@@ -225,10 +225,8 @@
 			</div>
 			<FavoriteTagPanel
 				visible={ctx.showFavoriteTagPanel}
-				enableMixed={mixedGenderStore.enabled}
 				onClose={handleCloseFavoriteTagPanel}
 				onAppendTag={handleAppendTag}
-				onUpdateEnableMixed={(v) => { mixedGenderStore.enabled = v; }}
 			/>
 		</div>
 	{/if}

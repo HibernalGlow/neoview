@@ -268,10 +268,11 @@ export class FolderStackState {
 /** 创建 FolderStack 状态实例的工厂函数 */
 export function createFolderStackState(
 	createLayerFn: LayerFactory,
+	tickFn: TickCallback,
 	callbacks?: {
 		onPathChange?: (path: string, addToHistory: boolean) => void;
 		onItemsChange?: (items: FsItem[]) => void;
 	}
 ): FolderStackState {
-	return new FolderStackState(createLayerFn, callbacks);
+	return new FolderStackState(createLayerFn, tickFn, callbacks);
 }

@@ -13,7 +13,7 @@ import { toBytes } from 'fast-base64';
  */
 export async function decodeBase64(base64: string, _mimeType?: string): Promise<ArrayBuffer> {
 	const bytes = await toBytes(base64);
-	return bytes.buffer;
+	return new Uint8Array(bytes).buffer;
 }
 
 /**

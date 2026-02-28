@@ -22,7 +22,6 @@ SearchSettings,
 FolderPanelState,
 SortConfig,
 FolderTreeConfig,
-NavigationResult,
 HistoryRecord
 } from './types';
 

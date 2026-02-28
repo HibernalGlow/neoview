@@ -19,21 +19,47 @@
 	} from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
-	// 导入所有设置面板组件
-	import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.svelte';
-	import ViewSettingsPanel from '$lib/components/panels/ViewSettingsPanel.svelte';
-	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
-	import ImageSettingsPanel from '$lib/components/panels/ImageSettingsPanel.svelte';
-	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
-	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
-	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
-	import BookSettingsPanel from '$lib/components/panels/BookSettingsPanel.svelte';
-	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
-	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
-	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
-	import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
-	import AboutPanel from '$lib/components/panels/AboutPanel.svelte';
-	import SystemSettingsPanel from '$lib/components/panels/SystemSettingsPanel.svelte';
+	type PanelModule = { default: unknown };
+
+	const panelLoaders = {
+		general: () => import('$lib/components/panels/GeneralSettingsPanel.svelte'),
+		system: () => import('$lib/components/panels/SystemSettingsPanel.svelte'),
+		view: () => import('$lib/components/panels/ViewSettingsPanel.svelte'),
+		notify: () => import('$lib/components/panels/NotificationSettingsPanel.svelte'),
+		bindings: () => import('$lib/components/dialogs/UnifiedBindingPanel.svelte'),
+		panels: () => import('$lib/components/panels/SidebarManagementPanel.svelte'),
+		cards: () => import('$lib/components/settings/CardPanelManager.svelte'),
+		theme: () => import('$lib/components/panels/ThemePanel.svelte'),
+		book: () => import('$lib/components/panels/BookSettingsPanel.svelte'),
+		performance: () => import('$lib/components/panels/PerformanceSettingsPanel.svelte'),
+		data: () => import('$lib/components/panels/DataSettingsPanel.svelte'),
+		about: () => import('$lib/components/panels/AboutPanel.svelte')
+	} as const;
+
+	const panelPromises = new Map<string, Promise<PanelModule>>();
+	let imagePanelsPromise: Promise<[PanelModule, PanelModule]> | null = null;
+
+	function getPanelPromise(tabValue: string): Promise<PanelModule> | null {
+		const loadPanel = panelLoaders[tabValue as keyof typeof panelLoaders];
+		if (!loadPanel) return null;
+
+		const cached = panelPromises.get(tabValue);
+		if (cached) return cached;
+
+		const nextPromise = loadPanel();
+		panelPromises.set(tabValue, nextPromise);
+		return nextPromise;
+	}
+
+	function getImagePanelsPromise(): Promise<[PanelModule, PanelModule]> {
+		if (!imagePanelsPromise) {
+			imagePanelsPromise = Promise.all([
+				import('$lib/components/panels/ImageSettingsPanel.svelte'),
+				import('$lib/components/dialogs/ViewerSettingsPanel.svelte')
+			]);
+		}
+		return imagePanelsPromise;
+	}
 
 	const tabs = [
 		{ value: 'general', label: '通用', icon: Settings },
@@ -135,46 +161,105 @@
 			style="background-color: color-mix(in oklch, var(--popover) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 		>
 			{#if activeTab === 'general'}
-				<GeneralSettingsPanel />
+				{#await getPanelPromise('general') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">通用设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'system'}
-				<SystemSettingsPanel />
+				{#await getPanelPromise('system') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">系统设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'view'}
-				<ViewSettingsPanel />
+				{#await getPanelPromise('view') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">视图设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'notify'}
-				<NotificationSettingsPanel />
+				{#await getPanelPromise('notify') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">通知设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'viewer' || activeTab === 'image'}
 				{#if activeTab === 'image'}
-					<div class="space-y-4 p-6">
-						<div class="rounded-lg border bg-card text-card-foreground p-4">
-							<h3 class="text-base font-semibold">影像</h3>
-							<p class="text-sm text-muted-foreground mt-1">
-								这里将放置全局影像（图片和视频）相关设置，例如格式支持、默认超分行为等。
-							</p>
+					{#await getImagePanelsPromise() then imagePanels}
+						{@const ImagePanel = imagePanels[0].default}
+						{@const ViewerPanel = imagePanels[1].default}
+						<div class="space-y-4 p-6">
+							<div class="rounded-lg border bg-card text-card-foreground p-4">
+								<h3 class="text-base font-semibold">影像</h3>
+								<p class="text-sm text-muted-foreground mt-1">
+									这里将放置全局影像（图片和视频）相关设置，例如格式支持、默认超分行为等。
+								</p>
+							</div>
+							<svelte:component this={ImagePanel} />
+							<svelte:component this={ViewerPanel} />
 						</div>
-						<ImageSettingsPanel />
-						<ViewerSettingsPanel />
-					</div>
+					{:catch}
+						<div class="p-6 text-sm text-destructive">影像设置加载失败</div>
+					{/await}
 				{:else}
-					<ViewerSettingsPanel />
+					{#await getImagePanelsPromise() then imagePanels}
+						{@const ViewerPanel = imagePanels[1].default}
+						<svelte:component this={ViewerPanel} />
+					{:catch}
+						<div class="p-6 text-sm text-destructive">阅读器设置加载失败</div>
+					{/await}
 				{/if}
 			{:else if activeTab === 'bindings'}
-				<UnifiedBindingPanel />
+				{#await getPanelPromise('bindings') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">操作绑定加载失败</div>
+				{/await}
 			{:else if activeTab === 'panels'}
-				<SidebarManagementPanel />
+				{#await getPanelPromise('panels') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">边栏管理加载失败</div>
+				{/await}
 			{:else if activeTab === 'cards'}
-				<div class="p-6">
-					<CardPanelManager />
-				</div>
+				{#await getPanelPromise('cards') then panelModule}
+					<div class="p-6">
+						<svelte:component this={panelModule.default} />
+					</div>
+				{:catch}
+					<div class="p-6 text-sm text-destructive">卡片管理加载失败</div>
+				{/await}
 			{:else if activeTab === 'theme'}
-				<ThemePanel />
+				{#await getPanelPromise('theme') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">外观设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'book'}
-				<BookSettingsPanel />
+				{#await getPanelPromise('book') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">书籍设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'performance'}
-				<PerformanceSettingsPanel />
+				{#await getPanelPromise('performance') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">性能设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'data'}
-				<DataSettingsPanel />
+				{#await getPanelPromise('data') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">数据设置加载失败</div>
+				{/await}
 			{:else if activeTab === 'about'}
-				<AboutPanel />
+				{#await getPanelPromise('about') then panelModule}
+					<svelte:component this={panelModule.default} />
+				{:catch}
+					<div class="p-6 text-sm text-destructive">关于页面加载失败</div>
+				{/await}
 			{:else}
 				<!-- 其他标签暂未实现 -->
 				<div class="p-6">

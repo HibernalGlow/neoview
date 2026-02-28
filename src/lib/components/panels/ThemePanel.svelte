@@ -3,7 +3,7 @@
   使用多 Tab 形式组织：主题模式、透明度、配色方案、字体
 -->
 <script lang="ts">
-	import { Palette, Sun, Layers, PaintBucket, Type, Smile } from '@lucide/svelte';
+	import { Palette, Sun, Layers, PaintBucket, Type } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import {
@@ -19,7 +19,6 @@
 	import TransparencyTab from './theme/TransparencyTab.svelte';
 	import ColorSchemeTab from './theme/ColorSchemeTab.svelte';
 	import FontTab from './theme/FontTab.svelte';
-	import IconSettingsPanel from './IconSettingsPanel.svelte';
 
 	let activeTab = $state('mode');
 	let currentMode = $state<ThemeMode>('system');
@@ -128,7 +127,7 @@
 
 	<!-- Tabs -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="grid w-full grid-cols-5">
+		<Tabs.List class="grid w-full grid-cols-4">
 			<Tabs.Trigger value="mode" class="gap-1.5 text-xs">
 				<Sun class="h-3.5 w-3.5" />
 				主题
@@ -145,15 +144,7 @@
 				<Type class="h-3.5 w-3.5" />
 				字体
 			</Tabs.Trigger>
-			<Tabs.Trigger value="icons" class="gap-1.5 text-xs">
-				<Smile class="h-3.5 w-3.5" />
-				图标
-			</Tabs.Trigger>
 		</Tabs.List>
-
-		<Tabs.Content value="icons" class="mt-4 h-[500px]">
-			<IconSettingsPanel />
-		</Tabs.Content>
 
 		<Tabs.Content value="mode" class="mt-4">
 			<ThemeModeTab

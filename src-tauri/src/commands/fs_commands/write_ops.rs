@@ -5,8 +5,26 @@ use super::FsState;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
-use tauri::async_runtime::spawn_blocking;
 use tauri::{Emitter, Manager, State};
+
+/// 在全新的独立线程上执行闭包，
+/// 确保 COM 状态干净（不受 Tokio/Tauri 线程池已有 COM 初始化影响）。
+/// 这是解决 `trash` crate 在 Windows 上 `CoInitializeEx` 冲突 panic 的关键。
+async fn run_on_trash_thread<F, T>(f: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+    T: Send + 'static,
+{
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("trash-worker".into())
+        .spawn(move || {
+            let result = f();
+            let _ = tx.send(result);
+        })
+        .map_err(|e| format!("Failed to spawn trash thread: {e}"))?;
+    rx.await.map_err(|_| "trash thread channel closed".to_string())?
+}
 
 /// 创建目录
 #[tauri::command]
@@ -41,18 +59,17 @@ pub async fn rename_path(
 }
 
 /// 移动到回收站
-/// 使用 `spawn_blocking` 在独立线程执行，避免 Windows COM 线程模型冲突
+/// 使用独立线程执行，确保 COM 状态干净（避免 Windows CoInitializeEx 冲突 panic）
 /// 包含重试机制以处理文件暂时被占用的情况
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
 
-    spawn_blocking(move || {
+    run_on_trash_thread(move || {
         if !path_buf.exists() {
             return Err(format!("文件不存在: {}", path_buf.display()));
         }
 
-        // 尝试删除，如果失败则重试
         let max_retries = 3;
         let mut last_error = String::new();
 
@@ -70,7 +87,6 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
                     );
 
                     if attempt < max_retries - 1 {
-                        // 等待一段时间后重试（让其他进程释放文件句柄）
                         std::thread::sleep(std::time::Duration::from_millis(
                             100 * (attempt as u64 + 1),
                         ));
@@ -84,7 +100,6 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
         ))
     })
     .await
-    .map_err(|e| format!("spawn_blocking error: {e}"))?
 }
 
 /// 异步移动到回收站（绕开 IPC 协议问题）
@@ -100,14 +115,12 @@ pub async fn move_to_trash_async(
     let path_buf = PathBuf::from(path);
 
     tokio::spawn(async move {
-        let delete_path = path_buf.clone();
-        let result = spawn_blocking(move || {
-            // 尝试删除，如果失败则重试
+        let result = run_on_trash_thread(move || {
             let max_retries = 3;
             let mut last_error = String::new();
 
             for attempt in 0..max_retries {
-                match trash::delete(&delete_path) {
+                match trash::delete(&path_buf) {
                     Ok(()) => return Ok(()),
                     Err(e) => {
                         last_error = e.to_string();
@@ -115,7 +128,7 @@ pub async fn move_to_trash_async(
                             "异步移动到回收站失败 (尝试 {}/{}): {} - {}",
                             attempt + 1,
                             max_retries,
-                            delete_path.display(),
+                            path_buf.display(),
                             last_error
                         );
 
@@ -128,16 +141,13 @@ pub async fn move_to_trash_async(
                 }
             }
 
-            Err(trash::Error::Unknown {
-                description: last_error,
-            })
+            Err(format!("异步移动到回收站失败 (已重试{max_retries}次): {last_error}"))
         })
         .await;
 
         let (success, error) = match result {
-            Ok(Ok(())) => (true, None),
-            Ok(Err(e)) => (false, Some(e.to_string())),
-            Err(e) => (false, Some(format!("spawn_blocking error: {}", e))),
+            Ok(()) => (true, None),
+            Err(e) => (false, Some(e)),
         };
 
         let payload = serde_json::json!({
@@ -351,7 +361,7 @@ pub async fn list_directory_files(
 /// 获取最近删除的项目（用于撤回功能）
 #[tauri::command]
 pub async fn get_last_deleted_item() -> Result<Option<TrashItem>, String> {
-    spawn_blocking(|| {
+    run_on_trash_thread(|| {
         let items = trash::os_limited::list().map_err(|e| format!("获取回收站列表失败: {}", e))?;
 
         let latest = items.into_iter().max_by_key(|item| item.time_deleted);
@@ -372,13 +382,12 @@ pub async fn get_last_deleted_item() -> Result<Option<TrashItem>, String> {
         }
     })
     .await
-    .map_err(|e| format!("spawn_blocking error: {}", e))?
 }
 
 /// 撤回上一次删除（恢复最近删除的项目）
 #[tauri::command]
 pub async fn undo_last_delete() -> Result<Option<String>, String> {
-    spawn_blocking(|| {
+    run_on_trash_thread(|| {
         let items = trash::os_limited::list().map_err(|e| format!("获取回收站列表失败: {}", e))?;
 
         if items.is_empty() {
@@ -397,7 +406,6 @@ pub async fn undo_last_delete() -> Result<Option<String>, String> {
         Ok(Some(original_path))
     })
     .await
-    .map_err(|e| format!("spawn_blocking error: {}", e))?
 }
 
 /// 规范化路径用于比较（统一斜杠方向、移除尾部斜杠、小写化）
@@ -424,7 +432,7 @@ fn is_child_of(child_path: &str, parent_path: &str) -> bool {
 /// 如果指定的路径是某个已删除文件夹的子路径，会自动恢复该父文件夹
 #[tauri::command]
 pub async fn restore_from_trash(original_path: String) -> Result<(), String> {
-    spawn_blocking(move || {
+    run_on_trash_thread(move || {
         let items = trash::os_limited::list().map_err(|e| format!("获取回收站列表失败: {}", e))?;
 
         let path_norm = normalize_path_for_compare(&original_path);
@@ -477,7 +485,6 @@ pub async fn restore_from_trash(original_path: String) -> Result<(), String> {
         trash::os_limited::restore_all(target).map_err(|e| format!("恢复失败: {}", e))
     })
     .await
-    .map_err(|e| format!("spawn_blocking error: {}", e))?
 }
 
 /// 释放指定路径相关的所有资源

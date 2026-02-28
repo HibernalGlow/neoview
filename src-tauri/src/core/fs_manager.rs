@@ -537,14 +537,23 @@ impl FsManager {
     }
 
     /// 移动到回收站
+    /// 在独立线程中执行 trash::delete，避免 Windows COM 线程模型冲突
     pub fn move_to_trash(&self, path: &Path) -> Result<(), String> {
-        // 对于删除操作，只检查路径是否存在，不需要完整的 canonicalize 验证
-        // 因为删除的目标文件可能包含特殊字符或即将被删除
         if !path.exists() {
             return Err(format!("文件不存在: {}", path.display()));
         }
 
-        trash::delete(path).map_err(|e| format!("移动到回收站失败: {}", e))
+        let path_owned = path.to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("trash-worker".into())
+            .spawn(move || {
+                let result =
+                    trash::delete(&path_owned).map_err(|e| format!("移动到回收站失败: {}", e));
+                let _ = tx.send(result);
+            })
+            .map_err(|e| format!("Failed to spawn trash thread: {}", e))?;
+        rx.recv().map_err(|_| "trash thread channel closed".to_string())?
     }
 
     /// 复制文件或目录

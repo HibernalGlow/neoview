@@ -320,12 +320,24 @@ impl ThumbnailServiceV3 {
             // 阶段 1：批量读 DB（无需持锁，I/O 密集）
             let mut loaded: Vec<(String, Vec<u8>)> = Vec::with_capacity(db_paths.len());
             for path in db_paths.iter() {
-                let category = if std::path::Path::new(path).is_dir() || !path.contains('.') {
-                    "folder"
+                let likely_folder = is_likely_folder(path);
+                let (primary, secondary) = if likely_folder {
+                    ("folder", "file")
                 } else {
-                    "file"
+                    ("file", "folder")
                 };
-                if let Ok(Some(blob)) = db.load_thumbnail_by_key_and_category(path, category) {
+
+                let loaded_blob = db
+                    .load_thumbnail_by_key_and_category(path, primary)
+                    .ok()
+                    .flatten()
+                    .or_else(|| {
+                        db.load_thumbnail_by_key_and_category(path, secondary)
+                            .ok()
+                            .flatten()
+                    });
+
+                if let Some(blob) = loaded_blob {
                     loaded.push((path.clone(), blob));
                     let _ = db.update_access_time(path);
                 }

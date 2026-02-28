@@ -51,10 +51,12 @@
 	<!-- 头部 -->
 	<div class="flex items-center justify-between">
 		<div class="flex items-center gap-2 font-semibold text-sm">
+			<!-- svelte-ignore slot_element_deprecated -->
 			<slot name="icon" />
 			<span>{title}</span>
 		</div>
 		<div class="flex items-center gap-2">
+			<!-- svelte-ignore slot_element_deprecated -->
 			<slot name="headerExtra" />
 			<div class="flex items-center gap-1 text-[10px]">
 				{#if showCollapseButton}
@@ -97,6 +99,7 @@
 
 	<!-- 内容区域 -->
 	{#if expanded}
+		<!-- svelte-ignore slot_element_deprecated -->
 		<slot />
 	{/if}
 </div>

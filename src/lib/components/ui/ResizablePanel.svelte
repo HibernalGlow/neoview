@@ -22,10 +22,14 @@
     children
   }: Props = $props();
 
-  let width = $state(defaultWidth);
+  let width = $state(300);
   let isResizing = $state(false);
   let startX = $state(0);
   let startWidth = $state(0);
+
+  $effect(() => {
+    width = defaultWidth;
+  });
 
   function handleMouseDown(e: MouseEvent) {
     isResizing = true;
@@ -68,12 +72,19 @@
   </div>
 
   <!-- 可拖拽的分隔条 -->
-  <div
+  <button
+    type="button"
     class="absolute top-0 bottom-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors"
     style="{side === 'left' ? 'right: -1px' : 'left: -1px'}"
     onmousedown={handleMouseDown}
+    onkeydown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+      }
+    }}
+    tabindex="-1"
   >
     <!-- 拖拽区域（加大点击区域） -->
     <div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
-  </div>
+  </button>
 </div>

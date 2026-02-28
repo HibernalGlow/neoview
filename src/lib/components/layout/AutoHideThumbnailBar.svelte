@@ -81,7 +81,7 @@
 				{#each thumbnails as thumb}
 					<button
 						id="thumb-{thumb.index}"
-						class="flex-shrink-0 h-full aspect-[3/4] rounded border-2 transition-all hover:border-primary {currentPage ===
+						class="shrink-0 h-full aspect-3/4 rounded border-2 transition-all hover:border-primary {currentPage ===
 						thumb.index
 							? 'border-primary ring-2 ring-primary/30 scale-105'
 							: 'border-transparent hover:border-muted-foreground/50'}"

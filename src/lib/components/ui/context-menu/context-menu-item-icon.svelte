@@ -19,7 +19,7 @@
 
 <Tooltip.Root delayDuration={400}>
 	<Tooltip.Trigger>
-		{#snippet child({ props: tooltipProps })}
+		{#snippet child({ props: tooltipProps }: { props: Record<string, unknown> })}
 			<ContextMenuPrimitive.Item
 				bind:ref
 				data-slot="context-menu-item-icon"

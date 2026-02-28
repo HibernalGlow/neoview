@@ -359,9 +359,9 @@
 	}
 
 	function getPanelStatusColor(side: 'left' | 'right' | 'hidden') {
-		if (side === 'left') return 'blue';
-		if (side === 'right') return 'purple';
-		return 'red';
+		if (side === 'left') return 'default';
+		if (side === 'right') return 'secondary';
+		return 'destructive';
 	}
 
 	function assignPanel(panelId: PanelId, side: 'left' | 'right' | 'hidden') {
@@ -439,15 +439,16 @@
 					<Tabs.List class="bg-muted/50 flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border p-1 shadow-sm">
 						<Tooltip.Provider>
 							{#each layoutGroups as group}
+								{@const GroupIcon = group.icon}
 								<Tooltip.Root delayDuration={300}>
 									<Tooltip.Trigger asChild>
-										{#snippet children({ props })}
+										{#snippet children({ props }: { props: any })}
 											<Tabs.Trigger
 												{...props}
 												value={group.id}
 												class="data-[state=active]:bg-background data-[state=active]:text-primary flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs transition-all data-[state=active]:shadow-sm"
 											>
-												<svelte:component this={group.icon} class="h-4 w-4" />
+												<GroupIcon class="h-4 w-4" />
 												<Badge variant="secondary" class="h-4.5 min-w-4.5 justify-center px-1 text-[9px] opacity-70">
 													{group.count}
 												</Badge>
@@ -469,8 +470,8 @@
 							<Table.Head class="w-10 px-2"></Table.Head>
 							<Table.Head class="w-12 px-0 text-center">图标</Table.Head>
 							<Table.Head class="w-auto">名称</Table.Head>
-							<Table.Head class="w-[90px] px-2 text-center">状态</Table.Head>
-							<Table.Head class="w-[130px] pr-4 text-right">操作</Table.Head>
+							<Table.Head class="w-22.5 px-2 text-center">状态</Table.Head>
+							<Table.Head class="w-32.5 pr-4 text-right">操作</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
@@ -538,7 +539,7 @@
 								<Table.Cell class="px-1 text-center">
 									<DropdownMenu.Root>
 										<DropdownMenu.Trigger asChild>
-											{#snippet children({ props })}
+											{#snippet children({ props }: { props: any })}
 												<Button
 													{...props}
 													variant="ghost"
@@ -619,7 +620,7 @@
 										{/if}
 										<DropdownMenu.Root>
 											<DropdownMenu.Trigger asChild>
-												{#snippet children({ props })}
+												{#snippet children({ props }: { props: any })}
 													<Button
 														{...props}
 														variant="ghost"

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Palette, Image, Video, MousePointer, Check, X, RefreshCw } from '@lucide/svelte';
+	import { Palette, Image as ImageIcon, Video, MousePointer, Check, X, RefreshCw } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import { Label } from '$lib/components/ui/label';
@@ -62,7 +62,7 @@
 	<Tabs.Root bind:value={activeTab} class="w-full">
 		<Tabs.List class="grid w-full grid-cols-3">
 			<Tabs.Trigger value="image" class="gap-1.5 text-xs">
-				<Image class="h-3.5 w-3.5" />
+				<ImageIcon class="h-3.5 w-3.5" />
 				图片
 			</Tabs.Trigger>
 			<Tabs.Trigger value="video" class="gap-1.5 text-xs">
@@ -100,7 +100,7 @@
 				<label class="flex items-center gap-2 text-sm">
 					<Checkbox
 						checked={currentSettings.image.supportedFormats.includes('jpg')}
-						on:click={() => toggleFormat('jpg')}
+						onclick={() => toggleFormat('jpg')}
 						aria-label="JPG/JPEG"
 					/>
 					<span>JPG / JPEG</span>
@@ -108,7 +108,7 @@
 				<label class="flex items-center gap-2 text-sm">
 					<Checkbox
 						checked={currentSettings.image.supportedFormats.includes('webp')}
-						on:click={() => toggleFormat('webp')}
+						onclick={() => toggleFormat('webp')}
 						aria-label="WebP"
 					/>
 					<span>WebP</span>
@@ -116,7 +116,7 @@
 				<label class="flex items-center gap-2 text-sm">
 					<Checkbox
 						checked={currentSettings.image.supportedFormats.includes('jxl')}
-						on:click={() => toggleFormat('jxl')}
+						onclick={() => toggleFormat('jxl')}
 						aria-label="JXL"
 					/>
 					<span>JXL</span>

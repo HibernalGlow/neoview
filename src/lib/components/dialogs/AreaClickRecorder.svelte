@@ -29,14 +29,14 @@
 	];
 
 	// 按键选项
-	const buttonOptions = [
+	const buttonOptions: Array<{ value: 'left' | 'right' | 'middle'; label: string }> = [
 		{ value: 'left', label: '左键' },
 		{ value: 'right', label: '右键' },
 		{ value: 'middle', label: '中键' }
 	];
 
 	// 动作选项
-	const actionOptions = [
+	const actionOptions: Array<{ value: 'click' | 'double-click' | 'press'; label: string }> = [
 		{ value: 'click', label: '单击' },
 		{ value: 'double-click', label: '双击' },
 		{ value: 'press', label: '按住' }

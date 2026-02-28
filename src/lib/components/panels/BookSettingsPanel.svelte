@@ -53,7 +53,10 @@
 				<Label class="text-sm font-semibold">允许压缩包文件操作（实验特性）</Label>
 				<p class="text-xs text-muted-foreground">开启后可通过操作绑定删除当前 ZIP 页等写操作。</p>
 			</div>
-			<Switch bind:checked={settings.archive.allowFileOperations} on:change={(event) => toggleAllowFileOps(event.currentTarget.checked)} />
+			<Switch
+				bind:checked={settings.archive.allowFileOperations}
+				onCheckedChange={(checked) => toggleAllowFileOps(checked)}
+			/>
 		</div>
 
 		<div class="flex items-center justify-between gap-4">
@@ -61,7 +64,10 @@
 				<Label class="text-sm font-semibold">删除前显示确认</Label>
 				<p class="text-xs text-muted-foreground">执行 deleteCurrentPage 时弹出二次确认，防止误删。</p>
 			</div>
-			<Switch bind:checked={settings.archive.confirmBeforeDelete} on:change={(event) => toggleConfirmBeforeDelete(event.currentTarget.checked)} />
+			<Switch
+				bind:checked={settings.archive.confirmBeforeDelete}
+				onCheckedChange={(checked) => toggleConfirmBeforeDelete(checked)}
+			/>
 		</div>
 	</div>
 

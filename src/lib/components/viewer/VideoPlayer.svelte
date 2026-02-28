@@ -78,14 +78,14 @@
 
 	let videoElement = $state<HTMLVideoElement | undefined>(undefined);
 	let isPlaying = $state(false);
-	let isMuted = $state(initialMuted);
+	let isMuted = $state(false);
 	let currentTime = $state(0);
 	let duration = $state(0);
-	let volume = $state(initialVolume);
+	let volume = $state(1);
 	let showControls = $state(true);
 	let controlsPinned = $state(false); // 固定控件不隐藏
-	let playbackRate = $state(initialPlaybackRate);
-	let loopMode: LoopMode = $state(initialLoopMode);
+	let playbackRate = $state(1);
+	let loopMode: LoopMode = $state('none');
 	let hideControlsTimeout: ReturnType<typeof setTimeout> | null = null;
 	let videoUrl = $state<string>('');
 
@@ -124,6 +124,10 @@
 
 	$effect(() => {
 		videoUrl = src || '';
+		isMuted = initialMuted;
+		volume = initialVolume;
+		playbackRate = initialPlaybackRate;
+		loopMode = initialLoopMode;
 	});
 
 	$effect(() => {
@@ -583,6 +587,7 @@
 	aria-label="视频播放器"
 >
 	{#if videoUrl}
+		<!-- svelte-ignore a11y_media_has_caption -->
 		<video
 			bind:this={videoElement}
 			class="h-full w-full"
@@ -598,9 +603,9 @@
 			crossorigin="anonymous"
 		>
 			{#if subtitle?.vttUrl}
-				<track kind="subtitles" src={subtitle.vttUrl} srclang="zh" label="字幕" default />
+				<track kind="captions" src={subtitle.vttUrl} srclang="zh" label="字幕" default />
 			{:else}
-				<track kind="captions" />
+				<track kind="captions" srclang="zh" label="字幕" default />
 			{/if}
 		</video>
 
@@ -629,7 +634,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
-			class="video-controls absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
+			class="video-controls absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
 			class:opacity-0={!showControls}
 			class:opacity-100={showControls}
 			data-video-controls="true"
@@ -862,35 +867,6 @@
 		pointer-events: auto;
 	}
 
-	.volume-slider {
-		accent-color: var(--primary);
-	}
-
-	.playback-slider {
-		accent-color: var(--primary);
-	}
-
-	.progress-bar {
-		position: relative;
-	}
-
-	.progress-fill {
-		pointer-events: none;
-	}
-
-	.preview-tooltip {
-		pointer-events: none;
-		z-index: 100;
-	}
-
-	.preview-canvas {
-		display: block;
-		width: 160px;
-		height: auto;
-		min-height: 60px;
-		background: #000;
-	}
-
 	/* 字幕样式 - 使用 CSS 变量实现动态样式 */
 	:global(video::cue) {
 		background-color: var(--subtitle-bg, rgba(0, 0, 0, 0.7));
@@ -902,12 +878,4 @@
 		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 	}
 
-	.subtitle-slider::-webkit-slider-thumb {
-		appearance: none;
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		background: var(--primary);
-		cursor: pointer;
-	}
 </style>

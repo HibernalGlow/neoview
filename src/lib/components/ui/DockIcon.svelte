@@ -27,7 +27,7 @@
 		children
 	}: Props = $props();
 
-	let mint = useMotionValue(mouseX);
+	let mint = useMotionValue(0);
 	$effect(() => {
 		mint.set(mouseX);
 	});
@@ -39,7 +39,12 @@
 		return val - bounds.x - bounds.width / 2;
 	});
 
-	let widthSync = useTransform(distanceCalc, [-distance, 0, distance], [38, magnification, 38]);
+	let widthSync = useTransform(distanceCalc, (value: number) => {
+		const clampedDistance = Math.max(1, distance);
+		const normalized = Math.max(-1, Math.min(1, value / clampedDistance));
+		const eased = 1 - Math.abs(normalized);
+		return 38 + (magnification - 38) * eased;
+	});
 
 	let width = useSpring(widthSync, {
 		mass: 0.1,

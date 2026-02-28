@@ -339,7 +339,8 @@
 			const binding = createBindingFromInput();
 			if (binding) {
 				// 强制添加，移除冲突
-				keyBindingsStore.forceAddContextBinding(editingAction, binding, editingContext);
+				const targetContext = actionEditingContexts[editingAction] || 'global';
+				keyBindingsStore.forceAddContextBinding(editingAction, binding, targetContext);
 			}
 		}
 		cancelEditing();
@@ -712,7 +713,7 @@
 												<!-- 上行：上下文切换 -->
 												<DropdownMenu.Root>
 													<DropdownMenu.Trigger asChild>
-														{#snippet children({ props })}
+														{#snippet children({ props }: { props: any })}
 															<Button
 																{...props}
 																variant="ghost"
@@ -756,7 +757,7 @@
 													<!-- Keyboard -->
 													<Tooltip.Root>
 														<Tooltip.Trigger asChild>
-															{#snippet children({ props })}
+															{#snippet children({ props }: { props: any })}
 																<Button
 																	{...props}
 																	variant="ghost"
@@ -778,9 +779,9 @@
 													<DropdownMenu.Root>
 														<Tooltip.Root>
 															<Tooltip.Trigger asChild>
-																{#snippet children({ props: tooltipProps })}
+																{#snippet children({ props: tooltipProps }: { props: any })}
 																	<DropdownMenu.Trigger asChild>
-																		{#snippet children({ props: menuProps })}
+																		{#snippet children({ props: menuProps }: { props: any })}
 																			<Button
 																				{...tooltipProps}
 																				{...menuProps}
@@ -834,7 +835,7 @@
 													<!-- Touch -->
 													<Tooltip.Root>
 														<Tooltip.Trigger asChild>
-															{#snippet children({ props })}
+															{#snippet children({ props }: { props: any })}
 																<Button
 																	{...props}
 																	variant="ghost"
@@ -855,7 +856,7 @@
 													<!-- Area -->
 													<Tooltip.Root>
 														<Tooltip.Trigger asChild>
-															{#snippet children({ props })}
+															{#snippet children({ props }: { props: any })}
 																<Button
 																	{...props}
 																	variant="ghost"
@@ -893,7 +894,7 @@
 														>
 															<DropdownMenu.Root>
 																<DropdownMenu.Trigger asChild>
-																	{#snippet children({ props })}
+																	{#snippet children({ props }: { props: any })}
 																		<button
 																			{...props}
 																			class="h-1.5 w-1.5 rounded-full bg-gray-500 transition-all hover:ring-2 hover:ring-gray-400"
@@ -940,7 +941,7 @@
 																>{keyBindingsStore.formatBinding(inputBinding)}</span
 															>
 															<button
-																class="text-muted-foreground/0 group-hover/item:text-destructive group-hover/item:text-muted-foreground/100 ml-0.5 transition-all"
+																class="text-muted-foreground/0 group-hover/item:text-destructive ml-0.5 transition-all"
 																onclick={() => removeBinding(binding.action, index, false)}
 															>
 																<X class="h-3 w-3" />
@@ -955,7 +956,7 @@
 														>
 															<DropdownMenu.Root>
 																<DropdownMenu.Trigger asChild>
-																	{#snippet children({ props })}
+																	{#snippet children({ props }: { props: any })}
 																		<button
 																			{...props}
 																			class={cn(
@@ -1007,7 +1008,7 @@
 																>{keyBindingsStore.formatBinding(cb.input)}</span
 															>
 															<button
-																class="text-muted-foreground/0 group-hover/item:text-destructive group-hover/item:text-muted-foreground/100 ml-0.5 transition-all"
+																class="text-muted-foreground/0 group-hover/item:text-destructive ml-0.5 transition-all"
 																onclick={() => removeBinding(binding.action, index, true, ctx)}
 															>
 																<X class="h-3 w-3" />
@@ -1029,7 +1030,7 @@
 												variant="ghost"
 												size="icon"
 												class="h-6 w-6 rounded-lg opacity-0 transition-all group-hover:opacity-60 hover:opacity-100"
-												onclick={() => keyBindingsStore.resetBindingToDefault(binding.action)}
+												onclick={() => keyBindingsStore.resetToDefault()}
 												title="恢复此项默认绑定"
 											>
 												<RotateCcw class="h-3 w-3" />

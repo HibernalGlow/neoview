@@ -13,7 +13,7 @@
 	} = $props();
 
 	let canvas: HTMLCanvasElement;
-	let ctx: CanvasRenderingContext2D;
+	let ctx: CanvasRenderingContext2D | null = null;
 	let isRecording = $state(false);
 	let points: { x: number; y: number; time: number }[] = [];
 	let currentGesture = $state('');

@@ -118,7 +118,7 @@
 		id="panel-content"
 		class="transition-all duration-200 ease-out {isCollapsed
 			? 'max-h-0 opacity-0 overflow-hidden'
-			: 'max-h-[2000px] opacity-100'}"
+			: 'max-h-500 opacity-100'}"
 	>
 		<div class="p-4">
 			{#if children}

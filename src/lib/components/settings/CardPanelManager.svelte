@@ -266,7 +266,7 @@
 				<Tooltip.Provider>
 					<Tooltip.Root delayDuration={300}>
 						<Tooltip.Trigger asChild>
-							{#snippet children({ props })}
+							{#snippet children({ props }: { props: any })}
 								<Tabs.Trigger
 									{...props}
 									value="all"
@@ -290,7 +290,7 @@
 						{@const title = getPanelTitle(panelId)}
 						<Tooltip.Root delayDuration={300}>
 							<Tooltip.Trigger asChild>
-								{#snippet children({ props })}
+								{#snippet children({ props }: { props: any })}
 									<Tabs.Trigger
 										{...props}
 										value={panelId}
@@ -321,8 +321,8 @@
 					<Table.Head class="w-10 px-2"></Table.Head>
 					<Table.Head class="w-12 px-0 text-center">图标</Table.Head>
 					<Table.Head class="w-auto">名称</Table.Head>
-					<Table.Head class="w-[110px] px-2 text-center">所属面板</Table.Head>
-					<Table.Head class="w-[120px] pr-4 text-right">操作</Table.Head>
+					<Table.Head class="w-27.5 px-2 text-center">所属面板</Table.Head>
+					<Table.Head class="w-30 pr-4 text-right">操作</Table.Head>
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
@@ -381,7 +381,7 @@
 						<Table.Cell class="px-1 text-center">
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger asChild>
-									{#snippet children({ props })}
+									{#snippet children({ props }: { props: any })}
 										<Button
 											{...props}
 											variant="ghost"
@@ -390,7 +390,7 @@
 										>
 											<Badge
 												variant={card.visible ? 'default' : 'outline'}
-												class="pointer-events-none block h-4 max-w-[80px] truncate px-1 text-center text-[9px] font-bold uppercase tracking-tighter"
+												class="pointer-events-none block h-4 max-w-20 truncate px-1 text-center text-[9px] font-bold uppercase tracking-tighter"
 											>
 												{getPanelTitle(card.panelId)}
 											</Badge>
@@ -399,7 +399,7 @@
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content
 									align="start"
-									class="max-h-[300px] overflow-y-auto rounded-xl p-1 shadow-lg"
+									class="max-h-75 overflow-y-auto rounded-xl p-1 shadow-lg"
 								>
 									<DropdownMenu.Label
 										class="text-muted-foreground px-2 py-1.5 text-[10px] font-bold uppercase"
@@ -470,7 +470,7 @@
 								{/if}
 								<DropdownMenu.Root>
 									<DropdownMenu.Trigger asChild>
-										{#snippet children({ props })}
+										{#snippet children({ props }: { props: any })}
 											<Button
 												{...props}
 												variant="ghost"

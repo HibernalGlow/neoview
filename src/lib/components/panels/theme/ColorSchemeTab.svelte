@@ -386,7 +386,7 @@
 		<Label class="text-sm font-semibold">导入主题 (JSON / CSS)</Label>
 		<div class="flex flex-col gap-2">
 			<textarea
-				class="bg-muted/50 focus-visible:ring-ring min-h-[120px] resize-y rounded-md border p-2 font-mono text-xs outline-none focus-visible:ring-1"
+				class="bg-muted/50 focus-visible:ring-ring min-h-30 resize-y rounded-md border p-2 font-mono text-xs outline-none focus-visible:ring-1"
 				bind:value={themeJson}
 				placeholder={placeholderText}
 			></textarea>
@@ -425,7 +425,8 @@
 						<div class="text-xs font-medium">{key}</div>
 						<Input
 							{value}
-							on:input={(e) => onThemeColorUpdate(editingVariant, key, e.currentTarget.value)}
+							oninput={(e) =>
+								onThemeColorUpdate(editingVariant, key, (e.currentTarget as HTMLInputElement).value)}
 						/>
 					</div>
 				</div>

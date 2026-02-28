@@ -550,11 +550,11 @@
 		}
 	}
 
-	function resetView() {
+	const resetView = () => {
 		manualScale = 1.0;
 		rotation = 0;
 		resetScrollPosition();
-	}
+	};
 
 	// 图片加载完成回调 - 更新尺寸到缓存和元数据
 	// 【修复】不再使用单一变量，尺寸由 stackImageLoader 缓存管理

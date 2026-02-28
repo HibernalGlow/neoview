@@ -2,7 +2,7 @@
 	/**
 	 * 路径面包屑导航栏 - 使用 shadcn-svelte Breadcrumb 重构
 	 */
-	import { FolderOpen } from '@lucide/svelte';
+	import { FolderOpen, Home as HomeIcon } from '@lucide/svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { onMount } from 'svelte';
 	import {

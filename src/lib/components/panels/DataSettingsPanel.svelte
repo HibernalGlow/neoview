@@ -10,7 +10,9 @@
 		Search,
 		MapPin,
 		FileJson,
-		ArrowUpDown
+		ArrowUpDown,
+		ArrowUp,
+		ArrowDown
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Checkbox from '$lib/components/ui/checkbox/checkbox.svelte';
@@ -348,7 +350,7 @@
 			<!-- Toolbar: Search & Main Actions -->
 			<div class="flex shrink-0 flex-wrap items-center justify-between gap-4 px-1 pb-4">
 				<!-- Left: Search -->
-				<div class="relative w-full max-w-[240px]">
+				<div class="relative w-full max-w-60">
 					<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 					<Input
 						bind:value={searchQuery}
@@ -557,7 +559,7 @@
 					{:else}
 						{#each Object.entries(groupedRows) as [panelName, groupRows]}
 							<!-- Group Header -->
-							<div class="bg-muted/20 sticky top-[33px] z-0 border-b px-4 py-1.5 backdrop-blur-sm">
+							<div class="bg-muted/20 sticky top-8.25 z-0 border-b px-4 py-1.5 backdrop-blur-sm">
 								<div
 									class="text-muted-foreground/60 flex items-center gap-2 text-[10px] font-bold tracking-widest uppercase"
 								>

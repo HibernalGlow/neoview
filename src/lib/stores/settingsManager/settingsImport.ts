@@ -21,12 +21,11 @@ import { isBrowser, writeJsonToLocalStorage, writeStringToLocalStorage } from '.
 export function importAppSettings(settings: AppSettings): void {
     try {
         if (settings.keybindings) {
-            keyBindingsStore.bindings = settings.keybindings;
-            keyBindingsStore.saveToStorage();
+            importKeybindings(settings.keybindings);
         }
 
         if (settings.emmMetadata) {
-            emmMetadataStore.updateSettings(settings.emmMetadata);
+            importEmmConfig(settings.emmMetadata);
         }
 
         if (settings.fileBrowser) {

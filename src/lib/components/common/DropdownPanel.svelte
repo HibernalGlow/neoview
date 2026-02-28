@@ -166,6 +166,7 @@
 	class="relative inline-block {className}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
+	role="group"
 >
 	<!-- 触发器 -->
 	<button
@@ -184,7 +185,7 @@
 	<!-- 下拉面板 -->
 	{#if isOpen}
 		<div
-			class="absolute z-50 min-w-[200px] {panelPositionClass} {animationOriginClass}"
+			class="absolute z-50 min-w-50 {panelPositionClass} {animationOriginClass}"
 			role="menu"
 			aria-orientation="vertical"
 		>

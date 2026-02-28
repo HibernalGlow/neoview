@@ -135,7 +135,6 @@
 <div 
   bind:this={fileListContainer}
   class="file-browser-list flex-1 overflow-y-auto p-2 focus:outline-none" 
-  tabindex="0" 
   onscroll={handleScroll}
 >
   {#if viewMode === 'list'}
@@ -149,6 +148,14 @@
             style="height: {itemHeight}px;"
             onclick={() => handleItemClick(item, index)}
             oncontextmenu={(e) => handleItemContextMenu(e, item)}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleItemClick(item, index);
+              }
+            }}
+            role="button"
+            tabindex="0"
           >
             <!-- 勾选框（勾选模式） -->
             {#if isCheckMode}
@@ -229,6 +236,14 @@
           class="group flex flex-col items-center gap-2 p-2 rounded border cursor-pointer transition-colors {selectedIndex === index ? 'bg-primary/10 border-primary' : 'hover:bg-accent/50 border-border'}"
           onclick={() => handleItemClick(item, index)}
           oncontextmenu={(e) => handleItemContextMenu(e, item)}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleItemClick(item, index);
+            }
+          }}
+          role="button"
+          tabindex="0"
         >
           <!-- 勾选框（勾选模式） -->
           {#if isCheckMode}

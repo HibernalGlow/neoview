@@ -68,6 +68,10 @@
 			class="absolute bottom-full right-0 mb-2 w-64 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
 			onclick={(e) => e.stopPropagation()}
 			onmousedown={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-label="字幕设置"
+			tabindex="-1"
 		>
 			<div class="mb-3 flex items-center justify-between">
 				<span class="text-sm font-medium text-white">字幕设置</span>

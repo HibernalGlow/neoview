@@ -211,10 +211,10 @@
 			<Label>备份间隔</Label>
 			<Select.Root
 				type="single"
-				value={{ value: String(settings.intervalMinutes), label: intervalOptions.find(o => o.value === String(settings.intervalMinutes))?.label || '' }}
+				value={String(settings.intervalMinutes)}
 				onValueChange={(v) => {
-					if (v?.value) {
-						autoBackupStore.updateSettings({ intervalMinutes: parseInt(v.value) });
+					if (v) {
+						autoBackupStore.updateSettings({ intervalMinutes: parseInt(v) });
 					}
 				}}
 			>

@@ -29,7 +29,8 @@
 				splitHorizontalPages: false,
 				treatHorizontalAsDoublePage: false,
 				singleFirstPageMode: 'restoreOrDefault',
-				singleLastPageMode: 'restoreOrDefault'
+				singleLastPageMode: 'restoreOrDefault',
+				widePageStretch: 'uniformHeight'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -52,7 +53,8 @@
 				splitHorizontalPages: false,
 				treatHorizontalAsDoublePage: false,
 				singleFirstPageMode: 'restoreOrDefault',
-				singleLastPageMode: 'restoreOrDefault'
+				singleLastPageMode: 'restoreOrDefault',
+				widePageStretch: 'uniformHeight'
 			};
 		}
 		if (!currentSettings.view.autoRotate) {
@@ -350,7 +352,7 @@
 							max={5.0}
 							step={0.1}
 							value={currentSettings.view.mouseCursor.hideDelay as any}
-							onValueChange={(v) => {
+							onValueChange={(v: number | number[]) => {
 								const latest = settingsManager.getSettings();
 								settingsManager.updateNestedSettings('view', {
 									mouseCursor: { ...latest.view.mouseCursor, hideDelay: Array.isArray(v) ? v[0] : v }
@@ -391,7 +393,7 @@
 							max={100}
 							step={1}
 							value={currentSettings.view.mouseCursor.showMovementThreshold as any}
-							onValueChange={(v) => {
+							onValueChange={(v: number | number[]) => {
 								const latest = settingsManager.getSettings();
 								settingsManager.updateNestedSettings('view', {
 									mouseCursor: { ...latest.view.mouseCursor, showMovementThreshold: Array.isArray(v) ? v[0] : v }

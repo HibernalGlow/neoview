@@ -57,9 +57,10 @@
             <ScanSearch class="h-3 w-3" />
             放大倍率
         </span>
-		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-[150px]">
+		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-37.5">
             <span class="text-xs w-8 text-right">{zoom.toFixed(1)}x</span>
             <Slider
+				type="single"
                 value={[zoom]}
                 min={1.0}
                 max={5.0}
@@ -72,9 +73,10 @@
 		<Separator.Root orientation="vertical" class="mx-2 h-5" />
 
 		<span class="text-muted-foreground mr-2 text-xs">镜片大小</span>
-		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-[150px]">
+		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-37.5">
              <span class="text-xs w-8 text-right">{size}px</span>
              <Slider
+					 type="single"
                 value={[size]}
                 min={100}
                 max={500}

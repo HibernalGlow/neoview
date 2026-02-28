@@ -202,6 +202,8 @@
 							: 'border-blue-500 bg-blue-50'
 						: 'border-muted-foreground/30 bg-muted/30'
 				}"
+				role="button"
+				tabindex="0"
 				oncontextmenu={(e) => e.preventDefault()}
 				onmouseenter={handleMouseEnter}
 				onmouseleave={handleMouseLeave}
@@ -209,6 +211,11 @@
 				onmousedown={handleMouseDown}
 				onclick={handleClick}
 				onmouseup={handleMouseUp}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+					}
+				}}
 			>
 				<!-- 状态指示器 -->
 				<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -291,7 +298,12 @@
 			<div class="flex gap-2">
 				<Button variant="outline" onclick={onCancel}>取消</Button>
 				{#if recordedOperation}
-					<Button onclick={() => onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action)}>
+					<Button
+						onclick={() => {
+							if (!recordedOperation) return;
+							onComplete(recordedOperation.gesture, recordedOperation.button, recordedOperation.action);
+						}}
+					>
 						使用此操作
 					</Button>
 				{/if}

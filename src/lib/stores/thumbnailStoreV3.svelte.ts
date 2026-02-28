@@ -117,7 +117,7 @@ function getAdaptiveDispatchConfig(): DispatchConfig {
 
   return {
     throttleMs: Math.max(MIN_THROTTLE_MS, BASE_THROTTLE_MS),
-    batchSize: Math.min(MAX_BATCH_SIZE, Math.max(MIN_BATCH_SIZE, BASE_BATCH_SIZE + 8)),
+    batchSize: Math.min(64, Math.max(MIN_BATCH_SIZE, BASE_BATCH_SIZE + 8)),
     parallelInvokes: MAX_PARALLEL_INVOKES,
   };
 }
@@ -236,11 +236,16 @@ function sweepExpiredRecentRequests() {
   }
 }
 
-// 动态预加载相关（根据停留时间指数扩展）
+// 动态预加载相关（基于滚动速度/方向的预测窗口）
 const prefetchState = {
   lastDir: '',
   stayStartTime: 0,
-  currentPrefetchCount: 20, // 初始预取数量
+  currentPrefetchCount: 20,
+  lastTimestampMs: 0,
+  lastCenterIndex: -1,
+  lastDirection: 0 as -1 | 0 | 1,
+  velocityEma: 0,
+  lastVisibleSpan: 0,
 };
 
 // 缩略图就绪事件 payload（仅含 path，无 blob — 前端通过协议 URL 读取）
@@ -814,38 +819,101 @@ export async function preloadDirectory(
   }
 }
 
+interface PrefetchWindow {
+  beforeCount: number;
+  afterCount: number;
+  prefetchCount: number;
+  velocityItemsPerSec: number;
+  direction: -1 | 0 | 1;
+}
+
 /**
- * 计算动态预取数量（根据停留时间指数增长）
- * 停留时间越长，预取范围越大
+ * 基于滚动速度和方向预测预取窗口。
+ * - 速度越快，窗口越大
+ * - 有方向时，前向窗口更大，反向窗口更小
  */
-function calculateDynamicPrefetchCount(currentDir: string): number {
+function calculatePredictivePrefetchWindow(
+  currentDir: string,
+  firstVisibleIndex: number,
+  lastVisibleIndex: number
+): PrefetchWindow {
   const now = Date.now();
   const MIN_PREFETCH = 20;
-  const MAX_PREFETCH = 200;
-  const GROWTH_INTERVAL = 2000; // 每 2 秒增长一次
+  const MAX_PREFETCH = 220;
+  const BASE_PREFETCH = 24;
+  const LOOKAHEAD_MS = 280;
+  const EMA_ALPHA = 0.24;
+  const LEADING_BIAS = 0.35;
 
-  // 如果目录变化，重置
+  const centerIndex = Math.floor((firstVisibleIndex + lastVisibleIndex) / 2);
+  const visibleSpan = Math.max(1, lastVisibleIndex - firstVisibleIndex + 1);
+
+  // 目录变化：重置速度模型
   if (prefetchState.lastDir !== currentDir) {
     prefetchState.lastDir = currentDir;
     prefetchState.stayStartTime = now;
+    prefetchState.lastTimestampMs = now;
+    prefetchState.lastCenterIndex = centerIndex;
+    prefetchState.lastDirection = 0;
+    prefetchState.velocityEma = 0;
+    prefetchState.lastVisibleSpan = visibleSpan;
     prefetchState.currentPrefetchCount = MIN_PREFETCH;
-    return MIN_PREFETCH;
+    return {
+      beforeCount: MIN_PREFETCH,
+      afterCount: MIN_PREFETCH,
+      prefetchCount: MIN_PREFETCH,
+      velocityItemsPerSec: 0,
+      direction: 0,
+    };
   }
 
-  // 计算停留时间
-  const stayDuration = now - prefetchState.stayStartTime;
-  const growthSteps = Math.floor(stayDuration / GROWTH_INTERVAL);
+  const dtMs = Math.max(1, now - prefetchState.lastTimestampMs);
+  const deltaIndex = prefetchState.lastCenterIndex >= 0
+    ? centerIndex - prefetchState.lastCenterIndex
+    : 0;
+  const instantVelocity = Math.abs(deltaIndex) * 1000 / dtMs;
+  prefetchState.velocityEma =
+    prefetchState.velocityEma * (1 - EMA_ALPHA) + instantVelocity * EMA_ALPHA;
 
-  // 指数增长：每个步骤增加 50%
-  if (growthSteps > 0) {
-    const newCount = Math.min(
-      MAX_PREFETCH,
-      Math.floor(MIN_PREFETCH * Math.pow(1.5, growthSteps))
-    );
-    prefetchState.currentPrefetchCount = newCount;
+  if (deltaIndex > 0) {
+    prefetchState.lastDirection = 1;
+  } else if (deltaIndex < 0) {
+    prefetchState.lastDirection = -1;
+  } else if (prefetchState.velocityEma < 4) {
+    prefetchState.lastDirection = 0;
   }
 
-  return prefetchState.currentPrefetchCount;
+  const predictiveLead = Math.round(prefetchState.velocityEma * (LOOKAHEAD_MS / 1000));
+  const spanBoost = Math.round(visibleSpan * 0.8);
+  const dynamicCount = Math.max(
+    MIN_PREFETCH,
+    Math.min(MAX_PREFETCH, BASE_PREFETCH + spanBoost + predictiveLead)
+  );
+
+  let beforeCount = dynamicCount;
+  let afterCount = dynamicCount;
+  if (prefetchState.lastDirection > 0) {
+    // 向下滚动：后向(列表后方)给更大窗口
+    beforeCount = Math.max(MIN_PREFETCH, Math.round(dynamicCount * LEADING_BIAS));
+    afterCount = dynamicCount;
+  } else if (prefetchState.lastDirection < 0) {
+    // 向上滚动：前向(列表前方)给更大窗口
+    beforeCount = dynamicCount;
+    afterCount = Math.max(MIN_PREFETCH, Math.round(dynamicCount * LEADING_BIAS));
+  }
+
+  prefetchState.currentPrefetchCount = dynamicCount;
+  prefetchState.lastTimestampMs = now;
+  prefetchState.lastCenterIndex = centerIndex;
+  prefetchState.lastVisibleSpan = visibleSpan;
+
+  return {
+    beforeCount,
+    afterCount,
+    prefetchCount: dynamicCount,
+    velocityItemsPerSec: Math.round(prefetchState.velocityEma),
+    direction: prefetchState.lastDirection,
+  };
 }
 
 /**
@@ -862,9 +930,6 @@ export async function requestVisibleThumbnailsWithPrefetch(
 ): Promise<void> {
   if (!initialized || visiblePaths.length === 0) return;
 
-  // 动态计算预取数量
-  const prefetchCount = calculateDynamicPrefetchCount(currentDir);
-
   // 找到可见区域在完整列表中的位置
   const firstVisibleIndex = allPaths.indexOf(visiblePaths[0]);
   const lastVisibleIndex = allPaths.indexOf(visiblePaths[visiblePaths.length - 1]);
@@ -877,9 +942,15 @@ export async function requestVisibleThumbnailsWithPrefetch(
   // 计算可见区域中心索引
   const centerIndex = Math.floor((firstVisibleIndex + lastVisibleIndex) / 2);
 
+  const predictiveWindow = calculatePredictivePrefetchWindow(
+    currentDir,
+    firstVisibleIndex,
+    lastVisibleIndex
+  );
+
   // 计算预取范围
-  const prefetchStart = Math.max(0, firstVisibleIndex - prefetchCount);
-  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
+  const prefetchStart = Math.max(0, firstVisibleIndex - predictiveWindow.beforeCount);
+  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + predictiveWindow.afterCount + 1);
 
   // 合并可见路径和预取路径（可见优先）
   const prefetchPaths = allPaths.slice(prefetchStart, prefetchEnd);
@@ -910,9 +981,6 @@ export async function requestVisibleThumbnailsDeltaWithPrefetch(
   // 先做可见区差量请求
   await requestVisibleThumbnailsDelta(visiblePaths, currentDir);
 
-  // 动态计算预取数量
-  const prefetchCount = calculateDynamicPrefetchCount(currentDir);
-
   // 找到可见区域在完整列表中的位置
   const firstVisibleIndex = allPaths.indexOf(visiblePaths[0]);
   const lastVisibleIndex = allPaths.indexOf(visiblePaths[visiblePaths.length - 1]);
@@ -922,10 +990,15 @@ export async function requestVisibleThumbnailsDeltaWithPrefetch(
   }
 
   const centerIndex = Math.floor((firstVisibleIndex + lastVisibleIndex) / 2);
+  const predictiveWindow = calculatePredictivePrefetchWindow(
+    currentDir,
+    firstVisibleIndex,
+    lastVisibleIndex
+  );
 
   // 计算预取范围
-  const prefetchStart = Math.max(0, firstVisibleIndex - prefetchCount);
-  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + prefetchCount + 1);
+  const prefetchStart = Math.max(0, firstVisibleIndex - predictiveWindow.beforeCount);
+  const prefetchEnd = Math.min(allPaths.length, lastVisibleIndex + predictiveWindow.afterCount + 1);
 
   // 仅预取可见区之外的路径
   const visibleSet = new Set(visiblePaths);
@@ -1065,6 +1138,9 @@ export function getPrefetchStats() {
     currentDir: prefetchState.lastDir,
     stayDuration: Date.now() - prefetchState.stayStartTime,
     prefetchCount: prefetchState.currentPrefetchCount,
+    velocityItemsPerSec: prefetchState.velocityEma,
+    direction: prefetchState.lastDirection,
+    visibleSpan: prefetchState.lastVisibleSpan,
   };
 }
 
@@ -1095,6 +1171,14 @@ export function cleanup(): void {
   inFlightRequests.clear();
   recentRequestedAt.clear();
   lastVisiblePathsByDir.clear();
+  prefetchState.lastDir = '';
+  prefetchState.stayStartTime = 0;
+  prefetchState.currentPrefetchCount = 20;
+  prefetchState.lastTimestampMs = 0;
+  prefetchState.lastCenterIndex = -1;
+  prefetchState.lastDirection = 0;
+  prefetchState.velocityEma = 0;
+  prefetchState.lastVisibleSpan = 0;
 
   initialized = false;
   console.log('🛑 ThumbnailStoreV3 cleaned up');

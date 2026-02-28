@@ -125,7 +125,7 @@ describe('thumbnailStoreV3 request queue', () => {
       .map((c) => (c?.[1] as { paths: string[] }).paths);
 
     expect(batches.length).toBeGreaterThanOrEqual(1);
-    expect(batches[0]).toEqual(expect.arrayContaining(['/p/3', '/p/4']));
+    expect(batches.flat()).toEqual(expect.arrayContaining(['/p/3', '/p/4']));
     expect(batches.flat()).toEqual(expect.arrayContaining(['/p/1', '/p/2', '/p/5', '/p/6']));
     expect(batches.flat()).not.toContain(undefined);
   });

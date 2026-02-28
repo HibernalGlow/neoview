@@ -233,13 +233,11 @@ impl ThumbnailServiceV3 {
         let mut db_paths: Vec<String> = Vec::new();
         let mut generate_paths: Vec<(String, ThumbnailFileType, usize, u64)> = Vec::new();
 
-        // 读取索引快照
-        let (db_idx_snap, folder_idx_snap, failed_snap) = {
-            let db_idx = self.db_index.read().ok().map(|g| g.clone());
-            let folder_idx = self.folder_db_index.read().ok().map(|g| g.clone());
-            let failed = self.failed_index.read().ok().map(|g| g.clone());
-            (db_idx, folder_idx, failed)
-        };
+        // 持有读锁直接查询：避免 3 次完整 HashSet<String> clone（O(N_cached) 堆分配）
+        // RwLock 读锁并发安全，worker 写锁只在任务完成时短暂获取，不会死锁
+        let db_guard = self.db_index.read().ok();
+        let folder_guard = self.folder_db_index.read().ok();
+        let failed_guard = self.failed_index.read().ok();
 
         // 分类每个路径
         for (priority, path) in paths.iter().enumerate() {
@@ -248,20 +246,20 @@ impl ThumbnailServiceV3 {
                 cached_paths.push(path.clone());
                 continue;
             }
-            // 检查失败索引
-            if let Some(ref failed) = failed_snap {
-                if failed.contains(path) {
+            // 检查失败索引（&str 查询，HashSet<String> 支持 Borrow<str>）
+            if let Some(ref failed) = failed_guard {
+                if failed.contains(path.as_str()) {
                     continue;
                 }
             }
             // 检查数据库索引
-            let in_db = db_idx_snap
+            let in_db = db_guard
                 .as_ref()
-                .map(|i| i.contains(path))
+                .map(|i| i.contains(path.as_str()))
                 .unwrap_or(false);
-            let in_folder = folder_idx_snap
+            let in_folder = folder_guard
                 .as_ref()
-                .map(|i| i.contains(path))
+                .map(|i| i.contains(path.as_str()))
                 .unwrap_or(false);
 
             if in_db || in_folder {

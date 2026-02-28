@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, Loader2 } from '@lucide/svelte';
+	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, Loader2, ShieldX } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -12,6 +12,8 @@
 		folderEntries: number;
 		dbSizeBytes: number;
 		dbSizeMb: number;
+		failedMemory: number;
+		failedDb: number;
 	}
 
 	// 状态
@@ -36,12 +38,16 @@
 				folder_entries: number;
 				db_size_bytes: number;
 				db_size_mb: number;
+				failed_memory: number;
+				failed_db: number;
 			}>('get_thumbnail_db_stats_v3');
 			stats = {
 				totalEntries: result.total_entries,
 				folderEntries: result.folder_entries,
 				dbSizeBytes: result.db_size_bytes,
 				dbSizeMb: result.db_size_mb,
+				failedMemory: result.failed_memory,
+				failedDb: result.failed_db,
 			};
 		} catch {
 			stats = null;
@@ -129,7 +135,6 @@
 		}
 	}
 	
-	// 旧版规范化
 	async function handleNormalize() {
 		isLoading = true;
 		message = null;
@@ -139,6 +144,21 @@
 			await loadStats();
 		} catch (e) {
 			message = `❌ 规范化失败: ${e}`;
+		} finally {
+			isLoading = false;
+		}
+	}
+
+	// 清除失败黑名单
+	async function handleClearFailed() {
+		isLoading = true;
+		message = null;
+		try {
+			const count = await invoke<number>('clear_failed_thumbnails_v3');
+			message = `✅ 已清除 ${count} 条失败黑名单记录，下次浏览时将重新尝试生成`;
+			await loadStats();
+		} catch (e) {
+			message = `❌ 清除失败: ${e}`;
 		} finally {
 			isLoading = false;
 		}
@@ -180,7 +200,7 @@
 
 	<!-- V3 统计信息 -->
 	{#if stats}
-		<div class="grid grid-cols-3 gap-2 text-xs">
+		<div class="grid grid-cols-2 gap-2 text-xs">
 			<div class="bg-muted/50 rounded p-2 text-center">
 				<div class="text-muted-foreground">总条目</div>
 				<div class="font-semibold">{stats.totalEntries.toLocaleString()}</div>
@@ -193,6 +213,11 @@
 				<div class="text-muted-foreground">数据库</div>
 				<div class="font-semibold">{formatSize(stats.dbSizeBytes)}</div>
 			</div>
+			<div class="bg-muted/50 rounded p-2 text-center">
+				<div class="text-muted-foreground">黑名单</div>
+				<div class="font-semibold text-red-500">{(stats.failedMemory + stats.failedDb).toLocaleString()}</div>
+				<div class="text-[10px] text-muted-foreground">内存{stats.failedMemory} / DB{stats.failedDb}</div>
+			</div>
 		</div>
 	{/if}
 
@@ -203,7 +228,7 @@
 		</div>
 	{/if}
 
-	<!-- 清理无效记录 -->
+	<!-- 清理无效记录 + 清除黑名单 -->
 	<div class="space-y-2">
 		<Label class="text-xs font-medium">清理无效记录</Label>
 		<div class="flex flex-wrap gap-2">
@@ -225,9 +250,19 @@
 				onclick={handleCleanupInvalidBlob}
 			>
 				<Trash2 class="h-3 w-3" />
-				空白Blob
+				空Blob
 			</Button>
 		</div>
+		<Button
+			variant="outline"
+			size="sm"
+			class="w-full gap-1 text-xs text-red-600 hover:text-red-700"
+			disabled={isLoading || !stats || (stats.failedMemory + stats.failedDb) === 0}
+			onclick={handleClearFailed}
+		>
+			<ShieldX class="h-3 w-3" />
+			清除失败黑名单 ({stats ? stats.failedMemory + stats.failedDb : 0})
+		</Button>
 	</div>
 
 	<!-- 清理过期条目 -->
@@ -309,7 +344,8 @@
 
 	<p class="text-[10px] text-muted-foreground">
 		<strong>无效路径</strong>：删除文件已不存在的缩略图记录<br/>
-		<strong>空白Blob</strong>：删除没有缩略图数据的空条目<br/>
+		<strong>空Blob</strong>：删除没有缩略图数据的空条目<br/>
+		<strong>清除黑名单</strong>：清除生成失败的记录，允许重新尝试生成<br/>
 		<strong>清理过期</strong>：删除超过指定天数的旧记录<br/>
 		<strong>按路径清理</strong>：删除指定目录下的所有缩略图<br/>
 		<strong>压缩</strong>：执行 VACUUM 回收已删除记录占用的空间<br/>

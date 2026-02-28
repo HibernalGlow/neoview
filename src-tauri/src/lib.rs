@@ -483,6 +483,8 @@ pub fn run() {
             commands::cleanup_by_path_prefix_v3,
             commands::vacuum_thumbnail_db_v3,
             commands::reload_thumbnail_v3,
+            commands::clear_failed_thumbnails_v3,
+            commands::get_failed_count_v3,
             // EMM JSON 缓存命令
             commands::thumbnail_commands::emm_commands::save_emm_json,
             commands::thumbnail_commands::emm_commands::batch_save_emm_json,

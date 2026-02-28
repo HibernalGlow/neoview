@@ -495,6 +495,39 @@ impl ThumbnailServiceV3 {
             .map_err(|e| format!("获取统计失败: {}", e))
     }
 
+    /// 获取失败黑名单数量（内存 + DB）
+    pub fn get_failed_count(&self) -> Result<(usize, usize), String> {
+        let memory_count = self.failed_index.read()
+            .map(|idx| idx.len())
+            .unwrap_or(0);
+        let db_count = self.db
+            .get_failed_count()
+            .map_err(|e| format!("获取失败记录数量失败: {}", e))?;
+        Ok((memory_count, db_count))
+    }
+
+    /// 清除失败黑名单（内存索引 + 数据库记录）
+    pub fn clear_failed_index(&self) -> Result<usize, String> {
+        // 1. 清除内存中的失败索引
+        let memory_cleared = if let Ok(mut idx) = self.failed_index.write() {
+            let count = idx.len();
+            idx.clear();
+            count
+        } else {
+            0
+        };
+        // 2. 清除数据库中的失败记录
+        let db_cleared = self.db
+            .clear_all_failed_thumbnails()
+            .map_err(|e| format!("清除数据库失败记录失败: {}", e))?;
+        log_info!(
+            "🧹 已清除失败黑名单: 内存 {} 条, 数据库 {} 条",
+            memory_cleared,
+            db_cleared
+        );
+        Ok(memory_cleared + db_cleared)
+    }
+
     /// 清理无效路径
     pub fn cleanup_invalid_paths(&self) -> Result<usize, String> {
         self.db

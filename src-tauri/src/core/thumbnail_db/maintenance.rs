@@ -317,4 +317,28 @@ impl ThumbnailDb {
 
         Ok(keys)
     }
+
+    /// 清除所有失败记录
+    pub fn clear_all_failed_thumbnails(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let count = conn.execute("DELETE FROM failed_thumbnails", [])?;
+        Ok(count)
+    }
+
+    /// 获取失败记录数量
+    pub fn get_failed_count(&self) -> SqliteResult<usize> {
+        self.open()?;
+        let conn_guard = self.connection.lock().unwrap();
+        let conn = conn_guard.as_ref().unwrap();
+
+        let count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM failed_thumbnails",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
 }

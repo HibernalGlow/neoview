@@ -234,6 +234,8 @@ pub struct MaintenanceStats {
     pub folder_entries: usize,
     pub db_size_bytes: i64,
     pub db_size_mb: f64,
+    pub failed_memory: usize,
+    pub failed_db: usize,
 }
 
 /// 获取数据库维护统计
@@ -241,12 +243,15 @@ pub struct MaintenanceStats {
 pub async fn get_thumbnail_db_stats_v3(app: AppHandle) -> Result<MaintenanceStats, String> {
     if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
         let (total, folders, size) = state.service.get_db_stats()?;
+        let (failed_memory, failed_db) = state.service.get_failed_count()?;
 
         Ok(MaintenanceStats {
             total_entries: total,
             folder_entries: folders,
             db_size_bytes: size,
             db_size_mb: size as f64 / 1024.0 / 1024.0,
+            failed_memory,
+            failed_db,
         })
     } else {
         Err("缩略图服务未初始化".to_string())
@@ -299,6 +304,27 @@ pub async fn vacuum_thumbnail_db_v3(app: AppHandle) -> Result<(), String> {
         state.service.vacuum_db()
     } else {
         Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 清除失败黑名单（内存索引 + 数据库记录）
+/// 清除后，之前失败的缩略图将在下次请求时重新尝试生成
+#[tauri::command]
+pub async fn clear_failed_thumbnails_v3(app: AppHandle) -> Result<usize, String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.clear_failed_index()
+    } else {
+        Err("缩略图服务未初始化".to_string())
+    }
+}
+
+/// 获取失败黑名单数量
+#[tauri::command]
+pub async fn get_failed_count_v3(app: AppHandle) -> Result<(usize, usize), String> {
+    if let Some(state) = app.try_state::<ThumbnailServiceV3State>() {
+        state.service.get_failed_count()
+    } else {
+        Ok((0, 0))
     }
 }
 

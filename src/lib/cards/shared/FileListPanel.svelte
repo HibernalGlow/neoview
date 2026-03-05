@@ -4,7 +4,7 @@
 	 * folder、bookmark、history 三个面板的共享基础组件
 	 * 组合 3 张卡片：BreadcrumbTabCard、ToolbarCard、FileListCard
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { get } from 'svelte/store';
 	import { homeDir } from '@tauri-apps/api/path';
 
@@ -43,9 +43,11 @@
 		mode?: PanelMode;
 	}
 	let { initialPath: propInitialPath, mode }: Props = $props();
+	// 捕获初始值，不创建响应式依赖（props 解构后值已同步可用）
+	const initialPathSnapshot = untrack(() => propInitialPath);
 
 	// ==================== Context 初始化 ====================
-	const ctx = createFolderContext(propInitialPath);
+	const ctx = createFolderContext(initialPathSnapshot);
 
 	// ==================== 按面板类型获取布局 stores ====================
 	const panelMode: StorePanelMode = ctx.panelMode as StorePanelMode;
@@ -56,7 +58,7 @@
 	const toolbarPosition = layoutStores.toolbarPosition;
 
 	// ==================== 共享操作初始化 ====================
-	const actions = createAllFileActions(ctx, propInitialPath);
+	const actions = createAllFileActions(ctx, initialPathSnapshot);
 
 	// ==================== 标签编辑状态 ====================
 	let tagEditorOpen = $state(false);
@@ -113,21 +115,21 @@
 	onMount(() => {
 		(async () => {
 			try {
-				if (propInitialPath && isVirtualPath(propInitialPath)) {
+				if (initialPathSnapshot && isVirtualPath(initialPathSnapshot)) {
 					// 虚拟实例初始化
 					const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 					ctx.localTabState = {
 						id: localId,
-						title: propInitialPath.includes('bookmark') ? '书签' : '历史',
-						currentPath: propInitialPath,
-						homePath: propInitialPath
+						title: initialPathSnapshot.includes('bookmark') ? '书签' : '历史',
+						currentPath: initialPathSnapshot,
+						homePath: initialPathSnapshot
 					};
-					ctx.homePath = propInitialPath;
-					ctx.navigationCommand.set({ type: 'init', path: propInitialPath });
+					ctx.homePath = initialPathSnapshot;
+					ctx.navigationCommand.set({ type: 'init', path: initialPathSnapshot });
 				} else {
 					// 普通实例初始化
 					const savedHome = localStorage.getItem('neoview-homepage-path');
-					const defaultHome = propInitialPath || (await homeDir());
+					const defaultHome = initialPathSnapshot || (await homeDir());
 					ctx.homePath = savedHome || defaultHome;
 					
 					// 检查当前活动标签页是否有路径
@@ -150,11 +152,11 @@
 			}
 		})();
 
-		if (!propInitialPath || !isVirtualPath(propInitialPath)) {
+		if (!initialPathSnapshot || !isVirtualPath(initialPathSnapshot)) {
 			document.addEventListener('keydown', handleKeydown);
 		}
 		return () => {
-			if (!propInitialPath || !isVirtualPath(propInitialPath)) {
+			if (!initialPathSnapshot || !isVirtualPath(initialPathSnapshot)) {
 				document.removeEventListener('keydown', handleKeydown);
 			}
 		};

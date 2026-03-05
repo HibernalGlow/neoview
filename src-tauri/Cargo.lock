@@ -3427,7 +3427,7 @@ dependencies = [
 
 [[package]]
 name = "neoview"
-version = "5.8.4"
+version = "5.8.5"
 dependencies = [
  "ahash 0.8.12",
  "base64 0.22.1",

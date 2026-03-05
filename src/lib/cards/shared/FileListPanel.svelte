@@ -60,6 +60,12 @@
 	// ==================== 共享操作初始化 ====================
 	const actions = createAllFileActions(ctx, initialPathSnapshot);
 
+	// 计算当前活动路径（用于面包屑同步）
+	const effectiveCurrentPath = $derived.by(() => {
+		const activeTab = ctx.displayTabs.find((t) => t.id === ctx.displayActiveTabId);
+		return activeTab?.currentPath || '';
+	});
+
 	// ==================== 标签编辑状态 ====================
 	let tagEditorOpen = $state(false);
 	let tagEditorPath = $state('');
@@ -168,13 +174,13 @@
 	<!-- 面包屑在左侧（垂直布局） -->
 	{#if $breadcrumbPosition === 'left'}
 		<div class="border-r border-border/50 shrink-0">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} />
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} externalPath={effectiveCurrentPath} />
 		</div>
 	{/if}
 
 	<!-- 面包屑在顶部 -->
 	{#if $breadcrumbPosition === 'top'}
-		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} externalPath={effectiveCurrentPath} />
 	{/if}
 
 	<!-- 中间主区域（标签栏+工具栏+文件列表） -->
@@ -330,14 +336,14 @@
 	<!-- 面包屑在底部 -->
 	{#if $breadcrumbPosition === 'bottom'}
 		<div class="border-t border-border/50">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} />
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} externalPath={effectiveCurrentPath} />
 		</div>
 	{/if}
 
 	<!-- 面包屑在右侧（垂直布局） -->
 	{#if $breadcrumbPosition === 'right'}
 		<div class="border-l border-border/50 shrink-0">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} />
+			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} externalPath={effectiveCurrentPath} />
 		</div>
 	{/if}
 </div>

@@ -4,11 +4,12 @@
  * 参考 NeeView 的 BreadcrumbBar 设计
  * 支持点击导航和直接输入路径
  */
-import { ChevronRight, Folder, HardDrive, MoreHorizontal, Edit2, Plus, Bookmark, Clock } from '@lucide/svelte';
+import { ChevronRight, MoreHorizontal, Edit2, Plus, Bookmark, Clock, Folder, HardDrive } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import { Input } from '$lib/components/ui/input';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import * as Tooltip from '$lib/components/ui/tooltip';
+import Icon from '$lib/components/ui/Icon.svelte';
 import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore';
 
 interface Props {
@@ -248,13 +249,13 @@ function handleNavigate(path: string) {
 						onclick={() => handleNavigate(breadcrumbItems[0].path)}
 					>
 						{#if virtualType === 'bookmark'}
-							<Bookmark class="h-3.5 w-3.5 text-amber-500 rotate-90" />
+							<Icon name="bookmark" fallback={Bookmark} class="h-3.5 w-3.5 text-amber-500 rotate-90" />
 						{:else if virtualType === 'history'}
-							<Clock class="h-3.5 w-3.5 text-blue-500 rotate-90" />
+							<Icon name="history" fallback={Clock} class="h-3.5 w-3.5 text-blue-500 rotate-90" />
 						{:else if breadcrumbItems[0].isRoot}
-							<HardDrive class="h-3.5 w-3.5 rotate-90" />
+							<Icon name="storage" fallback={HardDrive} class="h-3.5 w-3.5 rotate-90" />
 						{:else}
-							<Folder class="h-3.5 w-3.5 rotate-90" />
+							<Icon name="folder" fallback={Folder} class="h-3.5 w-3.5 rotate-90" />
 						{/if}
 						<span class="max-h-[80px] truncate text-xs">{breadcrumbItems[0].name}</span>
 					</Button>
@@ -273,7 +274,7 @@ function handleNavigate(path: string) {
 						<DropdownMenu.Content align="start">
 							{#each visibleItems().collapsed as item}
 								<DropdownMenu.Item onclick={() => handleNavigate(item.path)}>
-									<Folder class="mr-2 h-4 w-4" />
+									<Icon name="folder" fallback={Folder} class="mr-2 h-4 w-4" />
 									{item.name}
 								</DropdownMenu.Item>
 							{/each}
@@ -359,13 +360,13 @@ function handleNavigate(path: string) {
 					onclick={() => handleNavigate(breadcrumbItems[0].path)}
 				>
 					{#if virtualType === 'bookmark'}
-						<Bookmark class="h-3.5 w-3.5 text-amber-500" />
+						<Icon name="bookmark" fallback={Bookmark} class="h-3.5 w-3.5 text-amber-500" />
 					{:else if virtualType === 'history'}
-						<Clock class="h-3.5 w-3.5 text-blue-500" />
+						<Icon name="history" fallback={Clock} class="h-3.5 w-3.5 text-blue-500" />
 					{:else if breadcrumbItems[0].isRoot}
-						<HardDrive class="h-3.5 w-3.5" />
+						<Icon name="storage" fallback={HardDrive} class="h-3.5 w-3.5" />
 					{:else}
-						<Folder class="h-3.5 w-3.5" />
+						<Icon name="folder" fallback={Folder} class="h-3.5 w-3.5" />
 					{/if}
 					<span class="max-w-[80px] truncate text-xs">{breadcrumbItems[0].name}</span>
 				</Button>
@@ -384,7 +385,7 @@ function handleNavigate(path: string) {
 					<DropdownMenu.Content align="start">
 						{#each visibleItems().collapsed as item}
 							<DropdownMenu.Item onclick={() => handleNavigate(item.path)}>
-								<Folder class="mr-2 h-4 w-4" />
+								<Icon name="folder" fallback={Folder} class="mr-2 h-4 w-4" />
 								{item.name}
 							</DropdownMenu.Item>
 						{/each}

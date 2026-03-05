@@ -4,7 +4,7 @@
 	 * folder、bookmark、history 三个面板的共享基础组件
 	 * 组合 3 张卡片：BreadcrumbTabCard、ToolbarCard、FileListCard
 	 */
-	import { onMount, untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { homeDir } from '@tauri-apps/api/path';
 
@@ -42,15 +42,10 @@
 		/** 面板模式（可选，会自动从 initialPath 推断） */
 		mode?: PanelMode;
 	}
-	let { initialPath, mode }: Props = $props();
-	let propInitialPath = $state<string | undefined>(undefined);
-	$effect(() => {
-		propInitialPath = initialPath;
-	});
-	const initialPathSnapshot = untrack(() => propInitialPath);
+	let { initialPath: propInitialPath, mode }: Props = $props();
 
 	// ==================== Context 初始化 ====================
-	const ctx = createFolderContext(initialPathSnapshot);
+	const ctx = createFolderContext(propInitialPath);
 
 	// ==================== 按面板类型获取布局 stores ====================
 	const panelMode: StorePanelMode = ctx.panelMode as StorePanelMode;
@@ -61,7 +56,7 @@
 	const toolbarPosition = layoutStores.toolbarPosition;
 
 	// ==================== 共享操作初始化 ====================
-	const actions = createAllFileActions(ctx, initialPathSnapshot);
+	const actions = createAllFileActions(ctx, propInitialPath);
 
 	// ==================== 标签编辑状态 ====================
 	let tagEditorOpen = $state(false);

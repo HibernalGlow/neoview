@@ -35,6 +35,7 @@ import type {
 import { isArchivePath } from './streamingLoader.svelte';
 import { renderSwitchToastTemplate } from './toast';
 import { pageFrameStore } from '../pageFrame.svelte';
+import type { PagePosition } from '$lib/core/pageFrame';
 import { cleanupBookResources } from '$lib/core/bookCleanup';
 import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { folderPanelActions, isBookCandidate, normalizePath as normalizeFolderPath } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
@@ -235,7 +236,12 @@ class BookStore {
     // 初始化 pageFrameStore 用于本地布局计算（同步调用）
     if (book.pages && book.pages.length > 0) {
       pageFrameStore.initFromBookPages(book.pages);
-      console.log('📐 [PageFrame] 已初始化页面帧布局，共', book.pages.length, '页');
+      // 【修复】reset() 会将 pageMode 重置为 'single'，必须在初始化后重新同步当前视图模式
+      const currentViewMode = appState.getSnapshot().viewer.viewMode;
+      if (currentViewMode === 'double') {
+        pageFrameStore.setPageMode('double');
+      }
+      console.log('📐 [PageFrame] 已初始化页面帧布局，共', book.pages.length, '页，模式:', currentViewMode);
     }
     
     if (targetPage > 0 && book.totalPages > 0) {
@@ -337,7 +343,8 @@ class BookStore {
         this.syncAppStateBookSlice('user');
 
         // 更新 pageFrameStore 的当前位置
-        pageFrameStore.gotoPage(index);
+        // 【修复】直接 buildFrame 避免 framePositionForIndex 错误逆推导致 currentPosition 偏移
+        pageFrameStore.buildFrame({ index, part: 0 });
 
         // 异步通知后端（触发预加载）
         bookApi.navigateToPage(index).catch(err => {
@@ -411,8 +418,9 @@ class BookStore {
 
       // 【IPC优化】使用本地 PageFrameBuilder 计算下一帧位置
       let newIndex: number;
+      let nextPos: PagePosition | null = null;
       if (pageFrameStore.isInitialized()) {
-        const nextPos = pageFrameStore.getNextPosition();
+        nextPos = pageFrameStore.getNextPosition();
         if (nextPos) {
           newIndex = nextPos.index;
         } else {
@@ -433,7 +441,12 @@ class BookStore {
       await this.updateHistoryAfterNavigation(newIndex);
 
       // 更新 pageFrameStore 的当前位置
-      pageFrameStore.gotoPage(newIndex);
+      // 【修复】直接使用已计算好的精确位置，避免 framePositionForIndex 的错误回溯
+      if (nextPos) {
+        pageFrameStore.buildFrame(nextPos);
+      } else {
+        pageFrameStore.gotoPage(newIndex);
+      }
 
       this.showPageSwitchToastIfEnabled();
       return newIndex;
@@ -459,8 +472,9 @@ class BookStore {
 
       // 【IPC优化】使用本地 PageFrameBuilder 计算上一帧位置
       let newIndex: number;
+      let prevPos: PagePosition | null = null;
       if (pageFrameStore.isInitialized()) {
-        const prevPos = pageFrameStore.getPrevPosition();
+        prevPos = pageFrameStore.getPrevPosition();
         if (prevPos) {
           newIndex = prevPos.index;
         } else {
@@ -481,7 +495,12 @@ class BookStore {
       await this.updateHistoryAfterNavigation(newIndex);
 
       // 更新 pageFrameStore 的当前位置
-      pageFrameStore.gotoPage(newIndex);
+      // 【修复】直接使用已计算好的精确位置，避免 framePositionForIndex 的错误回溯
+      if (prevPos) {
+        pageFrameStore.buildFrame(prevPos);
+      } else {
+        pageFrameStore.gotoPage(newIndex);
+      }
 
       return newIndex;
     } catch (err) {
@@ -642,6 +661,11 @@ class BookStore {
       // 【Phase 4】排序后重新初始化 pageFrameStore
       if (updatedBook.pages && updatedBook.pages.length > 0) {
         pageFrameStore.initFromBookPages(updatedBook.pages);
+        // 【修复】同步当前视图模式，防止 reset 后 pageMode 丢失
+        const currentViewMode = appState.getSnapshot().viewer.viewMode;
+        if (currentViewMode === 'double') {
+          pageFrameStore.setPageMode('double');
+        }
         console.log('📐 [PageFrame] 排序后重新初始化，模式:', sortMode);
       }
 

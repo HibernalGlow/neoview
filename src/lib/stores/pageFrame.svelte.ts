@@ -382,6 +382,18 @@ function createPageFrameStore() {
 		/** 获取页面数量 */
 		pageCount(): number {
 			return builder?.pageCount() ?? 0;
+		},
+
+		/**
+		 * 只读查询指定位置的帧步长，不修改任何状态
+		 * 用于 getPageStep() 计算翻页步长，避免 buildFrame() 的副作用
+		 */
+		getFrameStepAt(pageIndex: number): number {
+			if (!builder) return 1;
+			const frame = builder.buildFrame({ index: pageIndex, part: 0 });
+			if (!frame) return 1;
+			const info = toPageFrameInfo(frame);
+			return Math.max(1, info.endIndex - info.startIndex + 1);
 		}
 	};
 }

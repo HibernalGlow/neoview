@@ -255,14 +255,9 @@ function getPageStep(): number {
 	// 【优化】使用本地 PageFrameBuilder 计算步进
 	const currentIndex = bookStore.currentPageIndex;
 	
-	// 如果 pageFrameStore 已初始化，使用帧信息计算步进
+	// 如果 pageFrameStore 已初始化，使用帧信息计算步进（只读查询，无副作用）
 	if (pageFrameStore.isInitialized()) {
-		const frame = pageFrameStore.buildFrame({ index: currentIndex, part: 0 });
-		if (frame) {
-			// 帧的页面数量就是步进值
-			const pageCount = frame.endIndex - frame.startIndex + 1;
-			return Math.max(1, pageCount);
-		}
+		return pageFrameStore.getFrameStepAt(currentIndex);
 	}
 	
 	// 降级：使用原有的实时计算逻辑

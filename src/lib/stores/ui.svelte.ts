@@ -235,6 +235,12 @@ function getPageDimensions(book: typeof bookStore.currentBook, pageIndex: number
 	return null;
 }
 
+// ============================================================================
+// 内部工具：计算当前帧的翻页步长
+// ============================================================================
+// ⚠️ 请使用 getFrameStepAt()（无副作用只读方法），
+//    切勿在此处调用 buildFrame()/gotoPage()，那两个方法会修改 pageFrameStore 的
+//    state.currentPosition，导致下次 getNextPosition/getPrevPosition 起点错误。
 function getPageStep(): number {
 	const snapshot = appState.getSnapshot();
 	const currentViewMode = snapshot.viewer.viewMode;
@@ -252,10 +258,9 @@ function getPageStep(): number {
 		return 1;
 	}
 	
-	// 【优化】使用本地 PageFrameBuilder 计算步进
 	const currentIndex = bookStore.currentPageIndex;
 	
-	// 如果 pageFrameStore 已初始化，使用帧信息计算步进（只读查询，无副作用）
+	// 首选：pageFrameStore.getFrameStepAt() 只读查询，不修改任何状态
 	if (pageFrameStore.isInitialized()) {
 		return pageFrameStore.getFrameStepAt(currentIndex);
 	}
@@ -531,11 +536,43 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 	lockedReadingDirection.update((current) => (current === direction ? null : direction));
 }
 
+// ============================================================================
+// 翻页动作：方向感知翻页（pageLeft / pageRight）
+// ============================================================================
+//
+// 【架构说明：翻页有两套独立的 API，请勿混用】
+//
+//  ① 方向感知翻页（本文件 pageLeft / pageRight）
+//     - 由用户界面方向操作触发（点击左/右区域、手势、方向键等）
+//     - 感知「阅读方向」和「分割页（splitPage）」状态
+//     - 内部调用 bookStore.navigateToPage(targetIndex) 进行实际跳转
+//     - 步长由 getPageStep() 计算（基于 pageFrameStore，无副作用只读查询）
+//
+//  ② 绝对前/后翻页（bookStore.nextPage / previousPage）
+//     - 通常由键盘 PageDown/PageUp、鼠标滚轮等「前进/后退」操作触发
+//     - 不感知阅读方向，始终以书本物理顺序前进或后退
+//     - 步长由 pageFrameStore.getNextPosition() / getPrevPosition() 计算
+//     - 内部直接操作 pageFrameStore.buildFrame(pos) 以避免 gotoPage 的逆推错误
+//
+// 【双页模式翻页 Bug 修复记录（2026-03）】
+//   症状：双页模式翻页出现 12→23→34 滑动窗口，而非正确的 12→34→56。
+//   根因1：pageFrameStore.initFromBookPages() 内部调用 reset() 将 pageMode 重置为
+//           'single'，导致 getFrameStepAt() 始终返回步长 1。
+//           修复：initFromBookPages 后同步 appState 中的 currentViewMode 到 pageFrameStore。
+//   根因2：pageFrameStore.gotoPage(n) 内部调用 framePositionForIndex(n)，其逆推逻辑
+//           会将 n 归并到前一帧（如 index=3 判断为 [2,3] 帧的第二页，返回 {index:2}），
+//           导致 state.currentPosition 比实际位置少 1，下次翻页起点错误。
+//           修复：所有翻页路径改为直接调用 buildFrame({index, part:0}) 设置精确位置。
+//   根因3：getPageStep() 调用 buildFrame() 存在副作用（会覆盖 state.currentPosition）。
+//           修复：新增纯读取方法 getFrameStepAt(index)，由 builder 直接计算步长，
+//           不修改 pageFrameStore 任何状态。
+
 export async function pageLeft() {
 	try {
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = subPageIndex.value;
 
+		// 分割页处理：若当前页是横向分割页且正在显示后半，先退回前半
 		if (shouldSplitPage(currentIndex)) {
 			if (currentSub === 1) {
 				subPageIndex.set(0);
@@ -543,6 +580,7 @@ export async function pageLeft() {
 			}
 		}
 
+		// getPageStep() 使用 pageFrameStore.getFrameStepAt()（无副作用只读查询）
 		const step = getPageStep();
 		const targetIndex = Math.max(currentIndex - step, 0);
 
@@ -573,40 +611,22 @@ export async function pageRight() {
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = subPageIndex.value;
 		const shouldSplit = shouldSplitPage(currentIndex);
-		const currentViewModeValue = viewMode.value;
 
-		const book = bookStore.currentBook;
-		const currentPage = book?.pages?.[currentIndex];
-		const nextPage = book?.pages?.[currentIndex + 1];
-		
-		console.log('📖 pageRight:', {
-			currentIndex,
-			currentSub,
-			shouldSplit,
-			splitEnabled: settingsManager.getSettings().view.pageLayout.splitHorizontalPages,
-			treatHorizontalAsDoublePage: settingsManager.getSettings().view.pageLayout?.treatHorizontalAsDoublePage,
-			viewMode: currentViewModeValue,
-			currentPageSize: currentPage ? `${currentPage.width}x${currentPage.height}` : 'N/A',
-			nextPageSize: nextPage ? `${nextPage.width}x${nextPage.height}` : 'N/A',
-			isCurrentLandscape: currentPage ? (currentPage.width ?? 0) > (currentPage.height ?? 0) : false,
-			isNextLandscape: nextPage ? (nextPage.width ?? 0) > (nextPage.height ?? 0) : false
-		});
-
+		// 分割页处理：若当前页是横向分割页且正在显示前半，先切到后半
 		if (shouldSplit) {
 			if (currentSub === 0) {
-				console.log('📖 pageRight: 切换到后半部分(1)');
 				subPageIndex.set(1);
 				return;
 			}
-			console.log('📖 pageRight: 已在后半部分，继续翻到下一页');
+			// 已在后半部分，继续翻到下一页（fall through）
 		}
 
+		// getPageStep() 使用 pageFrameStore.getFrameStepAt()（无副作用只读查询）
 		const step = getPageStep();
 		const maxIndex = Math.max(0, bookStore.totalPages - 1);
 		const targetIndex = Math.min(currentIndex + step, maxIndex);
 
 		if (targetIndex === currentIndex) {
-			console.log('📖 pageRight: 已是最后一页');
 			// 已在最后一页，检查是否显示边界提示
 			const settings = settingsManager.getSettings();
 			const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
@@ -616,7 +636,6 @@ export async function pageRight() {
 			return;
 		}
 
-		console.log('📖 pageRight: 导航到页面', targetIndex);
 		await bookStore.navigateToPage(targetIndex);
 
 		subPageIndex.set(0);

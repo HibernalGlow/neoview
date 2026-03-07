@@ -402,6 +402,18 @@ class BookStore {
     }
   }
 
+  // ── 绝对前/后翻页（nextPage / previousPage）──────────────────────────────────
+  // 与 ui.svelte.ts 的方向感知翻页（pageLeft/pageRight）并存，职责不同：
+  //   nextPage/previousPage：按书本物理顺序「下一帧/上一帧」，不感知阅读方向。
+  //   pageLeft/pageRight   ：感知阅读方向和分割页状态，通过 navigateToPage 跳转。
+  //
+  // ⚠️ 避坑提醒（framePositionForIndex 逆推错误）：
+  //   pageFrameStore.gotoPage(n) 内部调用 framePositionForIndex(n)，
+  //   该函数会将 n 逆推为所在帧的起始页（如 index=3 判为 [2,3] 帧 → 返回 {index:2}），
+  //   导致 state.currentPosition 偏移，下次翻页起点错误（出现 12→23→34 滑窗现象）。
+  //   ✅ 正确做法：保存 getNextPosition/getPrevPosition 返回的精确 PagePosition，
+  //   直接调用 buildFrame(pos)，跳过逆推逻辑。
+
   async nextPage() {
     if (!this.canNextPage) {
       // 已在最后一页，检查是否显示边界提示
@@ -416,7 +428,8 @@ class BookStore {
       const book = this.state.currentBook;
       if (!book) return;
 
-      // 【IPC优化】使用本地 PageFrameBuilder 计算下一帧位置
+      // 从 pageFrameStore 获取下一帧起始位置（已正确考虑双页步长）
+      // nextPos 是精确位置，必须用 buildFrame(nextPos) 而非 gotoPage(index) 更新状态
       let newIndex: number;
       let nextPos: PagePosition | null = null;
       if (pageFrameStore.isInitialized()) {
@@ -424,11 +437,9 @@ class BookStore {
         if (nextPos) {
           newIndex = nextPos.index;
         } else {
-          // 降级：简单 +1
           newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
         }
       } else {
-        // 降级：简单 +1
         newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
       }
 
@@ -440,8 +451,7 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);
 
-      // 更新 pageFrameStore 的当前位置
-      // 【修复】直接使用已计算好的精确位置，避免 framePositionForIndex 的错误回溯
+      // 用精确位置更新 pageFrameStore，避免 framePositionForIndex 逆推错误
       if (nextPos) {
         pageFrameStore.buildFrame(nextPos);
       } else {
@@ -470,7 +480,8 @@ class BookStore {
       const book = this.state.currentBook;
       if (!book) return;
 
-      // 【IPC优化】使用本地 PageFrameBuilder 计算上一帧位置
+      // 从 pageFrameStore 获取上一帧起始位置（已正确考虑双页步长）
+      // prevPos 是精确位置，必须用 buildFrame(prevPos) 而非 gotoPage(index) 更新状态
       let newIndex: number;
       let prevPos: PagePosition | null = null;
       if (pageFrameStore.isInitialized()) {
@@ -478,11 +489,9 @@ class BookStore {
         if (prevPos) {
           newIndex = prevPos.index;
         } else {
-          // 降级：简单 -1
           newIndex = Math.max(book.currentPage - 1, 0);
         }
       } else {
-        // 降级：简单 -1
         newIndex = Math.max(book.currentPage - 1, 0);
       }
 
@@ -494,8 +503,7 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);
 
-      // 更新 pageFrameStore 的当前位置
-      // 【修复】直接使用已计算好的精确位置，避免 framePositionForIndex 的错误回溯
+      // 用精确位置更新 pageFrameStore，避免 framePositionForIndex 逆推错误
       if (prevPos) {
         pageFrameStore.buildFrame(prevPos);
       } else {

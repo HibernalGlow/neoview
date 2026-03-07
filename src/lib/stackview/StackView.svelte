@@ -129,6 +129,28 @@
 		settingsManager.getSettings().view.defaultZoomMode ?? 'fit'
 	);
 
+	// ============================================================================
+	// 缩放架构（两层缩放模型）
+	// ============================================================================
+	// effectiveScale = modeScale × manualScale
+	//
+	// modeScale（自动层，$derived）：
+	//   由 currentZoomMode 决定，通过 calculateTargetScale() 计算绝对缩放值。
+	//   例：fit 模式 = min(视口宽/图片宽, 视口高/图片高)；original 模式 = 1.0
+	//   当图片或视口尺寸变化时自动重算。
+	//
+	// manualScale（手动层，$state，默认 1.0）：
+	//   用户在当前 zoomMode 基础上叠加的额外缩放系数（1.0 = 无额外缩放）。
+	//   由顶栏 +/- 按钮、滚轮手势修改，与 $zoomLevel store 双向同步。
+	//   切换 zoomMode 时由 handleApplyZoomMode 重置为 1.0。
+	//
+	// ⚠️ 常见错误（已修复）：
+	//   不要在 $effect 中调用 zoomModeManager.apply() 并将结果写入 $zoomLevel/manualScale。
+	//   zoomModeManager.apply() 计算的是「current_mode_scale / fit_scale」（相对于 fit 的比例），
+	//   若写入 manualScale 会造成 modeScale × manualScale 双重叠加：
+	//     例：original 模式下 modeScale=1，apply() 写入 1/fit_scale → effectiveScale=1/fit_scale（错误）
+	//   正确做法：只让 manualScale 代表用户手势缩放；modeScale 已包含完整模式信息。
+
 	// 用户手动缩放倍数（基于 zoomMode 的额外缩放，1.0 = 无额外缩放）
 	let manualScale = $state(1.0);
 
@@ -200,18 +222,28 @@
 		}
 	});
 
-	// 同步缩放到老 viewer 的 store（用于顶栏显示）
+	// ── 顶栏缩放同步（双向绑定 manualScale ↔ $zoomLevel）──────────────────────────
+	// 设计说明：
+	//   manualScale = 用户在当前 zoomMode 基础上的额外倍数（1.0 = 无额外缩放）
+	//   $zoomLevel  = 全局 store，供顶栏 +/- 按钮、滚轮手势读写
+	//   effectiveScale = modeScale × manualScale （modeScale 由 currentZoomMode 计算绝对比例）
+	//
+	// 注意：$zoomLevel 只代表 manualScale，不代表绝对缩放比例。
+	//       切换 zoomMode 时由 handleApplyZoomMode 将 manualScale 重置为 1.0，
+	//       而不是通过 setZoomLevel 写入 mode 的绝对比例（那样会导致双重叠加）。
+
+	// 写方向：manualScale 变化 → 同步到 $zoomLevel（顶栏读取显示用）
 	$effect(() => {
-		// effectiveScale 变化时，更新 zoomLevel store
-		// 这里用 manualScale 作为 zoomLevel，因为顶栏控制的是手动缩放
+		console.log('[Zoom] manualScale→$zoomLevel:', manualScale);
 		setZoomLevel(manualScale);
 	});
 
-	// 监听老 viewer store 的缩放变化（顶栏按钮触发）
+	// 读方向：顶栏按钮/滚轮修改 $zoomLevel → 同步到 manualScale（避免循环判断差值）
 	$effect(() => {
 		const storeZoom = $zoomLevel;
-		// 只有当 store 值与 manualScale 不同时才更新，避免循环
+		console.log('[Zoom] $zoomLevel变化:', storeZoom, '当前manualScale:', manualScale, '差值:', Math.abs(storeZoom - manualScale));
 		if (Math.abs(storeZoom - manualScale) > 0.001) {
+			console.log('[Zoom] 更新manualScale:', storeZoom);
 			manualScale = storeZoom;
 		}
 	});
@@ -805,14 +837,12 @@
 		}
 	});
 
-	// 应用缩放模式
-	$effect(() => {
-		const dims = imageStore.state.dimensions;
-
-		if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
-			zoomModeManager.apply(currentZoomMode, dims, viewportSize);
-		}
-	});
+	// 【注意】此处不再通过 zoomModeManager.apply() 将 mode-scale 写入 $zoomLevel/manualScale。
+	// 原因：modeScale ($derived) 已按 currentZoomMode 计算出正确的绝对缩放比例，
+	//       effectiveScale = modeScale × manualScale，若 zoomModeManager 再写入 manualScale
+	//       就会造成双重叠加（如 original 模式下显示比例错误）。
+	// manualScale 始终代表「用户在当前模式基础上的额外手动缩放系数（默认 1.0）」，
+	// 仅由顶栏 +/- 按钮或滚轮手势修改，切换 zoom 模式时重置为 1.0。
 
 	// 监听窗口大小变化
 	$effect(() => {
@@ -868,12 +898,14 @@
 		};
 	});
 
-	// 监听 zoomMode 变化事件
+	// 监听 zoomMode 变化事件（由顶栏/设置面板分发）
 	function handleApplyZoomMode(event: Event) {
 		const detail = (event as CustomEvent<ApplyZoomModeDetail>).detail;
 		const mode = detail.mode ?? settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
 		if (currentZoomMode !== mode) {
 			currentZoomMode = mode as ZoomMode;
+			// 切换缩放模式时重置手动缩放系数，避免旧的 manualScale 叠加到新模式上
+			manualScale = 1.0;
 		}
 	}
 
@@ -959,7 +991,7 @@
 			layout={effectivePageMode}
 			{direction}
 			{orientation}
-			scale={1}
+			scale={manualScale}
 			{rotation}
 			{viewportSize}
 			imageSize={hoverImageSize}
@@ -974,7 +1006,7 @@
 				frame={upscaledFrameData}
 				layout="single"
 				{direction}
-				scale={1}
+				scale={manualScale}
 				{rotation}
 				{viewportSize}
 				imageSize={hoverImageSize}

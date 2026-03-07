@@ -170,17 +170,19 @@
 		height: loadedImageSize.height || imageSize.height
 	});
 
-	// 计算 transform（只包含 scale 和 rotation）
+	// 计算 transform（仅包含旋转；手动缩放 scale 已乘入 getImageDisplayStyle 的像素尺寸，
+	// 不再用 CSS transform scale，否则 overflow:auto 容器的可滚动区域不会随之扩大）
 	let transformStyle = $derived.by(() => {
-		const parts: string[] = [];
-		if (scale !== 1) parts.push(`scale(${scale})`);
-		if (rotation !== 0) parts.push(`rotate(${rotation}deg)`);
-		return parts.length > 0 ? parts.join(' ') : 'none';
+		if (rotation !== 0) return `rotate(${rotation}deg)`;
+		return 'none';
 	});
 
 	// 计算单张图片的显示样式
 	// 双页模式下，每张图片有独立的 scale（用于高度对齐）
+	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
+	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
 	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
+		console.log('[CurrentFrameLayer] getImageDisplayStyle called, scale prop =', scale, 'zoomMode =', zoomMode);
 		// 使用图片自带的尺寸和 scale
 		const imgWidth = img.width ?? 0;
 		const imgHeight = img.height ?? 0;
@@ -211,10 +213,10 @@
 			const maxHeight = Math.max(h1, h2);
 			
 			if (totalWidth > 0 && maxHeight > 0) {
-				// 计算整体缩放比例以适应视口
+				// 计算整体缩放比例以适应视口，再乘以手动缩放系数
 				const scaleX = vp.width / totalWidth;
 				const scaleY = vp.height / maxHeight;
-				const frameScale = Math.min(scaleX, scaleY);
+				const frameScale = Math.min(scaleX, scaleY) * scale;
 				
 				// 应用帧缩放到当前图片
 				const finalWidth = displayWidth * frameScale;
@@ -225,7 +227,7 @@
 			}
 		}
 		
-		// 单页模式：使用原有逻辑
+		// 单页模式：各 zoomMode 先计算适配视口的基准尺寸，再乘以手动缩放系数 scale
 		const imgAspect = displayWidth / displayHeight;
 		
 		// 分割图倍率补偿 (图片标签渲染全宽，但逻辑宽度只有一半)
@@ -238,10 +240,10 @@
 				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+					return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
 				} else {
 					const width = vp.height * imgAspect;
-					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+					return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
 				}
 			}
 			
@@ -249,25 +251,25 @@
 				const vpAspect = vp.width / vp.height;
 				if (imgAspect > vpAspect) {
 					const width = vp.height * imgAspect;
-					return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+					return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
 				} else {
 					const height = vp.width / imgAspect;
-					return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+					return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
 				}
 			}
 			
 			case 'fitWidth': {
 				const height = vp.width / imgAspect;
-				return `width: ${vp.width * splitFactor}px; height: ${height}px; max-width: none; max-height: none;`;
+				return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'fitHeight': {
 				const width = vp.height * imgAspect;
-				return `width: ${width * splitFactor}px; height: ${vp.height}px; max-width: none; max-height: none;`;
+				return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
 			}
 			
 			case 'original': {
-				return `width: ${displayWidth * splitFactor}px; height: ${displayHeight}px; max-width: none; max-height: none;`;
+				return `width: ${displayWidth * splitFactor * scale}px; height: ${displayHeight * scale}px; max-width: none; max-height: none;`;
 			}
 			
 			default:

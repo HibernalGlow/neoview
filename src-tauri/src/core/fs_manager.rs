@@ -27,6 +27,45 @@ static ARCHIVE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         .collect()
 });
 
+const FS_RETRY_COUNT: usize = 5;
+
+fn is_transient_fs_error(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::DirectoryNotEmpty
+    ) || matches!(error.raw_os_error(), Some(5 | 32 | 33 | 145))
+}
+
+fn retry_delete_operation<F>(path: &Path, action: &str, mut op: F) -> Result<(), String>
+where
+    F: FnMut() -> std::io::Result<()>,
+{
+    for attempt in 0..FS_RETRY_COUNT {
+        match op() {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                if !is_transient_fs_error(&error) || attempt == FS_RETRY_COUNT - 1 {
+                    return Err(format!("{action}失败: {}", error));
+                }
+
+                log::warn!(
+                    "{}失败，准备重试 ({}/{}): {} - {}",
+                    action,
+                    attempt + 1,
+                    FS_RETRY_COUNT,
+                    path.display(),
+                    error
+                );
+                std::thread::sleep(std::time::Duration::from_millis(
+                    120 * (attempt as u64 + 1),
+                ));
+            }
+        }
+    }
+
+    Err(format!("{action}失败: 未知错误"))
+}
+
 /// 文件系统项（文件或目录）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -518,9 +557,9 @@ impl FsManager {
         self.validate_path(path)?;
 
         if path.is_dir() {
-            fs::remove_dir_all(path).map_err(|e| format!("删除目录失败: {}", e))
+            retry_delete_operation(path, "删除目录", || fs::remove_dir_all(path))
         } else {
-            fs::remove_file(path).map_err(|e| format!("删除文件失败: {}", e))
+            retry_delete_operation(path, "删除文件", || fs::remove_file(path))
         }
     }
 
@@ -533,29 +572,24 @@ impl FsManager {
             self.validate_path(parent)?;
         }
 
-        let max_retries = 3;
-
-        for attempt in 0..max_retries {
+        for attempt in 0..FS_RETRY_COUNT {
             match fs::rename(from, to) {
                 Ok(()) => return Ok(()),
                 Err(error) => {
-                    let is_transient = matches!(error.kind(), std::io::ErrorKind::PermissionDenied)
-                        || matches!(error.raw_os_error(), Some(5 | 32 | 33));
-
-                    if !is_transient || attempt == max_retries - 1 {
+                    if !is_transient_fs_error(&error) || attempt == FS_RETRY_COUNT - 1 {
                         return Err(format!("重命名失败: {}", error));
                     }
 
                     log::warn!(
                         "重命名失败，准备重试 ({}/{}): {} -> {} - {}",
                         attempt + 1,
-                        max_retries,
+                        FS_RETRY_COUNT,
                         from.display(),
                         to.display(),
                         error
                     );
                     std::thread::sleep(std::time::Duration::from_millis(
-                        100 * (attempt as u64 + 1),
+                        120 * (attempt as u64 + 1),
                     ));
                 }
             }

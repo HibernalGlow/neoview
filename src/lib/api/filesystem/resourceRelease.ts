@@ -27,6 +27,62 @@ function isPathContained(childPath: string, parentPath: string): boolean {
   return childNorm.startsWith(parentNorm + '\\');
 }
 
+function compactTargetPaths(paths: string[]): string[] {
+  const uniquePaths = Array.from(new Set(paths.filter(Boolean)));
+  uniquePaths.sort((a, b) => a.length - b.length);
+
+  const compacted: string[] = [];
+  for (const path of uniquePaths) {
+    const coveredByParent = compacted.some(parent => isPathContained(path, parent));
+    if (!coveredByParent) {
+      compacted.push(path);
+    }
+  }
+
+  return compacted;
+}
+
+async function closeBookIfNeeded(targetPaths: string[]): Promise<void> {
+  const requiresBookClose = targetPaths.some(isBookRelatedToPath);
+
+  if (!requiresBookClose) {
+    return;
+  }
+
+  console.log(`🔓 [ResourceRelease] 检测到书籍与目标路径相关，开始释放资源: ${targetPaths.join(', ')}`);
+  console.log(`🔓 [ResourceRelease] 当前书籍路径: ${bookStore.currentBook?.path}`);
+
+  await bookStore.closeBook();
+
+  try {
+    await invoke('pm_close_book');
+  } catch (e) {
+    console.warn('[ResourceRelease] pm_close_book 失败:', e);
+  }
+
+  try {
+    await invoke('close_book');
+  } catch (e) {
+    console.warn('[ResourceRelease] close_book 失败:', e);
+  }
+
+  try {
+    await invoke('pm_clear_cache');
+  } catch (e) {
+    console.warn('[ResourceRelease] pm_clear_cache 失败:', e);
+  }
+}
+
+async function releasePathCaches(targetPaths: string[]): Promise<void> {
+  for (const path of compactTargetPaths(targetPaths)) {
+    try {
+      await invoke('release_path_resources', { path });
+    } catch (e) {
+      console.warn('[ResourceRelease] release_path_resources 失败:', e);
+    }
+  }
+}
+
 /**
  * 检查当前打开的书籍是否与指定路径相关
  * 
@@ -68,42 +124,8 @@ export function isBookRelatedToPath(targetPath: string): boolean {
  */
 export async function releaseResourcesForPath(targetPath: string): Promise<boolean> {
   try {
-    const requiresBookClose = isBookRelatedToPath(targetPath);
-
-    if (requiresBookClose) {
-      console.log(`🔓 [ResourceRelease] 检测到书籍与目标路径相关，开始释放资源: ${targetPath}`);
-      console.log(`🔓 [ResourceRelease] 当前书籍路径: ${bookStore.currentBook?.path}`);
-
-      // 关闭前端书籍状态
-      await bookStore.closeBook();
-
-      // 调用后端释放资源命令
-      try {
-        await invoke('pm_close_book');
-      } catch (e) {
-        console.warn('[ResourceRelease] pm_close_book 失败:', e);
-      }
-
-      try {
-        await invoke('close_book');
-      } catch (e) {
-        console.warn('[ResourceRelease] close_book 失败:', e);
-      }
-
-      // 清理 PageManager 缓存
-      try {
-        await invoke('pm_clear_cache');
-      } catch (e) {
-        console.warn('[ResourceRelease] pm_clear_cache 失败:', e);
-      }
-    }
-
-    // 无论是否存在当前打开书籍，都清理路径相关缓存，避免残留句柄阻塞重命名/删除
-    try {
-      await invoke('release_path_resources', { path: targetPath });
-    } catch (e) {
-      console.warn('[ResourceRelease] release_path_resources 失败:', e);
-    }
+    await closeBookIfNeeded([targetPath]);
+    await releasePathCaches([targetPath]);
     
     // 等待一小段时间确保文件句柄完全释放
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -123,13 +145,19 @@ export async function releaseResourcesForPath(targetPath: string): Promise<boole
  * @returns 是否成功释放
  */
 export async function releaseResourcesForPaths(paths: string[]): Promise<boolean> {
-  // 检查是否有任何路径需要释放资源
-  const needsRelease = paths.some(path => isBookRelatedToPath(path));
-  
-  if (!needsRelease) {
+  if (paths.length === 0) {
     return true;
   }
-  
-  // 只需要释放一次
-  return releaseResourcesForPath(paths[0]);
+
+  try {
+    const targetPaths = compactTargetPaths(paths);
+    await closeBookIfNeeded(targetPaths);
+    await releasePathCaches(targetPaths);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    console.log(`✅ [ResourceRelease] 批量资源已释放: ${targetPaths.join(', ')}`);
+    return true;
+  } catch (err) {
+    console.error(`❌ [ResourceRelease] 批量释放资源失败:`, err);
+    return false;
+  }
 }

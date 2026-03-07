@@ -290,6 +290,7 @@ export function createDeleteActions(
 		let successCount = 0;
 		let failCount = 0;
 		const successPaths: string[] = [];
+		let firstError: string | null = null;
 
 		// 删除前释放相关资源（解决文件占用问题）
 		await FileSystemAPI.releaseResourcesForPaths(paths);
@@ -297,14 +298,17 @@ export function createDeleteActions(
 		for (const p of paths) {
 			try {
 				if (strategy === 'trash') {
-						await FileSystemAPI.moveToTrash(p);
-					} else {
-						await FileSystemAPI.deletePath(p);
-					}
+					await FileSystemAPI.moveToTrashAsync(p);
+				} else {
+					await FileSystemAPI.deletePath(p);
+				}
 				successCount++;
 				successPaths.push(p);
-			} catch {
+			} catch (err) {
 				failCount++;
+				if (!firstError) {
+					firstError = err instanceof Error ? err.message : String(err);
+				}
 			}
 		}
 
@@ -315,10 +319,14 @@ export function createDeleteActions(
 			}
 		}
 
+		handleRefresh();
 		folderTabActions.deselectAll();
 
 		if (failCount > 0) {
-			showErrorToast('部分删除失败', `成功 ${successCount} 个，失败 ${failCount} 个`);
+			showErrorToast(
+				'部分删除失败',
+				firstError ? `成功 ${successCount} 个，失败 ${failCount} 个：${firstError}` : `成功 ${successCount} 个，失败 ${failCount} 个`
+			);
 		} else {
 			showSuccessToast('删除成功', `已删除 ${successCount} 个文件`);
 		}
@@ -341,7 +349,7 @@ export function createDeleteActions(
 		folderTabActions.removeItem(item.path);
 		try {
 			if (strategy === 'trash') {
-				await FileSystemAPI.moveToTrash(item.path);
+				await FileSystemAPI.moveToTrashAsync(item.path);
 			} else {
 				await FileSystemAPI.deletePath(item.path);
 			}
@@ -351,6 +359,7 @@ export function createDeleteActions(
 			directoryTreeCache.removeItemFromCache(item.path);
 			showSuccessToast('删除成功', item.name);
 		} catch (err) {
+			handleRefresh();
 			showErrorToast('删除失败', err instanceof Error ? err.message : String(err));
 		}
 	};

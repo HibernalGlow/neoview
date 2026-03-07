@@ -586,6 +586,8 @@ export function createRenameActions(
 		if (!ctx.renameDialogItem) return;
 		const item = ctx.renameDialogItem;
 		try {
+			// 重命名前释放相关资源，避免当前打开内容或缓存持有句柄
+			await FileSystemAPI.releaseResourcesForPath(item.path);
 			const parentPath = item.path.substring(0, item.path.lastIndexOf(item.name));
 			const newPath = parentPath + newName;
 			await FileSystemAPI.renamePath(item.path, newPath);

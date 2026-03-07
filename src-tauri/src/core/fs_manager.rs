@@ -533,7 +533,35 @@ impl FsManager {
             self.validate_path(parent)?;
         }
 
-        fs::rename(from, to).map_err(|e| format!("重命名失败: {}", e))
+        let max_retries = 3;
+
+        for attempt in 0..max_retries {
+            match fs::rename(from, to) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    let is_transient = matches!(error.kind(), std::io::ErrorKind::PermissionDenied)
+                        || matches!(error.raw_os_error(), Some(5 | 32 | 33));
+
+                    if !is_transient || attempt == max_retries - 1 {
+                        return Err(format!("重命名失败: {}", error));
+                    }
+
+                    log::warn!(
+                        "重命名失败，准备重试 ({}/{}): {} -> {} - {}",
+                        attempt + 1,
+                        max_retries,
+                        from.display(),
+                        to.display(),
+                        error
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        100 * (attempt as u64 + 1),
+                    ));
+                }
+            }
+        }
+
+        Err("重命名失败: 未知错误".to_string())
     }
 
     /// 移动到回收站

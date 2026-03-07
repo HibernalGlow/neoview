@@ -68,38 +68,37 @@ export function isBookRelatedToPath(targetPath: string): boolean {
  */
 export async function releaseResourcesForPath(targetPath: string): Promise<boolean> {
   try {
-    // 检查是否需要释放资源
-    if (!isBookRelatedToPath(targetPath)) {
-      return true; // 无需释放
+    const requiresBookClose = isBookRelatedToPath(targetPath);
+
+    if (requiresBookClose) {
+      console.log(`🔓 [ResourceRelease] 检测到书籍与目标路径相关，开始释放资源: ${targetPath}`);
+      console.log(`🔓 [ResourceRelease] 当前书籍路径: ${bookStore.currentBook?.path}`);
+
+      // 关闭前端书籍状态
+      await bookStore.closeBook();
+
+      // 调用后端释放资源命令
+      try {
+        await invoke('pm_close_book');
+      } catch (e) {
+        console.warn('[ResourceRelease] pm_close_book 失败:', e);
+      }
+
+      try {
+        await invoke('close_book');
+      } catch (e) {
+        console.warn('[ResourceRelease] close_book 失败:', e);
+      }
+
+      // 清理 PageManager 缓存
+      try {
+        await invoke('pm_clear_cache');
+      } catch (e) {
+        console.warn('[ResourceRelease] pm_clear_cache 失败:', e);
+      }
     }
-    
-    console.log(`🔓 [ResourceRelease] 检测到书籍与删除路径相关，开始释放资源: ${targetPath}`);
-    console.log(`🔓 [ResourceRelease] 当前书籍路径: ${bookStore.currentBook?.path}`);
-    
-    // 关闭前端书籍状态
-    await bookStore.closeBook();
-    
-    // 调用后端释放资源命令
-    try {
-      await invoke('pm_close_book');
-    } catch (e) {
-      console.warn('[ResourceRelease] pm_close_book 失败:', e);
-    }
-    
-    try {
-      await invoke('close_book');
-    } catch (e) {
-      console.warn('[ResourceRelease] close_book 失败:', e);
-    }
-    
-    // 清理 PageManager 缓存
-    try {
-      await invoke('pm_clear_cache');
-    } catch (e) {
-      console.warn('[ResourceRelease] pm_clear_cache 失败:', e);
-    }
-    
-    // 调用后端释放指定路径的资源（清理 ArchiveManager 缓存）
+
+    // 无论是否存在当前打开书籍，都清理路径相关缓存，避免残留句柄阻塞重命名/删除
     try {
       await invoke('release_path_resources', { path: targetPath });
     } catch (e) {

@@ -234,16 +234,13 @@
 
 	// 写方向：manualScale 变化 → 同步到 $zoomLevel（顶栏读取显示用）
 	$effect(() => {
-		console.log('[Zoom] manualScale→$zoomLevel:', manualScale);
 		setZoomLevel(manualScale);
 	});
 
 	// 读方向：顶栏按钮/滚轮修改 $zoomLevel → 同步到 manualScale（避免循环判断差值）
 	$effect(() => {
 		const storeZoom = $zoomLevel;
-		console.log('[Zoom] $zoomLevel变化:', storeZoom, '当前manualScale:', manualScale, '差值:', Math.abs(storeZoom - manualScale));
 		if (Math.abs(storeZoom - manualScale) > 0.001) {
-			console.log('[Zoom] 更新manualScale:', storeZoom);
 			manualScale = storeZoom;
 		}
 	});

@@ -182,7 +182,6 @@
 	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
 	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
 	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
-		console.log('[CurrentFrameLayer] getImageDisplayStyle called, scale prop =', scale, 'zoomMode =', zoomMode);
 		// 使用图片自带的尺寸和 scale
 		const imgWidth = img.width ?? 0;
 		const imgHeight = img.height ?? 0;

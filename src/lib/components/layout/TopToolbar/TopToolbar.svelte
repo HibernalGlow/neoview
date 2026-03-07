@@ -15,6 +15,8 @@
 	import {
 		zoomIn,
 		zoomOut,
+		resetZoom,
+		setZoomLevel,
 		rotateClockwise,
 		setViewMode,
 		toggleViewModeLock,
@@ -133,6 +135,49 @@
 	let lockedSortMode = $derived(settings.book?.lockedSortMode ?? null);
 	let lockedMediaPriority = $derived(settings.book?.lockedMediaPriority ?? null);
 	let isSortLocked = $derived(lockedSortMode !== null || lockedMediaPriority !== null);
+
+	// 百分比按钮：单击重置手动缩放为 100%，长按进入数值输入模式
+	let zoomInputActive = $state(false);
+	let zoomInputValue = $state('');
+	let zoomInputEl = $state<HTMLInputElement | null>(null);
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function startLongPress() {
+		longPressTimer = setTimeout(() => {
+			longPressTimer = null;
+			// 进入输入模式
+			zoomInputValue = String(Math.round($viewerState.zoom * 100));
+			zoomInputActive = true;
+			// 等 DOM 更新后聚焦并全选
+			setTimeout(() => {
+				zoomInputEl?.focus();
+				zoomInputEl?.select();
+			}, 0);
+		}, 500);
+	}
+
+	function cancelLongPress() {
+		if (longPressTimer !== null) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+			// 短按：重置手动缩放为 100%
+			resetZoom();
+		}
+	}
+
+	function commitZoomInput() {
+		const parsed = parseInt(zoomInputValue, 10);
+		if (!isNaN(parsed)) {
+			const clamped = Math.max(10, Math.min(1000, parsed));
+			setZoomLevel(clamped / 100);
+		}
+		zoomInputActive = false;
+	}
+
+	function handleZoomInputKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') commitZoomInput();
+		if (e.key === 'Escape') zoomInputActive = false;
+	}
 
 	function handleZoomReset() {
 		dispatchApplyZoomMode();
@@ -479,19 +524,35 @@
 							<Tooltip.Content><p>缩小</p></Tooltip.Content>
 						</Tooltip.Root>
 
-						<Tooltip.Root>
-							<Tooltip.Trigger>
-								<Button
-									variant="ghost"
-									size="sm"
-									class="h-8 px-2 font-mono text-xs"
-									onclick={handleZoomReset}
-								>
-									{($viewerState.zoom * 100).toFixed(0)}%
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content><p>重置缩放</p></Tooltip.Content>
-						</Tooltip.Root>
+<!-- 百分比：单击重置100%，长按输入自定义值 -->
+							{#if zoomInputActive}
+								<input
+									bind:this={zoomInputEl}
+									bind:value={zoomInputValue}
+									type="number"
+									min="10"
+									max="1000"
+									class="h-8 w-16 rounded border border-border bg-background px-1 text-center font-mono text-xs outline-none focus:ring-1 focus:ring-primary"
+									onkeydown={handleZoomInputKeydown}
+									onblur={commitZoomInput}
+								/>
+							{:else}
+								<Tooltip.Root>
+									<Tooltip.Trigger>
+										<Button
+											variant="ghost"
+											size="sm"
+											class="h-8 px-2 font-mono text-xs select-none"
+											onpointerdown={startLongPress}
+											onpointerup={cancelLongPress}
+											onpointerleave={cancelLongPress}
+										>
+											{($viewerState.zoom * 100).toFixed(0)}%
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content><p>单击重置100%・长按输入数值</p></Tooltip.Content>
+								</Tooltip.Root>
+							{/if}
 
 						<Tooltip.Root>
 							<Tooltip.Trigger>

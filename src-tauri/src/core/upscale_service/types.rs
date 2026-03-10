@@ -2,7 +2,7 @@
 //! 
 //! 包含 TaskPriority, TaskScore, UpscaleTask, CacheEntry 等核心类型
 
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use crate::core::pyo3_upscaler::UpscaleModel;
 
 /// 任务优先级（数值越小优先级越高）
@@ -42,6 +42,8 @@ pub struct UpscaleTask {
     pub archive_path: Option<String>,
     /// 图片哈希
     pub image_hash: String,
+    /// 底层超分任务唯一键，用于取消正在执行的任务
+    pub job_key: String,
     /// 优先级分数（用于排序）
     pub score: TaskScore,
     /// 模型配置
@@ -53,6 +55,15 @@ pub struct UpscaleTask {
 }
 
 impl UpscaleTask {
+    /// 为底层超分任务生成唯一键
+    pub fn build_job_key(book_path: &str, page_index: usize) -> String {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        format!("upscale:{:x}:{}:{ts}", md5::compute(book_path.as_bytes()), page_index)
+    }
+
     /// 计算任务分数（基于当前页）
     pub fn calculate_score(page_index: usize, current_page: usize) -> TaskScore {
         if page_index == current_page {

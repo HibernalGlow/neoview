@@ -33,6 +33,8 @@ pub fn start_workers(
     cache_map: Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
     cache_dir: std::path::PathBuf,
     processing_set: Arc<RwLock<HashSet<(String, usize)>>>,
+    active_tasks: Arc<RwLock<HashMap<(String, usize), UpscaleTask>>>,
+    cancelled_jobs: Arc<RwLock<HashSet<String>>>,
     skipped_pages: Arc<RwLock<HashSet<(String, usize)>>>,
     failed_pages: Arc<RwLock<HashSet<(String, usize)>>>,
     completed_count: Arc<AtomicUsize>,
@@ -57,6 +59,8 @@ pub fn start_workers(
         let cache_map = Arc::clone(&cache_map);
         let cache_dir = cache_dir.clone();
         let processing_set = Arc::clone(&processing_set);
+        let active_tasks = Arc::clone(&active_tasks);
+        let cancelled_jobs = Arc::clone(&cancelled_jobs);
         let skipped_pages = Arc::clone(&skipped_pages);
         let failed_pages = Arc::clone(&failed_pages);
         let completed_count = Arc::clone(&completed_count);
@@ -82,6 +86,8 @@ pub fn start_workers(
                 cache_map,
                 cache_dir,
                 processing_set,
+                active_tasks,
+                cancelled_jobs,
                 skipped_pages,
                 failed_pages,
                 completed_count,
@@ -117,6 +123,8 @@ fn worker_loop(
     cache_map: Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
     cache_dir: std::path::PathBuf,
     processing_set: Arc<RwLock<HashSet<(String, usize)>>>,
+    active_tasks: Arc<RwLock<HashMap<(String, usize), UpscaleTask>>>,
+    cancelled_jobs: Arc<RwLock<HashSet<String>>>,
     skipped_pages: Arc<RwLock<HashSet<(String, usize)>>>,
     failed_pages: Arc<RwLock<HashSet<(String, usize)>>>,
     completed_count: Arc<AtomicUsize>,
@@ -179,6 +187,9 @@ fn worker_loop(
             if let Ok(mut set) = processing_set.write() {
                 set.insert((task.book_path.clone(), task.page_index));
             }
+            if let Ok(mut tasks) = active_tasks.write() {
+                tasks.insert((task.book_path.clone(), task.page_index), task.clone());
+            }
 
             // 发送 processing 状态事件到前端
             let processing_payload = UpscaleReadyPayload {
@@ -205,12 +216,19 @@ fn worker_loop(
                 &cache_dir,
                 &cache_map,
                 &task,
+                &cancelled_jobs,
                 default_timeout,
             );
 
             // 移除处理中标记
             if let Ok(mut set) = processing_set.write() {
                 set.remove(&(task.book_path.clone(), task.page_index));
+            }
+            if let Ok(mut tasks) = active_tasks.write() {
+                tasks.remove(&(task.book_path.clone(), task.page_index));
+            }
+            if let Ok(mut jobs) = cancelled_jobs.write() {
+                jobs.remove(&task.job_key);
             }
 
             // 打印处理结果
@@ -290,17 +308,29 @@ fn handle_task_result(
             let _ = app.emit("upscale-ready", payload);
         }
         Err(e) => {
-            failed_count.fetch_add(1, Ordering::SeqCst);
-            if let Ok(mut set) = failed_pages.write() {
-                set.insert((task.book_path.clone(), task.page_index));
+            let cancelled = is_cancelled_error(&e);
+            if !cancelled {
+                failed_count.fetch_add(1, Ordering::SeqCst);
+                if let Ok(mut set) = failed_pages.write() {
+                    set.insert((task.book_path.clone(), task.page_index));
+                }
             }
 
-            log_debug!("📤 发送错误事件: page {} error={}", task.page_index, e);
+            log_debug!(
+                "📤 发送{}事件: page {} error={}",
+                if cancelled { "取消" } else { "错误" },
+                task.page_index,
+                e
+            );
             let payload = UpscaleReadyPayload {
                 book_path: task.book_path.clone(),
                 page_index: task.page_index,
                 image_hash: task.image_hash.clone(),
-                status: UpscaleStatus::Failed,
+                status: if cancelled {
+                    UpscaleStatus::Cancelled
+                } else {
+                    UpscaleStatus::Failed
+                },
                 cache_path: None,
                 error: Some(e),
                 original_size: None,
@@ -312,4 +342,8 @@ fn handle_task_result(
             let _ = app.emit("upscale-ready", payload);
         }
     }
+}
+
+fn is_cancelled_error(error: &str) -> bool {
+    error.contains("取消")
 }

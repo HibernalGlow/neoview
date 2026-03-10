@@ -284,6 +284,8 @@ pub async fn upscale_service_request(
         noise_level: request.noise_level.unwrap_or(0),
     };
 
+    let job_key = Task::build_job_key(&request.book_path, request.page_index);
+
     let task = UpscaleTask {
         book_path: request.book_path,
         page_index: request.page_index,
@@ -291,6 +293,7 @@ pub async fn upscale_service_request(
         is_archive: false,
         archive_path: None,
         image_hash: request.image_hash,
+        job_key,
         score,
         model,
         allow_cache: true,

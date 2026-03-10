@@ -14,8 +14,8 @@ fn compare_task_order(a: &UpscaleTask, b: &UpscaleTask) -> Ordering {
         .then_with(|| a.submitted_at.cmp(&b.submitted_at))
 }
 
-/// 跳页时重新规划队列
-/// - 清除不在预超分范围内的待处理任务
+/// 页面变化时重新规划队列
+/// - 清除不在当前活动窗口内的待处理任务
 /// - 重新计算所有任务的优先级分数
 /// - 按新优先级排序（当前页 > 后方页 > 前方页）
 pub fn replan_queue_for_jump(
@@ -49,6 +49,28 @@ pub fn replan_queue_for_jump(
         tasks.sort_by(|a, b| a.score.cmp(&b.score));
         queue.extend(tasks);
     }
+}
+
+/// 已有待处理任务再次被请求时，使用最新优先级覆盖旧任务
+pub fn reprioritize_existing_task(
+    task_queue: &Mutex<VecDeque<UpscaleTask>>,
+    task: UpscaleTask,
+) -> bool {
+    if let Ok(mut queue) = task_queue.lock() {
+        if let Some(idx) = queue
+            .iter()
+            .position(|existing| existing.book_path == task.book_path && existing.page_index == task.page_index)
+        {
+            queue[idx] = task;
+
+            let mut tasks: Vec<_> = queue.drain(..).collect();
+            tasks.sort_by(compare_task_order);
+            queue.extend(tasks);
+            return true;
+        }
+    }
+
+    false
 }
 
 /// 从队列中获取优先级最高的任务
@@ -127,5 +149,68 @@ pub fn clear_old_book_tasks(task_queue: &Mutex<VecDeque<UpscaleTask>>, old_book:
         if cleared > 0 {
             log_debug!("📂 书籍切换，清空 {} 个旧任务", cleared);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::pyo3_upscaler::UpscaleModel;
+    use crate::core::upscale_service::types::{TaskPriority, TaskScore};
+    use std::time::Instant;
+
+    fn make_task(page_index: usize, priority: TaskPriority, distance: usize) -> UpscaleTask {
+        UpscaleTask {
+            book_path: "book".to_string(),
+            page_index,
+            image_path: format!("page-{page_index}.png"),
+            is_archive: false,
+            archive_path: None,
+            image_hash: format!("hash-{page_index}"),
+            job_key: UpscaleTask::build_job_key("book", page_index),
+            score: TaskScore { priority, distance },
+            model: UpscaleModel::default(),
+            allow_cache: true,
+            submitted_at: Instant::now(),
+        }
+    }
+
+    #[test]
+    fn replan_keeps_only_current_and_forward_window() {
+        let queue = Mutex::new(VecDeque::from(vec![
+            make_task(4, TaskPriority::Backward, 1),
+            make_task(5, TaskPriority::Current, 0),
+            make_task(6, TaskPriority::Forward, 1),
+            make_task(7, TaskPriority::Forward, 2),
+            make_task(10, TaskPriority::Forward, 5),
+        ]));
+
+        replan_queue_for_jump(&queue, 2, 5, 6);
+
+        let pages: Vec<_> = queue
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|task| task.page_index)
+            .collect();
+
+        assert_eq!(pages, vec![6, 7]);
+    }
+
+    #[test]
+    fn reprioritize_existing_task_promotes_current_page() {
+        let queue = Mutex::new(VecDeque::from(vec![
+            make_task(8, TaskPriority::Forward, 2),
+            make_task(9, TaskPriority::Forward, 3),
+        ]));
+
+        assert!(reprioritize_existing_task(
+            &queue,
+            make_task(8, TaskPriority::Current, 0),
+        ));
+
+        let queue = queue.lock().unwrap();
+        assert_eq!(queue.front().map(|task| task.page_index), Some(8));
+        assert_eq!(queue.front().map(|task| task.score.priority), Some(TaskPriority::Current));
     }
 }

@@ -90,6 +90,7 @@ pub fn process_task_v2(
     cache_dir: &Path,
     cache_map: &Arc<RwLock<HashMap<(String, usize), CacheEntry>>>,
     task: &UpscaleTask,
+    cancelled_jobs: &Arc<RwLock<std::collections::HashSet<String>>>,
     timeout: f64,
 ) -> Result<UpscaleReadyPayload, String> {
     log_debug!(
@@ -100,10 +101,12 @@ pub fn process_task_v2(
     );
 
     // 1. 读取图片数据
+    ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     let raw_image_data = load_image_data(&task.image_path)?;
     log_debug!("📥 读取图片数据: {} bytes", raw_image_data.len());
 
     // 2. 使用 WIC 解码
+    ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     let decode_result = decode_image_from_memory_with_wic(&raw_image_data)
         .map_err(|e| format!("WIC 解码失败: {}", e))?;
     
@@ -129,16 +132,34 @@ pub fn process_task_v2(
     };
 
     // 4. 执行超分
+    ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     let result_bytes = execute_upscale(
         py_state, &final_model, &decode_result, &raw_image_data, 
-        &task.image_path, width, height, timeout,
+        &task.image_path, width, height, timeout, &task.job_key,
     )?;
 
     // 5. 保存缓存并返回结果
+    ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     save_and_return_result(
         task, cache_dir, cache_map, &final_model, 
         &result_bytes, width, height,
     )
+}
+
+fn ensure_not_cancelled(
+    cancelled_jobs: &Arc<RwLock<std::collections::HashSet<String>>>,
+    job_key: &str,
+) -> Result<(), String> {
+    if cancelled_jobs
+        .read()
+        .ok()
+        .map(|jobs| jobs.contains(job_key))
+        .unwrap_or(false)
+    {
+        return Err("任务被取消".to_string());
+    }
+
+    Ok(())
 }
 
 /// 执行超分处理
@@ -151,6 +172,7 @@ fn execute_upscale(
     width: u32,
     height: u32,
     timeout: f64,
+    job_key: &str,
 ) -> Result<Vec<u8>, String> {
     let manager = {
         let guard = py_state
@@ -209,7 +231,12 @@ fn execute_upscale(
     };
 
     manager.upscale_image_memory(
-        &image_data, &model, timeout, width as i32, height as i32, None,
+        &image_data,
+        &model,
+        timeout,
+        width as i32,
+        height as i32,
+        Some(job_key),
     )
 }
 

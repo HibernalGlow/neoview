@@ -106,6 +106,12 @@ pub struct UpscaleService {
     /// 正在处理的任务集合：(book_path, page_index)
     processing_set: Arc<RwLock<HashSet<(String, usize)>>>,
 
+    /// 正在执行的任务详情，用于主动取消底层 sr_vulkan 任务
+    active_tasks: Arc<RwLock<HashMap<(String, usize), UpscaleTask>>>,
+
+    /// 已请求取消的 job_key，供解码/超分流程主动中断
+    cancelled_jobs: Arc<RwLock<HashSet<String>>>,
+
     /// 已跳过的页面（不满足条件）
     skipped_pages: Arc<RwLock<HashSet<(String, usize)>>>,
 
@@ -155,6 +161,8 @@ impl UpscaleService {
             task_queue: Arc::new(Mutex::new(VecDeque::new())),
             pending_set: Arc::new(RwLock::new(HashSet::new())),
             processing_set: Arc::new(RwLock::new(HashSet::new())),
+            active_tasks: Arc::new(RwLock::new(HashMap::new())),
+            cancelled_jobs: Arc::new(RwLock::new(HashSet::new())),
             skipped_pages: Arc::new(RwLock::new(HashSet::new())),
             failed_pages: Arc::new(RwLock::new(HashSet::new())),
             completed_count: Arc::new(AtomicUsize::new(0)),
@@ -191,6 +199,8 @@ impl UpscaleService {
             Arc::clone(&self.cache_map),
             self.cache_dir.clone(),
             Arc::clone(&self.processing_set),
+            Arc::clone(&self.active_tasks),
+            Arc::clone(&self.cancelled_jobs),
             Arc::clone(&self.skipped_pages),
             Arc::clone(&self.failed_pages),
             Arc::clone(&self.completed_count),
@@ -240,9 +250,9 @@ impl UpscaleService {
                 set.clear();
             }
 
-            // 清空处理中集合
-            if let Ok(mut set) = self.processing_set.write() {
-                set.clear();
+            let cancelled = self.cancel_active_tasks(|_, _| true);
+            if cancelled > 0 {
+                log_info!("🚫 超分已禁用，取消 {} 个正在执行的任务", cancelled);
             }
         } else if !was_enabled && enabled {
             log_info!("✅ 超分已启用");
@@ -292,10 +302,7 @@ impl UpscaleService {
             if old_book.as_ref() != book_path.as_ref() {
                 // 清空队列中属于旧书籍的任务
                 if let Some(ref old) = old_book {
-                    queue::clear_old_book_tasks(&self.task_queue, old);
-                    if let Ok(mut set) = self.pending_set.write() {
-                        set.retain(|(bp, _)| bp != old);
-                    }
+                    self.cancel_book(old);
                 }
 
                 // 清空状态
@@ -314,16 +321,37 @@ impl UpscaleService {
     /// 设置当前页面（触发预超分池更新）
     pub fn set_current_page(&self, page_index: usize) {
         let old_page = self.current_page.swap(page_index, Ordering::SeqCst);
-        
-        // 如果页面变化较大（跳页），重新规划队列
-        if (page_index as i64 - old_page as i64).abs() > 1 {
-            queue::replan_queue_for_jump(
-                &self.task_queue,
-                self.config.preload_range,
-                old_page,
-                page_index,
-            );
-            self.rebuild_pending_set_from_queue();
+
+        if old_page == page_index {
+            return;
+        }
+
+        queue::replan_queue_for_jump(
+            &self.task_queue,
+            self.config.preload_range,
+            old_page,
+            page_index,
+        );
+        self.rebuild_pending_set_from_queue();
+
+        let current_book = self.current_book
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone());
+        if let Some(book_path) = current_book {
+            let active_end = page_index + self.config.preload_range;
+            let cancelled = self.cancel_active_tasks(|_, task| {
+                task.book_path == book_path
+                    && (task.page_index < page_index || task.page_index > active_end)
+            });
+
+            if cancelled > 0 {
+                log_debug!(
+                    "🔄 页面切换到 {}，取消 {} 个活动窗口外任务",
+                    page_index,
+                    cancelled
+                );
+            }
         }
     }
 
@@ -340,6 +368,56 @@ impl UpscaleService {
         if let Ok(mut set) = self.pending_set.write() {
             *set = pending_keys;
         }
+    }
+
+    fn cancel_active_tasks<F>(&self, mut predicate: F) -> usize
+    where
+        F: FnMut(&(String, usize), &UpscaleTask) -> bool,
+    {
+        let tasks_to_cancel: Vec<UpscaleTask> = self
+            .active_tasks
+            .read()
+            .ok()
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|(key, task)| predicate(key, task))
+                    .map(|(_, task)| task.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if tasks_to_cancel.is_empty() {
+            return 0;
+        }
+
+        let manager = self
+            .py_state
+            .manager
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone());
+
+        if let Ok(mut cancelled_jobs) = self.cancelled_jobs.write() {
+            for task in &tasks_to_cancel {
+                cancelled_jobs.insert(task.job_key.clone());
+            }
+        }
+
+        for task in &tasks_to_cancel {
+            if let Some(manager) = manager.as_ref() {
+                if let Err(err) = manager.cancel_job(&task.job_key) {
+                    log_debug!(
+                        "⚠️ 取消活动任务失败: page {} job={} err={}",
+                        task.page_index,
+                        task.job_key,
+                        err
+                    );
+                }
+            }
+        }
+
+        tasks_to_cancel.len()
     }
 
     /// 检查缓存是否存在且有效
@@ -433,8 +511,10 @@ impl UpscaleService {
         if let Ok(set) = self.pending_set.read() {
             if set.contains(&key) {
                 self.dedupe_hit_count.fetch_add(1, Ordering::SeqCst);
-                log_debug!("📋 已在队列 page {}", task.page_index);
-                return Ok(());
+                if queue::reprioritize_existing_task(&self.task_queue, task.clone()) {
+                    log_debug!("⬆️ 提升队列优先级 page {}", task.page_index);
+                    return Ok(());
+                }
             }
         }
 
@@ -487,6 +567,7 @@ impl UpscaleService {
                 is_archive: false,
                 archive_path: None,
                 image_hash: hash.clone(),
+                job_key: UpscaleTask::build_job_key(book_path, *page_index),
                 score,
                 model: model.clone(),
                 allow_cache: true,
@@ -516,6 +597,7 @@ impl UpscaleService {
         if let Ok(mut set) = self.pending_set.write() {
             set.remove(&(book_path.to_string(), page_index));
         }
+        self.cancel_active_tasks(|_, task| task.book_path == book_path && task.page_index == page_index);
     }
 
     /// 取消指定书籍的所有任务
@@ -524,6 +606,7 @@ impl UpscaleService {
         if let Ok(mut set) = self.pending_set.write() {
             set.retain(|(bp, _)| bp != book_path);
         }
+        self.cancel_active_tasks(|_, task| task.book_path == book_path);
     }
 
     /// 清除缓存

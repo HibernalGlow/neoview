@@ -740,6 +740,15 @@
 		manualScale = Math.max(manualScale / 1.25, 0.1);
 	}
 
+	async function syncUpscaleForPage(pageIndex: number): Promise<void> {
+		try {
+			await upscaleStore.setCurrentPage(pageIndex);
+			await upscaleStore.triggerCurrentPageUpscale();
+		} catch (error) {
+			console.error('[StackView] 同步超分页面失败:', error);
+		}
+	}
+
 	// ============================================================================
 	// Effects
 	// ============================================================================
@@ -793,9 +802,8 @@
 			lastPageMode = currentPageMode;
 			lastPanorama = currentPanorama;
 
-			// 通知 upscaleStore 页面切换，触发超分
-			upscaleStore.setCurrentPage(pageIndex);
-			upscaleStore.triggerCurrentPageUpscale();
+			// 通知 upscaleStore 页面切换，串行同步当前页和预超分请求
+			void syncUpscaleForPage(pageIndex);
 
 			// 根据模式加载
 			if (currentPanorama) {

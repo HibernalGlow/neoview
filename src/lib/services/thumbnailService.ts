@@ -33,8 +33,8 @@ const INITIAL_PRELOAD_RANGE = 10;
 const BACKGROUND_BATCH_SIZE = 20;
 // 后台加载间隔：200ms（更快的后台加载）
 const BACKGROUND_LOAD_INTERVAL_MS = 200;
-// 后台加载最大半径：避免整本无界扩散（以页为单位）
-const MAX_BACKGROUND_RADIUS = 80;
+// 后台加载最大半径：使用足够大的值确保能覆盖整本书
+const MAX_BACKGROUND_RADIUS = 100_000;
 // 缩略图最大尺寸
 const THUMBNAIL_MAX_SIZE = 256;
 // 防抖时间：50ms（更快响应翻页）
@@ -215,7 +215,11 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 		}
 
 		// 收集初始需要加载的索引
-		const needLoad = collectIndicesToLoad(centerIndex, INITIAL_PRELOAD_RANGE, BACKGROUND_BATCH_SIZE);
+		const needLoad = collectIndicesToLoad(
+			centerIndex,
+			INITIAL_PRELOAD_RANGE,
+			BACKGROUND_BATCH_SIZE
+		);
 
 		// 没有需要加载的，启动后台加载
 		if (needLoad.length === 0) {
@@ -267,7 +271,9 @@ function startBackgroundLoad(): void {
 	const totalPages = currentBook.pages?.length || 0;
 	const currentVersion = preloadVersion;
 
-	console.debug(`🖼️ ThumbnailService: Starting background load from center ${backgroundLoadCenter}`);
+	console.debug(
+		`🖼️ ThumbnailService: Starting background load from center ${backgroundLoadCenter}`
+	);
 
 	const loadNextBatch = async () => {
 		// 版本检查（翻页时会取消）
@@ -276,23 +282,23 @@ function startBackgroundLoad(): void {
 			return;
 		}
 
-		// 扩大加载范围，但有上限，防止整本无界扩散
-		backgroundLoadRadius = Math.min(
-			backgroundLoadRadius + BACKGROUND_BATCH_SIZE,
-			MAX_BACKGROUND_RADIUS
-		);
+		// 扩大加载范围，上限为整本书的实际页数，确保能覆盖所有页面
+		backgroundLoadRadius = Math.min(backgroundLoadRadius + BACKGROUND_BATCH_SIZE, totalPages);
 
 		// 收集需要加载的索引
-		const needLoad = collectIndicesToLoad(backgroundLoadCenter, backgroundLoadRadius, BACKGROUND_BATCH_SIZE);
+		const needLoad = collectIndicesToLoad(
+			backgroundLoadCenter,
+			backgroundLoadRadius,
+			BACKGROUND_BATCH_SIZE
+		);
 
-		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖全部或达到上限）
+		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖整本书）
 		if (needLoad.length === 0) {
-			const maxRadius = Math.min(
-				MAX_BACKGROUND_RADIUS,
-				Math.max(backgroundLoadCenter, totalPages - 1 - backgroundLoadCenter)
-			);
+			const maxRadius = Math.max(backgroundLoadCenter, totalPages - 1 - backgroundLoadCenter);
 			if (backgroundLoadRadius >= maxRadius) {
-				console.debug(`🖼️ ThumbnailService: Background load complete (radius cap ${backgroundLoadRadius})`);
+				console.debug(
+					`🖼️ ThumbnailService: Background load complete (all ${totalPages} pages covered)`
+				);
 				backgroundLoadTimer = null;
 				return;
 			}

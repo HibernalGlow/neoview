@@ -10,12 +10,13 @@ import { Slider } from '$lib/components/ui/slider';
 import { Search, Grid3x3, List, Image as ImageIcon, Navigation, Sparkles } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
-import { thumbnailManager } from '$lib/utils/thumbnailManager';
+
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import type { Page } from '$lib/types';
 import { requestAllThumbnails } from '$lib/stores/thumbnailStoreV3.svelte';
+import { thumbnailService } from '$lib/services/thumbnailService';
 import PageContextMenu from './PageContextMenu.svelte';
 import PageIndexBadge from './PageIndexBadge.svelte';
 
@@ -158,24 +159,17 @@ function goToPage(index: number) {
 
 async function requestThumbnail(pageIndex: number) {
 	if (thumbnailCacheStore.hasThumbnail(pageIndex)) return;
-	if (thumbnailCacheStore.isLoading(pageIndex)) return;
-	
+	if (thumbnailService.isLoading(pageIndex)) return;
+
 	const book = bookStore.currentBook;
 	const page = book?.pages?.[pageIndex];
 	if (!book || !page) return;
-	
-	thumbnailCacheStore.setLoading(pageIndex);
-	try {
-		const pagePath = page.path || '';
-		const url = await thumbnailManager.getThumbnail(pagePath);
-		if (url) {
-			thumbnailCacheStore.setThumbnail(pageIndex, url, 0, 0);
-		} else {
-			thumbnailCacheStore.setFailed(pageIndex);
-		}
-	} catch {
-		thumbnailCacheStore.setFailed(pageIndex);
-	}
+
+	// Use thumbnailService so the request goes through the proper backend pipeline
+	// and results are written back to thumbnailCacheStore via the event listener.
+	// thumbnailManager.getThumbnail() returns null immediately for uncached pages
+	// and incorrectly marks them as failed, so we avoid it here.
+	void thumbnailService.loadThumbnails(pageIndex);
 }
 
 async function prefetchAllThumbnails() {

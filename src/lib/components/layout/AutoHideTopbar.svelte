@@ -51,8 +51,8 @@
 	}
 
 	// 切换全屏
-	function handleToggleFullscreen() {
-		toggleFullscreen();
+	async function handleToggleFullscreen() {
+		await toggleFullscreen();
 	}
 </script>
 

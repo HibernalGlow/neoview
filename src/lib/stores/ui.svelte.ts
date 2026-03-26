@@ -348,7 +348,16 @@ export function setFullscreenState(fullscreen: boolean): void {
 export async function initFullscreenState(): Promise<void> {
 	try {
 		const nativeState = await windowManager.syncFullscreenState();
-		setFullscreenState(nativeState);
+
+		// 历史版本曾将“最大化”误接到“全屏”，导致窗口状态恢复后反复启动即全屏。
+		// 这里统一在启动时纠偏：恢复到非全屏，保留其它窗口状态（大小/位置/最大化）。
+		if (nativeState) {
+			await windowManager.setFullscreen(false);
+			setFullscreenState(false);
+		} else {
+			setFullscreenState(false);
+		}
+
 		await windowManager.initFullscreenSync((newState: boolean) => {
 			setFullscreenState(newState);
 		});

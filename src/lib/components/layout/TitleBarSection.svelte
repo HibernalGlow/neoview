@@ -14,8 +14,7 @@
 		leftSidebarPinned,
 		rightSidebarPinned,
 		leftSidebarOpen,
-		rightSidebarOpen,
-		toggleFullscreen
+		rightSidebarOpen
 	} from '$lib/stores/ui.svelte';
 	import { showToast } from '$lib/utils/toast';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -255,7 +254,75 @@
 	}
 
 	async function maximizeWindow() {
-		await toggleFullscreen();
+		await appWindow.toggleMaximize();
+	}
+
+	function isInteractiveElement(target: EventTarget | null): boolean {
+		const element = target as HTMLElement | null;
+		if (!element) return false;
+		return Boolean(element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]'));
+	}
+
+	async function handleTitleBarMouseDown(event: MouseEvent): Promise<void> {
+		if (event.button !== 0) return;
+		if (isInteractiveElement(event.target)) return;
+
+		const isFullscreen = await appWindow.isFullscreen();
+		if (isFullscreen) return;
+
+		const isMaximized = await appWindow.isMaximized();
+		if (isMaximized) return;
+
+		await appWindow.startDragging();
+	}
+
+	async function handleTitleBarDoubleClick(event: MouseEvent): Promise<void> {
+		if (event.button !== 0) return;
+		if (isInteractiveElement(event.target)) return;
+
+		const isFullscreen = await appWindow.isFullscreen();
+		if (isFullscreen) return;
+
+		await appWindow.toggleMaximize();
+	}
+
+	type ResizeDirection =
+		| 'East'
+		| 'West'
+		| 'North'
+		| 'South'
+		| 'NorthEast'
+		| 'NorthWest'
+		| 'SouthEast'
+		| 'SouthWest';
+
+	async function handleResizeMouseDown(direction: ResizeDirection, event: MouseEvent): Promise<void> {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		event.stopPropagation();
+
+		const isFullscreen = await appWindow.isFullscreen();
+		if (isFullscreen) return;
+
+		const isMaximized = await appWindow.isMaximized();
+		if (isMaximized) {
+			await appWindow.unmaximize();
+			await new Promise((resolve) => setTimeout(resolve, 16));
+		}
+
+		try {
+			await appWindow.startResizeDragging(direction);
+		} catch {
+			await appWindow.setResizable(true);
+			await appWindow.startResizeDragging(direction);
+		}
+	}
+
+	function handleResizeOverlayMouseDown(event: MouseEvent): void {
+		const element = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-resize-direction]');
+		const direction = element?.dataset.resizeDirection as ResizeDirection | undefined;
+		if (!direction) return;
+		void handleResizeMouseDown(direction, event);
 	}
 
 	async function closeWindow() {
@@ -263,6 +330,10 @@
 	}
 
 	onMount(() => {
+		void appWindow.setResizable(true).catch((error) => {
+			console.warn('Failed to ensure window is resizable:', error);
+		});
+
 		if (typeof window === 'undefined') return;
 		void refreshProtocolStatus();
 		const delayedCheck = window.setTimeout(() => {
@@ -299,10 +370,15 @@
 	});
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	data-tauri-drag-region
 	class="flex h-8 select-none items-center justify-between border-b px-2"
 	style="background-color: color-mix(in oklch, var(--sidebar) {opacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({blur}px);"
+	role="banner"
+	aria-label="主窗口标题栏"
+	onmousedown={handleTitleBarMouseDown}
+	ondblclick={handleTitleBarDoubleClick}
 >
 	<!-- 左侧：四边栏控制和应用名 -->
 	<div data-tauri-drag-region class="flex flex-1 items-center gap-0.5">
@@ -639,4 +715,23 @@
 			<X class="h-4 w-4" />
 		</Button>
 	</div>
+</div>
+
+<!-- 无边框窗口的自定义缩放手柄（覆盖全窗口边缘） -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+	class="pointer-events-none fixed inset-0 select-none"
+	style="z-index: 2147483646;"
+	aria-hidden="true"
+	onmousedown={handleResizeOverlayMouseDown}
+>
+	<div data-resize-direction="West" class="pointer-events-auto absolute left-0 top-0 h-full w-2 cursor-w-resize"></div>
+	<div data-resize-direction="East" class="pointer-events-auto absolute right-0 top-0 h-full w-2 cursor-e-resize"></div>
+	<div data-resize-direction="North" class="pointer-events-auto absolute left-0 top-0 h-2 w-full cursor-n-resize"></div>
+	<div data-resize-direction="South" class="pointer-events-auto absolute bottom-0 left-0 h-2 w-full cursor-s-resize"></div>
+
+	<div data-resize-direction="NorthWest" class="pointer-events-auto absolute left-0 top-0 h-3 w-3 cursor-nw-resize"></div>
+	<div data-resize-direction="NorthEast" class="pointer-events-auto absolute right-0 top-0 h-3 w-3 cursor-ne-resize"></div>
+	<div data-resize-direction="SouthWest" class="pointer-events-auto absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize"></div>
+	<div data-resize-direction="SouthEast" class="pointer-events-auto absolute bottom-0 right-0 h-3 w-3 cursor-se-resize"></div>
 </div>

@@ -97,7 +97,12 @@ export class ImageLoaderCore {
 	/**
 	 * 加载页面图片（带优先级）
 	 */
-	async loadPage(pageIndex: number, priority: number = LoadPriority.NORMAL): Promise<LoadResult> {
+	async loadPage(pageIndex: number, priority: number = LoadPriority.NORMAL, signal?: AbortSignal): Promise<LoadResult> {
+		// 0. 检查已取消
+		if (signal?.aborted) {
+			throw new DOMException('Aborted', 'AbortError');
+		}
+
 		// 1. 检查缓存
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
@@ -139,7 +144,7 @@ export class ImageLoaderCore {
 		}
 
 		// 3. 创建加载任务
-		const loadPromise = this.executeLoad(pageIndex, priority);
+		const loadPromise = this.executeLoad(pageIndex, priority, signal);
 		this.pendingLoads.set(pageIndex, loadPromise);
 
 		try {
@@ -167,9 +172,15 @@ export class ImageLoaderCore {
 	 * 执行实际加载
 	 * 【优化】先返回图片，异步获取尺寸，不阻塞显示
 	 */
-	private async executeLoad(pageIndex: number, priority: number): Promise<LoadResult> {
+	private async executeLoad(pageIndex: number, priority: number, signal?: AbortSignal): Promise<LoadResult> {
 		return new Promise((resolve, reject) => {
 			this.loadQueue.enqueue(pageIndex, priority, async () => {
+				// 检查取消
+				if (signal?.aborted) {
+					reject(new DOMException('Aborted', 'AbortError'));
+					return;
+				}
+				
 				// 【架构优化】检查实例是否已失效
 				if (this.invalidated) {
 					reject(new Error('Loader invalidated'));
@@ -235,8 +246,8 @@ export class ImageLoaderCore {
 					});
 					
 					// 【架构优化】再次检查（读取可能耗时较长）
-					if (this.invalidated) {
-						reject(new Error('Loader invalidated during load'));
+					if (this.invalidated || signal?.aborted) {
+						reject(new DOMException('Aborted', 'AbortError'));
 						return;
 					}
 					

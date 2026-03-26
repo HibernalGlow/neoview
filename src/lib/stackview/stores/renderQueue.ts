@@ -148,11 +148,28 @@ export class RenderQueue {
   /** 当前页面索引 */
   private currentPageIndex = -1;
   
-  /** 任务队列 */
-  private tasks: QueueTask[] = [];
+  /** View 通道任务（当前页 ±1，最高优先级，可抢占 Ahead） */
+  private viewTasks: QueueTask[] = [];
   
-  /** 是否正在处理队列 */
-  private processing = false;
+  /** Ahead 通道任务（±2 以外的预加载，低优先级） */
+  private aheadTasks: QueueTask[] = [];
+  
+  /** 旧的 tasks 引用（兼容 getStatus） */
+  private get tasks(): QueueTask[] {
+    return [...this.viewTasks, ...this.aheadTasks];
+  }
+  
+  /** 是否正在处理 View 通道 */
+  private processingView = false;
+  
+  /** 是否正在处理 Ahead 通道 */
+  private processingAhead = false;
+  
+  /** 当前活跃的 AbortController（翻页时 abort 取消进行中的预加载） */
+  private activeAbortController: AbortController | null = null;
+  
+  /** 并发解码窗口大小 */
+  private readonly CONCURRENT_DECODE_LIMIT = Math.min(3, typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency ?? 2) : 2);
   
   /** 延迟加载的定时器 */
   private delayTimers: ReturnType<typeof setTimeout>[] = [];
@@ -216,8 +233,6 @@ export class RenderQueue {
       const preLoadSize = settings.performance?.preLoadSize;
       
       if (preLoadSize !== undefined && preLoadSize > 0) {
-        // 根据用户设置的预加载大小调整范围
-        // preLoadSize 表示总预加载数，按比例分配到各优先级
         this.config.highRange = Math.max(1, Math.floor(preLoadSize * 0.2));
         this.config.normalRange = Math.max(2, Math.floor(preLoadSize * 0.5));
         this.config.lowRange = preLoadSize;
@@ -236,7 +251,6 @@ export class RenderQueue {
       const { getAdaptiveConfig } = await import('$lib/utils/systemCapabilities');
       const adaptiveConfig = await getAdaptiveConfig();
       
-      // 根据系统能力选择预设配置
       if (adaptiveConfig.preloadAhead <= 2) {
         this.config = { ...LOW_END_PRELOAD_CONFIG };
         console.log('📋 [RenderQueue] 应用低端设备配置');
@@ -255,7 +269,8 @@ export class RenderQueue {
   /**
    * 设置当前页面，触发分层加载
    * 
-   * @param pageIndex 当前页面索引
+   * 【优化 #2: 取消过时任务】翻页时立即 abort 所有进行中的预加载
+   * 参考 NeeView: BookPageLoader._cancellationTokenSource.Cancel()
    */
   async setCurrentPage(pageIndex: number): Promise<void> {
     // 首次调用时同步配置
@@ -285,11 +300,10 @@ export class RenderQueue {
         }
       }
     } else {
-      // 翻页速度减慢，重置计数
       this.rapidTurnCount = 0;
     }
     
-    // 取消之前的任务
+    // 【关键优化 #2】取消所有进行中的预加载 IO
     this.cancelAll();
     
     // 更新当前页面
@@ -297,43 +311,44 @@ export class RenderQueue {
     this.currentToken++;
     const token = this.currentToken;
     
+    // 创建新的 AbortController
+    this.activeAbortController = new AbortController();
+    
     const book = bookStore.currentBook;
     if (!book) return;
     
     const totalPages = book.pages.length;
     
-    // 快速翻页模式：不仅加载当前页，预加载方向上的 1 页以防止白屏
+    // 快速翻页模式
     if (this.isRapidTurnMode) {
-      console.log(`⚡ [RenderQueue] 快速翻页模式: 加载页 ${pageIndex + 1} + 预测预加载方向 ${this.currentDirection > 0 ? '→' : '←'}`);
+      console.log(`⚡ [RenderQueue] 快速翻页模式: 加载页 ${pageIndex + 1} + 预测 ${this.currentDirection > 0 ? '→' : '←'}`);
       
-      // 1. 加载当前页
+      // View 通道：当前页
       if (!preDecodeCache.has(pageIndex)) {
-        await this.loadAndPreDecode(pageIndex, token);
+        await this.loadAndPreDecode(pageIndex, token, this.activeAbortController.signal);
       }
 
-      // 2. 加载方向预测的下一页 (1页)
+      // View 通道：方向预测下一页
       const nextIdx = pageIndex + this.currentDirection;
       if (nextIdx >= 0 && nextIdx < totalPages && !preDecodeCache.has(nextIdx)) {
-        this.addTask(nextIdx, RenderPriority.HIGH, token);
-        this.processQueue();
+        this.addViewTask(nextIdx, RenderPriority.HIGH, token);
+        this.processViewChannel();
       }
       
-      // 设置恢复定时器：停止翻页后 500ms 恢复正常预加载
+      // 恢复定时器
       this.clearRapidTurnRecoveryTimer();
       this.rapidTurnRecoveryTimer = setTimeout(() => {
         console.log(`✅ [RenderQueue] 退出快速翻页模式，恢复正常预加载`);
         this.isRapidTurnMode = false;
         this.rapidTurnCount = 0;
-        // 恢复正常预加载
         this.scheduleNormalPreload(this.currentPageIndex, token, totalPages);
-        // 重置递进加载状态
         this.resetProgressiveState();
       }, 500);
       
       return;
     }
     
-    console.log(`📋 渲染队列: 设置当前页 ${pageIndex + 1}/${totalPages} (方向: ${this.currentDirection > 0 ? '→' : '←'})`);
+    console.log(`📋 渲染队列: 设置当前页 ${pageIndex + 1}/${totalPages} (方向: ${this.currentDirection > 0 ? '→' : '←'}, 并发=${this.CONCURRENT_DECODE_LIMIT})`);
     
     // 正常模式：分层预加载
     await this.scheduleNormalPreload(pageIndex, token, totalPages);
@@ -354,39 +369,213 @@ export class RenderQueue {
   
   /**
    * 执行正常的分层预加载
+   * 【优化 #1: 双通道】View ±1 → viewTasks; 其余 → aheadTasks
    */
   private async scheduleNormalPreload(
     pageIndex: number, 
     token: number, 
     totalPages: number
   ): Promise<void> {
-    // 1. 立即加载当前页（如果未预解码）
+    // View 通道：立即加载当前页
     if (!preDecodeCache.has(pageIndex)) {
-      await this.loadAndPreDecode(pageIndex, token);
+      await this.loadAndPreDecode(pageIndex, token, this.activeAbortController?.signal);
     }
     
-    // 3. 延迟加载高优先级页面（主方向 ±1 页）
+    // View 通道：延迟加载 ±1 页（HIGH 优先级）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleDirectionalRange(pageIndex, 1, this.config.highRange, RenderPriority.HIGH, token, totalPages);
+      this.scheduleDirectionalView(pageIndex, 1, this.config.highRange, RenderPriority.HIGH, token, totalPages);
     }, this.config.highDelay));
     
-    // 4. 延迟加载普通优先级页面（±2-3 页）
+    // Ahead 通道：延迟加载 ±2-N 页（NORMAL/LOW 优先级）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleDirectionalRange(pageIndex, this.config.highRange + 1, this.config.normalRange, RenderPriority.NORMAL, token, totalPages);
+      this.scheduleDirectionalAhead(pageIndex, this.config.highRange + 1, this.config.normalRange, RenderPriority.NORMAL, token, totalPages);
     }, this.config.normalDelay));
     
-    // 5. 延迟加载低优先级页面（±4-5 页）
     this.delayTimers.push(setTimeout(() => {
       if (token !== this.currentToken) return;
-      this.scheduleDirectionalRange(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
+      this.scheduleDirectionalAhead(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
     }, this.config.lowDelay));
   }
   
+  // ============================================================================
+  // 双通道任务管理 (NeeView: View/Ahead JobClient 分离)
+  // ============================================================================
+  
+  /** 添加 View 通道任务 */
+  private addViewTask(pageIndex: number, priority: number, token: number): void {
+    const existing = this.viewTasks.find(t => t.pageIndex === pageIndex && t.token === token);
+    if (existing) {
+      if (priority > existing.priority) existing.priority = priority;
+      return;
+    }
+    this.viewTasks.push({ pageIndex, priority, token, status: 'pending' });
+    this.viewTasks.sort((a, b) => b.priority - a.priority);
+  }
+  
+  /** 添加 Ahead 通道任务 */
+  private addAheadTask(pageIndex: number, priority: number, token: number): void {
+    const existing = this.aheadTasks.find(t => t.pageIndex === pageIndex && t.token === token);
+    if (existing) {
+      if (priority > existing.priority) existing.priority = priority;
+      return;
+    }
+    this.aheadTasks.push({ pageIndex, priority, token, status: 'pending' });
+    this.aheadTasks.sort((a, b) => b.priority - a.priority);
+  }
+  
   /**
-   * 基于翻页方向的智能预加载调度
-   * 主方向（currentDirection）加载更多页面，反方向加载较少
+   * View 通道方向调度
+   */
+  private scheduleDirectionalView(
+    centerIndex: number, startOffset: number, endOffset: number,
+    priority: number, token: number, totalPages: number
+  ): void {
+    const pages = this.collectDirectionalPages(centerIndex, startOffset, endOffset, totalPages);
+    for (const idx of pages) this.addViewTask(idx, priority, token);
+    if (pages.length > 0) {
+      console.log(`🎯 [View] 方向预加载: [${pages.map(p => p + 1).join(', ')}]`);
+      this.processViewChannel();
+    }
+  }
+  
+  /**
+   * Ahead 通道方向调度
+   */
+  private scheduleDirectionalAhead(
+    centerIndex: number, startOffset: number, endOffset: number,
+    priority: number, token: number, totalPages: number
+  ): void {
+    const pages = this.collectDirectionalPages(centerIndex, startOffset, endOffset, totalPages);
+    for (const idx of pages) this.addAheadTask(idx, priority, token);
+    if (pages.length > 0) {
+      console.log(`📦 [Ahead] 方向预加载: [${pages.map(p => p + 1).join(', ')}]`);
+      this.processAheadChannel();
+    }
+  }
+  
+  /** 收集方向感知页面（公用逻辑） */
+  private collectDirectionalPages(
+    centerIndex: number, startOffset: number, endOffset: number, totalPages: number
+  ): number[] {
+    const pagesToLoad: number[] = [];
+    const primaryDirection = this.currentDirection;
+    const primaryCount = endOffset;
+    const secondaryCount = Math.max(1, Math.floor(endOffset / 2));
+    
+    for (let i = startOffset; i <= primaryCount; i++) {
+      const idx = centerIndex + (i * primaryDirection);
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) pagesToLoad.push(idx);
+    }
+    for (let i = startOffset; i <= secondaryCount; i++) {
+      const idx = centerIndex - (i * primaryDirection);
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) pagesToLoad.push(idx);
+    }
+    return [...new Set(pagesToLoad)];
+  }
+  
+  /**
+   * 处理 View 通道（当前页 ±1，串行，最高优先级）
+   * 【优化 #1】View 始终可抢占 Ahead
+   */
+  private async processViewChannel(): Promise<void> {
+    if (this.processingView) return;
+    this.processingView = true;
+    
+    try {
+      while (this.viewTasks.length > 0) {
+        const task = this.viewTasks[0];
+        
+        if (task.token !== this.currentToken) {
+          task.status = 'cancelled';
+          this.viewTasks.shift();
+          continue;
+        }
+        if (preDecodeCache.has(task.pageIndex)) {
+          task.status = 'done';
+          this.viewTasks.shift();
+          continue;
+        }
+        
+        task.status = 'loading';
+        await this.loadAndPreDecode(task.pageIndex, task.token, this.activeAbortController?.signal);
+        task.status = 'done';
+        this.viewTasks.shift();
+      }
+    } finally {
+      this.processingView = false;
+    }
+  }
+  
+  /**
+   * 处理 Ahead 通道（预加载，支持并发解码窗口）
+   * 【优化 #1】View 有新任务时，Ahead 让步
+   * 【优化 #3】使用 CONCURRENT_DECODE_LIMIT 路并行解码
+   */
+  private async processAheadChannel(): Promise<void> {
+    if (this.processingAhead) return;
+    this.processingAhead = true;
+    
+    try {
+      const activeDecodes = new Set<Promise<void>>();
+      
+      while (this.aheadTasks.length > 0) {
+        // 【抢占检查】如果 View 通道有新任务，让步等待
+        if (this.viewTasks.length > 0) {
+          // 等待 View 通道清空
+          await new Promise(resolve => setTimeout(resolve, 10));
+          continue;
+        }
+        
+        const task = this.aheadTasks[0];
+        
+        if (task.token !== this.currentToken) {
+          task.status = 'cancelled';
+          this.aheadTasks.shift();
+          continue;
+        }
+        if (preDecodeCache.has(task.pageIndex)) {
+          task.status = 'done';
+          this.aheadTasks.shift();
+          continue;
+        }
+        
+        // 【并发窗口控制】如果活跃解码数达上限，等待一个完成
+        if (activeDecodes.size >= this.CONCURRENT_DECODE_LIMIT) {
+          await Promise.race(activeDecodes);
+        }
+        
+        // 再次检查（等待期间可能有新的翻页）
+        if (task.token !== this.currentToken) {
+          task.status = 'cancelled';
+          this.aheadTasks.shift();
+          continue;
+        }
+        
+        task.status = 'loading';
+        this.aheadTasks.shift();
+        
+        const signal = this.activeAbortController?.signal;
+        const decodePromise = this.loadAndPreDecode(task.pageIndex, task.token, signal)
+          .then(() => { task.status = 'done'; })
+          .catch(() => { task.status = 'cancelled'; })
+          .finally(() => { activeDecodes.delete(decodePromise); });
+        
+        activeDecodes.add(decodePromise);
+      }
+      
+      // 等待所有活跃解码完成
+      if (activeDecodes.size > 0) {
+        await Promise.allSettled(activeDecodes);
+      }
+    } finally {
+      this.processingAhead = false;
+    }
+  }
+  
+  /**
+   * 兼容旧接口：调度一个方向范围的页面预加载
    */
   private scheduleDirectionalRange(
     centerIndex: number,
@@ -396,43 +585,12 @@ export class RenderQueue {
     token: number,
     totalPages: number
   ): void {
-    const pagesToLoad: number[] = [];
-    
-    // 主方向（翻页方向）加载更多
-    const primaryDirection = this.currentDirection;
-    const primaryCount = endOffset; // 主方向加载完整范围
-    const secondaryCount = Math.max(1, Math.floor(endOffset / 2)); // 反方向加载一半
-    
-    // 主方向页面
-    for (let i = startOffset; i <= primaryCount; i++) {
-      const idx = centerIndex + (i * primaryDirection);
-      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
-        pagesToLoad.push(idx);
-      }
+    // 根据优先级分派到不同通道
+    if (priority >= RenderPriority.HIGH) {
+      this.scheduleDirectionalView(centerIndex, startOffset, endOffset, priority, token, totalPages);
+    } else {
+      this.scheduleDirectionalAhead(centerIndex, startOffset, endOffset, priority, token, totalPages);
     }
-    
-    // 反方向页面（数量减半）
-    for (let i = startOffset; i <= secondaryCount; i++) {
-      const idx = centerIndex - (i * primaryDirection);
-      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
-        pagesToLoad.push(idx);
-      }
-    }
-    
-    // 去重
-    const uniquePages = [...new Set(pagesToLoad)];
-    
-    if (uniquePages.length > 0) {
-      console.log(`📋 方向感知预加载: 优先级=${priority}, 方向=${primaryDirection > 0 ? '→' : '←'}, 页面=[${uniquePages.map(p => p + 1).join(', ')}]`);
-    }
-    
-    // 添加到队列
-    for (const idx of uniquePages) {
-      this.addTask(idx, priority, token);
-    }
-    
-    // 处理队列
-    this.processQueue();
   }
   
   /**
@@ -448,106 +606,64 @@ export class RenderQueue {
   ): void {
     const pagesToLoad: number[] = [];
     
-    // 前向页面
     for (let i = startOffset; i <= endOffset; i++) {
       const idx = centerIndex + i;
-      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
-        pagesToLoad.push(idx);
-      }
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) pagesToLoad.push(idx);
     }
-    
-    // 后向页面
     for (let i = startOffset; i <= endOffset; i++) {
       const idx = centerIndex - i;
-      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) {
-        pagesToLoad.push(idx);
-      }
+      if (idx >= 0 && idx < totalPages && !preDecodeCache.has(idx)) pagesToLoad.push(idx);
     }
     
-    // 去重
     const uniquePages = [...new Set(pagesToLoad)];
     
     if (uniquePages.length > 0) {
       console.log(`📋 调度预解码: 优先级=${priority}, 页面=[${uniquePages.map(p => p + 1).join(', ')}]`);
     }
     
-    // 添加到队列
     for (const pageIndex of uniquePages) {
-      this.addTask(pageIndex, priority, token);
+      if (priority >= RenderPriority.HIGH) {
+        this.addViewTask(pageIndex, priority, token);
+      } else {
+        this.addAheadTask(pageIndex, priority, token);
+      }
     }
     
-    // 处理队列
-    this.processQueue();
+    if (priority >= RenderPriority.HIGH) {
+      this.processViewChannel();
+    } else {
+      this.processAheadChannel();
+    }
   }
   
   /**
-   * 添加任务到队列
+   * 添加任务到队列（兼容旧接口，内部分派到双通道）
    */
   private addTask(pageIndex: number, priority: number, token: number): void {
-    // 检查是否已在队列中
-    const existing = this.tasks.find(t => t.pageIndex === pageIndex && t.token === token);
-    if (existing) {
-      // 提升优先级
-      if (priority > existing.priority) {
-        existing.priority = priority;
-      }
-      return;
+    if (priority >= RenderPriority.HIGH) {
+      this.addViewTask(pageIndex, priority, token);
+    } else {
+      this.addAheadTask(pageIndex, priority, token);
     }
-    
-    this.tasks.push({
-      pageIndex,
-      priority,
-      token,
-      status: 'pending',
-    });
-    
-    // 按优先级排序（高优先级在前）
-    this.tasks.sort((a, b) => b.priority - a.priority);
   }
   
   /**
-   * 处理队列
+   * 处理队列（兼容旧接口，启动双通道处理）
    */
-  private async processQueue(): Promise<void> {
-    if (this.processing) return;
-    this.processing = true;
-    
-    try {
-      while (this.tasks.length > 0) {
-        const task = this.tasks[0];
-        
-        // 检查任务是否已过时
-        if (task.token !== this.currentToken) {
-          task.status = 'cancelled';
-          this.tasks.shift();
-          continue;
-        }
-        
-        // 检查是否已预解码
-        if (preDecodeCache.has(task.pageIndex)) {
-          task.status = 'done';
-          this.tasks.shift();
-          continue;
-        }
-        
-        // 执行加载
-        task.status = 'loading';
-        await this.loadAndPreDecode(task.pageIndex, task.token);
-        task.status = 'done';
-        this.tasks.shift();
-      }
-    } finally {
-      this.processing = false;
-    }
+  private processQueue(): void {
+    if (this.viewTasks.length > 0) this.processViewChannel();
+    if (this.aheadTasks.length > 0) this.processAheadChannel();
   }
   
   /**
    * 加载并预解码页面
+   * 【优化 #2】支持 AbortSignal 取消进行中的加载
+   * 参考 NeeView: CancellationToken 贯穿整个加载管线
    */
-  private async loadAndPreDecode(pageIndex: number, token: number): Promise<void> {
+  private async loadAndPreDecode(pageIndex: number, token: number, signal?: AbortSignal): Promise<void> {
     try {
-      // 检查令牌是否仍然有效
-      if (token !== this.currentToken) {
+      // 检查令牌 + 取消信号
+      if (token !== this.currentToken || signal?.aborted) {
         return;
       }
       
@@ -558,20 +674,24 @@ export class RenderQueue {
       if (cached) {
         url = cached.url;
       } else {
-        // 需要先加载
+        // 加载前再次检查取消
+        if (signal?.aborted || token !== this.currentToken) return;
+        
         const result = await imagePool.get(pageIndex);
         if (!result) return;
         url = result.url;
       }
       
-      // 再次检查令牌
-      if (token !== this.currentToken) {
+      // 加载后检查取消（NeeView 模式：IO 完成后仍检查 token）
+      if (token !== this.currentToken || signal?.aborted) {
         return;
       }
       
       // 预解码
       await preDecodeCache.preDecodeAndCache(pageIndex, url);
     } catch (error) {
+      // AbortError 静默处理
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.warn(`预解码失败: 页码 ${pageIndex + 1}`, error);
     }
   }
@@ -596,8 +716,15 @@ export class RenderQueue {
       }
     }
     
+    // 取消进行中的 IO
+    if (this.activeAbortController) {
+      this.activeAbortController.abort();
+      this.activeAbortController = null;
+    }
+    
     // 清空队列
-    this.tasks = [];
+    this.viewTasks = [];
+    this.aheadTasks = [];
   }
   
   /**

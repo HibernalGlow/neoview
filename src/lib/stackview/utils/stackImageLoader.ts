@@ -226,15 +226,19 @@ export class StackImageLoader {
   }
 
   /**
-   * 加载页面
+   * 加载页面（受 RenderQueue 取消策略控制）
    */
-  async loadPage(pageIndex: number, priority = 0): Promise<LoadResult> {
+  async loadPage(pageIndex: number, priority = 0, signal?: AbortSignal): Promise<LoadResult> {
     const book = bookStore.currentBook;
     if (!book || pageIndex < 0 || pageIndex >= book.pages.length) {
       throw new Error(`Invalid page index: ${pageIndex}`);
     }
 
-    const result = await this.core.loadPage(pageIndex, priority);
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    const result = await this.core.loadPage(pageIndex, priority, signal);
     
     // 优先使用缓存的尺寸
     let dimensions = this.dimensionsCache.get(pageIndex) ?? result.dimensions;

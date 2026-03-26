@@ -36,9 +36,9 @@ class ImagePool {
   /**
    * 异步获取图片
    */
-  async get(pageIndex: number): Promise<PooledImage | null> {
+  async get(pageIndex: number, signal?: AbortSignal): Promise<PooledImage | null> {
     try {
-      const result = await stackImageLoader.loadPage(pageIndex, 10);
+      const result = await stackImageLoader.loadPage(pageIndex, 10, signal);
       return {
         url: result.url,
         blob: result.blob,

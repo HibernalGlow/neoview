@@ -23,6 +23,8 @@
     "test:rust:stream:sweep": "cross-env RUST_TEST_THREADS=1 cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf directory_stream_real_dataset_param_sweep -- --nocapture --test-threads=1",
     "test:rust:stream:bench": "cross-env RUST_TEST_THREADS=1 cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf -- --nocapture --test-threads=1",
     "test:reading:sweep": "vitest run src/lib/services/readingExperienceParams.test.ts --reporter=verbose",
+    "test:perf:balanced": "cross-env NEOVIEW_TEST_SAMPLE_SEED=20260327 NEOVIEW_TEST_SAMPLE_LIST_FILE=.cache/perf_samples.txt NEOVIEW_TEST_RUNS=5 NEOVIEW_TEST_SAMPLE_COUNT=3 NEOVIEW_TEST_MIN_DIRECT_CHILDREN=20 NEOVIEW_TEST_BATCH_SIZES=15,24,32 NEOVIEW_TEST_SKIP_HIDDEN_MODES=true,false pnpm run test:rust:stream:real && pnpm run test:rust:stream:sweep && pnpm run test:reading:sweep",
+    "test:perf:aggressive": "cross-env NEOVIEW_TEST_SAMPLE_SEED=20260327 NEOVIEW_TEST_SAMPLE_LIST_FILE=.cache/perf_samples.txt NEOVIEW_TEST_RUNS=10 NEOVIEW_TEST_SAMPLE_COUNT=5 NEOVIEW_TEST_MIN_DIRECT_CHILDREN=30 NEOVIEW_TEST_BATCH_SIZES=24,32,50 NEOVIEW_TEST_SKIP_HIDDEN_MODES=true,false NEOVIEW_STREAM_REAL_MIN_AVG_ITEMS_PER_SEC=5000 pnpm run test:rust:stream:real && pnpm run test:rust:stream:sweep && pnpm run test:reading:sweep",
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
     "tauri": "tauri"

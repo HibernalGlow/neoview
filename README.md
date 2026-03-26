@@ -161,6 +161,10 @@ Tauri 会针对当前平台生成安装包与可执行程序。
   对阅读体验相关参数做组合测试（批次大小、隐藏文件过滤），输出排名。
 - `pnpm run test:reading:sweep`  
   对前端阅读体验参数做组合测试（预加载窗口、IPC 批处理），输出排名。
+- `pnpm run test:perf:balanced`  
+  一键运行平衡档性能回归（固定样本 + 5 轮统计）。
+- `pnpm run test:perf:aggressive`  
+  一键运行激进档性能回归（固定样本 + 10 轮统计 + 平均吞吐门槛）。
 
 ### 真实数据集测试（可自定义）
 
@@ -172,8 +176,12 @@ $env:NEOVIEW_TEST_DATASET_DIR = "E:\\1Hub\\EH"
 $env:NEOVIEW_TEST_TIMEOUT_SECS = "90"
 $env:NEOVIEW_TEST_SAMPLE_COUNT = "3"
 $env:NEOVIEW_TEST_MIN_DIRECT_CHILDREN = "20"
+$env:NEOVIEW_TEST_SAMPLE_SEED = "20260327"
+$env:NEOVIEW_TEST_SAMPLE_LIST_FILE = ".cache/perf_samples.txt"
+$env:NEOVIEW_TEST_RUNS = "10"
 $env:NEOVIEW_TEST_BATCH_SIZES = "10,15,24,32,50"
 $env:NEOVIEW_TEST_SKIP_HIDDEN_MODES = "true,false"
+$env:NEOVIEW_STREAM_REAL_MIN_AVG_ITEMS_PER_SEC = "5000"
 pnpm run test:rust:stream:real
 ```
 
@@ -181,8 +189,12 @@ pnpm run test:rust:stream:real
 - `NEOVIEW_TEST_TIMEOUT_SECS`：测试超时秒数（默认 60）
 - `NEOVIEW_TEST_SAMPLE_COUNT`：从目录内部随机抽取的子目录样本数（默认 3）
 - `NEOVIEW_TEST_MIN_DIRECT_CHILDREN`：候选子目录的最小直接子项数量（默认 20）
+- `NEOVIEW_TEST_SAMPLE_SEED`：随机抽样固定种子（默认 `20260327`）
+- `NEOVIEW_TEST_SAMPLE_LIST_FILE`：样本列表文件路径（存在则直接复用，不存在则生成导出）
+- `NEOVIEW_TEST_RUNS`：真实数据集测试重复运行次数（用于 avg/p95 统计，默认 1）
 - `NEOVIEW_TEST_BATCH_SIZES`：参数 sweep 时测试的批次大小列表（逗号分隔）
 - `NEOVIEW_TEST_SKIP_HIDDEN_MODES`：参数 sweep 时测试的隐藏文件过滤模式（`true,false`）
+- `NEOVIEW_STREAM_REAL_MIN_AVG_ITEMS_PER_SEC`：真实数据集多轮平均吞吐下限（低于则失败）
 
 如果目录不存在，真实数据集测试会自动跳过，不会导致测试失败。
 
@@ -193,6 +205,8 @@ pnpm run test:rust:stream:real
 ```
 
 真实数据集测试会先在 `NEOVIEW_TEST_DATASET_DIR` 内部递归发现候选子目录，然后随机抽样执行扫描；输出包括每个样本和 aggregate 汇总指标，避免只测顶层目录导致结果失真。
+
+如果设置了 `NEOVIEW_TEST_SAMPLE_LIST_FILE`，测试会把本轮样本集导出到该文件；后续运行将直接复用，保证对比稳定。
 
 如果你要挑默认参数，建议直接运行：
 
@@ -212,6 +226,15 @@ pnpm run test:reading:sweep
 
 - Preloader：`preloadAhead/preloadBehind` 组合在模拟翻页序列下的命中率与预加载成本。
 - IPCBatcher：`batchWindowMs/maxBatchSize` 组合在请求波峰场景下的 P95 延迟与吞吐。
+
+推荐一键档位：
+
+```bash
+pnpm run test:perf:balanced
+pnpm run test:perf:aggressive
+```
+
+这两个脚本会统一固定样本集并串行执行目录 real/sweep 与阅读 sweep，直接用于版本前后对比。
 
 你也可以设置基线吞吐来自动检测回归：
 

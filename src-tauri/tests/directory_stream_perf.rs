@@ -5,7 +5,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 use rand::prelude::SliceRandom;
-use rand::thread_rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use tokio::time::timeout;
 use walkdir::WalkDir;
 
@@ -16,6 +17,7 @@ const DEFAULT_REAL_DATASET_TIMEOUT_SECS: u64 = 60;
 const DEFAULT_REAL_DATASET_SAMPLE_COUNT: usize = 3;
 const DEFAULT_REAL_DATASET_MIN_DIRECT_CHILDREN: usize = 20;
 const DEFAULT_REAL_DATASET_MAX_DISCOVERY_DIRS: usize = 1200;
+const DEFAULT_SAMPLE_SEED: u64 = 20260327;
 
 #[derive(Debug)]
 struct StreamPerfStats {
@@ -44,6 +46,16 @@ impl StreamPerfStats {
         }
         self.total_items as f64 / secs
     }
+}
+
+fn percentile(values: &[f64], percentile: f64) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let pos = ((percentile / 100.0) * sorted.len() as f64).floor() as usize;
+    sorted[pos.min(sorted.len() - 1)]
 }
 
 fn resolve_real_dataset_dir() -> PathBuf {
@@ -136,6 +148,65 @@ fn resolve_min_direct_children() -> usize {
         .unwrap_or(DEFAULT_REAL_DATASET_MIN_DIRECT_CHILDREN)
 }
 
+fn resolve_sample_seed() -> u64 {
+    std::env::var("NEOVIEW_TEST_SAMPLE_SEED")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_SAMPLE_SEED)
+}
+
+fn resolve_runs() -> usize {
+    std::env::var("NEOVIEW_TEST_RUNS")
+        .ok()
+        .and_then(|raw| raw.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(1)
+}
+
+fn resolve_throughput_floor() -> Option<f64> {
+    std::env::var("NEOVIEW_STREAM_REAL_MIN_AVG_ITEMS_PER_SEC")
+        .ok()
+        .and_then(|raw| raw.parse::<f64>().ok())
+        .filter(|v| *v > 0.0)
+}
+
+fn load_sample_dirs_from_file(path: &PathBuf) -> Option<Vec<PathBuf>> {
+    let content = fs::read_to_string(path).ok()?;
+    let mut dirs = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        dirs.push(PathBuf::from(trimmed));
+    }
+    if dirs.is_empty() {
+        None
+    } else {
+        Some(dirs)
+    }
+}
+
+fn export_sample_dirs(path: &PathBuf, sample_dirs: &[PathBuf]) {
+    let mut out = String::new();
+    for dir in sample_dirs {
+        out.push_str(&dir.to_string_lossy());
+        out.push('\n');
+    }
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Err(err) = fs::write(path, out) {
+        eprintln!("[WARN] failed to export sample list to {}: {}", path.display(), err);
+    }
+}
+
+fn resolve_sample_list_file() -> Option<PathBuf> {
+    std::env::var("NEOVIEW_TEST_SAMPLE_LIST_FILE")
+        .ok()
+        .map(PathBuf::from)
+}
+
 fn count_direct_children(path: &PathBuf) -> usize {
     fs::read_dir(path).map(|iter| iter.count()).unwrap_or(0)
 }
@@ -166,17 +237,41 @@ fn discover_candidate_dirs(dataset_root: &PathBuf, min_direct_children: usize) -
 }
 
 fn choose_sample_dirs(dataset_root: &PathBuf) -> Vec<PathBuf> {
+    if let Some(file) = resolve_sample_list_file() {
+        if file.exists() {
+            if let Some(dirs) = load_sample_dirs_from_file(&file) {
+                println!(
+                    "[PERF][real] loaded fixed sample list from {} (count={})",
+                    file.display(),
+                    dirs.len()
+                );
+                return dirs;
+            }
+        }
+    }
+
     let sample_count = resolve_sample_count();
     let min_direct_children = resolve_min_direct_children();
+    let sample_seed = resolve_sample_seed();
     let mut candidates = discover_candidate_dirs(dataset_root, min_direct_children);
 
     if candidates.is_empty() {
         return vec![dataset_root.clone()];
     }
 
-    let mut r = thread_rng();
+    let mut r = StdRng::seed_from_u64(sample_seed);
     candidates.shuffle(&mut r);
     candidates.truncate(sample_count.min(candidates.len()));
+
+    if let Some(file) = resolve_sample_list_file() {
+        export_sample_dirs(&file, &candidates);
+        println!(
+            "[PERF][real] exported sample list to {} (seed={})",
+            file.display(),
+            sample_seed
+        );
+    }
+
     candidates
 }
 
@@ -245,9 +340,8 @@ async fn run_stream_scan(
     }
 }
 
-fn assert_against_baseline(label: &str, stats: &StreamPerfStats, env_key: &str) {
+fn assert_against_baseline(label: &str, current: f64, env_key: &str) {
     if let Some(baseline) = resolve_baseline_items_per_sec(env_key) {
-        let current = stats.items_per_sec();
         let delta = ((current - baseline) / baseline) * 100.0;
         println!(
             "[PERF][{}] baseline={:.2} items/s, current={:.2} items/s, delta={:+.2}%",
@@ -344,11 +438,7 @@ async fn directory_stream_perf_smoke() {
         stats.elapsed.as_millis(),
         stats.items_per_sec()
     );
-    assert_against_baseline(
-        "smoke",
-        &stats,
-        "NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC",
-    );
+    assert_against_baseline("smoke", stats.items_per_sec(), "NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC");
     assert!(stats.total_items >= 1_000, "too few items streamed");
 }
 
@@ -365,61 +455,87 @@ async fn directory_stream_real_dataset_smoke() {
 
     let timeout_duration = resolve_real_dataset_timeout();
     let sample_dirs = choose_sample_dirs(&dataset_dir);
+    let runs = resolve_runs();
 
     println!(
-        "[PERF][real] root={} sample_count={} timeout_secs={}",
+        "[PERF][real] root={} sample_count={} timeout_secs={} runs={}",
         dataset_dir.display(),
         sample_dirs.len(),
-        timeout_duration.as_secs()
+        timeout_duration.as_secs(),
+        runs
     );
 
-    let mut aggregate_items = 0usize;
-    let mut aggregate_batches = 0usize;
-    let mut aggregate_elapsed = Duration::ZERO;
+    let mut run_throughputs = Vec::new();
 
-    for (idx, dir) in sample_dirs.iter().enumerate() {
-        let stats = run_stream_scan(
-            dir.clone(),
-            timeout_duration,
-            ScanConfig {
-                batch_size: 24,
-                skip_hidden: true,
-            },
-        )
-        .await;
+    for run_idx in 0..runs {
+        let mut aggregate_items = 0usize;
+        let mut aggregate_batches = 0usize;
+        let mut aggregate_elapsed = Duration::ZERO;
+
+        for (idx, dir) in sample_dirs.iter().enumerate() {
+            let stats = run_stream_scan(
+                dir.clone(),
+                timeout_duration,
+                ScanConfig {
+                    batch_size: 24,
+                    skip_hidden: true,
+                },
+            )
+            .await;
+            println!(
+                "[PERF][real][run {}][sample {}] dataset={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+                run_idx + 1,
+                idx + 1,
+                dir.display(),
+                stats.total_items,
+                stats.batches,
+                stats.elapsed.as_millis(),
+                stats.items_per_sec()
+            );
+            aggregate_items += stats.total_items;
+            aggregate_batches += stats.batches;
+            aggregate_elapsed += stats.elapsed;
+        }
+
+        let stats = StreamPerfStats {
+            total_items: aggregate_items,
+            batches: aggregate_batches,
+            elapsed: aggregate_elapsed,
+        };
         println!(
-            "[PERF][real][sample {}] dataset={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
-            idx + 1,
-            dir.display(),
+            "[PERF][real][run {}][aggregate] samples={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+            run_idx + 1,
+            sample_dirs.len(),
             stats.total_items,
             stats.batches,
             stats.elapsed.as_millis(),
             stats.items_per_sec()
         );
-        aggregate_items += stats.total_items;
-        aggregate_batches += stats.batches;
-        aggregate_elapsed += stats.elapsed;
+        run_throughputs.push(stats.items_per_sec());
     }
 
-    let stats = StreamPerfStats {
-        total_items: aggregate_items,
-        batches: aggregate_batches,
-        elapsed: aggregate_elapsed,
-    };
+    let avg_throughput = run_throughputs.iter().sum::<f64>() / run_throughputs.len() as f64;
+    let p95_throughput = percentile(&run_throughputs, 95.0);
+
     println!(
-        "[PERF][real][aggregate] samples={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
-        sample_dirs.len(),
-        stats.total_items,
-        stats.batches,
-        stats.elapsed.as_millis(),
-        stats.items_per_sec()
+        "[PERF][real][summary] runs={} avg_throughput={:.2} items/s p95_throughput={:.2} items/s",
+        runs,
+        avg_throughput,
+        p95_throughput
     );
-    assert_against_baseline(
-        "real",
-        &stats,
-        "NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC",
-    );
-    assert!(stats.total_items > 0, "real dataset has no streamed items");
+
+    assert_against_baseline("real", avg_throughput, "NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC");
+
+    if let Some(floor) = resolve_throughput_floor() {
+        assert!(
+            avg_throughput >= floor,
+            "[PERF][real] avg throughput {:.2} is lower than floor {:.2}",
+            avg_throughput,
+            floor
+        );
+    }
+
+    assert!(avg_throughput > 0.0, "real dataset has no streamed items");
 }
 
 #[tokio::test]

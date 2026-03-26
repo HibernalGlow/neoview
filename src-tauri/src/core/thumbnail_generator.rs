@@ -57,6 +57,32 @@ pub struct ThumbnailGenerator {
 }
 
 impl ThumbnailGenerator {
+    /// 根据任务规模和任务类型动态选择并发度。
+    /// 目标：小批次低延迟，大批次高吞吐；压缩包任务避免过度并发导致磁盘抖动。
+    fn compute_adaptive_worker_count(&self, task_count: usize, is_archive: bool) -> usize {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        let base = self.config.thread_pool_size.max(1);
+
+        let by_task_size = if task_count <= 8 {
+            (cores.max(2)).min(8)
+        } else if task_count <= 32 {
+            (cores * 2).clamp(4, 16)
+        } else {
+            (cores * 3).clamp(8, 24)
+        };
+
+        let archive_cap = if is_archive {
+            // 压缩包读取通常受 IO 与解压开销约束，过高并发收益有限且抖动明显。
+            (cores * 2).clamp(4, 12)
+        } else {
+            usize::MAX
+        };
+
+        by_task_size.min(base).min(archive_cap).max(1)
+    }
+
     /// 创建新的缩略图生成器
     pub fn new(db: Arc<ThumbnailDb>, config: ThumbnailGeneratorConfig) -> Self {
         let thread_pool = Arc::new(ThreadPool::new(config.thread_pool_size));
@@ -1042,13 +1068,24 @@ impl ThumbnailGenerator {
     ) -> HashMap<String, Result<Vec<u8>, String>> {
         let (tx, rx) = mpsc::channel();
         let mut results = HashMap::new();
+        let worker_count = self.compute_adaptive_worker_count(paths.len(), is_archive);
+        let thread_pool = ThreadPool::new(worker_count);
+
+        if cfg!(debug_assertions) {
+            println!(
+                "⚙️ 批量缩略图并发调优: tasks={} is_archive={} workers={}",
+                paths.len(),
+                is_archive,
+                worker_count
+            );
+        }
 
         // 提交任务到线程池
         for path in paths {
             let tx = tx.clone();
             let generator = self.clone();
 
-            self.thread_pool.execute(move || {
+            thread_pool.execute(move || {
                 let result = if is_archive {
                     generator.generate_archive_thumbnail(&path)
                 } else {

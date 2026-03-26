@@ -17,6 +17,7 @@
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
   import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
+  import { pageTransitionStore } from '$lib/stores/pageTransitionStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -164,6 +165,15 @@
     if (filterCss) parts.push(`filter: ${filterCss}`);
     return parts.join('; ');
   });
+
+  // 获取动画设置
+  let animationsEnabled = $state(true);
+  $effect(() => {
+    const unsubscribe = pageTransitionStore.subscribe(s => {
+      animationsEnabled = s.enabled;
+    });
+    return unsubscribe;
+  });
 </script>
 
 {#if useCanvas}
@@ -192,6 +202,7 @@
       style:transform={transform || undefined}
       style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
       style:filter={filterCss || undefined}
+      style:--fade-transition={animationsEnabled ? 'opacity 0.2s ease-in-out' : 'none'}
       style={style || undefined}
       onload={handleMainImageLoad}
       draggable="false"
@@ -227,8 +238,8 @@
     /* 使用高质量渲染，避免锯齿 */
     image-rendering: auto;
     content-visibility: visible;
-    /* 主图加载前透明 */
-    transition: opacity 0.2s ease-in-out;
+    /* 【优化】主图加载前透明，根据全局开关决定是否有渐入动画 */
+    transition: var(--fade-transition, opacity 0.2s ease-in-out);
   }
 
   .frame-image.loading {

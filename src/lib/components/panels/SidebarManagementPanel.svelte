@@ -463,7 +463,7 @@
 				</Tabs.Root>
 			</div>
 
-			<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
+			<div class="bg-card overflow-auto rounded-2xl border shadow-sm">
 				<Table.Root class="table-fixed">
 					<Table.Header class="bg-muted/50">
 						<Table.Row>
@@ -666,7 +666,7 @@
 			</div>
 		</Tabs.Content>
 
-		<Tabs.Content value="settings" class="mt-0 flex-1 overflow-auto p-6 focus-visible:outline-none">
+		<Tabs.Content value="settings" class="mt-0 p-6 focus-visible:outline-none">
 			<div class="mx-auto grid max-w-4xl gap-6">
 				<!-- 文件面板组件设置 -->
 				<div class="bg-card/40 space-y-6 rounded-3xl border p-6 shadow-sm">

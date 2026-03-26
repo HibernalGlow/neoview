@@ -212,7 +212,7 @@
 	}
 </script>
 
-<div class="flex h-full flex-col gap-6 overflow-hidden p-1">
+<div class="flex flex-col gap-6 p-1">
 	<div class="flex flex-col gap-1.5 px-1">
 		<h3 class="text-xl font-bold tracking-tight">卡片组件管理</h3>
 		<p class="text-muted-foreground text-sm">精细化配置各面板内显示的卡片内容及排序。</p>
@@ -314,7 +314,8 @@
 		</Tabs.Root>
 	</div>
 
-	<div class="bg-card flex-1 overflow-hidden rounded-2xl border shadow-sm">
+	<div class="bg-card overflow-auto rounded-2xl border shadow-sm">
+
 		<Table.Root class="table-fixed">
 			<Table.Header class="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
 				<Table.Row>

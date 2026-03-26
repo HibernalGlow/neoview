@@ -317,7 +317,7 @@
 	}
 </script>
 
-<div class="flex h-full flex-col gap-6 overflow-hidden p-1">
+<div class="flex flex-col gap-6 p-1">
 	<div class="flex flex-col gap-1.5 px-1">
 		<h3 class="flex items-center gap-2 text-xl font-bold tracking-tight">
 			<Database class="h-5 w-5" />
@@ -326,7 +326,7 @@
 		<p class="text-muted-foreground text-sm">管理应用数据的导入导出、自动备份和云同步。</p>
 	</div>
 
-	<Tabs.Root bind:value={activeTab} class="flex flex-1 flex-col overflow-hidden">
+	<Tabs.Root bind:value={activeTab} class="flex flex-col">
 		<Tabs.List class="mb-4 grid w-full shrink-0 grid-cols-4">
 			<Tabs.Trigger value="modules" class="gap-1.5 text-xs">
 				<Database class="h-3.5 w-3.5" />

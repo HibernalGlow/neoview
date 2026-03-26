@@ -557,7 +557,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="bg-background flex h-full flex-col">
+<div class="bg-background flex flex-col">
 	<!-- 头部 -->
 	<div class="space-y-3 border-b p-4">
 		<div class="flex items-center justify-between">
@@ -636,7 +636,7 @@
 	</div>
 
 	<!-- 使用 shadcn Tabs 组件 -->
-	<Tabs.Root bind:value={activeCategory} class="flex flex-1 flex-col overflow-hidden">
+	<Tabs.Root bind:value={activeCategory} class="flex flex-col">
 		<!-- 分类 Tab 列表 -->
 		<div class="px-4 pt-2">
 			<Tabs.List class="h-auto w-full flex-wrap gap-1">
@@ -661,7 +661,7 @@
 						b.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
 						b.description.toLowerCase().includes(searchQuery.toLowerCase())
 				)}
-			<Tabs.Content value={category} class="flex-1 overflow-auto p-0 focus-visible:outline-none">
+			<Tabs.Content value={category} class="p-0 focus-visible:outline-none">
 				<div class="px-6 py-4">
 					<div class="bg-card overflow-hidden rounded-2xl border shadow-sm">
 						<Table.Root class="table-fixed">

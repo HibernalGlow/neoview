@@ -116,12 +116,10 @@ fn pop_for_preferred_lane(state: &mut TaskQueueState, preferred: TaskLane) -> Op
         TaskLane::Prefetch => state
             .prefetch
             .pop_front()
-            .or_else(|| state.visible.pop_front())
             .or_else(|| state.background.pop_front()),
         TaskLane::Background => state
             .background
             .pop_front()
-            .or_else(|| state.visible.pop_front())
             .or_else(|| state.prefetch.pop_front()),
     }
 }

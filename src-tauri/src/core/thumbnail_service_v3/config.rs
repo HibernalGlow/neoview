@@ -121,8 +121,8 @@ impl Default for ThumbnailServiceConfig {
                 background: 1,
             },
             scheduler_default_quota: LaneQuota {
-                visible: 6,
-                prefetch: 2,
+                visible: 7,
+                prefetch: 1,
                 background: 1,
             },
             scheduler_side_boost_quota: LaneQuota {

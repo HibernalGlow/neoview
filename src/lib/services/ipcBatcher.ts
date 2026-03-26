@@ -28,8 +28,8 @@ export interface IpcBatcherConfig {
 }
 
 const DEFAULT_CONFIG: IpcBatcherConfig = {
-  batchWindowMs: 50,
-  maxBatchSize: 10,
+  batchWindowMs: 12,
+  maxBatchSize: 12,
   maxRetries: 3,
   retryDelays: [50, 100, 200],
   smallRequestThreshold: 1024,

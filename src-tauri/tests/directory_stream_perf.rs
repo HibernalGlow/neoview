@@ -382,7 +382,7 @@ async fn directory_stream_real_dataset_smoke() {
             dir.clone(),
             timeout_duration,
             ScanConfig {
-                batch_size: 32,
+                batch_size: 24,
                 skip_hidden: true,
             },
         )

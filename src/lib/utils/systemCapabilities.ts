@@ -32,7 +32,7 @@ export interface AdaptiveConfig {
 
 // 默认配置（中等设备）
 const DEFAULT_CONFIG: AdaptiveConfig = {
-  preloadAhead: 3,
+  preloadAhead: 4,
   preloadBehind: 1,
   maxCacheSizeMB: 512,
   thumbnailBatchSize: 10,
@@ -127,7 +127,7 @@ export async function detectSystemCapabilities(): Promise<SystemCapabilities> {
     recommendedThumbnailBatchSize = 15;
     recommendedMaxConcurrent = Math.min(6, cpuCores);
   } else {
-    recommendedPreloadCount = 3;
+    recommendedPreloadCount = 4;
     recommendedCacheSizeMB = Math.min(512, Math.round(totalMemoryMB * 0.12));
     recommendedThumbnailBatchSize = 10;
     recommendedMaxConcurrent = Math.min(4, cpuCores);

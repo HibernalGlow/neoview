@@ -251,10 +251,10 @@ impl DirectoryScanner {
     /// 根据扫描进度动态调整批次大小。
     /// 冷启动阶段用更大批次快速填充，后续逐步收敛保证交互响应。
     fn adaptive_batch_size(total_loaded: usize) -> usize {
-        if total_loaded < 120 {
-            MAX_BATCH_SIZE
-        } else if total_loaded < 600 {
-            32
+        if total_loaded < 96 {
+            40
+        } else if total_loaded < 720 {
+            24
         } else {
             DEFAULT_BATCH_SIZE
         }

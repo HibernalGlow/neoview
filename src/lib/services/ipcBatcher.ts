@@ -8,6 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { perfMonitor } from '$lib/utils/perfMonitor';
+import { RequestDeduplicator } from '$lib/utils/requestDedup';
 
 export interface BatchRequest {
   id: string;
@@ -39,6 +40,7 @@ class IpcBatcherImpl {
   private pendingRequests: Map<string, BatchRequest> = new Map();
   private batchTimer: ReturnType<typeof setTimeout> | null = null;
   private requestCounter: number = 0;
+  private requestDedup = new RequestDeduplicator(150);
 
   /**
    * 设置配置
@@ -52,9 +54,13 @@ class IpcBatcherImpl {
    */
   async invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
     const startTime = performance.now();
+    const executor = () => this.invokeWithRetry<T>(command, args);
+    const task = this.shouldDedup(command)
+      ? this.requestDedup.run<T>(this.buildRequestKey(command, args), executor)
+      : executor();
     
     try {
-      const result = await this.invokeWithRetry<T>(command, args);
+      const result = await task;
       const latency = performance.now() - startTime;
       perfMonitor.record('ipcLatency', latency);
       return result;
@@ -63,6 +69,36 @@ class IpcBatcherImpl {
       perfMonitor.record('ipcLatency', latency);
       throw error;
     }
+  }
+
+  /**
+   * 仅对读路径命令启用去重，避免影响写操作语义。
+   */
+  private shouldDedup(command: string): boolean {
+    const writeCommandPattern = /^(set_|update_|save_|delete_|remove_|create_|clear_|toggle_|rename_|move_|copy_|batch_set_|batch_update_)/;
+    return !writeCommandPattern.test(command);
+  }
+
+  /**
+   * 构建稳定请求键，保证相同命令+参数可命中去重。
+   */
+  private buildRequestKey(command: string, args: Record<string, unknown>): string {
+    return `${command}:${this.stableStringify(args)}`;
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') {
+      return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    }
+
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    const serialized = keys.map((key) => `${JSON.stringify(key)}:${this.stableStringify(obj[key])}`);
+    return `{${serialized.join(',')}}`;
   }
 
   /**
@@ -236,14 +272,16 @@ class IpcBatcherImpl {
       request.reject(new Error('Request cancelled'));
     }
     this.pendingRequests.clear();
+    this.requestDedup.clear();
   }
 
   /**
    * 获取统计
    */
-  getStats(): { pendingCount: number } {
+  getStats(): { pendingCount: number; dedup: ReturnType<RequestDeduplicator['getStats']> } {
     return {
       pendingCount: this.pendingRequests.size,
+      dedup: this.requestDedup.getStats(),
     };
   }
 }

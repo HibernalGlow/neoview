@@ -248,6 +248,18 @@ impl Default for DirectoryScanner {
 }
 
 impl DirectoryScanner {
+    /// 根据扫描进度动态调整批次大小。
+    /// 冷启动阶段用更大批次快速填充，后续逐步收敛保证交互响应。
+    fn adaptive_batch_size(total_loaded: usize) -> usize {
+        if total_loaded < 120 {
+            MAX_BATCH_SIZE
+        } else if total_loaded < 600 {
+            32
+        } else {
+            DEFAULT_BATCH_SIZE
+        }
+    }
+
     /// 创建新的扫描器
     pub fn new(batch_size: usize, skip_hidden: bool) -> Self {
         let batch_size = batch_size.clamp(MIN_BATCH_SIZE, MAX_BATCH_SIZE);
@@ -297,7 +309,8 @@ impl DirectoryScanner {
         tx: mpsc::Sender<DirectoryStreamOutput>,
         start_time: Instant,
     ) {
-        let mut batch: Vec<FsItem> = Vec::with_capacity(batch_size);
+        let mut current_batch_size = batch_size;
+        let mut batch: Vec<FsItem> = Vec::with_capacity(current_batch_size);
         let mut batch_index = 0usize;
         let mut total_loaded = 0usize;
         let mut skipped_count = 0usize;
@@ -335,7 +348,7 @@ impl DirectoryScanner {
                     total_loaded += 1;
 
                     // 达到批次大小，发送批次
-                    if batch.len() >= batch_size {
+                    if batch.len() >= current_batch_size {
                         let batch_data = DirectoryBatch {
                             items: std::mem::take(&mut batch),
                             batch_index,
@@ -357,6 +370,13 @@ impl DirectoryScanner {
                             elapsed_ms: start_time.elapsed().as_millis() as u64,
                         };
                         let _ = tx.blocking_send(DirectoryStreamOutput::Progress(progress));
+
+                        // 自适应批次：早期加速填充，后期减小批次提升滚动期间响应性。
+                        current_batch_size = Self::adaptive_batch_size(total_loaded)
+                            .clamp(MIN_BATCH_SIZE, MAX_BATCH_SIZE);
+                        if batch.capacity() < current_batch_size {
+                            batch.reserve(current_batch_size - batch.capacity());
+                        }
 
                         // 让出 CPU（参考 Spacedrive 的防饥饿设计）
                         std::thread::yield_now();

@@ -30,6 +30,8 @@ class PreloaderImpl {
   private totalPages: number = 0;
   private direction: NavigationDirection = 'unknown';
   private lastNavigationTime: number = 0;
+  private velocityEma: number = 0;
+  private directionStreak: number = 0;
   private pendingPages: Set<number> = new Set();
   private getPageKey: ((pageIndex: number) => string) | null = null;
 
@@ -70,17 +72,22 @@ class PreloaderImpl {
     direction: NavigationDirection
   ): number[] {
     const pages: number[] = [];
+    const velocityBoost = this.getVelocityBoost();
 
     // 根据方向调整预加载范围
     let ahead = this.config.preloadAhead;
     let behind = this.config.preloadBehind;
 
     if (direction === 'forward') {
-      ahead = this.config.preloadAhead + 1;
-      behind = Math.max(0, this.config.preloadBehind - 1);
+      ahead = this.config.preloadAhead + 1 + velocityBoost;
+      behind = Math.max(0, this.config.preloadBehind - 1 - Math.floor(velocityBoost / 2));
     } else if (direction === 'backward') {
-      ahead = Math.max(0, this.config.preloadAhead - 1);
-      behind = this.config.preloadBehind + 1;
+      ahead = Math.max(0, this.config.preloadAhead - 1 - Math.floor(velocityBoost / 2));
+      behind = this.config.preloadBehind + 1 + velocityBoost;
+    } else if (velocityBoost > 0) {
+      // 未稳定方向时做小幅双向扩展，避免快速跳转出现空窗。
+      ahead += 1;
+      behind += 1;
     }
 
     // 添加前方页面（优先级更高）
@@ -113,16 +120,33 @@ class PreloaderImpl {
 
     // 检测方向
     const now = Date.now();
-    if (now - this.lastNavigationTime < 500) {
-      // 快速翻页，更新方向
-      if (currentPage > this.currentPage) {
+    const deltaPage = currentPage - this.currentPage;
+    const interval = this.lastNavigationTime > 0 ? now - this.lastNavigationTime : 0;
+
+    if (interval > 0 && interval < 800) {
+      const instantVelocity = Math.abs(deltaPage) * 1000 / interval;
+      this.velocityEma = this.velocityEma * 0.7 + instantVelocity * 0.3;
+    } else {
+      this.velocityEma *= 0.75;
+    }
+
+    if (interval < 500) {
+      if (deltaPage > 0) {
         this.direction = 'forward';
-      } else if (currentPage < this.currentPage) {
+      } else if (deltaPage < 0) {
         this.direction = 'backward';
       }
     } else {
       this.direction = 'unknown';
     }
+
+    if (deltaPage === 0) {
+      this.directionStreak = Math.max(0, this.directionStreak - 1);
+    } else {
+      const sameDirection = (deltaPage > 0 && this.direction === 'forward') || (deltaPage < 0 && this.direction === 'backward');
+      this.directionStreak = sameDirection ? this.directionStreak + 1 : 1;
+    }
+
     this.lastNavigationTime = now;
 
     // 计算需要预加载的页面
@@ -154,9 +178,17 @@ class PreloaderImpl {
     }
 
     if (keysToPreload.length > 0) {
-      // 前方页面用 normal 优先级，后方用 low
-      const forwardKeys = keysToPreload.slice(0, this.config.preloadAhead);
-      const backwardKeys = keysToPreload.slice(this.config.preloadAhead);
+      // 按相对方向设置优先级，不依赖固定分割位置。
+      const forwardKeys: string[] = [];
+      const backwardKeys: string[] = [];
+      for (const page of pagesToPreload) {
+        const key = this.getPageKey(page);
+        if (page > currentPage) {
+          forwardKeys.push(key);
+        } else {
+          backwardKeys.push(key);
+        }
+      }
 
       if (forwardKeys.length > 0) {
         imagePool.preload(forwardKeys, 'normal');
@@ -167,6 +199,14 @@ class PreloaderImpl {
     }
 
     this.currentPage = currentPage;
+  }
+
+  private getVelocityBoost(): number {
+    const streakBoost = this.directionStreak >= 3 ? 1 : 0;
+    if (this.velocityEma >= 12) return 3 + streakBoost;
+    if (this.velocityEma >= 7) return 2 + streakBoost;
+    if (this.velocityEma >= 4) return 1;
+    return 0;
   }
 
   /**
@@ -216,6 +256,8 @@ class PreloaderImpl {
     }
     this.pendingPages.clear();
     this.direction = 'unknown';
+    this.velocityEma = 0;
+    this.directionStreak = 0;
   }
 
   /**

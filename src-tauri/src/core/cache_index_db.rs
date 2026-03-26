@@ -156,6 +156,8 @@ impl CacheIndexDb {
         let conn = Connection::open(&self.db_path)?;
         // SQLite 极致性能优化
         // busy_timeout 设置为 5000ms 以处理并发访问
+        // 注意：directory_cache 表已移除，目录缓存仅使用内存 LRU 缓存
+        // 这大幅减少了磁盘占用（之前可达数十 GB）
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -167,12 +169,6 @@ impl CacheIndexDb {
              PRAGMA busy_timeout = 5000;
              PRAGMA read_uncommitted = ON;
              PRAGMA locking_mode = NORMAL;
-             CREATE TABLE IF NOT EXISTS directory_cache (
-                path TEXT PRIMARY KEY,
-                payload TEXT NOT NULL,
-                mtime INTEGER,
-                updated_at INTEGER NOT NULL
-             );
              CREATE TABLE IF NOT EXISTS thumbnail_cache (
                 path_key TEXT PRIMARY KEY,
                 category TEXT NOT NULL,
@@ -182,10 +178,23 @@ impl CacheIndexDb {
                 blob_key TEXT,
                 updated_at INTEGER NOT NULL
              );
-             CREATE INDEX IF NOT EXISTS idx_directory_cache_updated_at ON directory_cache(updated_at);
              CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_category ON thumbnail_cache(category);
              CREATE INDEX IF NOT EXISTS idx_thumbnail_cache_updated ON thumbnail_cache(updated_at);",
         )?;
+
+        // 🧹 自动清理：如果旧版本遗留了 directory_cache 表，删除它以回收空间
+        let has_old_table: bool = conn
+            .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='directory_cache'")
+            .and_then(|mut stmt| stmt.exists([]))
+            .unwrap_or(false);
+        if has_old_table {
+            log::info!("🧹 检测到旧版 directory_cache 表，正在删除以回收磁盘空间...");
+            let _ = conn.execute_batch(
+                "DROP TABLE IF EXISTS directory_cache;
+                 VACUUM;",
+            );
+            log::info!("✅ directory_cache 表已删除并执行 VACUUM");
+        }
 
         *conn_guard = Some(conn);
         Ok(())
@@ -202,95 +211,44 @@ impl CacheIndexDb {
         f(conn).map_err(|e| format!("缓存数据库操作失败: {}", e))
     }
 
+    /// 目录快照加载 - 已禁用 SQLite 持久化
+    /// 目录缓存现在完全依赖内存 LRU 缓存（DirectoryCache），不再写入磁盘
     pub fn load_directory_snapshot(
         &self,
-        path: &str,
-        mtime: Option<u64>,
+        _path: &str,
+        _mtime: Option<u64>,
     ) -> Result<Option<Vec<FsItem>>, String> {
-        let ttl_secs = self.directory_ttl.as_secs() as i64;
-        self.with_connection(|conn| {
-            let mut stmt = conn.prepare(
-                "SELECT payload, mtime, updated_at FROM directory_cache WHERE path = ?1 LIMIT 1",
-            )?;
-            let mut rows = stmt.query(params![path])?;
-            if let Ok(Some(row)) = rows.next() {
-                let payload: String = row.get(0)?;
-                let stored_mtime: Option<u64> = row.get(1)?;
-                let updated_at: i64 = row.get(2)?;
-
-                if mtime.is_some() && stored_mtime != mtime {
-                    conn.execute("DELETE FROM directory_cache WHERE path = ?1", params![path])?;
-                    return Ok(None);
-                }
-
-                let now = Utc::now().timestamp();
-                if ttl_secs > 0 && now - updated_at > ttl_secs {
-                    conn.execute("DELETE FROM directory_cache WHERE path = ?1", params![path])?;
-                    return Ok(None);
-                }
-
-                let cached: CachedDirectory = serde_json::from_str(&payload).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        payload.len(),
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-
-                Ok(Some(cached.items))
-            } else {
-                Ok(None)
-            }
-        })
+        // 不再从 SQLite 读取目录快照，直接返回 None
+        // 调用方会回退到文件系统扫描 + 内存缓存
+        Ok(None)
     }
 
+    /// 目录快照保存 - 已禁用 SQLite 持久化
+    /// 目录缓存现在完全依赖内存 LRU 缓存（DirectoryCache），不再写入磁盘
     pub fn save_directory_snapshot(
         &self,
-        path: &str,
-        mtime: Option<u64>,
-        items: &[FsItem],
+        _path: &str,
+        _mtime: Option<u64>,
+        _items: &[FsItem],
     ) -> Result<(), String> {
-        let payload = serde_json::to_string(&CachedDirectory {
-            items: items.to_vec(),
-        })
-        .map_err(|e| format!("序列化目录缓存失败: {}", e))?;
-
-        let updated_at = Utc::now().timestamp();
-        self.with_connection(|conn| {
-            conn.execute(
-                "INSERT OR REPLACE INTO directory_cache (path, payload, mtime, updated_at) VALUES (?1, ?2, ?3, ?4)",
-                params![path, payload, mtime, updated_at],
-            )?;
-            Ok(())
-        })
+        // 不再将目录快照写入 SQLite，直接返回 Ok
+        // 内存缓存由调用方（cache_ops.rs）单独管理
+        Ok(())
     }
 
+    /// 目录缓存清理 - 已禁用 SQLite 持久化
     pub fn cleanup_directory_cache(&self) -> Result<usize, String> {
-        let ttl_secs = self.directory_ttl.as_secs() as i64;
-        self.with_connection(|conn| {
-            let now = Utc::now().timestamp();
-            let deleted = conn.execute(
-                "DELETE FROM directory_cache WHERE (?1 > 0 AND (?2 - updated_at) > ?1)",
-                params![ttl_secs, now],
-            )?;
-            Ok(deleted)
-        })
+        // directory_cache 表已移除，无需清理
+        Ok(0)
     }
 
+    /// 目录缓存统计 - 已禁用 SQLite 持久化
     pub fn directory_stats(&self) -> Result<CacheTableStats, String> {
-        self.with_connection(|conn| {
-            let count: usize =
-                conn.query_row("SELECT COUNT(*) FROM directory_cache", [], |row| row.get(0))?;
-            let last_updated: Option<i64> = conn
-                .query_row("SELECT MAX(updated_at) FROM directory_cache", [], |row| {
-                    row.get(0)
-                })
-                .unwrap_or(None);
-            Ok(CacheTableStats {
-                table: "directory_cache".to_string(),
-                total_entries: count,
-                last_updated,
-            })
+        // directory_cache 表已移除，返回空统计
+        Ok(CacheTableStats {
+            table: "directory_cache (disabled, memory-only)".to_string(),
+            total_entries: 0,
+            last_updated: None,
         })
     }
 

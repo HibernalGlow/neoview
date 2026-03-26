@@ -129,13 +129,12 @@ pub fn run() {
             app.manage(protocol_state);
             log::info!("🌐 Custom Protocol (neoview://) 初始化完成");
 
-            // 优化：增加目录缓存容量和TTL
-            // 容量从 128 增加到 512，TTL 从 30s 增加到 120s
+            // 目录缓存：纯内存 LRU 缓存（不再写入 SQLite，避免磁盘膨胀）
+            // 容量 2048 条，TTL 5 分钟
             let directory_cache =
-                core::directory_cache::DirectoryCache::new(512, Duration::from_secs(120));
-            // 优化：增加 SQLite 缓存 TTL
-            // directory_ttl: 300s -> 600s (10分钟)
-            // thumbnail_ttl: 3600s -> 7200s (2小时)
+                core::directory_cache::DirectoryCache::new(2048, Duration::from_secs(300));
+            // SQLite 仅用于 thumbnail_cache 索引（轻量级）
+            // directory_cache 已完全移至内存，首次启动会自动清理旧表并 VACUUM
             // 使用 new_with_recovery 以支持数据库损坏时自动恢复
             let cache_index_db = CacheIndexDb::new_with_recovery(
                 app_data_root.join("directory_cache.db"),

@@ -151,6 +151,26 @@ Tauri 会针对当前平台生成安装包与可执行程序。
   使用 Prettier + ESLint 检查代码风格。
 - `yarn tauri dev` / `yarn tauri build`  
   通过 Tauri CLI 启动开发桌面应用 / 打包发行版。
+- `pnpm run test:rust:stream`  
+  运行目录流自动测试（包含临时数据集性能 smoke 测试 + 真实数据集测试）。
+- `pnpm run test:rust:stream:real`  
+  仅运行真实数据集测试（默认目录 `E:\1Hub\EH`）。
+
+### 真实数据集测试（可自定义）
+
+默认使用 `E:\1Hub\EH` 作为测试目录；你可以通过环境变量覆盖：
+
+```bash
+# PowerShell
+$env:NEOVIEW_TEST_DATASET_DIR = "E:\\1Hub\\EH"
+$env:NEOVIEW_TEST_TIMEOUT_SECS = "90"
+pnpm run test:rust:stream:real
+```
+
+- `NEOVIEW_TEST_DATASET_DIR`：真实测试目录路径（可自定义）
+- `NEOVIEW_TEST_TIMEOUT_SECS`：测试超时秒数（默认 60）
+
+如果目录不存在，真实数据集测试会自动跳过，不会导致测试失败。
 
 ## 缩略图批量 CLI（可选）
 

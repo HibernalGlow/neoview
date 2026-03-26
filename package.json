@@ -18,6 +18,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json --threshold error && tsc -p tsconfig.node.json",
+    "test:rust:stream": "cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf -- --nocapture",
+    "test:rust:stream:real": "cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf directory_stream_real_dataset_smoke -- --nocapture",
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
     "tauri": "tauri"

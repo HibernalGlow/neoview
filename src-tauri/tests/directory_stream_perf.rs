@@ -7,6 +7,24 @@ use tokio::time::timeout;
 
 use app_lib::test_exports::{DirectoryScanner, DirectoryStreamOutput, StreamManager};
 
+const DEFAULT_REAL_DATASET_DIR: &str = r"E:\1Hub\EH";
+const DEFAULT_REAL_DATASET_TIMEOUT_SECS: u64 = 60;
+
+fn resolve_real_dataset_dir() -> PathBuf {
+    std::env::var("NEOVIEW_TEST_DATASET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(DEFAULT_REAL_DATASET_DIR))
+}
+
+fn resolve_real_dataset_timeout() -> Duration {
+    let secs = std::env::var("NEOVIEW_TEST_TIMEOUT_SECS")
+        .ok()
+        .and_then(|raw| raw.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_REAL_DATASET_TIMEOUT_SECS);
+    Duration::from_secs(secs)
+}
+
 fn create_temp_dir_with_files(count: usize) -> PathBuf {
     let base = std::env::temp_dir().join("neoview_stream_perf");
     // Clean old data if any
@@ -76,4 +94,70 @@ async fn directory_stream_perf_smoke() {
     let _ = fs::remove_dir_all(&dir);
 
     assert!(perf_result >= 1_000, "too few items streamed");
+}
+
+#[tokio::test]
+async fn directory_stream_real_dataset_smoke() {
+    let dataset_dir = resolve_real_dataset_dir();
+    if !dataset_dir.exists() || !dataset_dir.is_dir() {
+        eprintln!(
+            "[SKIP] dataset dir not found: {} (set NEOVIEW_TEST_DATASET_DIR to override)",
+            dataset_dir.display()
+        );
+        return;
+    }
+
+    let timeout_duration = resolve_real_dataset_timeout();
+    let manager = StreamManager::new();
+    let (stream_id, handle, _reused) = manager.create_stream(&dataset_dir);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(128);
+
+    let dir_clone = dataset_dir.clone();
+    let handle_clone = handle.clone();
+    let tx_clone = tx.clone();
+    tokio::spawn(async move {
+        DirectoryScanner::new(32, true)
+            .scan_streaming(dir_clone, handle_clone, tx_clone)
+            .await;
+    });
+
+    let scan_result = timeout(timeout_duration, async move {
+        let mut total = 0usize;
+        let mut batches = 0usize;
+        let mut complete_seen = false;
+
+        while let Some(output) = rx.recv().await {
+            match output {
+                DirectoryStreamOutput::Batch(batch) => {
+                    total += batch.items.len();
+                    batches += 1;
+                }
+                DirectoryStreamOutput::Progress(_) => {}
+                DirectoryStreamOutput::Error(err) => {
+                    panic!("real dataset stream error: {}", err.message);
+                }
+                DirectoryStreamOutput::Complete(done) => {
+                    complete_seen = true;
+                    assert_eq!(done.total_items, total);
+                    break;
+                }
+            }
+        }
+
+        assert!(complete_seen, "real dataset stream did not complete");
+        assert!(batches > 0, "real dataset stream emitted no batches");
+        total
+    })
+    .await;
+
+    manager.remove_stream(&stream_id);
+
+    let total = scan_result.unwrap_or_else(|_| {
+        panic!(
+            "real dataset stream timed out after {:?} for {}",
+            timeout_duration,
+            dataset_dir.display()
+        )
+    });
+    assert!(total > 0, "real dataset has no streamed items");
 }

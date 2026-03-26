@@ -20,7 +20,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.app.json --threshold error && tsc -p tsconfig.node.json",
     "test:rust:stream": "cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf -- --nocapture",
     "test:rust:stream:real": "cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf directory_stream_real_dataset_smoke -- --nocapture",
+    "test:rust:stream:sweep": "cross-env RUST_TEST_THREADS=1 cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf directory_stream_real_dataset_param_sweep -- --nocapture --test-threads=1",
     "test:rust:stream:bench": "cross-env RUST_TEST_THREADS=1 cargo test --manifest-path src-tauri/Cargo.toml --test directory_stream_perf -- --nocapture --test-threads=1",
+    "test:reading:sweep": "vitest run src/lib/services/readingExperienceParams.test.ts --reporter=verbose",
     "format": "prettier --write .",
     "lint": "prettier --check . && eslint .",
     "tauri": "tauri"

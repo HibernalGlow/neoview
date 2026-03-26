@@ -157,6 +157,10 @@ Tauri 会针对当前平台生成安装包与可执行程序。
   仅运行真实数据集测试（默认目录 `E:\1Hub\EH`）。
 - `pnpm run test:rust:stream:bench`  
   单线程稳定模式运行目录流性能测试，便于前后版本对比。
+- `pnpm run test:rust:stream:sweep`  
+  对阅读体验相关参数做组合测试（批次大小、隐藏文件过滤），输出排名。
+- `pnpm run test:reading:sweep`  
+  对前端阅读体验参数做组合测试（预加载窗口、IPC 批处理），输出排名。
 
 ### 真实数据集测试（可自定义）
 
@@ -168,6 +172,8 @@ $env:NEOVIEW_TEST_DATASET_DIR = "E:\\1Hub\\EH"
 $env:NEOVIEW_TEST_TIMEOUT_SECS = "90"
 $env:NEOVIEW_TEST_SAMPLE_COUNT = "3"
 $env:NEOVIEW_TEST_MIN_DIRECT_CHILDREN = "20"
+$env:NEOVIEW_TEST_BATCH_SIZES = "10,15,24,32,50"
+$env:NEOVIEW_TEST_SKIP_HIDDEN_MODES = "true,false"
 pnpm run test:rust:stream:real
 ```
 
@@ -175,6 +181,8 @@ pnpm run test:rust:stream:real
 - `NEOVIEW_TEST_TIMEOUT_SECS`：测试超时秒数（默认 60）
 - `NEOVIEW_TEST_SAMPLE_COUNT`：从目录内部随机抽取的子目录样本数（默认 3）
 - `NEOVIEW_TEST_MIN_DIRECT_CHILDREN`：候选子目录的最小直接子项数量（默认 20）
+- `NEOVIEW_TEST_BATCH_SIZES`：参数 sweep 时测试的批次大小列表（逗号分隔）
+- `NEOVIEW_TEST_SKIP_HIDDEN_MODES`：参数 sweep 时测试的隐藏文件过滤模式（`true,false`）
 
 如果目录不存在，真实数据集测试会自动跳过，不会导致测试失败。
 
@@ -185,6 +193,25 @@ pnpm run test:rust:stream:real
 ```
 
 真实数据集测试会先在 `NEOVIEW_TEST_DATASET_DIR` 内部递归发现候选子目录，然后随机抽样执行扫描；输出包括每个样本和 aggregate 汇总指标，避免只测顶层目录导致结果失真。
+
+如果你要挑默认参数，建议直接运行：
+
+```bash
+pnpm run test:rust:stream:sweep
+```
+
+输出会给出每组参数的 aggregate 吞吐和 best->worst 排名，可直接用于决定 `batch_size` 与 `skip_hidden` 的默认组合。
+
+同时，前端阅读参数也提供 sweep：
+
+```bash
+pnpm run test:reading:sweep
+```
+
+该测试会输出两组排名：
+
+- Preloader：`preloadAhead/preloadBehind` 组合在模拟翻页序列下的命中率与预加载成本。
+- IPCBatcher：`batchWindowMs/maxBatchSize` 组合在请求波峰场景下的 P95 延迟与吞吐。
 
 你也可以设置基线吞吐来自动检测回归：
 

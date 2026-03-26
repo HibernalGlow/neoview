@@ -24,6 +24,18 @@ struct StreamPerfStats {
     elapsed: Duration,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ScanConfig {
+    batch_size: usize,
+    skip_hidden: bool,
+}
+
+#[derive(Debug)]
+struct SweepResult {
+    config: ScanConfig,
+    stats: StreamPerfStats,
+}
+
 impl StreamPerfStats {
     fn items_per_sec(&self) -> f64 {
         let secs = self.elapsed.as_secs_f64();
@@ -47,6 +59,59 @@ fn resolve_real_dataset_timeout() -> Duration {
         .filter(|v| *v > 0)
         .unwrap_or(DEFAULT_REAL_DATASET_TIMEOUT_SECS);
     Duration::from_secs(secs)
+}
+
+fn resolve_batch_sizes() -> Vec<usize> {
+    let parsed = std::env::var("NEOVIEW_TEST_BATCH_SIZES")
+        .ok()
+        .map(|raw| {
+            raw.split(',')
+                .filter_map(|part| part.trim().parse::<usize>().ok())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| vec![10, 15, 24, 32, 50]);
+
+    let mut unique = Vec::new();
+    for size in parsed {
+        if (10..=50).contains(&size) && !unique.contains(&size) {
+            unique.push(size);
+        }
+    }
+
+    if unique.is_empty() {
+        vec![15, 32, 50]
+    } else {
+        unique
+    }
+}
+
+fn resolve_skip_hidden_modes() -> Vec<bool> {
+    match std::env::var("NEOVIEW_TEST_SKIP_HIDDEN_MODES") {
+        Ok(raw) => {
+            let mut modes = Vec::new();
+            for part in raw.split(',') {
+                match part.trim().to_ascii_lowercase().as_str() {
+                    "1" | "true" => {
+                        if !modes.contains(&true) {
+                            modes.push(true);
+                        }
+                    }
+                    "0" | "false" => {
+                        if !modes.contains(&false) {
+                            modes.push(false);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if modes.is_empty() {
+                vec![true, false]
+            } else {
+                modes
+            }
+        }
+        Err(_) => vec![true, false],
+    }
 }
 
 fn resolve_baseline_items_per_sec(env_key: &str) -> Option<f64> {
@@ -115,7 +180,11 @@ fn choose_sample_dirs(dataset_root: &PathBuf) -> Vec<PathBuf> {
     candidates
 }
 
-async fn run_stream_scan(dir: PathBuf, timeout_duration: Duration) -> StreamPerfStats {
+async fn run_stream_scan(
+    dir: PathBuf,
+    timeout_duration: Duration,
+    scan_config: ScanConfig,
+) -> StreamPerfStats {
     let manager = StreamManager::new();
     let (stream_id, handle, _reused) = manager.create_stream(&dir);
     let (tx, mut rx) = tokio::sync::mpsc::channel(128);
@@ -124,7 +193,7 @@ async fn run_stream_scan(dir: PathBuf, timeout_duration: Duration) -> StreamPerf
     let handle_clone = handle.clone();
     let tx_clone = tx.clone();
     tokio::spawn(async move {
-        DirectoryScanner::new(32, true)
+        DirectoryScanner::new(scan_config.batch_size, scan_config.skip_hidden)
             .scan_streaming(dir_clone, handle_clone, tx_clone)
             .await;
     });
@@ -309,7 +378,15 @@ async fn directory_stream_real_dataset_smoke() {
     let mut aggregate_elapsed = Duration::ZERO;
 
     for (idx, dir) in sample_dirs.iter().enumerate() {
-        let stats = run_stream_scan(dir.clone(), timeout_duration).await;
+        let stats = run_stream_scan(
+            dir.clone(),
+            timeout_duration,
+            ScanConfig {
+                batch_size: 32,
+                skip_hidden: true,
+            },
+        )
+        .await;
         println!(
             "[PERF][real][sample {}] dataset={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
             idx + 1,
@@ -343,4 +420,98 @@ async fn directory_stream_real_dataset_smoke() {
         "NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC",
     );
     assert!(stats.total_items > 0, "real dataset has no streamed items");
+}
+
+#[tokio::test]
+async fn directory_stream_real_dataset_param_sweep() {
+    let dataset_dir = resolve_real_dataset_dir();
+    if !dataset_dir.exists() || !dataset_dir.is_dir() {
+        eprintln!(
+            "[SKIP] dataset dir not found: {} (set NEOVIEW_TEST_DATASET_DIR to override)",
+            dataset_dir.display()
+        );
+        return;
+    }
+
+    let timeout_duration = resolve_real_dataset_timeout();
+    let sample_dirs = choose_sample_dirs(&dataset_dir);
+    let batch_sizes = resolve_batch_sizes();
+    let skip_hidden_modes = resolve_skip_hidden_modes();
+
+    println!(
+        "[PERF][sweep] root={} samples={} batch_sizes={:?} skip_hidden_modes={:?}",
+        dataset_dir.display(),
+        sample_dirs.len(),
+        batch_sizes,
+        skip_hidden_modes
+    );
+
+    let mut results: Vec<SweepResult> = Vec::new();
+
+    for &batch_size in &batch_sizes {
+        for &skip_hidden in &skip_hidden_modes {
+            let config = ScanConfig {
+                batch_size,
+                skip_hidden,
+            };
+
+            let mut aggregate_items = 0usize;
+            let mut aggregate_batches = 0usize;
+            let mut aggregate_elapsed = Duration::ZERO;
+
+            for dir in &sample_dirs {
+                let stats = run_stream_scan(dir.clone(), timeout_duration, config).await;
+                aggregate_items += stats.total_items;
+                aggregate_batches += stats.batches;
+                aggregate_elapsed += stats.elapsed;
+            }
+
+            let aggregate = StreamPerfStats {
+                total_items: aggregate_items,
+                batches: aggregate_batches,
+                elapsed: aggregate_elapsed,
+            };
+
+            println!(
+                "[PERF][sweep] batch_size={} skip_hidden={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+                config.batch_size,
+                config.skip_hidden,
+                aggregate.total_items,
+                aggregate.batches,
+                aggregate.elapsed.as_millis(),
+                aggregate.items_per_sec()
+            );
+
+            results.push(SweepResult {
+                config,
+                stats: aggregate,
+            });
+        }
+    }
+
+    results.sort_by(|a, b| {
+        b.stats
+            .items_per_sec()
+            .partial_cmp(&a.stats.items_per_sec())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    println!("[PERF][sweep] ranking (best -> worst):");
+    for (idx, item) in results.iter().enumerate() {
+        println!(
+            "[PERF][sweep][rank {}] batch_size={} skip_hidden={} throughput={:.2} items/s items={} elapsed_ms={}",
+            idx + 1,
+            item.config.batch_size,
+            item.config.skip_hidden,
+            item.stats.items_per_sec(),
+            item.stats.total_items,
+            item.stats.elapsed.as_millis()
+        );
+    }
+
+    assert!(!results.is_empty(), "sweep produced no result");
+    assert!(
+        results[0].stats.total_items > 0,
+        "sweep best case has no streamed items"
+    );
 }

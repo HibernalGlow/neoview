@@ -67,7 +67,7 @@ describe('thumbnailStoreV3 request queue', () => {
     expect(batchSizes).toEqual([64, 6]);
   });
 
-  it('should cap pending queue to 512 items (drops oldest beyond cap)', async () => {
+  it('should keep requests within current queue budget (2048 cap)', async () => {
     vi.resetModules();
     const mod = await import('./thumbnailStoreV3.svelte');
 
@@ -82,7 +82,7 @@ describe('thumbnailStoreV3 request queue', () => {
       .filter((c) => (c?.[0] as string) === 'request_visible_thumbnails_v3')
       .reduce((sum, c) => sum + (c?.[1] as { paths: string[] }).paths.length, 0);
 
-    expect(sentPathsCount).toBe(512);
+    expect(sentPathsCount).toBe(600);
   });
 
   it('should request only newly entered visible paths in delta mode', async () => {
@@ -128,5 +128,32 @@ describe('thumbnailStoreV3 request queue', () => {
     expect(batches.flat()).toEqual(expect.arrayContaining(['/p/3', '/p/4']));
     expect(batches.flat()).toEqual(expect.arrayContaining(['/p/1', '/p/2', '/p/5', '/p/6']));
     expect(batches.flat()).not.toContain(undefined);
+  });
+
+  it('should skip duplicate prefetch dispatches inside recent-request window', async () => {
+    vi.resetModules();
+    const mod = await import('./thumbnailStoreV3.svelte');
+
+    await mod.initThumbnailServiceV3('', 256);
+
+    const visible = ['/p/3', '/p/4'];
+    const all = ['/p/1', '/p/2', '/p/3', '/p/4', '/p/5', '/p/6'];
+
+    await mod.requestVisibleThumbnailsDeltaWithPrefetch(visible, all, '/dir');
+    await vi.runAllTimersAsync();
+
+    const firstPrefetchCalls = invokeMock.mock.calls
+      .filter((c) => (c?.[0] as string) === 'request_visible_thumbnails_v3')
+      .filter((c) => (c?.[1] as { lane?: string }).lane === 'prefetch').length;
+
+    await mod.requestVisibleThumbnailsDeltaWithPrefetch(visible, all, '/dir');
+    await vi.runAllTimersAsync();
+
+    const secondPrefetchCalls = invokeMock.mock.calls
+      .filter((c) => (c?.[0] as string) === 'request_visible_thumbnails_v3')
+      .filter((c) => (c?.[1] as { lane?: string }).lane === 'prefetch').length;
+
+    expect(firstPrefetchCalls).toBeGreaterThan(0);
+    expect(secondPrefetchCalls).toBe(firstPrefetchCalls);
   });
 });

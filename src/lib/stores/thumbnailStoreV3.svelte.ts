@@ -60,6 +60,10 @@ const MIN_PARALLEL_INVOKES = 1;
 const MAX_PARALLEL_INVOKES = 2; // 单轮最多并发请求批次数
 const IN_FLIGHT_TTL_MS = 8000; // 在飞请求超时回收，避免异常时永久占位
 const RECENT_REQUEST_TTL_MS = 220; // 短时请求去重窗口，降低滚动抖动重复请求
+const PREFETCH_BACKPRESSURE_HARD_THRESHOLD = 0.55;
+const PREFETCH_BACKPRESSURE_SOFT_THRESHOLD = 0.3;
+const PREFETCH_MIN_BUDGET = 24;
+const PREFETCH_MAX_BUDGET = 180;
 const FILE_BROWSER_FLUSH_MS = 12; // 批量同步到 fileBrowserStore 的刷新间隔
 // 单次调度内发送批次数上限（0 表示不限，直到队列清空）。
 // 为避免卡住 UI，我们仍按批次顺序发送，每批 await invoke，剩余批次继续循环。
@@ -120,6 +124,42 @@ function getAdaptiveDispatchConfig(): DispatchConfig {
     batchSize: Math.min(64, Math.max(MIN_BATCH_SIZE, BASE_BATCH_SIZE + 8)),
     parallelInvokes: MAX_PARALLEL_INVOKES,
   };
+}
+
+function filterDispatchablePaths(paths: string[]): string[] {
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+
+  for (const path of paths) {
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+
+    if (thumbnails.has(path) || isInFlight(path) || isRecentlyRequested(path)) {
+      continue;
+    }
+
+    deduped.push(path);
+  }
+
+  return deduped;
+}
+
+function getAdaptivePrefetchBudget(requestCount: number): number {
+  const queuePressure = Math.min(1, pendingPathsOrder.length / MAX_QUEUE_SIZE);
+  const burstPressure = Math.min(1, dispatchTuning.burstScore / 2.5);
+  const blendedPressure = Math.min(1, queuePressure * 0.75 + burstPressure * 0.25);
+
+  if (blendedPressure >= PREFETCH_BACKPRESSURE_HARD_THRESHOLD) {
+    return 0;
+  }
+
+  if (blendedPressure >= PREFETCH_BACKPRESSURE_SOFT_THRESHOLD) {
+    return Math.min(requestCount, PREFETCH_MIN_BUDGET);
+  }
+
+  const budgetByPressure = Math.round(PREFETCH_MAX_BUDGET * (1 - blendedPressure * 0.7));
+  const budget = Math.max(PREFETCH_MIN_BUDGET, Math.min(PREFETCH_MAX_BUDGET, budgetByPressure));
+  return Math.min(requestCount, budget);
 }
 
 // 在飞请求去重：path -> request start timestamp
@@ -1010,7 +1050,15 @@ export async function requestVisibleThumbnailsDeltaWithPrefetch(
   }
 
   if (prefetchOnly.length === 0) return;
-  await requestThumbnailsByLane(prefetchOnly, currentDir, centerIndex, 'prefetch');
+  const prefetchBudget = getAdaptivePrefetchBudget(prefetchOnly.length);
+  if (prefetchBudget <= 0) return;
+
+  await requestThumbnailsByLane(
+    prefetchOnly.slice(0, prefetchBudget),
+    currentDir,
+    centerIndex,
+    'prefetch'
+  );
 }
 
 type ThumbnailLane = 'visible' | 'prefetch' | 'background';
@@ -1023,11 +1071,17 @@ async function requestThumbnailsByLane(
 ): Promise<void> {
   if (paths.length === 0) return;
 
-  for (let i = 0; i < paths.length;) {
+  sweepExpiredInFlight();
+  sweepExpiredRecentRequests();
+
+  const dispatchablePaths = filterDispatchablePaths(paths);
+  if (dispatchablePaths.length === 0) return;
+
+  for (let i = 0; i < dispatchablePaths.length;) {
     const tasks: Promise<void>[] = [];
 
-    for (let slot = 0; slot < MAX_PARALLEL_INVOKES && i < paths.length; slot += 1) {
-      const batch = paths.slice(i, i + MAX_BATCH_SIZE);
+    for (let slot = 0; slot < MAX_PARALLEL_INVOKES && i < dispatchablePaths.length; slot += 1) {
+      const batch = dispatchablePaths.slice(i, i + MAX_BATCH_SIZE);
       i += MAX_BATCH_SIZE;
 
       markInFlight(batch);
@@ -1054,7 +1108,7 @@ async function requestThumbnailsByLane(
       await Promise.all(tasks);
     }
 
-    if (i < paths.length) {
+    if (i < dispatchablePaths.length) {
       await new Promise((resolve) => setTimeout(resolve, BASE_THROTTLE_MS));
     }
   }

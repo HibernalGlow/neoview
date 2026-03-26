@@ -7,6 +7,7 @@ use crate::core::dimension_cache::DimensionCache;
 use crate::core::wic_decoder::WicDecoder;
 use crate::models::{BookType, Page};
 use serde::{Deserialize, Serialize};
+use std::io::Cursor;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -59,14 +60,17 @@ pub struct DimensionScanner {
     cancel_token: Arc<AtomicBool>,
     /// 缓存引用
     cache: Arc<Mutex<DimensionCache>>,
+    /// 共享压缩包管理器（内部已实现 Arc 引用和互斥锁）
+    archive_manager: ArchiveManager,
 }
 
 impl DimensionScanner {
     /// 创建新的扫描器
-    pub fn new(cache: Arc<Mutex<DimensionCache>>) -> Self {
+    pub fn new(cache: Arc<Mutex<DimensionCache>>, archive_manager: ArchiveManager) -> Self {
         Self {
             cancel_token: Arc::new(AtomicBool::new(false)),
             cache,
+            archive_manager,
         }
     }
 
@@ -83,6 +87,17 @@ impl DimensionScanner {
     /// 检查是否已取消
     fn is_cancelled(&self) -> bool {
         self.cancel_token.load(Ordering::SeqCst)
+    }
+
+    /// 快速获取图片尺寸（纯 Rust，不解码像素）
+    fn get_image_dimensions_fast(data: &[u8]) -> Option<(u32, u32)> {
+        if let Ok(format) = image::guess_format(data) {
+            let reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
+            if let Ok(dims) = reader.into_dimensions() {
+                return Some(dims);
+            }
+        }
+        None
     }
 
     /// 扫描书籍中所有页面的尺寸
@@ -160,11 +175,16 @@ impl DimensionScanner {
                 }
                 pending_updates.clear();
             }
+
+            // 稍微让出 CPU，避免完全打满 IO 和 CPU 导致加载第一张图卡顿
+            if idx % 10 == 0 {
+                std::thread::yield_now();
+            }
         }
 
         // 批量更新缓存
         if !cache_entries.is_empty() {
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self.cache.lock().expect("Failed to lock dimension cache");
             cache.set_batch(cache_entries);
             let _ = cache.save();
         }
@@ -208,6 +228,15 @@ impl DimensionScanner {
             BookType::Folder | BookType::Media => {
                 // 文件夹类型：直接读取文件
                 let path = Path::new(&page.path);
+                
+                // 优先使用快速提取
+                if let Ok(data) = std::fs::read(path) {
+                    if let Some(dims) = Self::get_image_dimensions_fast(&data) {
+                        return Some(dims);
+                    }
+                }
+
+                // 回退到 WIC
                 match WicDecoder::get_image_dimensions(path) {
                     Ok((w, h)) => Some((w, h)),
                     Err(e) => {
@@ -217,15 +246,20 @@ impl DimensionScanner {
                 }
             }
             BookType::Archive => {
-                // 压缩包类型：提取到内存后读取
+                // 压缩包类型：使用共享管理器（内含缓存机制）
                 let inner_path = page.inner_path.as_ref().unwrap_or(&page.path);
-                let archive_manager = ArchiveManager::new();
                 
-                match archive_manager.load_image_from_archive_binary(
+                match self.archive_manager.load_image_from_archive_binary(
                     Path::new(book_path),
                     inner_path,
                 ) {
                     Ok(data) => {
+                        // 优先使用快速提取
+                        if let Some(dims) = Self::get_image_dimensions_fast(&data) {
+                            return Some(dims);
+                        }
+                        
+                        // 回退到 WIC
                         match WicDecoder::get_image_dimensions_from_memory(&data) {
                             Ok((w, h)) => Some((w, h)),
                             Err(e) => {
@@ -247,6 +281,11 @@ impl DimensionScanner {
                 let inner_path = page.inner_path.as_ref().unwrap_or(&page.path);
                 match EbookManager::get_epub_image(book_path, inner_path) {
                     Ok((data, _mime)) => {
+                        // 优先使用快速提取
+                        if let Some(dims) = Self::get_image_dimensions_fast(&data) {
+                            return Some(dims);
+                        }
+
                         match WicDecoder::get_image_dimensions_from_memory(&data) {
                             Ok((w, h)) => Some((w, h)),
                             Err(e) => {
@@ -276,9 +315,11 @@ pub struct DimensionScannerState {
 }
 
 impl DimensionScannerState {
-    pub fn new(cache_path: std::path::PathBuf) -> Self {
+    pub fn new(cache_path: std::path::PathBuf, archive_manager: ArchiveManager) -> Self {
         let cache = Arc::new(Mutex::new(DimensionCache::new(cache_path)));
-        let scanner = Arc::new(Mutex::new(DimensionScanner::new(cache.clone())));
+        let scanner = Arc::new(Mutex::new(DimensionScanner::new(cache.clone(), archive_manager)));
         Self { scanner, cache }
     }
 }
+
+

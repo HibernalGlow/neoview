@@ -271,11 +271,16 @@ class BookStore {
 
     // 📐 【性能优化 #6】启动后台尺寸预扫描
     if (book.pages?.length > 0) {
-      console.log('📐 [DimensionScan] Starting background scan for', book.pages.length, 'pages');
-      dimensionApi.startDimensionScan(book.path, book.type, book.pages).catch(err => {
-        console.warn('⚠️ [DimensionScan] Failed to start scan:', err);
-      });
+      // 延迟 500ms 启动，将书籍打开初期的 IO 优先级完全让给首张图片的显示
+      setTimeout(() => {
+        if (this.state.currentBook?.path !== book.path) return;
+        console.log('📐 [DimensionScan] Starting background scan for', book.pages.length, 'pages');
+        dimensionApi.startDimensionScan(book.path, book.type, book.pages).catch(err => {
+          console.warn('⚠️ [DimensionScan] Failed to start scan:', err);
+        });
+      }, 500);
     }
+
   }
 
   async openDirectoryAsBook(path: string, options: OpenBookOptions = {}) {

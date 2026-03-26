@@ -221,7 +221,10 @@ pub fn run() {
 
             // 初始化尺寸扫描器状态
             let dimension_cache_path = app_data_root.join("dimension_cache.json");
-            app.manage(core::DimensionScannerState::new(dimension_cache_path));
+            app.manage(core::DimensionScannerState::new(
+                dimension_cache_path,
+                archive_manager_arc.lock().unwrap().clone(),
+            ));
             log::info!("📐 尺寸扫描器初始化完成");
 
             // 🖼️ 初始化 ThumbnailState（在启动时初始化，避免 state() 调用 panic）

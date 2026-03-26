@@ -125,7 +125,10 @@ impl AppContext {
 
         // 初始化尺寸扫描器
         let dimension_cache_path = app_data_root.join("dimension_cache.json");
-        let dimension_scanner = Arc::new(DimensionScannerState::new(dimension_cache_path));
+        let dimension_scanner = Arc::new(DimensionScannerState::new(
+            dimension_cache_path,
+            archive_manager.read().clone(),
+        ));
 
         // 初始化缩略图数据库和生成器
         let thumbnail_db_path = app_data_root.join("thumbnails.db");

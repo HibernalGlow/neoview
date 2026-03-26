@@ -155,6 +155,8 @@ Tauri 会针对当前平台生成安装包与可执行程序。
   运行目录流自动测试（包含临时数据集性能 smoke 测试 + 真实数据集测试）。
 - `pnpm run test:rust:stream:real`  
   仅运行真实数据集测试（默认目录 `E:\1Hub\EH`）。
+- `pnpm run test:rust:stream:bench`  
+  单线程稳定模式运行目录流性能测试，便于前后版本对比。
 
 ### 真实数据集测试（可自定义）
 
@@ -164,13 +166,40 @@ Tauri 会针对当前平台生成安装包与可执行程序。
 # PowerShell
 $env:NEOVIEW_TEST_DATASET_DIR = "E:\\1Hub\\EH"
 $env:NEOVIEW_TEST_TIMEOUT_SECS = "90"
+$env:NEOVIEW_TEST_SAMPLE_COUNT = "3"
+$env:NEOVIEW_TEST_MIN_DIRECT_CHILDREN = "20"
 pnpm run test:rust:stream:real
 ```
 
 - `NEOVIEW_TEST_DATASET_DIR`：真实测试目录路径（可自定义）
 - `NEOVIEW_TEST_TIMEOUT_SECS`：测试超时秒数（默认 60）
+- `NEOVIEW_TEST_SAMPLE_COUNT`：从目录内部随机抽取的子目录样本数（默认 3）
+- `NEOVIEW_TEST_MIN_DIRECT_CHILDREN`：候选子目录的最小直接子项数量（默认 20）
 
 如果目录不存在，真实数据集测试会自动跳过，不会导致测试失败。
+
+测试输出会包含性能指标，例如：
+
+```text
+[PERF][real] dataset=E:\1Hub\EH items=12345 batches=280 elapsed_ms=950 throughput=12994.74 items/s
+```
+
+真实数据集测试会先在 `NEOVIEW_TEST_DATASET_DIR` 内部递归发现候选子目录，然后随机抽样执行扫描；输出包括每个样本和 aggregate 汇总指标，避免只测顶层目录导致结果失真。
+
+你也可以设置基线吞吐来自动检测回归：
+
+```bash
+# PowerShell 示例：设置真实数据集基线吞吐
+$env:NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC = "12000"
+pnpm run test:rust:stream:real
+```
+
+可用基线环境变量：
+
+- `NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC`
+- `NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC`
+
+当当前吞吐低于基线时，测试会失败并提示 regression。
 
 ## 缩略图批量 CLI（可选）
 

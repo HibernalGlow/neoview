@@ -6,45 +6,35 @@
 import type { FsItem } from '$lib/types';
 import type { FolderLayer } from './FolderStackState.svelte';
 import * as FileSystemAPI from '$lib/api/filesystem';
-import { thumbnailManager } from '$lib/utils/thumbnailManager';
-import { directoryTreeCache } from '../../utils/directoryTreeCache';
+import { preloadDirectory } from '$lib/stores/thumbnailStoreV3.svelte';
 import { isVirtualPath } from '../../stores/folderTabStore';
+import { isArchiveFile } from './folderStackUtils';
 import {
 	loadVirtualPathData,
 	subscribeVirtualPathData
 } from '../../utils/virtualPathLoader';
-import { isArchiveFile, needsThumbnail } from './folderStackUtils';
-
-/** 缩略图预加载配置 */
-const THUMBNAIL_PRELOAD_COUNT = 10;
+import { directoryTreeCache } from '../../utils/directoryTreeCache';
 
 /**
- * 加载目录缩略图
- * 只预加载前10项，其余由 VirtualizedFileList 按需加载
+ * 加载目录缩略图 (V3 优化版)
+ * 1. 触发后端全目录预加载（低优先级车道）
+ * 2. 预热压缩包列表
  */
 export function loadThumbnailsForLayer(items: FsItem[], path: string): void {
-	// 虚拟路径不设置当前目录
-	if (!isVirtualPath(path)) {
-		thumbnailManager.setCurrentDirectory(path);
+	// 虚拟路径跳过预加载
+	if (isVirtualPath(path)) {
+		return;
 	}
 
-	const preloadItems = items.slice(0, THUMBNAIL_PRELOAD_COUNT);
-	const itemsNeedingThumbnails = preloadItems.filter(item =>
-		needsThumbnail(item.name, item.isDir)
-	);
+	// 1. 触发后端 V3 全目录缩略图预加载（异步不阻塞）
+	// 这会将该目录下的文件缩略图缓慢载入 SQLite 缓存
+	void preloadDirectory(path, 1);
 
-	// 预加载数据库索引
-	const paths = itemsNeedingThumbnails.map(item => item.path);
-	thumbnailManager.preloadDbIndex(paths).catch(err => {
-		console.debug('预加载数据库索引失败:', err);
-	});
-
-	// 请求缩略图并预热压缩包
-	itemsNeedingThumbnails.forEach(item => {
-		thumbnailManager.getThumbnail(item.path, path);
-		
+	// 2. 预热压缩包（如果是压缩包内的列表，前端已处理；这里处理文件列表中的压缩包）
+	const topItems = items.slice(0, 20);
+	topItems.forEach((item) => {
 		if (!item.isDir && isArchiveFile(item.name)) {
-			FileSystemAPI.preheatArchiveList(item.path);
+			void FileSystemAPI.preheatArchiveList(item.path);
 		}
 	});
 }

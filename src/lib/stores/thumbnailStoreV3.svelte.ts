@@ -6,7 +6,7 @@ import { getThumbUrl } from '$lib/api/imageProtocol';
 
 // 缩略图缓存 (path -> blob URL) - 使用 SvelteMap 响应式状态以支持动态刷新
 const thumbnails = new SvelteMap<string, string>();
-const THUMBNAIL_CACHE_LIMIT = 512; // 内存 LRU 上限，防止无限增长
+const THUMBNAIL_CACHE_LIMIT = 2048; // 增加内存 LRU 上限，支持上千张图片的快速回溯
 
 function setThumbnailWithEviction(path: string, url: string) {
   const existing = thumbnails.get(path);
@@ -54,8 +54,8 @@ const BASE_THROTTLE_MS = 8;
 const MAX_THROTTLE_MS = 20;
 const MIN_BATCH_SIZE = 40;
 const BASE_BATCH_SIZE = 64;
-const MAX_BATCH_SIZE = 80; // 单次发送上限，避免一次塞入过多路径
-const MAX_QUEUE_SIZE = 512; // 队列上限，滚动快时丢弃最早的低优先级请求
+const MAX_BATCH_SIZE = 120; // 增加单次发送上限，后端 V3 服务可以高效处理大批量请求
+const MAX_QUEUE_SIZE = 2048; // 增加队列上限，防止快速滚动数千张图片时丢失请求
 const MIN_PARALLEL_INVOKES = 1;
 const MAX_PARALLEL_INVOKES = 2; // 单轮最多并发请求批次数
 const IN_FLIGHT_TTL_MS = 8000; // 在飞请求超时回收，避免异常时永久占位
@@ -107,10 +107,10 @@ function getAdaptiveDispatchConfig(): DispatchConfig {
     };
   }
 
-  if (queuePressure > 0.35) {
+  if (queuePressure > 0.4) {
     return {
-      throttleMs: 12,
-      batchSize: 56,
+      throttleMs: 10,
+      batchSize: 80,
       parallelInvokes: MAX_PARALLEL_INVOKES,
     };
   }

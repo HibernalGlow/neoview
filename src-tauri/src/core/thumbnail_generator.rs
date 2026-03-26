@@ -116,44 +116,11 @@ impl ThumbnailGenerator {
             .map_err(|e| format!("转换失败: {e}"))
     }
 
-    /// 降速机制：当图片大小或像素量超过阈值时，进行递进降速
-    fn apply_throttling(data: &[u8], ext: &str) {
-        let size_bytes = data.len();
-        let size_threshold = (1.5 * 1024.0 * 1024.0) as usize;
-
-        let mut delay_ms = 0.0;
-
-        // 1. 基于文件大小的延迟 (超过 1.5MB 开始)
-        if size_bytes > size_threshold {
-            let ratio = size_bytes as f64 / size_threshold as f64;
-            delay_ms += (ratio - 1.0) * 100.0; // 每超过一个阈值单位增加 100ms
-        }
-
-        // 2. 基于像素量的延迟 (超过 900万像素开始)
-        let decoder = UnifiedDecoder::with_format(ext);
-        if let Ok((w, h)) = decoder.get_dimensions(data) {
-            let pixels = w as u64 * h as u64;
-            let pixel_threshold = 9_000_000u64;
-            if pixels > pixel_threshold {
-                let ratio = pixels as f64 / pixel_threshold as f64;
-                delay_ms += (ratio - 1.0) * 150.0; // 每超过一个阈值单位增加 150ms
-            }
-        }
-
-        if delay_ms > 5.0 {
-            // 限制最大延迟，避免前端等待超时
-            let final_delay = delay_ms.min(2500.0) as u64;
-
-            #[cfg(debug_assertions)]
-            println!(
-                "⏳ [Thumbnail] Throttling applied: size={:.2}MB, delay={}ms, path_ext={}",
-                size_bytes as f64 / 1024.0 / 1024.0,
-                final_delay,
-                ext
-            );
-
-            std::thread::sleep(std::time::Duration::from_millis(final_delay));
-        }
+    /// 降速机制：高性能设备无需人工降速
+    fn apply_throttling(_data: &[u8], _ext: &str) {
+        // 移除之前过于激进的基于文件大小和像素量的强制延迟。
+        // 对于拥有上千张图片的高性能设备，这些延迟会显著拖慢批量生成速度。
+        // 系统层级的负载均衡应由 V3 服务的调度器和车道配额管理。
     }
 
     /// 从图像生成 webp 缩略图

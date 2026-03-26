@@ -75,30 +75,31 @@ impl Default for ThumbnailServiceConfig {
             .map(|n| n.get())
             .unwrap_or(4);
         
-        // 线程数 = CPU核心数 * 1.5，最少4，最多16
-        let worker_threads = ((num_cores * 3) / 2).max(4).min(16);
+        // 线程数 = CPU核心数 * 1.5，最少4，最高可扩到 32 (针对现代多核 CPU 如 i9/R9)
+        let worker_threads = ((num_cores * 3) / 2).max(4).min(32);
         
-        // 动态内存缓存：基于可用系统内存的估算
-        // 假设每个缩略图平均 30KB，最少512，最多4096
-        // 默认 1024，如果核心数多则增加
-        let memory_cache_size = if num_cores >= 8 {
-            2048
+        // 动态内存缓存：
+        // 假设每个缩略图平均 30KB，最少512，核心多则动态增加
+        let memory_cache_size = if num_cores >= 12 {
+            8192 // 针对高性能桌面端 CPU
+        } else if num_cores >= 8 {
+            4096
         } else if num_cores >= 4 {
-            1024
+            2048
         } else {
-            512
+            1024
         };
 
-        let adaptive_min_active_workers = (worker_threads / 3).max(2).min(worker_threads);
-        let decode_stage_max_active = (worker_threads / 2).max(1);
-        let scale_stage_max_active = ((worker_threads * 3) / 4).max(1);
-        let encode_stage_max_active = ((worker_threads * 2) / 3).max(1);
-        let memory_cache_byte_budget = if num_cores >= 8 {
-            512 * 1024 * 1024
-        } else if num_cores >= 4 {
-            256 * 1024 * 1024
+        let adaptive_min_active_workers = (worker_threads / 3).max(4).min(worker_threads);
+        let decode_stage_max_active = (worker_threads / 2).max(2);
+        let scale_stage_max_active = ((worker_threads * 3) / 4).max(2);
+        let encode_stage_max_active = ((worker_threads * 2) / 3).max(2);
+        let memory_cache_byte_budget = if num_cores >= 12 {
+            2048 * 1024 * 1024 // 2GB
+        } else if num_cores >= 8 {
+            1024 * 1024 * 1024 // 1GB
         } else {
-            128 * 1024 * 1024
+            512 * 1024 * 1024 // 512MB
         };
         
         Self {

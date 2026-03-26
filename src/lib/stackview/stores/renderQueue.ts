@@ -119,14 +119,14 @@ const LOW_END_PRELOAD_CONFIG: PreloadConfig = {
   lowDelay: 500,
 };
 
-/** 高端设备预加载配置 */
+/** 高端设备预加载配置 (如 i9 / 3090) */
 const HIGH_END_PRELOAD_CONFIG: PreloadConfig = {
-  highRange: 2,
-  normalRange: 4,
-  lowRange: 7,
-  highDelay: 30,
-  normalDelay: 100,
-  lowDelay: 200,
+  highRange: 3,
+  normalRange: 8,
+  lowRange: 15,
+  highDelay: 20,
+  normalDelay: 60,
+  lowDelay: 120,
 };
 
 /** 默认递进加载配置 */
@@ -185,11 +185,11 @@ export class RenderQueue {
   /** 连续快速翻页计数 */
   private rapidTurnCount = 0;
   
-  /** 快速翻页阈值 (ms) - 两次翻页间隔小于此值视为快速翻页 */
-  private readonly RAPID_TURN_THRESHOLD_MS = 200;
+  /** 快速翻页阈值 (ms) - 降低从 200ms 到 120ms (更符合高性能设备节奏) */
+  private readonly RAPID_TURN_THRESHOLD_MS = 120;
   
-  /** 触发快速翻页模式所需的连续次数 */
-  private readonly RAPID_TURN_TRIGGER_COUNT = 3;
+  /** 触发快速翻页模式所需的连续次数 - 增加到 4 次以减少模式抖动 */
+  private readonly RAPID_TURN_TRIGGER_COUNT = 4;
   
   /** 是否处于快速翻页模式 */
   private isRapidTurnMode = false;
@@ -302,13 +302,20 @@ export class RenderQueue {
     
     const totalPages = book.pages.length;
     
-    // 快速翻页模式：仅加载当前页，跳过预加载以提高响应速度
+    // 快速翻页模式：不仅加载当前页，预加载方向上的 1 页以防止白屏
     if (this.isRapidTurnMode) {
-      console.log(`⚡ [RenderQueue] 快速翻页: 仅加载页 ${pageIndex + 1}`);
+      console.log(`⚡ [RenderQueue] 快速翻页模式: 加载页 ${pageIndex + 1} + 预测预加载方向 ${this.currentDirection > 0 ? '→' : '←'}`);
       
-      // 仅加载当前页
+      // 1. 加载当前页
       if (!preDecodeCache.has(pageIndex)) {
         await this.loadAndPreDecode(pageIndex, token);
+      }
+
+      // 2. 加载方向预测的下一页 (1页)
+      const nextIdx = pageIndex + this.currentDirection;
+      if (nextIdx >= 0 && nextIdx < totalPages && !preDecodeCache.has(nextIdx)) {
+        this.addTask(nextIdx, RenderPriority.HIGH, token);
+        this.processQueue();
       }
       
       // 设置恢复定时器：停止翻页后 500ms 恢复正常预加载

@@ -62,7 +62,7 @@ class PreDecodeCacheStore {
   /** 正在预解码的页面（避免重复预解码） */
   private pending = new Set<number>();
   
-  constructor(maxSize = 20) {
+  constructor(maxSize = 80) {
     this.maxSize = maxSize;
   }
   

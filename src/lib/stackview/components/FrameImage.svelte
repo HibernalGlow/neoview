@@ -12,6 +12,7 @@
 <script lang="ts">
   import { imagePool } from '../stores/imagePool.svelte';
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
+  import { bookStore } from '$lib/stores/book.svelte';
   import { stackImageLoader } from '../utils/stackImageLoader';
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
@@ -111,6 +112,42 @@
     return url;
   });
   
+  // ==================== 【性能优化 #4】ViewSource 渲染延迟 ====================
+  // 快速翻页时延迟渲染图片，减少主线程解码压力
+  let settledUrl = $state('');
+  let settleTimer = 0;
+
+  $effect(() => {
+    // 依赖 displayUrl
+    const targetUrl = displayUrl;
+    
+    // 如果已经在渲染同个 URL，直接跳过
+    if (settledUrl === targetUrl) return;
+
+    // 清理旧定时器
+    if (settleTimer) clearTimeout(settleTimer);
+
+    // 如果还没有 settledUrl（第一次加载），或者是在快速翻页
+    // 使用 60ms 的延迟，这个延迟符合 NeeView 的表现，且对视觉影响极小
+    settleTimer = window.setTimeout(() => {
+      settledUrl = targetUrl;
+    }, 60);
+
+    return () => {
+      if (settleTimer) clearTimeout(settleTimer);
+    };
+  });
+
+  // 【性能优化 #5】Mini-Thumbnail (BlurHash) 占位符
+  let thumbnailUrl = $derived(bookStore.currentBook?.pages[pageIndex]?.thumbnail || '');
+  let showThumbnail = $state(true);
+
+  // 当 Full Image 加载完成后隐藏缩略图
+  function handleMainImageLoad(e: Event) {
+    showThumbnail = false;
+    if (onload) onload(e);
+  }
+
   // 合成最终 clip-path（裁剪 + 页面分割）
   let effectiveClipPath = $derived.by(() => {
     const trimClip = trimSettings ? trimToClipPath(trimSettings) : '';
@@ -131,33 +168,52 @@
 
 {#if useCanvas}
   <!-- Canvas 渲染模式：Worker 预解码，性能更好 -->
-  <CanvasImage
-    {pageIndex}
-    url={displayUrl}
-    {alt}
-    {transform}
-    clipPath={effectiveClipPath}
-    style={combinedStyle}
-    class="{className} {effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}"
-    {onload}
-  />
+  <div class="image-container {className}" style:background-image={showThumbnail && thumbnailUrl ? `url(${thumbnailUrl})` : 'none'}>
+    <CanvasImage
+      {pageIndex}
+      url={settledUrl}
+      {alt}
+      {transform}
+      clipPath={effectiveClipPath}
+      style={combinedStyle}
+      class={effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}
+      onload={handleMainImageLoad}
+    />
+  </div>
 {:else}
   <!-- img 渲染模式：传统方式 -->
-  <img
-    src={displayUrl}
-    {alt}
-    class="frame-image {className}"
-    class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
-    style:transform={transform || undefined}
-    style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
-    style:filter={filterCss || undefined}
-    style={style || undefined}
-    onload={onload}
-    draggable="false"
-  />
+  <div class="image-container {className}" style:background-image={showThumbnail && thumbnailUrl ? "url(" + thumbnailUrl + ")" : 'none'}>
+    <img
+      src={settledUrl}
+      {alt}
+      class="frame-image"
+      class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
+      class:loading={showThumbnail}
+      style:transform={transform || undefined}
+      style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
+      style:filter={filterCss || undefined}
+      style={style || undefined}
+      onload={handleMainImageLoad}
+      draggable="false"
+    />
+  </div>
 {/if}
 
 <style>
+  .image-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-size: cover;
+    background-position: center;
+    /* 缩略图模糊效果，模拟 BlurHash */
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+
   .frame-image {
     /* 默认尺寸限制，可被父组件通过 style prop 覆盖 */
     max-width: 100%;
@@ -171,6 +227,12 @@
     /* 使用高质量渲染，避免锯齿 */
     image-rendering: auto;
     content-visibility: visible;
+    /* 主图加载前透明 */
+    transition: opacity 0.2s ease-in-out;
+  }
+
+  .frame-image.loading {
+    opacity: 0;
   }
 
   .frame-image.is-split {

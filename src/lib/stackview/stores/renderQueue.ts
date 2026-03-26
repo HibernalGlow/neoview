@@ -131,10 +131,10 @@ const HIGH_END_PRELOAD_CONFIG: PreloadConfig = {
 
 /** 默认递进加载配置 */
 const DEFAULT_PROGRESSIVE_CONFIG: ProgressiveLoadConfig = {
-  enabled: false,
-  dwellTime: 3,
+  enabled: true, // 默认开启，支持长时间停留后全量加载
+  dwellTime: 4,  // 停留 4 秒后触发
   batchSize: 5,
-  maxPages: 50,
+  maxPages: 100,
 };
 
 // ============================================================================
@@ -397,6 +397,14 @@ export class RenderQueue {
       if (token !== this.currentToken) return;
       this.scheduleDirectionalAhead(pageIndex, this.config.normalRange + 1, this.config.lowRange, RenderPriority.LOW, token, totalPages);
     }, this.config.lowDelay));
+
+    // 【性能优化 #10】BACKGROUND 通道：IO 预加载 (±6-15 页，仅 IO 不解码)
+    this.delayTimers.push(setTimeout(() => {
+      if (token !== this.currentToken) return;
+      // 这里的 15 是假设的背景加载范围，通常是 lowRange 的 2-3 倍
+      const backgroundRange = Math.max(15, this.config.lowRange * 2);
+      this.scheduleDirectionalAheadIO(pageIndex, this.config.lowRange + 1, backgroundRange, RenderPriority.BACKGROUND, token, totalPages);
+    }, this.config.lowDelay + 200));
   }
   
   // ============================================================================
@@ -415,13 +423,15 @@ export class RenderQueue {
   }
   
   /** 添加 Ahead 通道任务 */
-  private addAheadTask(pageIndex: number, priority: number, token: number): void {
+  private addAheadTask(pageIndex: number, priority: number, token: number, ioOnly = false): void {
     const existing = this.aheadTasks.find(t => t.pageIndex === pageIndex && t.token === token);
     if (existing) {
       if (priority > existing.priority) existing.priority = priority;
       return;
     }
-    this.aheadTasks.push({ pageIndex, priority, token, status: 'pending' });
+    // 使用 QueueTask 扩展或元数据
+    const task = { pageIndex, priority, token, status: 'pending' as const, ioOnly };
+    this.aheadTasks.push(task as any);
     this.aheadTasks.sort((a, b) => b.priority - a.priority);
   }
   
@@ -451,6 +461,21 @@ export class RenderQueue {
     for (const idx of pages) this.addAheadTask(idx, priority, token);
     if (pages.length > 0) {
       console.log(`📦 [Ahead] 方向预加载: [${pages.map(p => p + 1).join(', ')}]`);
+      this.processAheadChannel();
+    }
+  }
+
+  /**
+   * BACKGROUND 通道方向调度 (仅 IO)
+   */
+  private scheduleDirectionalAheadIO(
+    centerIndex: number, startOffset: number, endOffset: number,
+    priority: number, token: number, totalPages: number
+  ): void {
+    const pages = this.collectDirectionalPages(centerIndex, startOffset, endOffset, totalPages);
+    for (const idx of pages) this.addAheadTask(idx, priority, token, true); // IO 标记
+    if (pages.length > 0) {
+      console.log(`🌐 [Background-IO] 方向预取: [${pages.map(p => p + 1).join(', ')}]`);
       this.processAheadChannel();
     }
   }
@@ -557,7 +582,9 @@ export class RenderQueue {
         this.aheadTasks.shift();
         
         const signal = this.activeAbortController?.signal;
-        const decodePromise = this.loadAndPreDecode(task.pageIndex, task.token, signal)
+        const taskFn = (task as any).ioOnly ? this.loadOnly.bind(this) : this.loadAndPreDecode.bind(this);
+        
+        const decodePromise = taskFn(task.pageIndex, task.token, signal)
           .then(() => { task.status = 'done'; })
           .catch(() => { task.status = 'cancelled'; })
           .finally(() => { activeDecodes.delete(decodePromise); });
@@ -656,6 +683,23 @@ export class RenderQueue {
   }
   
   /**
+   * 仅加载页面数据（IO 预取）
+   * 不执行预解码，节省内存但加速后续访问
+   */
+  private async loadOnly(pageIndex: number, token: number, signal?: AbortSignal): Promise<void> {
+    try {
+      if (token !== this.currentToken || signal?.aborted) return;
+      if (imagePool.has(pageIndex)) return;
+
+      // 仅触发加载
+      await imagePool.get(pageIndex, signal);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.warn(`IO 预取失败: 页码 ${pageIndex + 1}`, error);
+    }
+  }
+
+  /**
    * 加载并预解码页面
    * 【优化 #2】支持 AbortSignal 取消进行中的加载
    * 参考 NeeView: CancellationToken 贯穿整个加载管线
@@ -734,7 +778,7 @@ export class RenderQueue {
     return {
       currentPage: this.currentPageIndex,
       pendingCount: this.tasks.filter(t => t.status === 'pending').length,
-      preDecodedCount: preDecodeCache.getStats().size,
+      preDecodedCount: preDecodeCache.getStats().count,
       currentToken: this.currentToken,
     };
   }

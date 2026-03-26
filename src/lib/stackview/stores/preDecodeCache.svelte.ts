@@ -21,13 +21,19 @@ export interface PreDecodedEntry {
   /** 图片尺寸 */
   width: number;
   height: number;
+  /** 预估内存占用 (Bytes) */
+  sizeInBytes: number;
 }
 
 export interface PreDecodeCacheStats {
-  /** 缓存大小 */
-  size: number;
+  /** 缓存条目数 */
+  count: number;
   /** 最大缓存数 */
-  maxSize: number;
+  maxCount: number;
+  /** 当前内存占用 (Bytes) */
+  currentBytes: number;
+  /** 最大内存占用 (Bytes) */
+  maxBytes: number;
   /** 命中次数 */
   hits: number;
   /** 未命中次数 */
@@ -48,7 +54,13 @@ class PreDecodeCacheStore {
   private cache = new Map<number, PreDecodedEntry>();
   
   /** 最大缓存数量 */
-  private maxSize: number;
+  private maxCount: number;
+  
+  /** 最大内存限制 (Bytes) - 默认 1GB */
+  private maxBytes: number;
+
+  /** 当前内存占用 (Bytes) */
+  private currentBytes = 0;
   
   /** 统计：命中次数 */
   private hits = 0;
@@ -62,8 +74,9 @@ class PreDecodeCacheStore {
   /** 正在预解码的页面（避免重复预解码） */
   private pending = new Set<number>();
   
-  constructor(maxSize = 80) {
-    this.maxSize = maxSize;
+  constructor(maxCount = 100, maxBytesMB = 1024) {
+    this.maxCount = maxCount;
+    this.maxBytes = maxBytesMB * 1024 * 1024;
   }
   
   /** 递增版本号，触发响应式更新 */
@@ -158,19 +171,24 @@ class PreDecodeCacheStore {
       await img.decode();
       const decodeTime = performance.now() - startTime;
       
+      const sizeInBytes = img.naturalWidth * img.naturalHeight * 4;
+      
       const entry: PreDecodedEntry = {
         img,
         url,
         timestamp: Date.now(),
         width: img.naturalWidth,
         height: img.naturalHeight,
+        sizeInBytes,
       };
       
-      if (this.cache.size >= this.maxSize) {
+      // 【优化 #8】内存预算检查
+      while (this.cache.size >= this.maxCount || (this.currentBytes + sizeInBytes > this.maxBytes && this.cache.size > 0)) {
         this.evictLRU();
       }
       
       this.cache.set(pageIndex, entry);
+      this.currentBytes += sizeInBytes;
       
       // 触发响应式更新
       this.bumpVersion();
@@ -218,9 +236,12 @@ class PreDecodeCacheStore {
       await img.decode();
       const decodeTime = performance.now() - startTime;
       
+      const sizeInBytes = img.naturalWidth * img.naturalHeight * 4;
+      
       // 清理旧的缓存条目
       const oldEntry = this.cache.get(pageIndex);
       if (oldEntry) {
+        this.currentBytes -= oldEntry.sizeInBytes;
         oldEntry.img.src = '';
       }
       
@@ -230,10 +251,16 @@ class PreDecodeCacheStore {
         timestamp: Date.now(),
         width: img.naturalWidth,
         height: img.naturalHeight,
+        sizeInBytes,
       };
       
-      // 直接替换，不检查 maxSize（超分图优先级更高）
+      // 直接替换，并确保总内存不超限太多 (超分图优先级高，但也要守基本法)
+      while (this.currentBytes + sizeInBytes > this.maxBytes * 1.2 && this.cache.size > 0) {
+        this.evictLRU();
+      }
+
       this.cache.set(pageIndex, entry);
+      this.currentBytes += sizeInBytes;
       
       // 触发响应式更新
       this.bumpVersion();
@@ -266,11 +293,12 @@ class PreDecodeCacheStore {
     if (oldestKey !== null) {
       const entry = this.cache.get(oldestKey);
       if (entry) {
+        this.currentBytes -= entry.sizeInBytes;
         entry.img.src = '';
       }
       this.cache.delete(oldestKey);
       this.bumpVersion();
-      console.log(`🗑️ 淘汰预解码缓存: 页码 ${oldestKey + 1}`);
+      console.log(`🗑️ 淘汰预解码缓存: 页码 ${oldestKey + 1}, 释放 ${((entry?.sizeInBytes || 0) / 1024 / 1024).toFixed(1)}MB, 剩余 ${(this.currentBytes / 1024 / 1024).toFixed(1)}MB`);
     }
   }
   
@@ -283,6 +311,7 @@ class PreDecodeCacheStore {
     }
     this.cache.clear();
     this.pending.clear();
+    this.currentBytes = 0;
     this.hits = 0;
     this.misses = 0;
     this.bumpVersion();
@@ -295,8 +324,10 @@ class PreDecodeCacheStore {
   getStats(): PreDecodeCacheStats {
     const total = this.hits + this.misses;
     return {
-      size: this.cache.size,
-      maxSize: this.maxSize,
+      count: this.cache.size,
+      maxCount: this.maxCount,
+      currentBytes: this.currentBytes,
+      maxBytes: this.maxBytes,
       hits: this.hits,
       misses: this.misses,
       hitRate: total > 0 ? this.hits / total : 0,
@@ -306,9 +337,19 @@ class PreDecodeCacheStore {
   /**
    * 设置最大缓存数量
    */
-  setMaxSize(maxSize: number): void {
-    this.maxSize = maxSize;
-    while (this.cache.size > this.maxSize) {
+  setMaxCount(maxCount: number): void {
+    this.maxCount = maxCount;
+    while (this.cache.size > this.maxCount) {
+      this.evictLRU();
+    }
+  }
+
+  /**
+   * 设置最大内存限制 (MB)
+   */
+  setMaxBytes(maxMB: number): void {
+    this.maxBytes = maxMB * 1024 * 1024;
+    while (this.currentBytes > this.maxBytes && this.cache.size > 0) {
       this.evictLRU();
     }
   }

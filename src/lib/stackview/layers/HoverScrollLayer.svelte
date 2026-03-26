@@ -2,8 +2,9 @@
   HoverScrollLayer - 原生滚动悬停层
   
   原理：使用浏览器原生滚动 API，性能最佳
-  - 鼠标偏离中心的距离 * 倍率 = 滚动速度
-  - 利用浏览器硬件加速滚动
+  - 核心优化 #7: 运动学平滑滚动 (Kinematics)
+  - 鼠标偏离中心的距离 * 倍率 = 目标速度
+  - 当前速度平滑插值到目标速度，实现惯性和缓冲
 -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -32,12 +33,15 @@
   let currentMouseY = 0;
   let isHovering = false;
   
+  // 运动学状态 (使用组件作用域变量，避免高频渲染触发 Svelte 更新)
+  let currentVelX = 0;
+  let currentVelY = 0;
+
   // 【性能优化】使用 RAF 批量更新 rect，避免强制重排
   let rectUpdateScheduled = false;
   
   function updateTargetContainer() {
     targetContainer = document.querySelector(targetSelector) as HTMLElement | null;
-    // 不立即获取 rect，等下一帧
     scheduleRectUpdate();
   }
   
@@ -56,11 +60,13 @@
     scheduleRectUpdate();
   }
   
-  // 核心滚动逻辑 - 倍率滚动
+  // 核心滚动逻辑 - 运动学滚动
   function scrollStep() {
     rafId = null;
     
     if (!enabled || !isHovering || !targetContainer || !cachedRect) {
+      currentVelX = 0;
+      currentVelY = 0;
       return;
     }
     
@@ -68,47 +74,51 @@
     const localX = currentMouseX - rect.left;
     const localY = currentMouseY - rect.top;
     
-    // 边界检测
-    if (localX < 0 || localX > rect.width || localY < 0 || localY > rect.height) {
-      return;
-    }
-    
-    // 侧边栏排除
-    if (localX < sidebarMargin || localX > rect.width - sidebarMargin) {
-      return;
-    }
-    
     // 计算最大滚动范围
     const maxScrollLeft = targetContainer.scrollWidth - targetContainer.clientWidth;
     const maxScrollTop = targetContainer.scrollHeight - targetContainer.clientHeight;
-    
-    // 如果没有可滚动区域，直接返回
-    if (maxScrollLeft <= 0 && maxScrollTop <= 0) {
-      return;
+
+    // 侧边栏排除
+    if (localX < sidebarMargin || localX > rect.width - sidebarMargin) {
+      currentVelX *= 0.85; // 缓冲减速
+      currentVelY *= 0.85;
+    } else {
+      // 如果没有可滚动区域，且速度已归零，停止循环
+      if (maxScrollLeft <= 0 && maxScrollTop <= 0 && Math.abs(currentVelX) < 0.05 && Math.abs(currentVelY) < 0.05) {
+        return;
+      }
+      
+      // 计算针对性偏移 (-0.5 到 0.5)
+      const effectiveWidth = rect.width - 2 * sidebarMargin;
+      const effectiveX = localX - sidebarMargin;
+      const normalizedX = (effectiveX / effectiveWidth) - 0.5;
+      const normalizedY = (localY / rect.height) - 0.5;
+
+      // ==================== 【性能优化 #7】运动学平滑滚动 (Kinematics) ====================
+      // 计算目标速度 (基础速度提高到 30 以获得更爽快的响应感)
+      const targetVelocityX = normalizedX * scrollSpeed * 30;
+      const targetVelocityY = normalizedY * scrollSpeed * 30;
+      
+      // 平滑插值系数 (0-1)，越小越平滑/越有惯性
+      // NeeView 风格通常在 0.1 - 0.2 之间
+      const smoothing = 0.12; 
+      
+      // 更新当前速度
+      currentVelX += (targetVelocityX - currentVelX) * smoothing;
+      currentVelY += (targetVelocityY - currentVelY) * smoothing;
+      
+      // 停止阈值
+      if (Math.abs(currentVelX) < 0.05) currentVelX = 0;
+      if (Math.abs(currentVelY) < 0.05) currentVelY = 0;
     }
-    
-    // 计算鼠标相对于中心的偏移（-0.5 到 0.5）
-    const effectiveWidth = rect.width - 2 * sidebarMargin;
-    const effectiveX = localX - sidebarMargin;
-    const normalizedX = (effectiveX / effectiveWidth) - 0.5; // -0.5 到 0.5
-    const normalizedY = (localY / rect.height) - 0.5; // -0.5 到 0.5
-    
-    // 滚动速度 = 偏移 * 倍率 * 基础速度
-    const baseSpeed = 15; // 基础速度（像素/帧）
-    const scrollDeltaX = normalizedX * scrollSpeed * baseSpeed;
-    const scrollDeltaY = normalizedY * scrollSpeed * baseSpeed;
     
     // 应用滚动
-    if (maxScrollLeft > 0) {
-      const newX = Math.max(0, Math.min(maxScrollLeft, 
-        targetContainer.scrollLeft + scrollDeltaX));
-      targetContainer.scrollLeft = newX;
+    if (currentVelX !== 0 && maxScrollLeft > 0) {
+      targetContainer.scrollLeft += currentVelX;
     }
     
-    if (maxScrollTop > 0) {
-      const newY = Math.max(0, Math.min(maxScrollTop, 
-        targetContainer.scrollTop + scrollDeltaY));
-      targetContainer.scrollTop = newY;
+    if (currentVelY !== 0 && maxScrollTop > 0) {
+      targetContainer.scrollTop += currentVelY;
     }
     
     // 继续动画循环
@@ -121,40 +131,21 @@
     }
   }
   
-  // 检测鼠标是否在 UI 元素上（边栏、工具栏、设置面板等）
   function isOverUIElement(e: MouseEvent): boolean {
     const target = e.target as HTMLElement;
     if (!target) return false;
     
-    // 检查是否在以下 UI 元素内
     const uiSelectors = [
-      '[data-sidebar]',           // 边栏
-      '[data-panel]',             // 面板
-      '[data-toolbar]',           // 工具栏
-      '.settings-panel',          // 设置面板
-      '.sidebar',                 // 边栏
-      '.panel',                   // 面板
-      '.toolbar',                 // 工具栏
-      '.popover',                 // 弹出框
-      '.dialog',                  // 对话框
-      '[role="dialog"]',          // 对话框
-      '[role="menu"]',            // 菜单
-      '.top-toolbar',             // 顶部工具栏
-      '.bottom-toolbar',          // 底部工具栏
-      '.info-panel',              // 信息面板
-      '.folder-panel',            // 文件夹面板
-      'button',                   // 按钮
-      'input',                    // 输入框
-      'select',                   // 选择框
-      '[data-radix-popper-content-wrapper]', // Radix UI 弹出内容
+      '[data-sidebar]', '[data-panel]', '[data-toolbar]',
+      '.settings-panel', '.sidebar', '.panel', '.toolbar',
+      '.popover', '.dialog', '[role="dialog"]', '[role="menu"]',
+      '.top-toolbar', '.bottom-toolbar', '.info-panel', '.folder-panel',
+      'button', 'input', 'select', '[data-radix-popper-content-wrapper]',
     ];
     
     for (const selector of uiSelectors) {
-      if (target.closest(selector)) {
-        return true;
-      }
+      if (target.closest(selector)) return true;
     }
-    
     return false;
   }
 
@@ -164,15 +155,11 @@
     currentMouseX = e.clientX;
     currentMouseY = e.clientY;
     
-    // 如果鼠标在 UI 元素上，停止滚动
     if (isOverUIElement(e)) {
-      if (isHovering) {
-        isHovering = false;
-      }
+      if (isHovering) isHovering = false;
       return;
     }
     
-    // 检测是否在目标区域内
     if (cachedRect) {
       const inBounds = 
         currentMouseX >= cachedRect.left &&
@@ -188,10 +175,7 @@
       }
     }
     
-    // 如果正在 hover，继续调度滚动
-    if (isHovering) {
-      scheduleScroll();
-    }
+    if (isHovering) scheduleScroll();
   }
   
   function onMouseLeave() {
@@ -204,7 +188,6 @@
   
   let resizeObserver: ResizeObserver | null = null;
   let mutationObserver: MutationObserver | null = null;
-  // 【修复内存泄漏】将 mutationTimeout 和 initTimeout 提升到组件作用域
   let mutationTimeout: ReturnType<typeof setTimeout> | null = null;
   let initTimeout: ReturnType<typeof setTimeout> | null = null;
   
@@ -213,7 +196,6 @@
     window.addEventListener('scroll', updateRect, { capture: true, passive: true });
     window.addEventListener('resize', updateRect, { passive: true });
     
-    // 延迟初始化，等待 DOM 渲染
     initTimeout = setTimeout(() => {
       updateTargetContainer();
     }, 100);
@@ -225,7 +207,6 @@
       });
       resizeObserver.observe(layerRef);
       
-      // 监听 DOM 变化
       mutationObserver = new MutationObserver(() => {
         if (mutationTimeout) clearTimeout(mutationTimeout);
         mutationTimeout = setTimeout(() => {
@@ -244,28 +225,13 @@
     window.removeEventListener('scroll', updateRect, { capture: true });
     window.removeEventListener('resize', updateRect);
     
-    if (resizeObserver) {
-      resizeObserver.disconnect();
-    }
-    
-    if (mutationObserver) {
-      mutationObserver.disconnect();
-    }
-    
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-    }
-    
-    // 【修复内存泄漏】清理所有定时器
-    if (mutationTimeout) {
-      clearTimeout(mutationTimeout);
-    }
-    if (initTimeout) {
-      clearTimeout(initTimeout);
-    }
+    if (resizeObserver) resizeObserver.disconnect();
+    if (mutationObserver) mutationObserver.disconnect();
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    if (mutationTimeout) clearTimeout(mutationTimeout);
+    if (initTimeout) clearTimeout(initTimeout);
   });
   
-  // 当 enabled 变化时重置
   $effect(() => {
     if (enabled) {
       updateTargetContainer();
@@ -279,7 +245,6 @@
   });
 </script>
 
-<!-- 隐藏的参考元素 -->
 <div class="hover-scroll-layer-ref" bind:this={layerRef} role="presentation"></div>
 
 <style>

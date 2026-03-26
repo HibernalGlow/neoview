@@ -13,6 +13,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
 import { pageNavigationDedup } from '$lib/utils/requestDedup';
+import * as dimensionApi from '$lib/api/dimensions';
 
 import { SvelteMap } from 'svelte/reactivity';
 import {
@@ -267,6 +268,14 @@ class BookStore {
 
     this.showBookSwitchToastIfEnabled();
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
+
+    // 📐 【性能优化 #6】启动后台尺寸预扫描
+    if (book.pages?.length > 0) {
+      console.log('📐 [DimensionScan] Starting background scan for', book.pages.length, 'pages');
+      dimensionApi.startDimensionScan(book.path, book.type, book.pages).catch(err => {
+        console.warn('⚠️ [DimensionScan] Failed to start scan:', err);
+      });
+    }
   }
 
   async openDirectoryAsBook(path: string, options: OpenBookOptions = {}) {

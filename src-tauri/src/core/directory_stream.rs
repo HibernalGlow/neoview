@@ -23,6 +23,8 @@ pub const DEFAULT_BATCH_SIZE: usize = 15;
 pub const MAX_BATCH_SIZE: usize = 50;
 /// 最小批次大小
 pub const MIN_BATCH_SIZE: usize = 10;
+/// 进度事件最小发送间隔（按已加载条目数）
+const PROGRESS_MIN_ITEMS_INTERVAL: usize = 32;
 
 // ============================================================================
 // 数据结构定义
@@ -313,6 +315,7 @@ impl DirectoryScanner {
         let mut batch: Vec<FsItem> = Vec::with_capacity(current_batch_size);
         let mut batch_index = 0usize;
         let mut total_loaded = 0usize;
+        let mut last_progress_loaded = 0usize;
         let mut skipped_count = 0usize;
 
         let entries = match std::fs::read_dir(&path) {
@@ -338,6 +341,16 @@ impl DirectoryScanner {
 
             match entry_result {
                 Ok(entry) => {
+                    if skip_hidden
+                        && entry
+                            .file_name()
+                            .as_encoded_bytes()
+                            .first()
+                            .is_some_and(|b| *b == b'.')
+                    {
+                        continue;
+                    }
+
                     // 获取元数据
                     let metadata = match entry.metadata() {
                         Ok(m) => m,
@@ -375,13 +388,17 @@ impl DirectoryScanner {
                             return;
                         }
 
-                        // 发送进度
-                        let progress = StreamProgress {
-                            loaded: total_loaded,
-                            estimated_total: None,
-                            elapsed_ms: start_time.elapsed().as_millis() as u64,
-                        };
-                        let _ = tx.blocking_send(DirectoryStreamOutput::Progress(progress));
+                        if total_loaded.saturating_sub(last_progress_loaded)
+                            >= PROGRESS_MIN_ITEMS_INTERVAL
+                        {
+                            let progress = StreamProgress {
+                                loaded: total_loaded,
+                                estimated_total: None,
+                                elapsed_ms: start_time.elapsed().as_millis() as u64,
+                            };
+                            let _ = tx.blocking_send(DirectoryStreamOutput::Progress(progress));
+                            last_progress_loaded = total_loaded;
+                        }
 
                         if adaptive_batch_enabled {
                             // 自适应批次：早期加速填充，后期减小批次提升滚动期间响应性。
@@ -435,16 +452,7 @@ impl DirectoryScanner {
     }
 
     #[inline]
-    fn is_hidden_entry(entry: &std::fs::DirEntry, metadata: &std::fs::Metadata) -> bool {
-        if entry
-            .file_name()
-            .as_encoded_bytes()
-            .first()
-            .is_some_and(|b| *b == b'.')
-        {
-            return true;
-        }
-
+    fn is_hidden_entry(_entry: &std::fs::DirEntry, metadata: &std::fs::Metadata) -> bool {
         #[cfg(windows)]
         {
             use std::os::windows::fs::MetadataExt;

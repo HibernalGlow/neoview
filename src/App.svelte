@@ -65,6 +65,7 @@
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { getMatches } from '@tauri-apps/plugin-cli';
+	import { restoreStateCurrent, saveWindowState, StateFlags } from '@tauri-apps/plugin-window-state';
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { windowManager } from '$lib/core/windows/windowManager';
@@ -258,6 +259,14 @@
 		// 加载空页面设置
 		loadEmptySettings();
 
+		// 显式恢复窗口状态（位置/尺寸/最大化/全屏），避免自动恢复时序差异。
+		try {
+			await restoreStateCurrent(StateFlags.ALL);
+			console.log('✅ Window state restored');
+		} catch (error) {
+			console.warn('⚠️ Window state restore failed:', error);
+		}
+
 		// 初始化卡片窗口系统
 		try {
 			await initCardWindowSystem();
@@ -422,6 +431,10 @@
 
 	// 清理语音命令监听器和全屏状态监听器
 	onDestroy(() => {
+		void saveWindowState(StateFlags.ALL).catch((error) => {
+			console.warn('⚠️ Window state save failed:', error);
+		});
+
 		if (voiceCommandHandler) {
 			window.removeEventListener('neoview-voice-command', voiceCommandHandler);
 		}

@@ -24,27 +24,6 @@ async function maximizeWindow() {
 await appWindow.toggleMaximize();
 }
 
-function isInteractiveElement(target: EventTarget | null): boolean {
-const element = target as HTMLElement | null;
-if (!element) return false;
-return Boolean(
-element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]')
-);
-}
-
-async function handleTitleBarMouseDown(event: MouseEvent): Promise<void> {
-if (event.button !== 0) return;
-if (isInteractiveElement(event.target)) return;
-
-const isFullscreen = await appWindow.isFullscreen();
-if (isFullscreen) return;
-
-const isMaximized = await appWindow.isMaximized();
-if (isMaximized) return;
-
-await appWindow.startDragging();
-}
-
 async function closeWindow() {
 await appWindow.close();
 }
@@ -56,7 +35,6 @@ data-tauri-drag-region
 class="h-8 bg-secondary/50 flex items-center justify-between px-2 select-none border-b"
 role="banner"
 aria-label="窗口标题栏"
-onmousedown={handleTitleBarMouseDown}
 >
 <!-- 左侧：菜单按钮 -->
 <div class="flex items-center gap-1">

@@ -263,19 +263,6 @@
 		return Boolean(element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]'));
 	}
 
-	async function handleTitleBarMouseDown(event: MouseEvent): Promise<void> {
-		if (event.button !== 0) return;
-		if (isInteractiveElement(event.target)) return;
-
-		const isFullscreen = await appWindow.isFullscreen();
-		if (isFullscreen) return;
-
-		const isMaximized = await appWindow.isMaximized();
-		if (isMaximized) return;
-
-		await appWindow.startDragging();
-	}
-
 	async function handleTitleBarDoubleClick(event: MouseEvent): Promise<void> {
 		if (event.button !== 0) return;
 		if (isInteractiveElement(event.target)) return;
@@ -377,7 +364,6 @@
 	style="background-color: color-mix(in oklch, var(--sidebar) {opacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({blur}px);"
 	role="banner"
 	aria-label="主窗口标题栏"
-	onmousedown={handleTitleBarMouseDown}
 	ondblclick={handleTitleBarDoubleClick}
 >
 	<!-- 左侧：四边栏控制和应用名 -->

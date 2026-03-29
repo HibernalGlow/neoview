@@ -44,10 +44,10 @@ const DEFAULT_CONFIG: AdaptiveConfig = {
 
 // 低端设备配置
 const LOW_END_CONFIG: AdaptiveConfig = {
-  preloadAhead: 2,
+  preloadAhead: 3,
   preloadBehind: 1,
   maxCacheSizeMB: 256,
-  thumbnailBatchSize: 5,
+  thumbnailBatchSize: 6,
   maxConcurrentLoads: 2,
   maxConcurrentThumbnails: 2,
   enableBackgroundDecode: true,
@@ -117,9 +117,10 @@ export async function detectSystemCapabilities(): Promise<SystemCapabilities> {
   let recommendedMaxConcurrent: number;
 
   if (isLowEndDevice) {
-    recommendedPreloadCount = 2;
+    // 2 -> 3 可显著降低翻页 miss，同时仍保持低配并发上限
+    recommendedPreloadCount = 3;
     recommendedCacheSizeMB = Math.min(256, Math.round(totalMemoryMB * 0.1));
-    recommendedThumbnailBatchSize = 5;
+    recommendedThumbnailBatchSize = 6;
     recommendedMaxConcurrent = 2;
   } else if (isHighEndDevice) {
     recommendedPreloadCount = 5;

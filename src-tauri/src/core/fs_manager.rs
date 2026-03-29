@@ -210,11 +210,12 @@ impl FsManager {
             })
             .collect();
 
-        // 使用 rayon 并行处理条目
-        let items: Vec<FsItem> = valid_entries
+        // 使用 rayon 并行处理条目，并预计算排序键减少比较期分配
+        let mut items_with_sort_key: Vec<(FsItem, String)> = valid_entries
             .par_iter()
             .map(|(entry, entry_path, metadata)| {
                 let name = entry.file_name().to_string_lossy().to_string();
+            let sort_key = name.to_lowercase();
                 let mut target_path_str = None;
                 let mut is_dir = metadata.is_dir();
                 // 检查 .lnk
@@ -270,34 +271,37 @@ impl FsManager {
                             .map(|t| Self::is_image_file(Path::new(t)))
                             .unwrap_or(false));
 
-                FsItem {
-                    name,
-                    path: entry_path.to_string_lossy().to_string(),
-                    is_dir,
-                    size,
-                    modified,
-                    created,
-                    is_image,
-                    folder_count,
-                    image_count,
-                    archive_count,
-                    video_count,
-                    target_path: target_path_str,
-                }
+                (
+                    FsItem {
+                        name,
+                        path: entry_path.to_string_lossy().to_string(),
+                        is_dir,
+                        size,
+                        modified,
+                        created,
+                        is_image,
+                        folder_count,
+                        image_count,
+                        archive_count,
+                        video_count,
+                        target_path: target_path_str,
+                    },
+                    sort_key,
+                )
             })
             .collect();
 
         // 排序：目录优先，然后按名称（使用并行自然排序，大量条目时更快）
-        let mut sorted_items = items;
-        sorted_items.par_sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        items_with_sort_key.par_sort_by(|a, b| match (a.0.is_dir, b.0.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => {
-                let name_a = a.name.to_lowercase();
-                let name_b = b.name.to_lowercase();
-                natural_sort_rs::natural_cmp::<str, String>(&name_a, &name_b)
-            }
+            _ => natural_sort_rs::natural_cmp::<str, String>(&a.1, &b.1),
         });
+
+        let sorted_items = items_with_sort_key
+            .into_iter()
+            .map(|(item, _)| item)
+            .collect();
 
         Ok(sorted_items)
     }

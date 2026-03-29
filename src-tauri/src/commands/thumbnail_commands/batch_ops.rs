@@ -13,7 +13,7 @@ use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Manager, State};
 
@@ -354,7 +354,7 @@ pub async fn scan_folder_thumbnails(
 
 /// 在文件夹中查找候选文件（图片或压缩包）
 pub fn find_candidate_for_folder(
-    fs_manager: &Arc<Mutex<FsManager>>,
+    fs_manager: &Arc<FsManager>,
     folder_path: &str,
 ) -> Result<Option<(String, FolderMatchKind)>, String> {
     let mut queue = vec![(folder_path.to_string(), 0usize)];
@@ -385,14 +385,11 @@ pub fn find_candidate_for_folder(
 
 /// 读取目录内容
 pub fn read_directory_items(
-    fs_manager: &Arc<Mutex<FsManager>>,
+    fs_manager: &Arc<FsManager>,
     path: &str,
 ) -> Result<Vec<FsItem>, String> {
     let path_buf = PathBuf::from(path);
-    let manager = fs_manager
-        .lock()
-        .map_err(|e| format!("获取 FsManager 锁失败: {}", e))?;
-    manager.read_directory(&path_buf)
+    fs_manager.read_directory(&path_buf)
 }
 
 /// 检查路径是否为压缩包

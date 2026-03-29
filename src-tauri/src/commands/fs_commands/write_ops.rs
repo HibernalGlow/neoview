@@ -29,7 +29,7 @@ where
 /// 创建目录
 #[tauri::command]
 pub async fn create_directory(path: String, state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     fs_manager.create_directory(&path)
@@ -38,7 +38,7 @@ pub async fn create_directory(path: String, state: State<'_, FsState>) -> Result
 /// 删除文件或目录
 #[tauri::command]
 pub async fn delete_path(path: String, state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     fs_manager.delete(&path)
@@ -51,7 +51,7 @@ pub async fn rename_path(
     to: String,
     state: State<'_, FsState>,
 ) -> Result<(), String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
@@ -166,7 +166,7 @@ pub async fn move_to_trash_async(
 /// 复制文件或文件夹
 #[tauri::command]
 pub async fn copy_path(from: String, to: String, state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
@@ -176,7 +176,7 @@ pub async fn copy_path(from: String, to: String, state: State<'_, FsState>) -> R
 /// 移动文件或文件夹
 #[tauri::command]
 pub async fn move_path(from: String, to: String, state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);

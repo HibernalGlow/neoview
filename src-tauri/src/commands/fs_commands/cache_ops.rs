@@ -98,10 +98,7 @@ pub async fn load_directory_snapshot(
         .enqueue_blocking(
             "filebrowser-directory-load",
             job_path,
-            move || -> Result<Vec<FsItem>, String> {
-                let fs_manager = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
-                fs_manager.read_directory_with_stats(&path_for_job)
-            },
+            move || -> Result<Vec<FsItem>, String> { fs_manager.read_directory_with_stats(&path_for_job) },
         )
         .await?;
 
@@ -215,8 +212,7 @@ pub async fn batch_load_directory_snapshots(
 
             async move {
                 let load_result = tauri::async_runtime::spawn_blocking(move || {
-                    let fs = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
-                    fs.read_directory(&path_buf)
+                    fs_manager.read_directory(&path_buf)
                 })
                 .await;
 
@@ -297,7 +293,7 @@ pub async fn browse_directory_page(
     let limit = options.limit.unwrap_or(100);
 
     let page_entries: Vec<PathBuf> = entries.into_iter().skip(offset).take(limit).collect();
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
     let mut items = Vec::new();
     for entry_path in page_entries {
         if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
@@ -354,7 +350,7 @@ pub async fn start_directory_stream(
 
     let mut initial_items = Vec::new();
     {
-        let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+        let fs_manager = &state.fs_manager;
         for entry_path in initial_batch {
             if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
                 initial_items.push(item);
@@ -411,7 +407,7 @@ pub async fn get_next_stream_batch(
 
         let mut items = Vec::new();
         {
-            let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+            let fs_manager = &state.fs_manager;
             for entry_path in batch {
                 if let Ok(item) = fs_manager.read_item_with_stats(&entry_path) {
                     items.push(item);

@@ -16,10 +16,7 @@ pub async fn search_files(
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
     let search_options = options.unwrap_or_default();
 
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path_buf = PathBuf::from(path);
 
@@ -35,10 +32,7 @@ pub async fn search_files(
 /// 初始化文件索引
 #[tauri::command]
 pub async fn initialize_file_index(state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     fs_manager.initialize_indexer()
 }
@@ -50,10 +44,7 @@ pub async fn build_file_index(
     recursive: bool,
     state: State<'_, FsState>,
 ) -> Result<(), String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     fs_manager.build_index(&path, recursive)
@@ -64,10 +55,7 @@ pub async fn build_file_index(
 pub async fn get_index_stats(
     state: State<'_, FsState>,
 ) -> Result<crate::core::file_indexer::IndexStats, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     fs_manager.get_index_stats()
 }
@@ -75,10 +63,7 @@ pub async fn get_index_stats(
 /// 清除文件索引
 #[tauri::command]
 pub async fn clear_file_index(state: State<'_, FsState>) -> Result<(), String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     fs_manager.clear_index()
 }
@@ -91,10 +76,7 @@ pub async fn search_in_index(
     options: Option<IndexSearchOptions>,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let max_results = max_results.unwrap_or(100);
     let search_options = options.map(|o| crate::core::file_indexer::SearchOptions {
@@ -117,10 +99,7 @@ pub async fn get_indexed_paths(
     recursive: Option<bool>,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let recursive = recursive.unwrap_or(false);
 
@@ -130,10 +109,7 @@ pub async fn get_indexed_paths(
 /// 检查路径是否已被索引
 #[tauri::command]
 pub async fn is_path_indexed(path: String, state: State<'_, FsState>) -> Result<bool, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     fs_manager.is_path_indexed(&path)
 }
@@ -143,10 +119,7 @@ pub async fn is_path_indexed(path: String, state: State<'_, FsState>) -> Result<
 pub async fn get_index_progress(
     state: State<'_, FsState>,
 ) -> Result<crate::core::file_indexer::IndexProgress, String> {
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     fs_manager.get_index_progress()
 }
@@ -159,10 +132,7 @@ pub async fn get_unindexed_files(
 ) -> Result<UnindexedFilesResult, String> {
     println!("🔍 开始扫描未索引文件: {}", root_path);
 
-    let fs_manager = state
-        .fs_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let root_path = PathBuf::from(root_path);
 

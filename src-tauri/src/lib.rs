@@ -120,7 +120,7 @@ pub fn run() {
             let archive_manager_arc = Arc::new(Mutex::new(archive_manager));
 
             app.manage(FsState {
-                fs_manager: Arc::new(Mutex::new(fs_manager)),
+                fs_manager: Arc::new(fs_manager),
                 archive_manager: Arc::clone(&archive_manager_arc),
             });
 

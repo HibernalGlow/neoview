@@ -32,7 +32,7 @@ use crate::core::cache_index_db::CacheIndexDb;
 
 /// 文件系统状态
 pub struct FsState {
-    pub fs_manager: Arc<Mutex<FsManager>>,
+    pub fs_manager: Arc<FsManager>,
     pub archive_manager: Arc<Mutex<ArchiveManager>>,
 }
 

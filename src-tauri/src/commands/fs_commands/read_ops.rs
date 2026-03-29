@@ -184,7 +184,7 @@ pub async fn browse_directory(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<Vec<crate::core::fs_manager::FsItem>, String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     fs_manager.read_directory(&path)
@@ -305,7 +305,6 @@ pub async fn list_subfolders(path: String) -> Result<Vec<SubfolderItem>, String>
         let path_buf = PathBuf::from(path);
 
         spawn_blocking(move || {
-            let fs_manager = fs_manager.lock().unwrap_or_else(|e| e.into_inner());
             fs_manager.get_directory_total_size(&path_buf)
         })
         .await
@@ -381,7 +380,7 @@ pub async fn get_images_in_directory(
     recursive: bool,
     state: State<'_, FsState>,
 ) -> Result<Vec<String>, String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     let images = fs_manager.get_images_in_directory(&path, recursive)?;
@@ -398,7 +397,7 @@ pub async fn get_file_metadata(
     path: String,
     state: State<'_, FsState>,
 ) -> Result<crate::core::fs_manager::FsItem, String> {
-    let fs_manager = state.fs_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let fs_manager = &state.fs_manager;
 
     let path = PathBuf::from(path);
     fs_manager.get_file_metadata(&path)

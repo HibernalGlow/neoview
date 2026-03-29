@@ -9,7 +9,6 @@
 
 use crate::core::fs_manager::FsItem;
 use dashmap::DashMap;
-use jwalk::WalkDir;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -309,19 +308,28 @@ impl DirectoryScanner {
         tx: mpsc::Sender<DirectoryStreamOutput>,
         start_time: Instant,
     ) {
+        let adaptive_batch_enabled = batch_size == DEFAULT_BATCH_SIZE;
         let mut current_batch_size = batch_size;
         let mut batch: Vec<FsItem> = Vec::with_capacity(current_batch_size);
         let mut batch_index = 0usize;
         let mut total_loaded = 0usize;
         let mut skipped_count = 0usize;
 
-        // 使用 jwalk 并行遍历（深度 1，只扫描直接子项）
-        let walker = WalkDir::new(&path)
-            .min_depth(1)
-            .max_depth(1)
-            .skip_hidden(skip_hidden);
+        let entries = match std::fs::read_dir(&path) {
+            Ok(entries) => entries,
+            Err(e) => {
+                let error = StreamError {
+                    message: e.to_string(),
+                    path: Some(path.to_string_lossy().to_string()),
+                    skipped_count: 0,
+                };
+                let _ = tx.blocking_send(DirectoryStreamOutput::Error(error));
+                return;
+            }
+        };
 
-        for entry_result in walker {
+        // 深度固定为 1：直接扫描目录子项，避免 jwalk 在浅层目录上的额外调度开销。
+        for entry_result in entries {
             // 检查取消
             if handle.is_cancelled() {
                 log::info!("Stream {} cancelled", handle.id);
@@ -330,17 +338,21 @@ impl DirectoryScanner {
 
             match entry_result {
                 Ok(entry) => {
-                    let entry_path = entry.path();
-
                     // 获取元数据
                     let metadata = match entry.metadata() {
                         Ok(m) => m,
                         Err(e) => {
-                            log::debug!("跳过无法获取元数据的条目 {:?}: {}", entry_path, e);
+                            log::debug!("跳过无法获取元数据的条目 {:?}: {}", entry.path(), e);
                             skipped_count += 1;
                             continue;
                         }
                     };
+
+                    if skip_hidden && Self::is_hidden_entry(&entry, &metadata) {
+                        continue;
+                    }
+
+                    let entry_path = entry.path();
 
                     // 构建 FsItem
                     let item = Self::build_fs_item(&entry_path, &metadata);
@@ -371,15 +383,19 @@ impl DirectoryScanner {
                         };
                         let _ = tx.blocking_send(DirectoryStreamOutput::Progress(progress));
 
-                        // 自适应批次：早期加速填充，后期减小批次提升滚动期间响应性。
-                        current_batch_size = Self::adaptive_batch_size(total_loaded)
-                            .clamp(MIN_BATCH_SIZE, MAX_BATCH_SIZE);
-                        if batch.capacity() < current_batch_size {
-                            batch.reserve(current_batch_size - batch.capacity());
+                        if adaptive_batch_enabled {
+                            // 自适应批次：早期加速填充，后期减小批次提升滚动期间响应性。
+                            current_batch_size = Self::adaptive_batch_size(total_loaded)
+                                .clamp(MIN_BATCH_SIZE, MAX_BATCH_SIZE);
+                            if batch.capacity() < current_batch_size {
+                                batch.reserve(current_batch_size - batch.capacity());
+                            }
                         }
 
-                        // 让出 CPU（参考 Spacedrive 的防饥饿设计）
-                        std::thread::yield_now();
+                        // 小目录批次很少时不主动让出，避免额外调度开销；大目录仍保持响应性。
+                        if total_loaded >= 256 {
+                            std::thread::yield_now();
+                        }
                     }
                 }
                 Err(e) => {
@@ -416,6 +432,29 @@ impl DirectoryScanner {
             };
             let _ = tx.blocking_send(DirectoryStreamOutput::Complete(complete));
         }
+    }
+
+    #[inline]
+    fn is_hidden_entry(entry: &std::fs::DirEntry, metadata: &std::fs::Metadata) -> bool {
+        if entry
+            .file_name()
+            .as_encoded_bytes()
+            .first()
+            .is_some_and(|b| *b == b'.')
+        {
+            return true;
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+            if metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0 {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// 构建 FsItem
@@ -489,25 +528,34 @@ impl DirectoryScanner {
 
     /// 检查是否为图片文件
     fn is_image_file(path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            matches!(
-                ext.as_str(),
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
-            )
-        } else {
-            false
-        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            return false;
+        };
+
+        ext.eq_ignore_ascii_case("jpg")
+            || ext.eq_ignore_ascii_case("jpeg")
+            || ext.eq_ignore_ascii_case("png")
+            || ext.eq_ignore_ascii_case("gif")
+            || ext.eq_ignore_ascii_case("bmp")
+            || ext.eq_ignore_ascii_case("webp")
+            || ext.eq_ignore_ascii_case("avif")
+            || ext.eq_ignore_ascii_case("jxl")
+            || ext.eq_ignore_ascii_case("tiff")
+            || ext.eq_ignore_ascii_case("tif")
     }
 
     /// 检查是否为压缩包文件
     fn is_archive_file(path: &Path) -> bool {
-        if let Some(ext) = path.extension() {
-            let ext = ext.to_string_lossy().to_lowercase();
-            matches!(ext.as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7")
-        } else {
-            false
-        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            return false;
+        };
+
+        ext.eq_ignore_ascii_case("zip")
+            || ext.eq_ignore_ascii_case("cbz")
+            || ext.eq_ignore_ascii_case("rar")
+            || ext.eq_ignore_ascii_case("cbr")
+            || ext.eq_ignore_ascii_case("7z")
+            || ext.eq_ignore_ascii_case("cb7")
     }
 }
 

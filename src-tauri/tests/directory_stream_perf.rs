@@ -432,10 +432,10 @@ async fn directory_stream_perf_smoke() {
         elapsed: started.elapsed(),
     };
     println!(
-        "[PERF][smoke] items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+        "[PERF][smoke] items={} batches={} elapsed_us={} throughput={:.2} items/s",
         stats.total_items,
         stats.batches,
-        stats.elapsed.as_millis(),
+        stats.elapsed.as_micros(),
         stats.items_per_sec()
     );
     assert_against_baseline("smoke", stats.items_per_sec(), "NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC");
@@ -483,13 +483,13 @@ async fn directory_stream_real_dataset_smoke() {
             )
             .await;
             println!(
-                "[PERF][real][run {}][sample {}] dataset={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+                "[PERF][real][run {}][sample {}] dataset={} items={} batches={} elapsed_us={} throughput={:.2} items/s",
                 run_idx + 1,
                 idx + 1,
                 dir.display(),
                 stats.total_items,
                 stats.batches,
-                stats.elapsed.as_millis(),
+                stats.elapsed.as_micros(),
                 stats.items_per_sec()
             );
             aggregate_items += stats.total_items;
@@ -503,12 +503,12 @@ async fn directory_stream_real_dataset_smoke() {
             elapsed: aggregate_elapsed,
         };
         println!(
-            "[PERF][real][run {}][aggregate] samples={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+            "[PERF][real][run {}][aggregate] samples={} items={} batches={} elapsed_us={} throughput={:.2} items/s",
             run_idx + 1,
             sample_dirs.len(),
             stats.total_items,
             stats.batches,
-            stats.elapsed.as_millis(),
+            stats.elapsed.as_micros(),
             stats.items_per_sec()
         );
         run_throughputs.push(stats.items_per_sec());
@@ -589,12 +589,12 @@ async fn directory_stream_real_dataset_param_sweep() {
             };
 
             println!(
-                "[PERF][sweep] batch_size={} skip_hidden={} items={} batches={} elapsed_ms={} throughput={:.2} items/s",
+                "[PERF][sweep] batch_size={} skip_hidden={} items={} batches={} elapsed_us={} throughput={:.2} items/s",
                 config.batch_size,
                 config.skip_hidden,
                 aggregate.total_items,
                 aggregate.batches,
-                aggregate.elapsed.as_millis(),
+                aggregate.elapsed.as_micros(),
                 aggregate.items_per_sec()
             );
 
@@ -615,13 +615,13 @@ async fn directory_stream_real_dataset_param_sweep() {
     println!("[PERF][sweep] ranking (best -> worst):");
     for (idx, item) in results.iter().enumerate() {
         println!(
-            "[PERF][sweep][rank {}] batch_size={} skip_hidden={} throughput={:.2} items/s items={} elapsed_ms={}",
+            "[PERF][sweep][rank {}] batch_size={} skip_hidden={} throughput={:.2} items/s items={} elapsed_us={}",
             idx + 1,
             item.config.batch_size,
             item.config.skip_hidden,
             item.stats.items_per_sec(),
             item.stats.total_items,
-            item.stats.elapsed.as_millis()
+            item.stats.elapsed.as_micros()
         );
     }
 

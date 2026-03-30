@@ -1,5 +1,3 @@
-use once_cell::sync::Lazy;
-use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::path::Path;
 
@@ -31,15 +29,17 @@ pub const VIDEO_EXTENSIONS: &[&str] = &[
     "nov",
 ];
 
-/// 预编译的视频扩展名集合（O(1) 查找）
-static VIDEO_EXTENSIONS_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    VIDEO_EXTENSIONS.iter().copied().collect()
-});
+#[inline]
+fn is_video_extension_inner(ext: &str) -> bool {
+    VIDEO_EXTENSIONS
+        .iter()
+        .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+}
 
 /// 判断扩展名是否为视频扩展（不带点，如 "mp4"）
 #[inline]
 pub fn is_video_extension(ext: &str) -> bool {
-    VIDEO_EXTENSIONS_SET.contains(ext.to_ascii_lowercase().as_str())
+    is_video_extension_inner(ext)
 }
 
 /// 判断给定路径是否为视频文件（O(1) 查找）
@@ -47,6 +47,6 @@ pub fn is_video_extension(ext: &str) -> bool {
 pub fn is_video_path(path: &Path) -> bool {
     path.extension()
         .and_then(OsStr::to_str)
-        .map(|ext| VIDEO_EXTENSIONS_SET.contains(ext.to_ascii_lowercase().as_str()))
+    .map(is_video_extension_inner)
         .unwrap_or(false)
 }

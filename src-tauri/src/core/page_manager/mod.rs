@@ -131,6 +131,22 @@ pub struct PageContentManager {
 }
 
 impl PageContentManager {
+    #[inline]
+    fn ext_matches_any(ext: &str, candidates: &[&str]) -> bool {
+        candidates
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+    }
+
+    #[inline]
+    fn path_ext_matches_any(path: &str, candidates: &[&str]) -> bool {
+        Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|ext| Self::ext_matches_any(ext, candidates))
+            .unwrap_or(false)
+    }
+
     /// 创建页面管理器
     pub fn new(
         job_engine: Arc<JobEngine>,
@@ -355,45 +371,22 @@ impl PageContentManager {
 
     /// 检查是否为压缩包文件
     fn is_archive_file(path: &str) -> bool {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        matches!(ext.as_str(), "zip" | "rar" | "7z" | "cbz" | "cbr")
+        Self::path_ext_matches_any(path, &["zip", "rar", "7z", "cbz", "cbr"])
     }
 
     /// 检查是否为图片文件
     fn is_image_file(path: &str) -> bool {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        matches!(
-            ext.as_str(),
-            "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "jxl" | "bmp"
-        )
+        Self::path_ext_matches_any(path, &["jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp"])
     }
 
     /// 检查是否为视频文件
     fn is_video_file(path: &str) -> bool {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        matches!(ext.as_str(), "mp4" | "mkv" | "webm" | "avi" | "mov" | "wmv")
+        Self::path_ext_matches_any(path, &["mp4", "mkv", "webm", "avi", "mov", "wmv"])
     }
 
     /// 检查是否为 EPUB 文件
     fn is_epub_file(path: &str) -> bool {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        ext == "epub"
+        Self::path_ext_matches_any(path, &["epub"])
     }
 
     /// 扫描 EPUB 中的图片
@@ -423,15 +416,18 @@ impl PageContentManager {
 
         let mut files: Vec<String> = fs::read_dir(path)
             .map_err(|e| format!("读取目录失败: {}", e))?
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry.path().extension().map_or(false, |ext| {
-                    let ext = ext.to_string_lossy().to_lowercase();
-                    image_extensions.contains(&ext.as_str())
-                        || video_extensions.contains(&ext.as_str())
-                })
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                let path_buf = entry.path();
+                let ext = path_buf.extension().and_then(|e| e.to_str())?;
+                if Self::ext_matches_any(ext, &image_extensions)
+                    || Self::ext_matches_any(ext, &video_extensions)
+                {
+                    Some(path_buf.to_string_lossy().to_string())
+                } else {
+                    None
+                }
             })
-            .map(|entry| entry.path().to_string_lossy().to_string())
             .collect();
 
         files.sort();
@@ -635,22 +631,22 @@ impl PageContentManager {
 
     /// 检测视频 MIME 类型
     fn detect_video_mime(path: &str) -> String {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = Path::new(path).extension().and_then(|e| e.to_str());
+        let mime = if ext.is_some_and(|value| value.eq_ignore_ascii_case("webm")) {
+            "video/webm"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("mkv")) {
+            "video/x-matroska"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("avi")) {
+            "video/x-msvideo"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("mov")) {
+            "video/quicktime"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("wmv")) {
+            "video/x-ms-wmv"
+        } else {
+            "video/mp4"
+        };
 
-        match ext.as_str() {
-            "mp4" => "video/mp4",
-            "webm" => "video/webm",
-            "mkv" => "video/x-matroska",
-            "avi" => "video/x-msvideo",
-            "mov" => "video/quicktime",
-            "wmv" => "video/x-ms-wmv",
-            _ => "video/mp4",
-        }
-        .to_string()
+        mime.to_string()
     }
 
     /// 触发预加载（公开方法，由前端调用）
@@ -787,26 +783,36 @@ impl PageContentManager {
 
     /// 检测 MIME 类型
     fn detect_mime_type(path: &str) -> String {
-        let ext = Path::new(path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
+        let ext = Path::new(path).extension().and_then(|e| e.to_str());
+        let mime = if ext.is_some_and(|value| {
+            value.eq_ignore_ascii_case("jpg") || value.eq_ignore_ascii_case("jpeg")
+        }) {
+            "image/jpeg"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("png")) {
+            "image/png"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("gif")) {
+            "image/gif"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("webp")) {
+            "image/webp"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("avif")) {
+            "image/avif"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("jxl")) {
+            "image/jxl"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("bmp")) {
+            "image/bmp"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("svg")) {
+            "image/svg+xml"
+        } else if ext.is_some_and(|value| value.eq_ignore_ascii_case("ico")) {
+            "image/x-icon"
+        } else if ext.is_some_and(|value| {
+            value.eq_ignore_ascii_case("tiff") || value.eq_ignore_ascii_case("tif")
+        }) {
+            "image/tiff"
+        } else {
+            "application/octet-stream"
+        };
 
-        match ext.as_str() {
-            "jpg" | "jpeg" => "image/jpeg",
-            "png" => "image/png",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            "avif" => "image/avif",
-            "jxl" => "image/jxl",
-            "bmp" => "image/bmp",
-            "svg" => "image/svg+xml",
-            "ico" => "image/x-icon",
-            "tiff" | "tif" => "image/tiff",
-            _ => "application/octet-stream",
-        }
-        .to_string()
+        mime.to_string()
     }
 
     /// 关闭当前书籍

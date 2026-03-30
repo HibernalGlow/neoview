@@ -32,6 +32,13 @@ pub struct BookManager {
 }
 
 impl BookManager {
+    #[inline]
+    fn ext_matches_any(ext: &str, candidates: &[&str]) -> bool {
+        candidates
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+    }
+
     pub fn new() -> Self {
         Self::with_cache(Arc::new(IndexCache::default()))
     }
@@ -125,15 +132,24 @@ impl BookManager {
         }
 
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            let lower = ext.to_lowercase();
-            match lower.as_str() {
-                "zip" | "rar" | "7z" | "cbz" | "cbr" => Ok(BookType::Archive),
-                "epub" => Ok(BookType::Epub),
-                "pdf" => Ok(BookType::Pdf),
-                // 常见视频扩展名，作为 Media 类型处理
-                _ if video_exts::is_video_extension(&lower) => Ok(BookType::Media),
-                _ => Err(format!("Unsupported file type: {}", ext)),
+            if Self::ext_matches_any(ext, &["zip", "rar", "7z", "cbz", "cbr"]) {
+                return Ok(BookType::Archive);
             }
+
+            if ext.eq_ignore_ascii_case("epub") {
+                return Ok(BookType::Epub);
+            }
+
+            if ext.eq_ignore_ascii_case("pdf") {
+                return Ok(BookType::Pdf);
+            }
+
+            // 常见视频扩展名，作为 Media 类型处理
+            if video_exts::is_video_extension(ext) {
+                return Ok(BookType::Media);
+            }
+
+            Err(format!("Unsupported file type: {}", ext))
         } else {
             Err("Cannot determine file type".to_string())
         }
@@ -399,9 +415,11 @@ impl BookManager {
     /// 检查是否是图片文件
     fn is_image_file(&self, path: &Path) -> bool {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            matches!(
-                ext.to_lowercase().as_str(),
-                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "avif" | "jxl" | "tiff" | "tif"
+            Self::ext_matches_any(
+                ext,
+                &[
+                    "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+                ],
             )
         } else {
             false

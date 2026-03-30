@@ -17,7 +17,11 @@
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
   import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
-  import { pageTransitionStore } from '$lib/stores/pageTransitionStore.svelte';
+  import {
+    pageTransitionStore,
+    easingCssMap,
+    type PageTransitionSettings
+  } from '$lib/stores/pageTransitionStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -113,8 +117,29 @@
     return url;
   });
   
+  // 获取动画设置
+  let transitionSettings = $state<PageTransitionSettings>(pageTransitionStore.getSettings());
+  $effect(() => {
+    const unsubscribe = pageTransitionStore.subscribe((s) => {
+      transitionSettings = s;
+    });
+    return unsubscribe;
+  });
+
+  // 仅在「淡入淡出」模式下启用图片加载淡入，避免覆盖其它翻页动画
+  let shouldFadeOnLoad = $derived(
+    transitionSettings.enabled && transitionSettings.type === 'fade'
+  );
+
+  let fadeTransitionCss = $derived.by(() => {
+    if (!shouldFadeOnLoad) return 'none';
+    const easing = easingCssMap[transitionSettings.easing];
+    return `opacity ${transitionSettings.duration}ms ${easing}`;
+  });
+
   // ==================== 【性能优化 #4】ViewSource 渲染延迟 ====================
   // 快速翻页时延迟渲染图片，减少主线程解码压力
+  // 但在非淡入翻页动画中，优先保证图片尽快出现以展示位移动画
   let settledUrl = $state('');
   let settleTimer = 0;
 
@@ -128,11 +153,15 @@
     // 清理旧定时器
     if (settleTimer) clearTimeout(settleTimer);
 
+    const settleDelay = transitionSettings.enabled && transitionSettings.type !== 'none' && transitionSettings.type !== 'fade'
+      ? 0
+      : 60;
+
     // 如果还没有 settledUrl（第一次加载），或者是在快速翻页
-    // 使用 60ms 的延迟，这个延迟符合 NeeView 的表现，且对视觉影响极小
+    // 默认使用 60ms 延迟；非淡入翻页动画时禁用延迟避免吞掉位移效果
     settleTimer = window.setTimeout(() => {
       settledUrl = targetUrl;
-    }, 60);
+    }, settleDelay);
 
     return () => {
       if (settleTimer) clearTimeout(settleTimer);
@@ -166,14 +195,6 @@
     return parts.join('; ');
   });
 
-  // 获取动画设置
-  let animationsEnabled = $state(true);
-  $effect(() => {
-    const unsubscribe = pageTransitionStore.subscribe(s => {
-      animationsEnabled = s.enabled;
-    });
-    return unsubscribe;
-  });
 </script>
 
 {#if useCanvas}
@@ -198,11 +219,11 @@
       {alt}
       class="frame-image"
       class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
-      class:loading={showThumbnail}
+      class:loading={showThumbnail && shouldFadeOnLoad}
       style:transform={transform || undefined}
       style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
       style:filter={filterCss || undefined}
-      style:--fade-transition={animationsEnabled ? 'opacity 0.2s ease-in-out' : 'none'}
+      style:--fade-transition={fadeTransitionCss}
       style={style || undefined}
       onload={handleMainImageLoad}
       draggable="false"

@@ -19,6 +19,7 @@ use tauri::State;
 
 // 全局流ID计数器
 static STREAM_COUNTER: AtomicU64 = AtomicU64::new(0);
+const SNAPSHOT_STATS_MAX_DIRECT_ENTRIES: usize = 180;
 
 // 流状态管理
 static STREAMS: LazyLock<Mutex<HashMap<String, DirectoryStream>>> =
@@ -43,13 +44,35 @@ fn directory_mtime(path: &Path) -> Option<u64> {
         .map(|d| d.as_secs())
 }
 
+/// 自适应决定是否收集子目录统计。
+/// 大目录优先走快速模式，避免对子目录逐一统计导致的 I/O 放大。
+fn should_collect_snapshot_stats(path: &Path) -> bool {
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+
+    let mut seen = 0usize;
+    for entry in entries {
+        if entry.is_err() {
+            continue;
+        }
+        seen += 1;
+        if seen > SNAPSHOT_STATS_MAX_DIRECT_ENTRIES {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// 加载目录快照
 #[tauri::command]
 pub async fn load_directory_snapshot(
     path: String,
     state: State<'_, FsState>,
     cache_state: State<'_, DirectoryCacheState>,
-    cache_index: State<'_, CacheIndexState>,
+    _cache_index: State<'_, CacheIndexState>,
     scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<DirectorySnapshotResponse, String> {
     let path_buf = PathBuf::from(&path);
@@ -72,19 +95,6 @@ pub async fn load_directory_snapshot(
         }
     }
 
-    // SQLite 缓存
-    if let Some(persisted_items) = cache_index.db.load_directory_snapshot(&path, mtime)? {
-        {
-            let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
-            cache.insert(path.clone(), persisted_items.clone(), mtime);
-        }
-        return Ok(DirectorySnapshotResponse {
-            items: persisted_items,
-            mtime,
-            cached: true,
-        });
-    }
-
     // 文件系统读取
     println!(
         "📁 DirectorySnapshot miss: {} -> 调度 filebrowser-directory-load",
@@ -93,12 +103,27 @@ pub async fn load_directory_snapshot(
     let fs_manager = Arc::clone(&state.fs_manager);
     let job_path = path.clone();
     let path_for_job = path_buf.clone();
+    let collect_stats = should_collect_snapshot_stats(&path_buf);
+
+    if !collect_stats {
+        log::debug!(
+            "DirectorySnapshot 快速模式（跳过子目录统计）: {}",
+            path
+        );
+    }
+
     let items: Vec<FsItem> = scheduler
         .scheduler
         .enqueue_blocking(
             "filebrowser-directory-load",
             job_path,
-            move || -> Result<Vec<FsItem>, String> { fs_manager.read_directory_with_stats(&path_for_job) },
+            move || -> Result<Vec<FsItem>, String> {
+                if collect_stats {
+                    fs_manager.read_directory_with_stats(&path_for_job)
+                } else {
+                    fs_manager.read_directory(&path_for_job)
+                }
+            },
         )
         .await?;
 
@@ -106,9 +131,6 @@ pub async fn load_directory_snapshot(
         let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
         cache.insert(path.clone(), items.clone(), mtime);
     }
-    cache_index
-        .db
-        .save_directory_snapshot(&path, mtime, &items)?;
 
     Ok(DirectorySnapshotResponse {
         items,
@@ -123,13 +145,12 @@ pub async fn batch_load_directory_snapshots(
     paths: Vec<String>,
     state: State<'_, FsState>,
     cache_state: State<'_, DirectoryCacheState>,
-    cache_index: State<'_, CacheIndexState>,
+    _cache_index: State<'_, CacheIndexState>,
     scheduler: State<'_, BackgroundSchedulerState>,
 ) -> Result<Vec<BatchDirectorySnapshotResult>, String> {
-    use futures::future::join_all;
+    use futures::stream::{self, StreamExt};
 
     let fs_manager = Arc::clone(&state.fs_manager);
-    let cache_index_db = Arc::clone(&cache_index.db);
     let _ = &scheduler;
 
     let mut results: Vec<BatchDirectorySnapshotResult> = Vec::with_capacity(paths.len());
@@ -156,40 +177,12 @@ pub async fn batch_load_directory_snapshots(
             }
         }
 
-        // 2. 检查 SQLite 缓存
-        match cache_index_db.load_directory_snapshot(path, mtime) {
-            Ok(Some(persisted_items)) => {
-                {
-                    let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
-                    cache.insert(path.clone(), persisted_items.clone(), mtime);
-                }
-                results.push(BatchDirectorySnapshotResult {
-                    path: path.clone(),
-                    snapshot: Some(DirectorySnapshotResponse {
-                        items: persisted_items,
-                        mtime,
-                        cached: true,
-                    }),
-                    error: None,
-                });
-                continue;
-            }
-            Ok(None) => {
-                pending_loads.push((idx, path.clone(), path_buf, mtime));
-                results.push(BatchDirectorySnapshotResult {
-                    path: path.clone(),
-                    snapshot: None,
-                    error: None,
-                });
-            }
-            Err(e) => {
-                results.push(BatchDirectorySnapshotResult {
-                    path: path.clone(),
-                    snapshot: None,
-                    error: Some(e),
-                });
-            }
-        }
+        pending_loads.push((idx, path.clone(), path_buf, mtime));
+        results.push(BatchDirectorySnapshotResult {
+            path: path.clone(),
+            snapshot: None,
+            error: None,
+        });
     }
 
     if pending_loads.is_empty() {
@@ -202,58 +195,63 @@ pub async fn batch_load_directory_snapshots(
         paths.len() - pending_loads.len()
     );
 
-    // 3. 并发加载所有 miss 的目录
-    let futures: Vec<_> = pending_loads
-        .into_iter()
-        .map(|(idx, path, path_buf, mtime)| {
-            let fs_manager = Arc::clone(&fs_manager);
-            let cache_index_db = Arc::clone(&cache_index_db);
-            let cache_state_inner = cache_state.inner();
+    // 3. 有界并发加载所有 miss 的目录，避免大量路径时线程风暴与磁盘抖动。
+    let max_concurrency = std::thread::available_parallelism()
+        .map(|n| (n.get() * 2).clamp(4, 16))
+        .unwrap_or(8);
 
-            async move {
-                let load_result = tauri::async_runtime::spawn_blocking(move || {
-                    fs_manager.read_directory(&path_buf)
-                })
-                .await;
+    let loaded: Vec<(usize, BatchDirectorySnapshotResult)> = stream::iter(
+        pending_loads
+            .into_iter()
+            .map(|(idx, path, path_buf, mtime)| {
+                let fs_manager = Arc::clone(&fs_manager);
+                let cache_state_inner = cache_state.inner();
 
-                let result = match load_result {
-                    Ok(Ok(items)) => {
-                        {
-                            let mut cache = cache_state_inner
-                                .cache
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner());
-                            cache.insert(path.clone(), items.clone(), mtime);
+                async move {
+                    let load_result = tauri::async_runtime::spawn_blocking(move || {
+                        fs_manager.read_directory(&path_buf)
+                    })
+                    .await;
+
+                    let result = match load_result {
+                        Ok(Ok(items)) => {
+                            {
+                                let mut cache = cache_state_inner
+                                    .cache
+                                    .lock()
+                                    .unwrap_or_else(|e| e.into_inner());
+                                cache.insert(path.clone(), items.clone(), mtime);
+                            }
+
+                            BatchDirectorySnapshotResult {
+                                path,
+                                snapshot: Some(DirectorySnapshotResponse {
+                                    items,
+                                    mtime,
+                                    cached: false,
+                                }),
+                                error: None,
+                            }
                         }
-                        let _ = cache_index_db.save_directory_snapshot(&path, mtime, &items);
-
-                        BatchDirectorySnapshotResult {
+                        Ok(Err(e)) => BatchDirectorySnapshotResult {
                             path,
-                            snapshot: Some(DirectorySnapshotResponse {
-                                items,
-                                mtime,
-                                cached: false,
-                            }),
-                            error: None,
-                        }
-                    }
-                    Ok(Err(e)) => BatchDirectorySnapshotResult {
-                        path,
-                        snapshot: None,
-                        error: Some(e),
-                    },
-                    Err(e) => BatchDirectorySnapshotResult {
-                        path,
-                        snapshot: None,
-                        error: Some(format!("spawn_blocking error: {}", e)),
-                    },
-                };
-                (idx, result)
-            }
-        })
-        .collect();
+                            snapshot: None,
+                            error: Some(e),
+                        },
+                        Err(e) => BatchDirectorySnapshotResult {
+                            path,
+                            snapshot: None,
+                            error: Some(format!("spawn_blocking error: {}", e)),
+                        },
+                    };
 
-    let loaded: Vec<(usize, BatchDirectorySnapshotResult)> = join_all(futures).await;
+                    (idx, result)
+                }
+            }),
+    )
+    .buffer_unordered(max_concurrency)
+    .collect()
+    .await;
 
     for (idx, result) in loaded {
         results[idx] = result;
@@ -471,31 +469,76 @@ fn sort_entries(entries: &mut Vec<PathBuf>, sort_by: &Option<String>, sort_order
     let sort_by = sort_by.as_ref().map(|s| s.as_str()).unwrap_or("name");
     let sort_ascending = sort_order.as_ref().map(|s| s.as_str()).unwrap_or("asc") == "asc";
 
-    entries.sort_by(|a, b| {
-        let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    match sort_by {
+        "size" => {
+            let mut keyed: Vec<(PathBuf, u64, String)> = entries
+                .drain(..)
+                .map(|path| {
+                    let size = path.metadata().ok().map(|m| m.len()).unwrap_or(0);
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    (path, size, name)
+                })
+                .collect();
 
-        let comparison = match sort_by {
-            "name" => a_name.cmp(&b_name),
-            "size" => {
-                let a_size = a.metadata().ok().map(|m| m.len()).unwrap_or(0);
-                let b_size = b.metadata().ok().map(|m| m.len()).unwrap_or(0);
-                a_size.cmp(&b_size)
+            keyed.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)));
+            if !sort_ascending {
+                keyed.reverse();
             }
-            "modified" => {
-                let a_modified = a.metadata().ok().and_then(|m| m.modified().ok());
-                let b_modified = b.metadata().ok().and_then(|m| m.modified().ok());
-                a_modified.cmp(&b_modified)
-            }
-            _ => a_name.cmp(&b_name),
-        };
 
-        if sort_ascending {
-            comparison
-        } else {
-            comparison.reverse()
+            *entries = keyed.into_iter().map(|(path, _, _)| path).collect();
         }
-    });
+        "modified" => {
+            let mut keyed: Vec<(PathBuf, u64, String)> = entries
+                .drain(..)
+                .map(|path| {
+                    let modified = path
+                        .metadata()
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    (path, modified, name)
+                })
+                .collect();
+
+            keyed.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.cmp(&b.2)));
+            if !sort_ascending {
+                keyed.reverse();
+            }
+
+            *entries = keyed.into_iter().map(|(path, _, _)| path).collect();
+        }
+        _ => {
+            let mut keyed: Vec<(PathBuf, String)> = entries
+                .drain(..)
+                .map(|path| {
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    (path, name)
+                })
+                .collect();
+
+            keyed.sort_by(|a, b| a.1.cmp(&b.1));
+            if !sort_ascending {
+                keyed.reverse();
+            }
+
+            *entries = keyed.into_iter().map(|(path, _)| path).collect();
+        }
+    }
 }
 
 fn convert_paths_to_file_info(paths: Vec<PathBuf>) -> Result<Vec<FileInfo>, String> {

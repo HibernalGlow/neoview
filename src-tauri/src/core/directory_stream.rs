@@ -2,7 +2,7 @@
 //! 参考 Spacedrive 的流式加载架构实现目录流式扫描
 //!
 //! 核心特性：
-//! - 批量流式返回（每 15-50 项一批）
+//! - 批量流式返回（每 15-256 项一批）
 //! - 支持取消操作
 //! - 进度报告
 //! - 权限错误优雅处理
@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 /// 默认批次大小（参考 Spacedrive 的 MAX_POLLS = 15）
 pub const DEFAULT_BATCH_SIZE: usize = 15;
 /// 最大批次大小
-pub const MAX_BATCH_SIZE: usize = 50;
+pub const MAX_BATCH_SIZE: usize = 256;
 /// 最小批次大小
 pub const MIN_BATCH_SIZE: usize = 10;
 /// 进度事件最小发送间隔（按已加载条目数）

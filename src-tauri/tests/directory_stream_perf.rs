@@ -10,7 +10,9 @@ use rand::SeedableRng;
 use tokio::time::timeout;
 use walkdir::WalkDir;
 
-use app_lib::test_exports::{DirectoryScanner, DirectoryStreamOutput, StreamManager};
+use app_lib::test_exports::{
+    DirectoryScanner, DirectoryStreamOutput, StreamManager, MAX_BATCH_SIZE,
+};
 
 const DEFAULT_REAL_DATASET_DIR: &str = r"E:\1Hub\EH";
 const DEFAULT_REAL_DATASET_TIMEOUT_SECS: u64 = 60;
@@ -85,7 +87,7 @@ fn resolve_batch_sizes() -> Vec<usize> {
 
     let mut unique = Vec::new();
     for size in parsed {
-        if (10..=50).contains(&size) && !unique.contains(&size) {
+        if (10..=MAX_BATCH_SIZE).contains(&size) && !unique.contains(&size) {
             unique.push(size);
         }
     }

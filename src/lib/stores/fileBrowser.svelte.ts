@@ -534,6 +534,8 @@ function createFileBrowserStore() {
         }));
 
         const STREAM_APPLY_DEBOUNCE_MS = 48;
+        const STREAM_PROGRESSIVE_SORT_MAX_ITEMS = 1200;
+        const STREAM_LARGE_DIR_DEBOUNCE_MS = 120;
         let applyTimer: ReturnType<typeof setTimeout> | null = null;
         let hasPendingApply = false;
 
@@ -545,28 +547,27 @@ function createFileBrowserStore() {
           hasPendingApply = false;
         };
 
-        const applyItems = (items: FsItem[]) => {
+        const applyItems = (items: FsItem[], forceSort = false) => {
           if (version !== streamVersion) return;
 
-          const sortedItems = sortItems(
-            items,
-            currentState.sortField,
-            currentState.sortOrder,
-            parentPath
-          );
+          // 大目录流式阶段避免每批次全量排序，改为完成时再做一次最终排序。
+          const shouldSortNow = forceSort || items.length <= STREAM_PROGRESSIVE_SORT_MAX_ITEMS;
+          const viewItems = shouldSortNow
+            ? sortItems(items, currentState.sortField, currentState.sortOrder, parentPath)
+            : items;
 
           update(state => ({
             ...state,
-            items: sortedItems,
-            visibleItems: state.useVisibleItemsOverride ? state.visibleItems : sortedItems,
+            items: viewItems,
+            visibleItems: state.useVisibleItemsOverride ? state.visibleItems : viewItems,
             thumbnails: version === streamVersion ? state.thumbnails : new Map(),
             loading: false
           }));
 
           const normalizedTarget = normalizePath(targetPath);
-          const targetIndex = sortedItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
+          const targetIndex = viewItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
           const finalSelectIndex = targetIndex >= 0 ? targetIndex : selectIndex;
-          if (finalSelectIndex !== undefined && finalSelectIndex >= 0 && finalSelectIndex < sortedItems.length) {
+          if (finalSelectIndex !== undefined && finalSelectIndex >= 0 && finalSelectIndex < viewItems.length) {
             update(state => ({
               ...state,
               selectedIndex: finalSelectIndex,
@@ -579,19 +580,24 @@ function createFileBrowserStore() {
         const scheduleApplyItems = (immediate = false) => {
           if (immediate) {
             clearApplyTimer();
-            applyItems(collected);
+            applyItems(collected, true);
             return;
           }
 
           hasPendingApply = true;
           if (applyTimer) return;
 
+          const debounceMs =
+            collected.length > STREAM_PROGRESSIVE_SORT_MAX_ITEMS
+              ? STREAM_LARGE_DIR_DEBOUNCE_MS
+              : STREAM_APPLY_DEBOUNCE_MS;
+
           applyTimer = setTimeout(() => {
             applyTimer = null;
             if (!hasPendingApply) return;
             hasPendingApply = false;
-            applyItems(collected);
-          }, STREAM_APPLY_DEBOUNCE_MS);
+            applyItems(collected, false);
+          }, debounceMs);
         };
 
         try {
@@ -614,7 +620,8 @@ function createFileBrowserStore() {
               }
             },
             {
-              batchSize: 256,
+              // 实测 skip_hidden=true 时 32 在当前数据集吞吐更稳定，避免落到 50/128+ 的低效区间。
+              batchSize: 32,
               sortBy: currentState.sortField,
               sortOrder: currentState.sortOrder
             }

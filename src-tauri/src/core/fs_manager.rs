@@ -1,9 +1,7 @@
 use super::file_indexer::FileIndexer;
 use super::video_exts;
-use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,21 +9,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use trash;
 
-/// 预编译的图片扩展名集合（O(1) 查找）
-static IMAGE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    [
-        "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
-    ]
-    .into_iter()
-    .collect()
-});
-
-/// 预编译的压缩包扩展名集合
-static ARCHIVE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    ["zip", "cbz", "rar", "cbr", "7z", "cb7"]
-        .into_iter()
-        .collect()
-});
+const IMAGE_EXTENSIONS: [&str; 10] = [
+    "jpg", "jpeg", "png", "gif", "bmp", "webp", "avif", "jxl", "tiff", "tif",
+];
+const ARCHIVE_EXTENSIONS: [&str; 6] = ["zip", "cbz", "rar", "cbr", "7z", "cb7"];
 
 const FS_RETRY_COUNT: usize = 5;
 const DIRECTORY_STATS_MAX_DIRECT_ENTRIES: usize = 180;
@@ -138,27 +125,28 @@ impl FsManager {
     /// 添加允许访问的根目录
     pub fn add_allowed_root(&mut self, root: PathBuf) {
         if root.is_absolute() {
-            self.allowed_roots.push(root);
+            let canonical_root = root.canonicalize().unwrap_or(root);
+            if !self.allowed_roots.iter().any(|existing| existing == &canonical_root) {
+                self.allowed_roots.push(canonical_root);
+            }
         }
     }
 
     /// 验证路径是否在允许的根目录下（防止目录遍历攻击）
     pub fn validate_path(&self, path: &Path) -> Result<(), String> {
-        let canonical = path
-            .canonicalize()
-            .map_err(|e| format!("无法解析路径: {}", e))?;
-
-        // 如果没有限制，允许所有路径
+        // 默认无白名单限制时直接放行，避免每次都 canonicalize 触发额外 I/O。
         if self.allowed_roots.is_empty() {
             return Ok(());
         }
 
+        let canonical = path
+            .canonicalize()
+            .map_err(|e| format!("无法解析路径: {}", e))?;
+
         // 检查是否在允许的根目录下
         for root in &self.allowed_roots {
-            if let Ok(root_canonical) = root.canonicalize() {
-                if canonical.starts_with(&root_canonical) {
-                    return Ok(());
-                }
+            if canonical.starts_with(root) {
+                return Ok(());
             }
         }
 
@@ -478,20 +466,26 @@ impl FsManager {
         })
     }
 
-    /// 检查是否为图片文件（使用预编译 HashSet，O(1) 查找）
+    /// 检查是否为图片文件（无分配大小写比较）
     pub fn is_image_file(path: &Path) -> bool {
-        path.extension()
-            .and_then(OsStr::to_str)
-            .map(|ext| IMAGE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
-            .unwrap_or(false)
+        let Some(ext) = path.extension().and_then(OsStr::to_str) else {
+            return false;
+        };
+
+        IMAGE_EXTENSIONS
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
     }
 
-    /// 检查是否为压缩包文件（使用预编译 HashSet，O(1) 查找）
+    /// 检查是否为压缩包文件（无分配大小写比较）
     pub fn is_archive_file(path: &Path) -> bool {
-        path.extension()
-            .and_then(OsStr::to_str)
-            .map(|ext| ARCHIVE_EXTENSIONS.contains(ext.to_ascii_lowercase().as_str()))
-            .unwrap_or(false)
+        let Some(ext) = path.extension().and_then(OsStr::to_str) else {
+            return false;
+        };
+
+        ARCHIVE_EXTENSIONS
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
     }
 
     /// 检查是否为视频文件

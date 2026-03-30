@@ -12,7 +12,7 @@ import { fileBrowserStore } from '../fileBrowser.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
-import { pageNavigationDedup } from '$lib/utils/requestDedup';
+import { pageNavigationDedup, RequestDeduplicator } from '$lib/utils/requestDedup';
 import * as dimensionApi from '$lib/api/dimensions';
 
 import { SvelteMap } from 'svelte/reactivity';
@@ -58,9 +58,19 @@ class BookStore {
   });
 
   private lastEmmMetadataForCurrentBook: EMMMetadata | null = null;
+  private openBookDedup = new RequestDeduplicator(30000);
 
   // 超分状态管理：每页超分状态映射 pageIndex -> status
   private upscaleStatusByPage = $state<SvelteMap<number, UpscaleStatus>>(new SvelteMap());
+
+  private buildOpenBookDedupKey(path: string, options: OpenBookOptions): string {
+    const normalizedPath = path.replace(/\\/g, '/');
+    const normalizedInitialFilePath = (options.initialFilePath ?? '').replace(/\\/g, '/');
+    const initialPage = options.initialPage ?? -1;
+    const skipHistory = options.skipHistory ? 1 : 0;
+    const useStreaming = options.useStreaming === undefined ? 'd' : (options.useStreaming ? 1 : 0);
+    return `open-${normalizedPath}-${initialPage}-${normalizedInitialFilePath}-${skipHistory}-${useStreaming}`;
+  }
 
   // Getters
   get currentBook() { return this.state.currentBook; }
@@ -152,30 +162,33 @@ class BookStore {
   // ==================== 书籍操作 ====================
 
   async openBook(path: string, options: OpenBookOptions = {}) {
-    try {
-      console.log('📖 Opening book:', path);
-      this.state.loading = true;
-      this.state.error = '';
-      this.state.upscaledImageData = null;
-      this.state.singleFileMode = false;
-      this.state.originalFilePath = null;
-      this.state.pathStack = [{ path }];
-      infoPanelStore.resetAll();
+    const dedupKey = this.buildOpenBookDedupKey(path, options);
+    await this.openBookDedup.run(dedupKey, async () => {
+      try {
+        console.log('📖 Opening book:', path);
+        this.state.loading = true;
+        this.state.error = '';
+        this.state.upscaledImageData = null;
+        this.state.singleFileMode = false;
+        this.state.originalFilePath = null;
+        this.state.pathStack = [{ path }];
+        infoPanelStore.resetAll();
 
-      // 【内存泄漏修复】清理上一本书的所有缓存资源
-      cleanupBookResources();
+        // 【内存泄漏修复】清理上一本书的所有缓存资源
+        cleanupBookResources();
 
-      await this.openBookNormal(path, options);
-    } catch (err) {
-      console.error('❌ Error opening book:', err);
-      this.state.error = String(err);
-      this.state.currentBook = null;
-      this.syncAppStateBookSlice();
-      this.lastEmmMetadataForCurrentBook = null;
-      infoPanelStore.resetBookInfo();
-    } finally {
-      this.state.loading = false;
-    }
+        await this.openBookNormal(path, options);
+      } catch (err) {
+        console.error('❌ Error opening book:', err);
+        this.state.error = String(err);
+        this.state.currentBook = null;
+        this.syncAppStateBookSlice();
+        this.lastEmmMetadataForCurrentBook = null;
+        infoPanelStore.resetBookInfo();
+      } finally {
+        this.state.loading = false;
+      }
+    });
   }
 
   private async openBookNormal(path: string, options: OpenBookOptions) {

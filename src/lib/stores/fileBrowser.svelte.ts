@@ -620,8 +620,8 @@ function createFileBrowserStore() {
               }
             },
             {
-              // 实测 skip_hidden=true 时 32 在当前数据集吞吐更稳定，避免落到 50/128+ 的低效区间。
-              batchSize: 32,
+              // 引入后端流队列控并发后，实测 skip_hidden=true 下 50 批次吞吐最佳。
+              batchSize: 50,
               sortBy: currentState.sortField,
               sortOrder: currentState.sortOrder
             }

@@ -8,9 +8,26 @@ use crate::core::directory_stream::{
     StreamManagerState, StreamOptions, StreamProgress,
 };
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use tauri::{ipc::Channel, State};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
+
+const STREAM_SCAN_MAX_CONCURRENCY: usize = 6;
+const STREAM_SEARCH_MAX_CONCURRENCY: usize = 3;
+
+static STREAM_SCAN_QUEUE: LazyLock<Arc<Semaphore>> = LazyLock::new(|| {
+    let permits = std::thread::available_parallelism()
+        .map(|n| n.get().clamp(2, STREAM_SCAN_MAX_CONCURRENCY))
+        .unwrap_or(2);
+    Arc::new(Semaphore::new(permits))
+});
+
+static STREAM_SEARCH_QUEUE: LazyLock<Arc<Semaphore>> = LazyLock::new(|| {
+    let permits = std::thread::available_parallelism()
+        .map(|n| n.get().clamp(1, STREAM_SEARCH_MAX_CONCURRENCY))
+        .unwrap_or(1);
+    Arc::new(Semaphore::new(permits))
+});
 
 /// 流式浏览目录（Spacedrive 风格）
 ///
@@ -53,7 +70,21 @@ pub async fn stream_directory_v2(
     // 启动扫描任务
     let scan_handle = Arc::clone(&handle);
     let scan_path = path_buf.clone();
+    let scan_queue = Arc::clone(&*STREAM_SCAN_QUEUE);
     tokio::spawn(async move {
+        let _permit = match scan_queue.acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => {
+                let _ = tx
+                    .send(DirectoryStreamOutput::Error(StreamError {
+                        message: "目录流队列已关闭".to_string(),
+                        path: Some(scan_path.to_string_lossy().to_string()),
+                        skipped_count: 0,
+                    }))
+                    .await;
+                return;
+            }
+        };
         scanner.scan_streaming(scan_path, scan_handle, tx).await;
     });
 
@@ -179,8 +210,22 @@ pub async fn stream_search_v2(
     // 启动搜索任务
     let manager = Arc::clone(&state.manager);
     let stream_id_clone = stream_id.clone();
+    let search_queue = Arc::clone(&*STREAM_SEARCH_QUEUE);
 
     tokio::spawn(async move {
+        let _permit = match search_queue.acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => {
+                let _ = channel.send(SearchStreamOutput::Error(StreamError {
+                    message: "搜索流队列已关闭".to_string(),
+                    path: Some(path_buf.to_string_lossy().to_string()),
+                    skipped_count: 0,
+                }));
+                manager.remove_stream(&stream_id_clone);
+                return;
+            }
+        };
+
         let start_time = Instant::now();
         let mut batch: Vec<FsItem> = Vec::with_capacity(batch_size);
         let mut batch_index = 0usize;

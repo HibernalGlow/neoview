@@ -28,6 +28,7 @@ static ARCHIVE_EXTENSIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 });
 
 const FS_RETRY_COUNT: usize = 5;
+const DIRECTORY_STATS_MAX_DIRECT_ENTRIES: usize = 180;
 
 fn is_transient_fs_error(error: &std::io::Error) -> bool {
     matches!(
@@ -210,12 +211,15 @@ impl FsManager {
             })
             .collect();
 
+        // 单次扫描后自适应决定是否收集子目录统计，避免调用层先预扫描再读取。
+        let collect_stats = with_stats && valid_entries.len() <= DIRECTORY_STATS_MAX_DIRECT_ENTRIES;
+
         // 使用 rayon 并行处理条目，并预计算排序键减少比较期分配
         let mut items_with_sort_key: Vec<(FsItem, String)> = valid_entries
             .par_iter()
             .map(|(entry, entry_path, metadata)| {
                 let name = entry.file_name().to_string_lossy().to_string();
-            let sort_key = name.to_lowercase();
+                let sort_key = name.to_lowercase();
                 let mut target_path_str = None;
                 let mut is_dir = metadata.is_dir();
                 // 检查 .lnk
@@ -235,7 +239,7 @@ impl FsManager {
 
                 // 子目录统计
                 let (size, folder_count, image_count, archive_count, video_count) = if is_dir {
-                    if with_stats {
+                    if collect_stats {
                         // 如果需要统计，则获取详细数据（包含大小和计数）
                         let stats = self.get_directory_stats(entry_path, false);
                         (

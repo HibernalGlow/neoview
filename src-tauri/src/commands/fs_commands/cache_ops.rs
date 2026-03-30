@@ -19,7 +19,6 @@ use tauri::State;
 
 // 全局流ID计数器
 static STREAM_COUNTER: AtomicU64 = AtomicU64::new(0);
-const SNAPSHOT_STATS_MAX_DIRECT_ENTRIES: usize = 180;
 
 // 流状态管理
 static STREAMS: LazyLock<Mutex<HashMap<String, DirectoryStream>>> =
@@ -46,26 +45,6 @@ fn directory_mtime(path: &Path) -> Option<u64> {
 
 /// 自适应决定是否收集子目录统计。
 /// 大目录优先走快速模式，避免对子目录逐一统计导致的 I/O 放大。
-fn should_collect_snapshot_stats(path: &Path) -> bool {
-    let entries = match fs::read_dir(path) {
-        Ok(entries) => entries,
-        Err(_) => return false,
-    };
-
-    let mut seen = 0usize;
-    for entry in entries {
-        if entry.is_err() {
-            continue;
-        }
-        seen += 1;
-        if seen > SNAPSHOT_STATS_MAX_DIRECT_ENTRIES {
-            return false;
-        }
-    }
-
-    true
-}
-
 /// 加载目录快照
 #[tauri::command]
 pub async fn load_directory_snapshot(
@@ -103,27 +82,13 @@ pub async fn load_directory_snapshot(
     let fs_manager = Arc::clone(&state.fs_manager);
     let job_path = path.clone();
     let path_for_job = path_buf.clone();
-    let collect_stats = should_collect_snapshot_stats(&path_buf);
-
-    if !collect_stats {
-        log::debug!(
-            "DirectorySnapshot 快速模式（跳过子目录统计）: {}",
-            path
-        );
-    }
 
     let items: Vec<FsItem> = scheduler
         .scheduler
         .enqueue_blocking(
             "filebrowser-directory-load",
             job_path,
-            move || -> Result<Vec<FsItem>, String> {
-                if collect_stats {
-                    fs_manager.read_directory_with_stats(&path_for_job)
-                } else {
-                    fs_manager.read_directory(&path_for_job)
-                }
-            },
+            move || -> Result<Vec<FsItem>, String> { fs_manager.read_directory_with_stats(&path_for_job) },
         )
         .await?;
 
@@ -153,18 +118,26 @@ pub async fn batch_load_directory_snapshots(
     let fs_manager = Arc::clone(&state.fs_manager);
     let _ = &scheduler;
 
-    let mut results: Vec<BatchDirectorySnapshotResult> = Vec::with_capacity(paths.len());
+    let mut results: Vec<BatchDirectorySnapshotResult> = paths
+        .iter()
+        .map(|path| BatchDirectorySnapshotResult {
+            path: path.clone(),
+            snapshot: None,
+            error: None,
+        })
+        .collect();
+
     let mut pending_loads: Vec<(usize, String, PathBuf, Option<u64>)> = Vec::new();
+    {
+        let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
 
-    for (idx, path) in paths.iter().enumerate() {
-        let path_buf = PathBuf::from(path);
-        let mtime = directory_mtime(&path_buf);
+        for (idx, path) in paths.iter().enumerate() {
+            let path_buf = PathBuf::from(path);
+            let mtime = directory_mtime(&path_buf);
 
-        // 1. 检查内存缓存
-        {
-            let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
+            // 1. 单次加锁批量检查内存缓存，减少 N 次锁竞争
             if let Some(entry) = cache.get(path, mtime) {
-                results.push(BatchDirectorySnapshotResult {
+                results[idx] = BatchDirectorySnapshotResult {
                     path: path.clone(),
                     snapshot: Some(DirectorySnapshotResponse {
                         items: entry.items,
@@ -172,17 +145,12 @@ pub async fn batch_load_directory_snapshots(
                         cached: true,
                     }),
                     error: None,
-                });
+                };
                 continue;
             }
-        }
 
-        pending_loads.push((idx, path.clone(), path_buf, mtime));
-        results.push(BatchDirectorySnapshotResult {
-            path: path.clone(),
-            snapshot: None,
-            error: None,
-        });
+            pending_loads.push((idx, path.clone(), path_buf, mtime));
+        }
     }
 
     if pending_loads.is_empty() {
@@ -200,12 +168,11 @@ pub async fn batch_load_directory_snapshots(
         .map(|n| (n.get() * 2).clamp(4, 16))
         .unwrap_or(8);
 
-    let loaded: Vec<(usize, BatchDirectorySnapshotResult)> = stream::iter(
+    let loaded: Vec<(usize, String, Option<u64>, Result<Vec<FsItem>, String>)> = stream::iter(
         pending_loads
             .into_iter()
             .map(|(idx, path, path_buf, mtime)| {
                 let fs_manager = Arc::clone(&fs_manager);
-                let cache_state_inner = cache_state.inner();
 
                 async move {
                     let load_result = tauri::async_runtime::spawn_blocking(move || {
@@ -214,38 +181,12 @@ pub async fn batch_load_directory_snapshots(
                     .await;
 
                     let result = match load_result {
-                        Ok(Ok(items)) => {
-                            {
-                                let mut cache = cache_state_inner
-                                    .cache
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner());
-                                cache.insert(path.clone(), items.clone(), mtime);
-                            }
-
-                            BatchDirectorySnapshotResult {
-                                path,
-                                snapshot: Some(DirectorySnapshotResponse {
-                                    items,
-                                    mtime,
-                                    cached: false,
-                                }),
-                                error: None,
-                            }
-                        }
-                        Ok(Err(e)) => BatchDirectorySnapshotResult {
-                            path,
-                            snapshot: None,
-                            error: Some(e),
-                        },
-                        Err(e) => BatchDirectorySnapshotResult {
-                            path,
-                            snapshot: None,
-                            error: Some(format!("spawn_blocking error: {}", e)),
-                        },
+                        Ok(Ok(items)) => Ok(items),
+                        Ok(Err(e)) => Err(e),
+                        Err(e) => Err(format!("spawn_blocking error: {}", e)),
                     };
 
-                    (idx, result)
+                    (idx, path, mtime, result)
                 }
             }),
     )
@@ -253,8 +194,32 @@ pub async fn batch_load_directory_snapshots(
     .collect()
     .await;
 
-    for (idx, result) in loaded {
-        results[idx] = result;
+    // 4. 聚合写回缓存，避免并发阶段频繁抢锁
+    {
+        let mut cache = cache_state.cache.lock().unwrap_or_else(|e| e.into_inner());
+        for (idx, path, mtime, result) in loaded {
+            match result {
+                Ok(items) => {
+                    cache.insert(path.clone(), items.clone(), mtime);
+                    results[idx] = BatchDirectorySnapshotResult {
+                        path,
+                        snapshot: Some(DirectorySnapshotResponse {
+                            items,
+                            mtime,
+                            cached: false,
+                        }),
+                        error: None,
+                    };
+                }
+                Err(e) => {
+                    results[idx] = BatchDirectorySnapshotResult {
+                        path,
+                        snapshot: None,
+                        error: Some(e),
+                    };
+                }
+            }
+        }
     }
 
     Ok(results)

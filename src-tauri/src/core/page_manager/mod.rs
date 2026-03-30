@@ -43,6 +43,7 @@ pub struct ThumbnailItem {
 
 use crate::core::archive::ArchiveManager;
 use crate::core::job_engine::{Job, JobEngine, JobOutput, JobPriority, JobResult};
+use crate::models::{BookInfo as ModelBookInfo, BookType as ModelBookType, Page as ModelPage};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -169,6 +170,13 @@ impl PageContentManager {
     pub async fn open_book(&mut self, path: &str) -> Result<BookInfo, String> {
         log::info!("📖 PageManager: 打开书籍 {}", path);
 
+        // 同路径重复打开直接复用当前上下文，避免重复扫描。
+        if let Some(current) = self.current_book.as_ref() {
+            if current.path == path {
+                return Ok(BookInfo::from(current));
+            }
+        }
+
         // 清理旧书籍
         if let Some(ref old_book) = self.current_book {
             self.job_engine.cancel_book(&old_book.path).await;
@@ -217,6 +225,132 @@ impl PageContentManager {
         self.current_book = Some(book);
 
         Ok(info)
+    }
+
+    /// 从 `BookManager` 的书籍信息同步上下文，避免重复扫描。
+    pub async fn sync_from_model_book(&mut self, book: &ModelBookInfo) -> Result<BookInfo, String> {
+        let same_path_target = self.current_book.as_ref().and_then(|current| {
+            if current.path == book.path {
+                Some(book.current_page.min(current.total_pages.saturating_sub(1)))
+            } else {
+                None
+            }
+        });
+
+        if let Some(target_index) = same_path_target {
+            if let Some(current_mut) = self.current_book.as_mut() {
+                let _ = current_mut.goto(target_index);
+                return Ok(BookInfo::from(&*current_mut));
+            }
+        }
+
+        let old_path_to_cleanup = self
+            .current_book
+            .as_ref()
+            .map(|current| current.path.clone());
+
+        if let Some(old_path) = old_path_to_cleanup {
+            self.job_engine.cancel_book(&old_path).await;
+            self.memory_pool.lock().await.clear_book(&old_path);
+        }
+
+        let mut context = Self::build_context_from_model_book(book)?;
+        let _ = context.goto(book.current_page.min(context.total_pages.saturating_sub(1)));
+        let info = BookInfo::from(&context);
+        self.current_book = Some(context);
+        Ok(info)
+    }
+
+    fn build_context_from_model_book(book: &ModelBookInfo) -> Result<BookContext, String> {
+        let book_type = Self::map_model_book_type(book)?;
+        let mut pages = Vec::with_capacity(book.pages.len());
+
+        for (index, page) in book.pages.iter().enumerate() {
+            pages.push(PageInfo {
+                index,
+                inner_path: Self::resolve_inner_path(book_type, &book.path, page),
+                name: page.name.clone(),
+                size: Some(page.size),
+                content_type: Self::resolve_content_type(page),
+                width: page.width,
+                height: page.height,
+            });
+        }
+
+        let total_pages = pages.len();
+        Ok(BookContext {
+            path: book.path.clone(),
+            book_type,
+            pages,
+            total_pages,
+            current_index: 0,
+            read_direction: 1,
+        })
+    }
+
+    fn map_model_book_type(book: &ModelBookInfo) -> Result<BookType, String> {
+        let mapped = match book.book_type {
+            ModelBookType::Archive => BookType::Archive,
+            ModelBookType::Folder => BookType::Directory,
+            ModelBookType::Epub => BookType::Epub,
+            ModelBookType::Media => {
+                if let Some(page) = book.pages.first() {
+                    let content_type = Self::resolve_content_type(page);
+                    if content_type == PageContentType::Video {
+                        BookType::SingleVideo
+                    } else {
+                        BookType::SingleImage
+                    }
+                } else {
+                    BookType::SingleVideo
+                }
+            }
+            ModelBookType::Pdf => {
+                return Err("PageManager 暂不支持 PDF 同步".to_string());
+            }
+        };
+
+        Ok(mapped)
+    }
+
+    fn resolve_content_type(page: &ModelPage) -> PageContentType {
+        if let Some(inner_path) = page.inner_path.as_deref() {
+            let detected = PageContentType::from_path(inner_path);
+            if detected != PageContentType::Unknown {
+                return detected;
+            }
+        }
+
+        let detected = PageContentType::from_path(&page.path);
+        if detected != PageContentType::Unknown {
+            return detected;
+        }
+
+        PageContentType::from_path(&page.name)
+    }
+
+    fn resolve_inner_path(book_type: BookType, book_path: &str, page: &ModelPage) -> String {
+        match book_type {
+            BookType::Archive => page
+                .inner_path
+                .clone()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| page.path.clone()),
+            BookType::Epub => page
+                .inner_path
+                .clone()
+                .filter(|s| !s.is_empty())
+                .or_else(|| {
+                    page.path
+                        .strip_prefix(book_path)
+                        .and_then(|rest| rest.strip_prefix(':'))
+                        .map(ToString::to_string)
+                })
+                .unwrap_or_else(|| page.path.clone()),
+            BookType::Directory | BookType::SingleImage | BookType::SingleVideo | BookType::Playlist => {
+                page.path.clone()
+            }
+        }
     }
 
     /// 检查是否为压缩包文件

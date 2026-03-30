@@ -75,6 +75,13 @@ impl BookManager {
             return Err(format!("Path does not exist: {}", path));
         }
 
+        if let Some(current) = self.current_book.as_ref() {
+            if Self::is_same_book_path(&current.path, path) {
+                debug!("📖 BookManager: 重复打开同一路径，复用现有书籍上下文");
+                return Ok(current.clone());
+            }
+        }
+
         let book_type = self.detect_book_type(&path_buf)?;
         let name = path_buf
             .file_name()
@@ -639,10 +646,65 @@ impl BookManager {
             .ok()
             .map(|d| d.as_secs() as i64)
     }
+
+    fn is_same_book_path(existing_path: &str, requested_path: &str) -> bool {
+        if cfg!(windows) {
+            let normalized_existing = existing_path.replace('/', "\\");
+            let normalized_requested = requested_path.replace('/', "\\");
+            normalized_existing.eq_ignore_ascii_case(&normalized_requested)
+        } else {
+            existing_path == requested_path
+        }
+    }
 }
 
 impl Default for BookManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BookManager;
+    use std::fs;
+
+    #[test]
+    fn open_book_same_path_reuses_existing_context() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        fs::write(temp_dir.path().join("001.jpg"), b"a").expect("write image 1");
+        fs::write(temp_dir.path().join("002.jpg"), b"b").expect("write image 2");
+
+        let path = temp_dir.path().to_string_lossy().to_string();
+        let mut manager = BookManager::new();
+
+        let first = manager.open_book(&path).expect("first open");
+        assert_eq!(first.total_pages, 2);
+
+        manager.navigate_to_page(1).expect("goto page 1");
+
+        let second = manager.open_book(&path).expect("second open");
+        assert_eq!(second.current_page, 1);
+
+        let current = manager.get_current_book().expect("current book");
+        assert_eq!(current.current_page, 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn open_book_same_path_with_mixed_separators_reuses_context() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        fs::write(temp_dir.path().join("001.jpg"), b"a").expect("write image 1");
+        fs::write(temp_dir.path().join("002.jpg"), b"b").expect("write image 2");
+
+        let canonical_path = temp_dir.path().to_string_lossy().to_string();
+        let slash_variant = canonical_path.replace('\\', "/");
+        let mut manager = BookManager::new();
+
+        manager.open_book(&canonical_path).expect("first open");
+        manager.navigate_to_page(1).expect("goto page 1");
+
+        let second = manager.open_book(&slash_variant).expect("second open mixed separators");
+        assert_eq!(second.current_page, 1);
     }
 }

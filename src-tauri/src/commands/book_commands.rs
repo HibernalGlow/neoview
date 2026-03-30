@@ -4,19 +4,39 @@
 use crate::core::BookManager;
 use crate::core::ImageLoader;
 use crate::core::DimensionScannerState;
+use crate::commands::page_commands::PageManagerState;
 use crate::models::{BookInfo, PageSortMode, MediaPriorityMode};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
+
+fn is_same_book_path(existing_path: &str, requested_path: &str) -> bool {
+    if cfg!(windows) {
+        let normalized_existing = existing_path.replace('/', "\\");
+        let normalized_requested = requested_path.replace('/', "\\");
+        normalized_existing.eq_ignore_ascii_case(&normalized_requested)
+    } else {
+        existing_path == requested_path
+    }
+}
 
 #[tauri::command]
 pub async fn open_book(
     path: String,
     state: State<'_, Mutex<BookManager>>,
+    page_state: State<'_, PageManagerState>,
     scanner_state: State<'_, DimensionScannerState>,
     app_handle: AppHandle,
 ) -> Result<BookInfo, String> {
-    // 取消之前的扫描任务
-    {
+    let is_same_path_request = {
+        let manager = state.lock().map_err(|e| e.to_string())?;
+        manager
+            .get_current_book()
+            .map(|book| is_same_book_path(&book.path, &path))
+            .unwrap_or(false)
+    };
+
+    if !is_same_path_request {
+        // 仅在切换到新书时取消旧扫描任务。
         let scanner = scanner_state.scanner.lock().map_err(|e| e.to_string())?;
         scanner.cancel();
     }
@@ -26,6 +46,18 @@ pub async fn open_book(
         let mut manager = state.lock().map_err(|e| e.to_string())?;
         manager.open_book(&path)?
     };
+
+    // 将 BookManager 的扫描结果同步给 PageManager，避免后续 pm_open_book 再次扫描同一本书。
+    {
+        let mut page_manager = page_state.manager.write().await;
+        if let Err(e) = page_manager.sync_from_model_book(&book).await {
+            log::warn!("⚠️ open_book: PageManager 同步失败，将回退到 pm_open_book 扫描: {e}");
+        }
+    }
+
+    if is_same_path_request {
+        return Ok(book);
+    }
 
     // 启动后台尺寸扫描
     let book_path = book.path.clone();

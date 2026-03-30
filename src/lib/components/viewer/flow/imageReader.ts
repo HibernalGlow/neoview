@@ -561,8 +561,14 @@ export async function readPageBlobV2(
 		let bookSyncMs = 0;
 		if (lastSyncedBookPath !== currentBook.path) {
 			const syncStart = performance.now();
-			logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
-			await pm.openBook(currentBook.path);
+			// 优先走轻量状态检查，已同步时避免再次触发 openBook 命令路径。
+			const pmBook = await pm.getBookInfo();
+			if (pmBook?.path === currentBook.path) {
+				logImageTrace(traceId, 'PageManager already synced', { path: currentBook.path });
+			} else {
+				logImageTrace(traceId, 'syncing PageManager book', { path: currentBook.path });
+				await pm.openBook(currentBook.path);
+			}
 			lastSyncedBookPath = currentBook.path;
 			bookSyncMs = performance.now() - syncStart;
 		}

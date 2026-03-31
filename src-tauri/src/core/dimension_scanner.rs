@@ -9,10 +9,13 @@ use crate::models::{BookType, Page};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
+
+const CACHE_SAVE_DEBOUNCE_MS: u64 = 5_000;
+const CACHE_FORCE_SAVE_ENTRY_COUNT: usize = 1_024;
 
 /// 扫描结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +61,8 @@ pub struct DimensionScanComplete {
 pub struct DimensionScanner {
     /// 取消令牌
     cancel_token: Arc<AtomicBool>,
+    /// 最近一次缓存持久化时间（Unix 毫秒）
+    last_cache_save_ms: AtomicU64,
     /// 缓存引用
     cache: Arc<Mutex<DimensionCache>>,
     /// 共享压缩包管理器（内部已实现 Arc 引用和互斥锁）
@@ -69,6 +74,7 @@ impl DimensionScanner {
     pub fn new(cache: Arc<Mutex<DimensionCache>>, archive_manager: ArchiveManager) -> Self {
         Self {
             cancel_token: Arc::new(AtomicBool::new(false)),
+            last_cache_save_ms: AtomicU64::new(0),
             cache,
             archive_manager,
         }
@@ -100,6 +106,33 @@ impl DimensionScanner {
         None
     }
 
+    #[inline]
+    fn unix_ms_now() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .ok()
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+            .unwrap_or(0)
+    }
+
+    fn should_persist_cache_now(&self, new_entries: usize) -> bool {
+        if new_entries == 0 {
+            return false;
+        }
+
+        let now = Self::unix_ms_now();
+        let last = self.last_cache_save_ms.load(Ordering::Relaxed);
+        let force_flush = new_entries >= CACHE_FORCE_SAVE_ENTRY_COUNT;
+        let debounce_elapsed = now.saturating_sub(last) >= CACHE_SAVE_DEBOUNCE_MS;
+
+        if force_flush || debounce_elapsed {
+            self.last_cache_save_ms.store(now, Ordering::Relaxed);
+            return true;
+        }
+
+        false
+    }
+
     /// 扫描书籍中所有页面的尺寸
     pub fn scan_book(
         &self,
@@ -117,20 +150,23 @@ impl DimensionScanner {
         let mut pending_updates: Vec<DimensionUpdate> = Vec::new();
         let mut cache_entries: Vec<(String, u32, u32, Option<i64>)> = Vec::new();
 
+        // 批量预取缓存命中，避免逐页加锁。
+        let cached_dimensions = {
+            let cache = self.cache.lock().unwrap();
+            pages
+                .iter()
+                .map(|page| cache.get(&page.stable_hash, page.modified))
+                .collect::<Vec<_>>()
+        };
+
         log::info!("🔍 DimensionScanner: 开始扫描 {total} 页, book_type={book_type:?}");
 
-        for (idx, page) in pages.iter().enumerate() {
+        for (idx, (page, cached)) in pages.iter().zip(cached_dimensions.into_iter()).enumerate() {
             // 检查取消
             if self.is_cancelled() {
-                    log::info!("⏹️ DimensionScanner: 扫描被取消，已完成 {idx}/{total}");
+                log::info!("⏹️ DimensionScanner: 扫描被取消，已完成 {idx}/{total}");
                 break;
             }
-
-            // 先检查缓存
-            let cached = {
-                let cache = self.cache.lock().unwrap();
-                cache.get(&page.stable_hash, page.modified)
-            };
 
             if let Some((width, height)) = cached {
                 cached_count += 1;
@@ -186,10 +222,14 @@ impl DimensionScanner {
         }
 
         // 批量更新缓存
-        if !cache_entries.is_empty() {
+        let cache_entries_len = cache_entries.len();
+        if cache_entries_len > 0 {
+            let should_persist_now = self.should_persist_cache_now(cache_entries_len);
             let mut cache = self.cache.lock().expect("Failed to lock dimension cache");
             cache.set_batch(cache_entries);
-            let _ = cache.save();
+            if should_persist_now {
+                let _ = cache.save();
+            }
         }
 
         let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);

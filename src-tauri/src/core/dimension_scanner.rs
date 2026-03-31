@@ -2,7 +2,7 @@
 //! 
 //! 异步扫描书籍中所有页面的尺寸，支持取消和缓存
 
-use crate::core::archive::ArchiveManager;
+use crate::core::archive::{is_image_file, ArchiveManager};
 use crate::core::dimension_cache::DimensionCache;
 use crate::core::wic_decoder::WicDecoder;
 use crate::models::{BookType, Page};
@@ -56,6 +56,30 @@ pub struct DimensionScanComplete {
     pub duration_ms: u64,
 }
 
+/// 尺寸扫描任务页（轻量字段，避免复制完整 Page 结构）
+#[derive(Debug, Clone)]
+pub struct ScanPageTask {
+    pub index: usize,
+    pub stable_hash: String,
+    pub modified: Option<i64>,
+    pub path: String,
+    pub inner_path: Option<String>,
+    pub name: String,
+}
+
+impl From<&Page> for ScanPageTask {
+    fn from(page: &Page) -> Self {
+        Self {
+            index: page.index,
+            stable_hash: page.stable_hash.clone(),
+            modified: page.modified,
+            path: page.path.clone(),
+            inner_path: page.inner_path.clone(),
+            name: page.name.clone(),
+        }
+    }
+}
+
 
 /// 页面尺寸扫描器
 pub struct DimensionScanner {
@@ -98,12 +122,18 @@ impl DimensionScanner {
     /// 快速获取图片尺寸（纯 Rust，不解码像素）
     fn get_image_dimensions_fast(data: &[u8]) -> Option<(u32, u32)> {
         if let Ok(format) = image::guess_format(data) {
-            let reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
+            let reader = image::ImageReader::with_format(Cursor::new(data), format);
             if let Ok(dims) = reader.into_dimensions() {
                 return Some(dims);
             }
         }
         None
+    }
+
+    /// 从文件路径快速获取图片尺寸（尽量只读取头部）
+    fn get_image_dimensions_from_path_fast(path: &Path) -> Option<(u32, u32)> {
+        let reader = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+        reader.into_dimensions().ok()
     }
 
     #[inline]
@@ -138,7 +168,7 @@ impl DimensionScanner {
         &self,
         book_path: &str,
         book_type: &BookType,
-        pages: &[Page],
+        pages: &[ScanPageTask],
         app_handle: Option<&AppHandle>,
     ) -> ScanResult {
         let start = Instant::now();
@@ -262,20 +292,22 @@ impl DimensionScanner {
     /// 扫描单个页面的尺寸
     fn scan_page_dimensions(
         &self,
-        page: &Page,
+        page: &ScanPageTask,
         book_type: &BookType,
         book_path: &str,
     ) -> Option<(u32, u32)> {
         match book_type {
             BookType::Folder | BookType::Media => {
+                if !is_image_file(&page.path) {
+                    return None;
+                }
+
                 // 文件夹类型：直接读取文件
                 let path = Path::new(&page.path);
-                
-                // 优先使用快速提取
-                if let Ok(data) = std::fs::read(path) {
-                    if let Some(dims) = Self::get_image_dimensions_fast(&data) {
-                        return Some(dims);
-                    }
+
+                // 优先使用按路径的轻量尺寸提取（避免整文件读入内存）
+                if let Some(dims) = Self::get_image_dimensions_from_path_fast(path) {
+                    return Some(dims);
                 }
 
                 // 回退到 WIC

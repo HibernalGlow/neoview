@@ -3,6 +3,7 @@
 
 use crate::commands::page_commands::PageManagerState;
 use crate::core::archive::is_image_file;
+use crate::core::dimension_scanner::ScanPageTask;
 use crate::core::BookManager;
 use crate::core::DimensionScannerState;
 use crate::core::ImageLoader;
@@ -101,15 +102,15 @@ pub async fn open_book(
         return Ok(book);
     }
 
-    let pages: Vec<Page> = book
+    let scan_pages: Vec<ScanPageTask> = book
         .pages
         .iter()
         .filter(|page| is_image_page_for_dimension_scan(page))
-        .cloned()
+        .map(ScanPageTask::from)
         .collect();
 
     // 非图片书籍（例如纯视频）无需启动尺寸扫描。
-    if pages.is_empty() {
+    if scan_pages.is_empty() {
         return Ok(book);
     }
 
@@ -145,7 +146,7 @@ pub async fn open_book(
             return;
         }
 
-        scanner_arc.scan_book(&book_path, &book_type, &pages, Some(&app_handle));
+        scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle));
     });
 
     Ok(book)

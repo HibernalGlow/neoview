@@ -1,6 +1,6 @@
 //! 页面尺寸扫描相关命令
 
-use crate::core::dimension_scanner::{DimensionScannerState, ScanResult};
+use crate::core::dimension_scanner::{DimensionScannerState, ScanPageTask, ScanResult};
 use crate::models::{BookType, Page};
 use std::sync::Arc;
 use tauri::{AppHandle, State, command, async_runtime::spawn_blocking};
@@ -14,6 +14,8 @@ pub async fn start_dimension_scan(
     state: State<'_, DimensionScannerState>,
 ) -> Result<ScanResult, String> {
     log::info!("📐 [DimensionCommand] 调度书籍尺寸扫描: {book_path}");
+
+    let scan_pages: Vec<ScanPageTask> = pages.iter().map(ScanPageTask::from).collect();
     
     let scanner_arc = Arc::clone(&state.scanner);
     let scan_guard_arc = Arc::clone(&state.scan_guard);
@@ -27,7 +29,7 @@ pub async fn start_dimension_scan(
         scanner_arc.reset();
         
         // 执行扫描
-        Ok::<ScanResult, String>(scanner_arc.scan_book(&book_path, &book_type, &pages, Some(&app_handle)))
+        Ok::<ScanResult, String>(scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle)))
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))??;

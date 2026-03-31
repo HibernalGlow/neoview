@@ -116,6 +116,12 @@
     // 3. 使用原始 URL
     return url;
   });
+
+  // 标记当前是否命中了预解码 URL，用于减少不必要的渲染延迟
+  let usingPreDecodedUrl = $derived.by(() => {
+    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(pageIndex);
+    return !!preDecodedUrl && preDecodedUrl === displayUrl;
+  });
   
   // 获取动画设置
   let transitionSettings = $state<PageTransitionSettings>(pageTransitionStore.getSettings());
@@ -153,9 +159,11 @@
     // 清理旧定时器
     if (settleTimer) clearTimeout(settleTimer);
 
-    const settleDelay = transitionSettings.enabled && transitionSettings.type !== 'none' && transitionSettings.type !== 'fade'
+    const settleDelay = usingPreDecodedUrl
       ? 0
-      : 60;
+      : transitionSettings.enabled && transitionSettings.type !== 'none' && transitionSettings.type !== 'fade'
+        ? 0
+        : 60;
 
     // 如果还没有 settledUrl（第一次加载），或者是在快速翻页
     // 默认使用 60ms 延迟；非淡入翻页动画时禁用延迟避免吞掉位移效果
@@ -171,6 +179,7 @@
   // 【性能优化 #5】Mini-Thumbnail (BlurHash) 占位符
   let thumbnailUrl = $derived(bookStore.currentBook?.pages[pageIndex]?.thumbnail || '');
   let showThumbnail = $state(true);
+  let hasSettledUrl = $derived(settledUrl.length > 0);
 
   // 当 Full Image 加载完成后隐藏缩略图
   function handleMainImageLoad(e: Event) {
@@ -200,34 +209,38 @@
 {#if useCanvas}
   <!-- Canvas 渲染模式：Worker 预解码，性能更好 -->
   <div class="image-container {className}" style:background-image={showThumbnail && thumbnailUrl ? `url(${thumbnailUrl})` : 'none'}>
-    <CanvasImage
-      {pageIndex}
-      url={settledUrl}
-      {alt}
-      {transform}
-      clipPath={effectiveClipPath}
-      style={combinedStyle}
-      class={effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}
-      onload={handleMainImageLoad}
-    />
+    {#if hasSettledUrl}
+      <CanvasImage
+        {pageIndex}
+        url={settledUrl}
+        {alt}
+        {transform}
+        clipPath={effectiveClipPath}
+        style={combinedStyle}
+        class={effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}
+        onload={handleMainImageLoad}
+      />
+    {/if}
   </div>
 {:else}
   <!-- img 渲染模式：传统方式 -->
   <div class="image-container {className}" style:background-image={showThumbnail && thumbnailUrl ? "url(" + thumbnailUrl + ")" : 'none'}>
-    <img
-      src={settledUrl}
-      {alt}
-      class="frame-image"
-      class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
-      class:loading={showThumbnail && shouldFadeOnLoad}
-      style:transform={transform || undefined}
-      style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
-      style:filter={filterCss || undefined}
-      style:--fade-transition={fadeTransitionCss}
-      style={style || undefined}
-      onload={handleMainImageLoad}
-      draggable="false"
-    />
+    {#if hasSettledUrl}
+      <img
+        src={settledUrl}
+        {alt}
+        class="frame-image"
+        class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
+        class:loading={showThumbnail && shouldFadeOnLoad}
+        style:transform={transform || undefined}
+        style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
+        style:filter={filterCss || undefined}
+        style:--fade-transition={fadeTransitionCss}
+        style={style || undefined}
+        onload={handleMainImageLoad}
+        draggable="false"
+      />
+    {/if}
   </div>
 {/if}
 

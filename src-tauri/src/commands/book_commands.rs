@@ -102,6 +102,11 @@ pub async fn open_book(
         return Ok(book);
     }
 
+    // 同步后再次检查请求代际，避免为过期请求构建扫描任务。
+    if !is_latest_open_book_request(request_generation) {
+        return Ok(book);
+    }
+
     let scan_pages: Vec<ScanPageTask> = book
         .pages
         .iter()
@@ -111,6 +116,11 @@ pub async fn open_book(
 
     // 非图片书籍（例如纯视频）无需启动尺寸扫描。
     if scan_pages.is_empty() {
+        return Ok(book);
+    }
+
+    // 调度前再次确认当前请求仍然是最新，避免无效任务入队。
+    if !is_latest_open_book_request(request_generation) {
         return Ok(book);
     }
 

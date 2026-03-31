@@ -16,6 +16,9 @@ use tauri::{AppHandle, Emitter};
 
 const CACHE_SAVE_DEBOUNCE_MS: u64 = 5_000;
 const CACHE_FORCE_SAVE_ENTRY_COUNT: usize = 1_024;
+const PROGRESS_BATCH_BASE: usize = 20;
+const PROGRESS_BATCH_MEDIUM: usize = 50;
+const PROGRESS_BATCH_LARGE: usize = 100;
 
 /// 扫描结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,6 +166,17 @@ impl DimensionScanner {
         false
     }
 
+    #[inline]
+    fn progress_batch_size(total_pages: usize) -> usize {
+        if total_pages >= 4_000 {
+            PROGRESS_BATCH_LARGE
+        } else if total_pages >= 1_000 {
+            PROGRESS_BATCH_MEDIUM
+        } else {
+            PROGRESS_BATCH_BASE
+        }
+    }
+
     /// 扫描书籍中所有页面的尺寸
     pub fn scan_book(
         &self,
@@ -173,11 +187,23 @@ impl DimensionScanner {
     ) -> ScanResult {
         let start = Instant::now();
         let total = pages.len();
+
+        if total == 0 {
+            return ScanResult {
+                scanned_count: 0,
+                cached_count: 0,
+                failed_count: 0,
+                duration_ms: 0,
+            };
+        }
+
+        let should_emit_progress = app_handle.is_some();
+        let progress_batch_size = Self::progress_batch_size(total);
         
         let mut scanned_count = 0usize;
         let mut cached_count = 0usize;
         let mut failed_count = 0usize;
-        let mut pending_updates: Vec<DimensionUpdate> = Vec::new();
+        let mut pending_updates: Vec<DimensionUpdate> = Vec::with_capacity(progress_batch_size);
         let mut cache_entries: Vec<(String, u32, u32, Option<i64>)> = Vec::new();
 
         // 批量预取缓存命中，避免逐页加锁。
@@ -200,21 +226,25 @@ impl DimensionScanner {
 
             if let Some((width, height)) = cached {
                 cached_count += 1;
-                pending_updates.push(DimensionUpdate {
-                    page_index: page.index,
-                    width,
-                    height,
-                });
+                if should_emit_progress {
+                    pending_updates.push(DimensionUpdate {
+                        page_index: page.index,
+                        width,
+                        height,
+                    });
+                }
             } else {
                 // 需要扫描
                 match self.scan_page_dimensions(page, book_type, book_path) {
                     Some((width, height)) => {
                         scanned_count += 1;
-                        pending_updates.push(DimensionUpdate {
-                            page_index: page.index,
-                            width,
-                            height,
-                        });
+                        if should_emit_progress {
+                            pending_updates.push(DimensionUpdate {
+                                page_index: page.index,
+                                width,
+                                height,
+                            });
+                        }
                         cache_entries.push((
                             page.stable_hash.clone(),
                             width,
@@ -229,7 +259,7 @@ impl DimensionScanner {
             }
 
             // 每 20 个页面或最后一个页面时发送进度
-            if pending_updates.len() >= 20 || idx == total - 1 {
+            if should_emit_progress && (pending_updates.len() >= progress_batch_size || idx == total - 1) {
                 let updates = std::mem::take(&mut pending_updates);
                 if let Some(handle) = app_handle {
                     let completed = u64::try_from(idx + 1).unwrap_or(u64::MAX);

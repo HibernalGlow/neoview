@@ -10,6 +10,7 @@
 	import { X, Maximize, Minus } from '@lucide/svelte';
 	import { getOrCreateTabStore, type CardWindowTabStore } from '$lib/stores/cardWindowTabStore.svelte';
 	import { cardWindowManager } from '$lib/core/windows/cardWindowManager';
+	import WindowResizeOverlay from '$lib/components/layout/WindowResizeOverlay.svelte';
 	import TabBar from '$lib/components/cardwindow/TabBar.svelte';
 	import CardWindowContent from '$lib/components/cardwindow/CardWindowContent.svelte';
 
@@ -191,7 +192,9 @@
 	<title>{windowTitle} - NeoView</title>
 </svelte:head>
 
-<div class="h-screen w-screen flex flex-col bg-background select-none">
+<div class="h-screen w-screen flex flex-col overflow-hidden rounded-xl border border-border/40 bg-background select-none">
+	<WindowResizeOverlay />
+
 	<!-- 标题栏 -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div 

@@ -10,7 +10,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
+static OPEN_BOOK_REQUEST_GENERATION: AtomicU64 = AtomicU64::new(0);
 static OPEN_BOOK_SCAN_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+#[inline]
+fn is_latest_open_book_request(generation: u64) -> bool {
+    OPEN_BOOK_REQUEST_GENERATION.load(Ordering::SeqCst) == generation
+}
 
 fn is_same_book_path(existing_path: &str, requested_path: &str) -> bool {
     if cfg!(windows) {
@@ -30,6 +36,8 @@ pub async fn open_book(
     scanner_state: State<'_, DimensionScannerState>,
     app_handle: AppHandle,
 ) -> Result<BookInfo, String> {
+    let request_generation = OPEN_BOOK_REQUEST_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+
     let is_same_path_request = {
         let manager = state.lock().map_err(|e| e.to_string())?;
         manager
@@ -37,7 +45,7 @@ pub async fn open_book(
             .is_some_and(|book| is_same_book_path(&book.path, &path))
     };
 
-    if !is_same_path_request {
+    if !is_same_path_request && is_latest_open_book_request(request_generation) {
         // 仅在切换到新书时取消旧扫描任务。
         let scanner = scanner_state.scanner.lock().map_err(|e| e.to_string())?;
         scanner.cancel();
@@ -46,11 +54,37 @@ pub async fn open_book(
     // 打开书籍
     let book = {
         let mut manager = state.lock().map_err(|e| e.to_string())?;
+
+        // 若该请求在等待锁期间已被更晚请求覆盖，则直接复用当前上下文，避免重复扫描。
+        if !is_latest_open_book_request(request_generation) {
+            if let Some(current) = manager.get_current_book().cloned() {
+                log::debug!("open_book: stale request skipped before load");
+                return Ok(current);
+            }
+        }
+
         manager.open_book(&path)?
     };
 
+    // 若加载完成后该请求已过期，跳过后续同步/扫描副作用。
+    if !is_latest_open_book_request(request_generation) {
+        log::debug!("open_book: stale request skipped after load side-effects");
+        return Ok(book);
+    }
+
+    let should_sync_page_manager = if is_same_path_request {
+        let page_manager = page_state.manager.read().await;
+        !page_manager.current_book_info().is_some_and(|current| {
+            is_same_book_path(&current.path, &book.path)
+                && current.total_pages == book.total_pages
+                && current.current_index == book.current_page
+        })
+    } else {
+        true
+    };
+
     // 将 BookManager 的扫描结果同步给 PageManager，避免后续 pm_open_book 再次扫描同一本书。
-    {
+    if should_sync_page_manager {
         let mut page_manager = page_state.manager.write().await;
         if let Err(e) = page_manager.sync_from_model_book(&book).await {
             log::warn!("⚠️ open_book: PageManager 同步失败，将回退到 pm_open_book 扫描: {e}");

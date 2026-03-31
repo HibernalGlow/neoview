@@ -59,6 +59,8 @@ class BookStore {
 
   private lastEmmMetadataForCurrentBook: EMMMetadata | null = null;
   private openBookDedup = new RequestDeduplicator(30000);
+  private openBookRequestVersion = 0;
+  private activeOpenBookKey: string | null = null;
 
   // 超分状态管理：每页超分状态映射 pageIndex -> status
   private upscaleStatusByPage = $state<SvelteMap<number, UpscaleStatus>>(new SvelteMap());
@@ -70,6 +72,22 @@ class BookStore {
     const skipHistory = options.skipHistory ? 1 : 0;
     const useStreaming = options.useStreaming === undefined ? 'd' : (options.useStreaming ? 1 : 0);
     return `open-${normalizedPath}-${initialPage}-${normalizedInitialFilePath}-${skipHistory}-${useStreaming}`;
+  }
+
+  private beginOpenBookRequest(dedupKey: string): { key: string; version: number } {
+    if (this.activeOpenBookKey !== dedupKey) {
+      this.activeOpenBookKey = dedupKey;
+      this.openBookRequestVersion += 1;
+    }
+
+    return {
+      key: dedupKey,
+      version: this.openBookRequestVersion,
+    };
+  }
+
+  private isOpenBookRequestCurrent(ticket: { key: string; version: number }): boolean {
+    return this.activeOpenBookKey === ticket.key && this.openBookRequestVersion === ticket.version;
   }
 
   // Getters
@@ -163,8 +181,11 @@ class BookStore {
 
   async openBook(path: string, options: OpenBookOptions = {}) {
     const dedupKey = this.buildOpenBookDedupKey(path, options);
+    const ticket = this.beginOpenBookRequest(dedupKey);
     await this.openBookDedup.run(dedupKey, async () => {
       try {
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         console.log('📖 Opening book:', path);
         this.state.loading = true;
         this.state.error = '';
@@ -174,11 +195,17 @@ class BookStore {
         this.state.pathStack = [{ path }];
         infoPanelStore.resetAll();
 
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         // 【内存泄漏修复】清理上一本书的所有缓存资源
         cleanupBookResources();
 
-        await this.openBookNormal(path, options);
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
+        await this.openBookNormal(path, options, ticket);
       } catch (err) {
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         console.error('❌ Error opening book:', err);
         this.state.error = String(err);
         this.state.currentBook = null;
@@ -186,13 +213,21 @@ class BookStore {
         this.lastEmmMetadataForCurrentBook = null;
         infoPanelStore.resetBookInfo();
       } finally {
-        this.state.loading = false;
+        if (this.isOpenBookRequestCurrent(ticket)) {
+          this.state.loading = false;
+        }
       }
     });
   }
 
-  private async openBookNormal(path: string, options: OpenBookOptions) {
+  private async openBookNormal(
+    path: string,
+    options: OpenBookOptions,
+    ticket: { key: string; version: number }
+  ) {
     const book = await bookApi.openBook(path);
+    if (!this.isOpenBookRequestCurrent(ticket)) return;
+
     console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
     // 应用锁定的排序模式
@@ -203,9 +238,13 @@ class BookStore {
     if (lockedSortMode && book.sortMode !== lockedSortMode) {
       try {
         const updatedBook = await bookApi.setBookSortMode(lockedSortMode as PageSortMode);
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         Object.assign(book, updatedBook);
         console.log('🔒 已应用锁定的排序模式:', lockedSortMode);
       } catch (err) {
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         console.warn('⚠️ 应用锁定排序模式失败:', err);
       }
     }
@@ -214,10 +253,16 @@ class BookStore {
     if (lockedMediaPriority && book.mediaPriorityMode !== lockedMediaPriority) {
       try {
         const { setMediaPriorityMode } = await import('$lib/api/book');
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         const updatedBook = await setMediaPriorityMode(lockedMediaPriority as 'none' | 'videoFirst' | 'imageFirst');
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         Object.assign(book, updatedBook);
         console.log('🔒 已应用锁定的媒体优先模式:', lockedMediaPriority);
       } catch (err) {
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         console.warn('⚠️ 应用锁定媒体优先模式失败:', err);
       }
     }
@@ -241,6 +286,8 @@ class BookStore {
       }
     }
     
+    if (!this.isOpenBookRequestCurrent(ticket)) return;
+
     book.currentPage = targetPage;
 
     this.state.currentBook = book;
@@ -258,17 +305,21 @@ class BookStore {
       console.log('📐 [PageFrame] 已初始化页面帧布局，共', book.pages.length, '页，模式:', currentViewMode);
     }
     
-    if (targetPage > 0 && book.totalPages > 0) {
+    if (targetPage > 0 && book.totalPages > 0 && this.isOpenBookRequestCurrent(ticket)) {
       bookApi.navigateToPage(targetPage).catch(navErr => {
         console.error('❌ Error navigating to initial page after open:', navErr);
       });
     }
     
+    if (!this.isOpenBookRequestCurrent(ticket)) return;
+
     this.syncInfoPanelBookInfo().catch(() => {});
     this.syncFileBrowserSelection(path);
 
     if (!options.skipHistory) {
       import('$lib/stores/unifiedHistory.svelte').then(({ unifiedHistoryStore }) => {
+        if (!this.isOpenBookRequestCurrent(ticket)) return;
+
         const pathStack = this.buildPathStack();
         const currentPage = book.pages?.[targetPage];
         const currentFilePath = currentPage?.path;

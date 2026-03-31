@@ -1,13 +1,16 @@
-//! NeoView - Book Commands
+//! `NeoView` - `Book` Commands
 //! 书籍管理相关的 Tauri 命令
 
-use crate::core::BookManager;
-use crate::core::ImageLoader;
-use crate::core::DimensionScannerState;
 use crate::commands::page_commands::PageManagerState;
-use crate::models::{BookInfo, PageSortMode, MediaPriorityMode};
+use crate::core::BookManager;
+use crate::core::DimensionScannerState;
+use crate::core::ImageLoader;
+use crate::models::{BookInfo, MediaPriorityMode, PageSortMode};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
+
+static OPEN_BOOK_SCAN_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn is_same_book_path(existing_path: &str, requested_path: &str) -> bool {
     if cfg!(windows) {
@@ -31,8 +34,7 @@ pub async fn open_book(
         let manager = state.lock().map_err(|e| e.to_string())?;
         manager
             .get_current_book()
-            .map(|book| is_same_book_path(&book.path, &path))
-            .unwrap_or(false)
+            .is_some_and(|book| is_same_book_path(&book.path, &path))
     };
 
     if !is_same_path_request {
@@ -59,6 +61,8 @@ pub async fn open_book(
         return Ok(book);
     }
 
+    let scan_generation = OPEN_BOOK_SCAN_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+
     // 启动后台尺寸扫描
     let book_path = book.path.clone();
     let book_type = book.book_type.clone();
@@ -67,8 +71,22 @@ pub async fn open_book(
 
     // 在后台线程执行扫描
     std::thread::spawn(move || {
+        if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
+            return;
+        }
+
         let scanner = scanner_arc.lock().unwrap();
+
+        if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
+            return;
+        }
+
         scanner.reset(); // 重置取消令牌
+
+        if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
+            return;
+        }
+
         scanner.scan_book(&book_path, &book_type, &pages, Some(&app_handle));
     });
 

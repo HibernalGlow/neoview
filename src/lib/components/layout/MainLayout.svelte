@@ -32,7 +32,6 @@
 	import RightSidebar from './RightSidebar.svelte';
 	import { TopToolbar } from './TopToolbar/index';
 	import BottomThumbnailBar from './BottomThumbnailBar.svelte';
-	import WindowResizeOverlay from './WindowResizeOverlay.svelte';
 	import { StackView } from '$lib/stackview';
 	import AreaOverlay from '../ui/AreaOverlay.svelte';
 	import HoverAreasOverlay from '../ui/HoverAreasOverlay.svelte';
@@ -172,8 +171,6 @@
 </script>
 
 <div class="bg-background fixed inset-0" role="application" aria-label="NeoView 主界面">
-	<WindowResizeOverlay />
-
 	<!-- 自动隐藏顶部工具栏（包含标题栏） -->
 	<TopToolbar />
 

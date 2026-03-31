@@ -6,7 +6,6 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { Settings, X, Minimize } from '@lucide/svelte';
-	import WindowResizeOverlay from '$lib/components/layout/WindowResizeOverlay.svelte';
 	import SettingsContent from '$lib/components/SettingsContent.svelte';
 
 	const appWindow = getCurrentWebviewWindow();
@@ -20,9 +19,7 @@
 	}
 </script>
 
-<div class="fixed inset-0 flex flex-col overflow-hidden rounded-xl border border-border/40 bg-background">
-	<WindowResizeOverlay />
-
+<div class="fixed inset-0 flex flex-col bg-background">
 	<!-- 自定义标题栏 -->
 	<div
 		data-tauri-drag-region

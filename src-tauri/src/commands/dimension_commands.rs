@@ -65,7 +65,13 @@ pub async fn start_dimension_scan(
         }
         
         // 执行扫描
-        Ok::<ScanResult, String>(scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle)))
+        Ok::<ScanResult, String>(scanner_arc.scan_book(
+            &book_path,
+            &book_type,
+            &scan_pages,
+            Some(&app_handle),
+            Some(request_generation),
+        ))
     })
     .await
     .map_err(|e| format!("spawn_blocking error: {e}"))??;

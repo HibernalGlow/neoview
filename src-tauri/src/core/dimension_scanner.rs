@@ -46,6 +46,7 @@ pub struct DimensionScanProgress {
     pub book_path: String,
     pub updates: Vec<DimensionUpdate>,
     pub progress: f32,
+    pub scan_id: Option<u64>,
 }
 
 /// 扫描完成事件
@@ -57,6 +58,7 @@ pub struct DimensionScanComplete {
     pub cached_count: usize,
     pub failed_count: usize,
     pub duration_ms: u64,
+    pub scan_id: Option<u64>,
 }
 
 /// 尺寸扫描任务页（轻量字段，避免复制完整 Page 结构）
@@ -184,6 +186,7 @@ impl DimensionScanner {
         book_type: &BookType,
         pages: &[ScanPageTask],
         app_handle: Option<&AppHandle>,
+        scan_id: Option<u64>,
     ) -> ScanResult {
         let start = Instant::now();
         let total = pages.len();
@@ -270,6 +273,7 @@ impl DimensionScanner {
                         book_path: book_path.to_string(),
                         updates,
                         progress,
+                        scan_id,
                     };
                     let _ = handle.emit("dimension-scan-progress", &event);
                 }
@@ -302,6 +306,7 @@ impl DimensionScanner {
                 cached_count,
                 failed_count,
                 duration_ms,
+                scan_id,
             };
             let _ = handle.emit("dimension-scan-complete", &event);
         }

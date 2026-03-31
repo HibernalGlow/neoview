@@ -18,6 +18,7 @@ interface DimensionScanProgress {
   bookPath: string;
   updates: DimensionUpdate[];
   progress: number;
+  scanId?: number;
 }
 
 /** 扫描完成事件 */
@@ -27,10 +28,29 @@ interface DimensionScanComplete {
   cachedCount: number;
   failedCount: number;
   durationMs: number;
+  scanId?: number;
 }
 
 let progressUnlisten: UnlistenFn | null = null;
 let completeUnlisten: UnlistenFn | null = null;
+const latestScanIdByBookPath = new Map<string, number>();
+
+function shouldIgnoreStaleScanEvent(bookPath: string, scanId?: number): boolean {
+  if (scanId === undefined) {
+    return false;
+  }
+
+  const latestScanId = latestScanIdByBookPath.get(bookPath);
+  if (latestScanId !== undefined && scanId < latestScanId) {
+    return true;
+  }
+
+  if (latestScanId === undefined || scanId > latestScanId) {
+    latestScanIdByBookPath.set(bookPath, scanId);
+  }
+
+  return false;
+}
 
 /**
  * 初始化尺寸扫描事件监听
@@ -43,10 +63,15 @@ export async function initDimensionScanListener(): Promise<void> {
   progressUnlisten = await listen<DimensionScanProgress>(
     'dimension-scan-progress',
     (event) => {
-      const { bookPath, updates, progress } = event.payload;
+      const { bookPath, updates, progress, scanId } = event.payload;
       
       // 确保是当前书籍的更新
       if (bookStore.currentBook?.path !== bookPath) {
+        return;
+      }
+
+      // 过滤旧扫描代际事件，避免无效批量更新
+      if (shouldIgnoreStaleScanEvent(bookPath, scanId)) {
         return;
       }
 
@@ -62,10 +87,15 @@ export async function initDimensionScanListener(): Promise<void> {
   completeUnlisten = await listen<DimensionScanComplete>(
     'dimension-scan-complete',
     (event) => {
-      const { bookPath, scannedCount, cachedCount, failedCount, durationMs } = event.payload;
+      const { bookPath, scannedCount, cachedCount, failedCount, durationMs, scanId } = event.payload;
       
       // 确保是当前书籍的更新
       if (bookStore.currentBook?.path !== bookPath) {
+        return;
+      }
+
+      // 过滤旧扫描代际事件，避免过期完成事件扰动状态
+      if (shouldIgnoreStaleScanEvent(bookPath, scanId)) {
         return;
       }
 
@@ -90,4 +120,5 @@ export async function cleanupDimensionScanListener(): Promise<void> {
     completeUnlisten();
     completeUnlisten = null;
   }
+  latestScanIdByBookPath.clear();
 }

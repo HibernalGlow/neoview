@@ -156,7 +156,7 @@ pub async fn open_book(
             return;
         }
 
-        scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle));
+        scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle), Some(scan_generation));
     });
 
     Ok(book)

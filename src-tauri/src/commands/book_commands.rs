@@ -2,10 +2,11 @@
 //! 书籍管理相关的 Tauri 命令
 
 use crate::commands::page_commands::PageManagerState;
+use crate::core::archive::is_image_file;
 use crate::core::BookManager;
 use crate::core::DimensionScannerState;
 use crate::core::ImageLoader;
-use crate::models::{BookInfo, MediaPriorityMode, PageSortMode};
+use crate::models::{BookInfo, MediaPriorityMode, Page, PageSortMode};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
@@ -26,6 +27,12 @@ fn is_same_book_path(existing_path: &str, requested_path: &str) -> bool {
     } else {
         existing_path == requested_path
     }
+}
+
+#[inline]
+fn is_image_page_for_dimension_scan(page: &Page) -> bool {
+    let target_path = page.inner_path.as_deref().unwrap_or(&page.path);
+    is_image_file(target_path)
 }
 
 #[tauri::command]
@@ -94,17 +101,28 @@ pub async fn open_book(
         return Ok(book);
     }
 
+    let pages: Vec<Page> = book
+        .pages
+        .iter()
+        .filter(|page| is_image_page_for_dimension_scan(page))
+        .cloned()
+        .collect();
+
+    // 非图片书籍（例如纯视频）无需启动尺寸扫描。
+    if pages.is_empty() {
+        return Ok(book);
+    }
+
     let scan_generation = OPEN_BOOK_SCAN_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
 
     // 启动后台尺寸扫描
     let book_path = book.path.clone();
     let book_type = book.book_type.clone();
-    let pages = book.pages.clone();
     let scanner_arc = scanner_state.scanner.clone();
     let scan_guard_arc = scanner_state.scan_guard.clone();
 
-    // 在后台线程执行扫描
-    std::thread::spawn(move || {
+    // 在运行时阻塞线程池执行扫描，避免频繁创建独立系统线程。
+    tauri::async_runtime::spawn_blocking(move || {
         if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
             return;
         }

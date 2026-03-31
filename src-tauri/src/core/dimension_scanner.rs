@@ -117,12 +117,12 @@ impl DimensionScanner {
         let mut pending_updates: Vec<DimensionUpdate> = Vec::new();
         let mut cache_entries: Vec<(String, u32, u32, Option<i64>)> = Vec::new();
 
-        log::info!("🔍 DimensionScanner: 开始扫描 {} 页, book_type={:?}", total, book_type);
+        log::info!("🔍 DimensionScanner: 开始扫描 {total} 页, book_type={book_type:?}");
 
         for (idx, page) in pages.iter().enumerate() {
             // 检查取消
             if self.is_cancelled() {
-                log::info!("⏹️ DimensionScanner: 扫描被取消，已完成 {}/{}", idx, total);
+                    log::info!("⏹️ DimensionScanner: 扫描被取消，已完成 {idx}/{total}");
                 break;
             }
 
@@ -164,16 +164,19 @@ impl DimensionScanner {
 
             // 每 20 个页面或最后一个页面时发送进度
             if pending_updates.len() >= 20 || idx == total - 1 {
+                let updates = std::mem::take(&mut pending_updates);
                 if let Some(handle) = app_handle {
-                    let progress = (idx + 1) as f32 / total as f32;
+                    let completed = u64::try_from(idx + 1).unwrap_or(u64::MAX);
+                    let total_count = u64::try_from(total).unwrap_or(u64::MAX).max(1);
+                    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+                    let progress = (completed as f64 / total_count as f64) as f32;
                     let event = DimensionScanProgress {
                         book_path: book_path.to_string(),
-                        updates: pending_updates.clone(),
+                        updates,
                         progress,
                     };
                     let _ = handle.emit("dimension-scan-progress", &event);
                 }
-                pending_updates.clear();
             }
 
             // 稍微让出 CPU，避免完全打满 IO 和 CPU 导致加载第一张图卡顿
@@ -189,7 +192,7 @@ impl DimensionScanner {
             let _ = cache.save();
         }
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         // 发送完成事件
         if let Some(handle) = app_handle {
@@ -204,8 +207,7 @@ impl DimensionScanner {
         }
 
         log::info!(
-            "✅ DimensionScanner: 完成扫描 scanned={}, cached={}, failed={}, duration={}ms",
-            scanned_count, cached_count, failed_count, duration_ms
+            "✅ DimensionScanner: 完成扫描 scanned={scanned_count}, cached={cached_count}, failed={failed_count}, duration={duration_ms}ms"
         );
 
         ScanResult {
@@ -310,15 +312,22 @@ impl DimensionScanner {
 
 /// 全局扫描器状态
 pub struct DimensionScannerState {
-    pub scanner: Arc<Mutex<DimensionScanner>>,
+    pub scanner: Arc<DimensionScanner>,
+    /// 扫描串行化锁：确保同一时刻只有一个扫描任务运行
+    pub scan_guard: Arc<Mutex<()>>,
     pub cache: Arc<Mutex<DimensionCache>>,
 }
 
 impl DimensionScannerState {
     pub fn new(cache_path: std::path::PathBuf, archive_manager: ArchiveManager) -> Self {
         let cache = Arc::new(Mutex::new(DimensionCache::new(cache_path)));
-        let scanner = Arc::new(Mutex::new(DimensionScanner::new(cache.clone(), archive_manager)));
-        Self { scanner, cache }
+        let scanner = Arc::new(DimensionScanner::new(cache.clone(), archive_manager));
+        let scan_guard = Arc::new(Mutex::new(()));
+        Self {
+            scanner,
+            scan_guard,
+            cache,
+        }
     }
 }
 

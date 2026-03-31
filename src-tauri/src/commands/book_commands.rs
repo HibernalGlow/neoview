@@ -47,8 +47,7 @@ pub async fn open_book(
 
     if !is_same_path_request && is_latest_open_book_request(request_generation) {
         // 仅在切换到新书时取消旧扫描任务。
-        let scanner = scanner_state.scanner.lock().map_err(|e| e.to_string())?;
-        scanner.cancel();
+        scanner_state.scanner.cancel();
     }
 
     // 打开书籍
@@ -102,6 +101,7 @@ pub async fn open_book(
     let book_type = book.book_type.clone();
     let pages = book.pages.clone();
     let scanner_arc = scanner_state.scanner.clone();
+    let scan_guard_arc = scanner_state.scan_guard.clone();
 
     // 在后台线程执行扫描
     std::thread::spawn(move || {
@@ -109,19 +109,25 @@ pub async fn open_book(
             return;
         }
 
-        let scanner = scanner_arc.lock().unwrap();
+        let _scan_guard = match scan_guard_arc.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                log::warn!("open_book: failed to lock scan guard: {e}");
+                return;
+            }
+        };
 
         if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
             return;
         }
 
-        scanner.reset(); // 重置取消令牌
+        scanner_arc.reset(); // 重置取消令牌
 
         if OPEN_BOOK_SCAN_GENERATION.load(Ordering::SeqCst) != scan_generation {
             return;
         }
 
-        scanner.scan_book(&book_path, &book_type, &pages, Some(&app_handle));
+        scanner_arc.scan_book(&book_path, &book_type, &pages, Some(&app_handle));
     });
 
     Ok(book)

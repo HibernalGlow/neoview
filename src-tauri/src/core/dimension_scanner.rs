@@ -19,6 +19,7 @@ const CACHE_FORCE_SAVE_ENTRY_COUNT: usize = 1_024;
 const PROGRESS_BATCH_BASE: usize = 20;
 const PROGRESS_BATCH_MEDIUM: usize = 50;
 const PROGRESS_BATCH_LARGE: usize = 100;
+const PROGRESS_MIN_UPDATE_COUNT: usize = 8;
 const PROGRESS_EMIT_INTERVAL_BASE_MS: u64 = 12;
 const PROGRESS_EMIT_INTERVAL_MEDIUM_MS: u64 = 24;
 const PROGRESS_EMIT_INTERVAL_LARGE_MS: u64 = 40;
@@ -220,6 +221,7 @@ impl DimensionScanner {
         let progress_emit_interval_ms = Self::progress_emit_interval_ms(total);
         let mut last_progress_emit_at = Instant::now();
         let total_count = u64::try_from(total).unwrap_or(u64::MAX).max(1);
+        let mut updates_since_last_emit = 0usize;
         
         let mut scanned_count = 0usize;
         let mut cached_count = 0usize;
@@ -253,6 +255,7 @@ impl DimensionScanner {
                         width,
                         height,
                     });
+                    updates_since_last_emit += 1;
                 }
             } else {
                 // 需要扫描
@@ -265,6 +268,7 @@ impl DimensionScanner {
                                 width,
                                 height,
                             });
+                            updates_since_last_emit += 1;
                         }
                         cache_entries.push((
                             page.stable_hash.clone(),
@@ -284,8 +288,9 @@ impl DimensionScanner {
             let reached_batch = pending_updates.len() >= progress_batch_size;
             let emit_interval_elapsed = reached_batch
                 && last_progress_emit_at.elapsed().as_millis() >= u128::from(progress_emit_interval_ms);
+            let reached_update_threshold = updates_since_last_emit >= PROGRESS_MIN_UPDATE_COUNT;
 
-            if should_emit_progress && (is_last_page || emit_interval_elapsed) {
+            if should_emit_progress && (is_last_page || (emit_interval_elapsed && reached_update_threshold)) {
                 let updates = std::mem::take(&mut pending_updates);
                 if let Some(handle) = app_handle {
                     let completed = u64::try_from(idx + 1).unwrap_or(u64::MAX);
@@ -299,6 +304,7 @@ impl DimensionScanner {
                     };
                     let _ = handle.emit("dimension-scan-progress", &event);
                     last_progress_emit_at = Instant::now();
+                    updates_since_last_emit = 0;
                 }
             }
 

@@ -41,6 +41,7 @@ import ActionButtons from './ActionButtons.svelte';
 import SortPanel from './SortPanel.svelte';
 import ViewPanel from './ViewPanel.svelte';
 import TreePanel from './TreePanel.svelte';
+import TypeFilterBar from '$lib/components/panels/folderPanel/components/FolderToolbar/TypeFilterBar.svelte';
 import MoreSettingsTabs from './MoreSettingsTabs.svelte';
 
 interface Props {
@@ -179,14 +180,21 @@ let canGoUp = $derived(globalCanGoUpValue);
 let sortPanelExpanded = $state(false);
 let viewPanelExpanded = $state(false);
 let treePanelExpanded = $state(false);
+let typeFilterBarExpanded = $state(false);
 let showMoreSettings = $state(false);
 let sortLockSettings = $state<SortLockSettings>(folderTabActions.getSortSettings());
 
 function refreshSortLockSettings() { sortLockSettings = folderTabActions.getSortSettings(); }
-function closePanels() { sortPanelExpanded = false; viewPanelExpanded = false; treePanelExpanded = false; }
+function closePanels() {
+	sortPanelExpanded = false;
+	viewPanelExpanded = false;
+	treePanelExpanded = false;
+	typeFilterBarExpanded = false;
+}
 function toggleSortPanel() { const was = sortPanelExpanded; closePanels(); sortPanelExpanded = !was; if (!was) refreshSortLockSettings(); }
 function toggleViewPanel() { const was = viewPanelExpanded; closePanels(); viewPanelExpanded = !was; }
 function toggleTreePanel() { const was = treePanelExpanded; closePanels(); treePanelExpanded = !was; }
+function toggleTypeFilterBar() { const was = typeFilterBarExpanded; closePanels(); typeFilterBarExpanded = !was; }
 function toggleMoreSettings() { showMoreSettings = !showMoreSettings; }
 
 // ==================== 状态修改函数 ====================
@@ -311,6 +319,7 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		{showSearchBar}
 		{showMigrationBar}
 		{itemTypeFilter}
+		{typeFilterBarExpanded}
 		{showRandomTagBar}
 		{penetrateMode}
 		{openInNewTabMode}
@@ -328,7 +337,7 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		onToggleTreePanel={toggleTreePanel}
 		onToggleShowSearchBar={handleToggleShowSearchBar}
 		onToggleShowMigrationBar={handleToggleShowMigrationBar}
-		onSetItemTypeFilter={handleSetItemTypeFilter}
+		onToggleTypeFilterBar={toggleTypeFilterBar}
 		onToggleRandomTagBar={() => onToggleRandomTagBar?.()}
 		onTogglePenetrateMode={handleTogglePenetrateMode}
 		onToggleShowPenetrateSettingsBar={handleToggleShowPenetrateSettingsBar}
@@ -366,6 +375,14 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		{inlineTreeMode}
 		onSetFolderTreeLayout={handleSetFolderTreeLayout}
 		onToggleInlineTree={handleToggleInlineTreeMode}
+	/>
+{/if}
+
+<!-- 类型筛选下拉栏 -->
+{#if typeFilterBarExpanded && virtualMode}
+	<TypeFilterBar
+		{itemTypeFilter}
+		onSetItemTypeFilter={handleSetItemTypeFilter}
 	/>
 {/if}
 

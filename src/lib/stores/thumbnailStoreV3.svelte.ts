@@ -633,9 +633,29 @@ export async function requestVisibleThumbnailsDelta(
   if (!currentDir || paths.length === 0) return;
 
   const enteredPaths = updateVisibleSnapshot(currentDir, paths);
-  if (enteredPaths.length === 0) return;
 
-  await requestVisibleThumbnails(enteredPaths, currentDir, centerIndex);
+  // 即使可见区没有变化，也要补请求当前可见但已被淘汰/未命中的缩略图，
+  // 否则切换到其他页签后回到当前页签会出现“缩略图空白且不再请求”的情况。
+  const missingVisiblePaths = filterDispatchablePaths(paths);
+
+  const pathsToRequest: string[] = [];
+  const seen = new Set<string>();
+
+  for (const path of enteredPaths) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    pathsToRequest.push(path);
+  }
+
+  for (const path of missingVisiblePaths) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    pathsToRequest.push(path);
+  }
+
+  if (pathsToRequest.length === 0) return;
+
+  await requestVisibleThumbnails(pathsToRequest, currentDir, centerIndex);
 }
 
 /**

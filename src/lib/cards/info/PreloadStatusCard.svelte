@@ -42,7 +42,7 @@ let progressiveState = $state<ProgressiveLoadState>(renderQueue.getProgressiveSt
 // 计算已预解码页数
 const preDecodedCount = $derived.by(() => {
 	void preDecodeVersion;
-	return preDecodeCache.getStats().size;
+	return preDecodeCache.getStats().count;
 });
 
 // 【性能优化】计算已预加载页数（使用 O(1) 的 size 属性）
@@ -64,7 +64,7 @@ const cacheStats = $derived.by(() => {
 });
 
 // 预解码缓存最大值
-let preDecodeCacheMaxSize = $state(preDecodeCache.getStats().maxSize);
+let preDecodeCacheMaxSize = $state(preDecodeCache.getStats().maxCount);
 
 // 更新配置
 function updateConfig(partial: Partial<PreloadConfig>) {
@@ -156,7 +156,7 @@ function saveProgressiveConfig() {
 
 // 预解码缓存设置（持久化）
 function handlePreDecodeCacheMaxSizeChange(value: number) {
-	preDecodeCache.setMaxSize(value);
+	preDecodeCache.setMaxCount(value);
 	preDecodeCacheMaxSize = value;
 	settingsManager.updateNestedSettings('performance', { preDecodeCacheSize: value });
 }
@@ -184,7 +184,7 @@ onMount(() => {
 	
 	// 预解码缓存容量
 	if (perf.preDecodeCacheSize !== undefined && perf.preDecodeCacheSize > 0) {
-		preDecodeCache.setMaxSize(perf.preDecodeCacheSize);
+		preDecodeCache.setMaxCount(perf.preDecodeCacheSize);
 		preDecodeCacheMaxSize = perf.preDecodeCacheSize;
 	}
 	
@@ -373,7 +373,7 @@ onDestroy(() => {
 			<span class="text-xs text-muted-foreground">已预解码</span>
 			<div class="flex items-center gap-1.5">
 				<div class="w-2 h-2 bg-green-500 rounded-full"></div>
-				<span class="text-xs font-mono text-green-500">{preDecodedCount} / {cacheStats.maxSize}</span>
+				<span class="text-xs font-mono text-green-500">{preDecodedCount} / {cacheStats.maxCount}</span>
 			</div>
 		</div>
 		
@@ -416,9 +416,9 @@ onDestroy(() => {
 			<div class="space-y-1">
 				<div class="flex justify-between text-[10px] text-muted-foreground">
 					<span>预解码进度</span>
-					<span>{((preDecodedCount / Math.min(totalPages, cacheStats.maxSize)) * 100).toFixed(0)}%</span>
+					<span>{((preDecodedCount / Math.min(totalPages, cacheStats.maxCount)) * 100).toFixed(0)}%</span>
 				</div>
-				<Progress value={(preDecodedCount / Math.min(totalPages, cacheStats.maxSize)) * 100} class="h-1.5" />
+				<Progress value={(preDecodedCount / Math.min(totalPages, cacheStats.maxCount)) * 100} class="h-1.5" />
 			</div>
 		{/if}
 

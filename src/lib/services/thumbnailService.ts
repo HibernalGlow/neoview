@@ -21,7 +21,10 @@ import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';
-import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
+import {
+	getThumbnailUrl,
+	requestVisibleThumbnails as requestVisibleThumbnailsV3
+} from '$lib/stores/thumbnailStoreV3.svelte';
 
 // ===========================================================================
 // 配置
@@ -130,14 +133,60 @@ function needsLoading(index: number): boolean {
 		return false;
 	}
 
-	// 视频文件跳过（后端不能直接生成视频缩略图）
+	// 视频文件交给 ThumbnailStoreV3 处理，这里跳过 pageManager 预加载
 	const page = currentBook.pages?.[index];
 	const filename = page?.name || page?.path || '';
-	if (isVideoFile(filename)) {
-		return false;
-	}
+	if (isVideoFile(filename)) return false;
 
 	return true;
+}
+
+/**
+ * 收集需要通过 V3 服务生成的「视频」缩略图路径（中央优先）
+ */
+function collectVideoPathsToLoad(centerIndex: number, radius: number, maxCount: number): string[] {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook || !currentBook.pages) return [];
+
+	const totalPages = currentBook.pages.length;
+	const result: string[] = [];
+
+	for (let offset = 0; offset <= radius && result.length < maxCount; offset++) {
+		const candidates = offset === 0 ? [centerIndex] : [centerIndex - offset, centerIndex + offset];
+
+		for (const idx of candidates) {
+			if (idx < 0 || idx >= totalPages || result.length >= maxCount) continue;
+			const page = currentBook.pages[idx];
+			if (!page) continue;
+
+			const filename = page.name || page.path || '';
+			if (!isVideoFile(filename)) continue;
+
+			// 仅对真实文件路径请求 V3，压缩包内视频仍由现有路径处理
+			if (page.innerPath) continue;
+
+			if (thumbnailCacheStore.hasThumbnail(idx)) continue;
+			if (getThumbnailUrl(page.path)) continue;
+
+			result.push(page.path);
+		}
+	}
+
+	return result;
+}
+
+async function requestVideoThumbnailsV3(centerIndex: number, radius: number): Promise<void> {
+	const currentBook = bookStore.currentBook;
+	if (!currentBook || !currentBook.pages) return;
+
+	const videoPaths = collectVideoPathsToLoad(centerIndex, radius, BACKGROUND_BATCH_SIZE);
+	if (videoPaths.length === 0) return;
+
+	try {
+		await requestVisibleThumbnailsV3(videoPaths, currentBook.path, centerIndex);
+	} catch (error) {
+		console.error('Failed to request video thumbnails via V3:', error);
+	}
 }
 
 /**
@@ -194,6 +243,9 @@ async function loadThumbnails(centerIndex: number): Promise<void> {
 	if (debounceTimer) {
 		clearTimeout(debounceTimer);
 	}
+
+	// 视频缩略图由 V3 服务单独拉起（不阻塞图片逻辑）
+	void requestVideoThumbnailsV3(centerIndex, INITIAL_PRELOAD_RANGE);
 
 	// 停止后台加载（翻页时重新开始）
 	stopBackgroundLoad();
@@ -291,6 +343,9 @@ function startBackgroundLoad(): void {
 			backgroundLoadRadius,
 			BACKGROUND_BATCH_SIZE
 		);
+
+		// 后台批量拉起视频缩略图
+		void requestVideoThumbnailsV3(backgroundLoadCenter, backgroundLoadRadius);
 
 		// 检查是否已加载完所有页面（没有需要加载的且范围已覆盖整本书）
 		if (needLoad.length === 0) {

@@ -15,6 +15,8 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { imagePool } from './imagePool.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';
+import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
+import { isAnimatedImageVideoCandidate } from '$lib/utils/animatedVideoModeUtils';
 
 // 全局标记防止 HMR 导致多次监听
 let globalListenerInitialized = false;
@@ -405,8 +407,10 @@ class UpscaleStore {
       const page = book.pages[i];
       if (page) {
         // 【关键】跳过视频文件，视频不支持超分
-        const filename = page.name || page.path || '';
-        if (isVideoFile(filename)) {
+        const filename = page.name || page.innerPath || page.path || '';
+        const isAnimatedVideoPage =
+          animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(filename);
+        if (isVideoFile(filename) || isAnimatedVideoPage) {
           continue;
         }
 
@@ -486,8 +490,10 @@ class UpscaleStore {
       const page = book.pages[i];
       if (page) {
         // 【关键】跳过视频文件，视频不支持超分
-        const filename = page.name || page.path || '';
-        if (isVideoFile(filename)) {
+        const filename = page.name || page.innerPath || page.path || '';
+        const isAnimatedVideoPage =
+          animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(filename);
+        if (isVideoFile(filename) || isAnimatedVideoPage) {
           continue;
         }
 

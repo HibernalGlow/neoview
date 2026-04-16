@@ -38,6 +38,7 @@
 		colorFilter: () => import('./info/ColorFilterCard.svelte'),
 		imageTrim: () => import('./info/ImageTrimCard.svelte'),
 		pageTransition: () => import('./info/PageTransitionCard.svelte'),
+		animatedVideoMode: () => import('./info/AnimatedVideoModeCard.svelte'),
 		ambientBackground: () => import('./info/AmbientBackgroundCard.svelte'),
 		preloadStatus: () => import('./info/PreloadStatusCard.svelte'),
 		sidebarHeight: () => import('./info/SidebarHeightCard.svelte'),

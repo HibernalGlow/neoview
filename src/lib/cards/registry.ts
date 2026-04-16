@@ -232,6 +232,13 @@ export const cardRegistry: Record<string, CardDefinition> = {
 		defaultPanel: 'control',
 		canHide: true,
 	},
+	'animatedVideoMode': {
+		id: 'animatedVideoMode',
+		title: '动图视频模式',
+		icon: 'Play',
+		defaultPanel: 'control',
+		canHide: true,
+	},
 	'ambientBackground': {
 		id: 'ambientBackground',
 		title: '动态背景',

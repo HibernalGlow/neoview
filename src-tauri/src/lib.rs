@@ -527,6 +527,7 @@ pub fn run() {
             commands::load_video,
             commands::load_video_from_archive,
             commands::extract_video_to_temp,
+            commands::convert_animated_image_to_video_temp,
             commands::get_background_queue_metrics,
             commands::get_explorer_context_menu_enabled,
             commands::set_explorer_context_menu_enabled,

@@ -44,6 +44,8 @@
 	import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 	import { isVideoFile } from '$lib/utils/videoUtils';
 	import { videoStore } from '$lib/stores/video.svelte';
+	import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
+	import { isAnimatedImageVideoCandidate } from '$lib/utils/animatedVideoModeUtils';
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import { deleteArchiveEntry } from '$lib/api/archive';
@@ -501,8 +503,15 @@
 
 		// 如果当前是视频页，对部分导航动作做视频模式优先的重解释
 		const currentPage = bookStore.currentPage;
+		const currentMediaName =
+			currentPage?.name || currentPage?.innerPath || currentPage?.path || '';
+		const isAnimatedVideoPage =
+			animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(currentMediaName);
 		const isVideoPage = Boolean(
-			currentPage && (isVideoFile(currentPage.name) || isVideoFile(currentPage.path))
+			currentPage &&
+				(isVideoFile(currentMediaName) ||
+					isAnimatedVideoPage ||
+					keyBindingsStore.isContextActive('videoPlayer'))
 		);
 
 		if (isVideoPage) {

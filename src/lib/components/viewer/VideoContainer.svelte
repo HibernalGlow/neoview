@@ -6,11 +6,19 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import VideoPlayer from './VideoPlayer.svelte';
+	import AnimatedImagePlayer from './AnimatedImagePlayer.svelte';
 	import { videoStore } from '$lib/stores/video.svelte';
+	import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
 	import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 	import { bookStore } from '$lib/stores';
 	import { keyBindingsStore } from '$lib/stores/keybindings';
-	import { isVideoFile, getVideoMimeType } from '$lib/utils/videoUtils';
+	import { isVideoFile } from '$lib/utils/videoUtils';
+	import {
+		isAnimatedImageVideoCandidate,
+		isAnimatedWebpCandidate,
+		matchesAnimatedVideoKeyword
+	} from '$lib/utils/animatedVideoModeUtils';
+	import { isAnimatedImage } from '$lib/utils/imageUtils';
 	import {
 		getPossibleSubtitleNames,
 		getSubtitleType,
@@ -29,25 +37,32 @@
 	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
 
 	// Props
-	const {
-		page = null,
-		onEnded = () => {},
-		onError = (error: any) => {}
-	}: {
+	interface Props {
 		page?: Page | null;
 		onEnded?: () => void;
 		onError?: (error: any) => void;
-	} = $props();
+	}
+
+	let {
+		page = null,
+		onEnded = () => {},
+		onError = (error: any) => {}
+	}: Props = $props();
 
 	// 视频播放器引用
 	let videoPlayerRef = $state<any>(null);
+	let animatedPlayerRef = $state<any>(null);
 
 	// 视频URL状态
 	let videoUrl = $state<string | null>(null);
+	let frontendAnimatedUrl = $state<string | null>(null);
 	let videoUrlRevokeNeeded = false;
 	let videoStartTime = $state(0);
 	let lastVideoHistoryUpdateAt = 0;
 	let currentVideoRequestId = 0;
+	const animatedWebpProbeCache = new Map<string, boolean>();
+	let webpAnimatedForCurrentPage = $state(false);
+	let webpProbeVersion = 0;
 
 	// 字幕状态
 	let subtitleData = $state<SubtitleData | null>(null);
@@ -58,6 +73,7 @@
 			URL.revokeObjectURL(videoUrl);
 		}
 		videoUrl = null;
+		frontendAnimatedUrl = null;
 		videoUrlRevokeNeeded = false;
 	}
 
@@ -77,6 +93,61 @@
 		videoUrl = url;
 		videoUrlRevokeNeeded = revokeNeeded;
 	}
+
+	function shouldOpenAnimatedAsVideo(filename: string): boolean {
+		if (!filename) return false;
+		if (!animatedVideoModeStore.canUse) return false;
+		if (isVideoFile(filename)) return false;
+		if (matchesAnimatedVideoKeyword(filename, animatedVideoModeStore.keywords)) return true;
+		if (isAnimatedImageVideoCandidate(filename)) return true;
+		if (isAnimatedWebpCandidate(filename)) return webpAnimatedForCurrentPage;
+		return false;
+	}
+
+	$effect(() => {
+		const currentPage = page;
+		const filename = currentPage?.name || currentPage?.innerPath || currentPage?.path || '';
+		const probeKey = currentPage
+			? `${bookStore.currentBook?.path ?? ''}::${currentPage.innerPath ?? currentPage.path}`
+			: '';
+
+		webpAnimatedForCurrentPage = false;
+
+		if (!currentPage || !animatedVideoModeStore.canUse || !isAnimatedWebpCandidate(filename)) {
+			return;
+		}
+
+		const cached = animatedWebpProbeCache.get(probeKey);
+		if (cached !== undefined) {
+			webpAnimatedForCurrentPage = cached;
+			return;
+		}
+
+		const probeId = ++webpProbeVersion;
+		void (async () => {
+			try {
+				let probePath = currentPage.path;
+				if (currentPage.innerPath && bookStore.currentBook?.type === 'archive') {
+					probePath = await invoke<string>('extract_image_to_temp', {
+						archivePath: bookStore.currentBook.path,
+						filePath: currentPage.innerPath,
+						traceId: `video-container-webp-probe-${Date.now()}`,
+						pageIndex: currentPage.index
+					});
+				}
+
+				const animated = await isAnimatedImage(convertFileSrc(probePath));
+				if (probeId !== webpProbeVersion) return;
+				animatedWebpProbeCache.set(probeKey, animated);
+				webpAnimatedForCurrentPage = animated;
+			} catch (error) {
+				if (probeId !== webpProbeVersion) return;
+				animatedWebpProbeCache.set(probeKey, false);
+				webpAnimatedForCurrentPage = false;
+				console.warn('VideoContainer WebP 动图检测失败，按静态图处理:', error);
+			}
+		})();
+	});
 
 	// 加载视频
 	async function loadVideo(videoPage: Page) {
@@ -98,6 +169,36 @@
 				}
 			} else {
 				videoStartTime = 0;
+			}
+
+			const filename = videoPage.name || videoPage.innerPath || videoPage.path || '';
+			const useAnimatedVideoMode = shouldOpenAnimatedAsVideo(filename);
+
+			if (useAnimatedVideoMode) {
+				let animatedImagePath = videoPage.path;
+				if (videoPage.innerPath && bookStore.currentBook?.type === 'archive') {
+					const archivePath = bookStore.currentBook.path;
+					animatedImagePath = await invoke<string>('extract_image_to_temp', {
+						archivePath,
+						filePath: videoPage.innerPath,
+						traceId: `animated-image-${Date.now()}`,
+						pageIndex: videoPage.index
+					});
+					if (requestId !== currentVideoRequestId) return;
+				}
+
+				if (animatedVideoModeStore.preferFfmpegConversion) {
+					const convertedVideoPath = await invoke<string>('convert_animated_image_to_video_temp', {
+						imagePath: animatedImagePath,
+						traceId: `animated-video-${Date.now()}`
+					});
+					if (requestId !== currentVideoRequestId) return;
+					setVideoUrl(convertFileSrc(convertedVideoPath), false);
+				} else {
+					if (requestId !== currentVideoRequestId) return;
+					frontendAnimatedUrl = convertFileSrc(animatedImagePath);
+				}
+				return;
 			}
 
 			// 加载视频数据
@@ -244,9 +345,10 @@
 	// 监听 page 变化，加载视频并切换上下文
 	$effect(() => {
 		// 使用与 StackView 一致的检测逻辑：优先 name，然后 innerPath
-		const filename = page?.name || page?.innerPath || '';
+		const filename = page?.name || page?.innerPath || page?.path || '';
 		const currentPage = page;
-		if (currentPage && filename && isVideoFile(filename)) {
+		const isAnimatedVideoPage = shouldOpenAnimatedAsVideo(filename);
+		if (currentPage && filename && (isVideoFile(filename) || isAnimatedVideoPage)) {
 			// 切换到视频上下文
 			keyBindingsStore.setContexts(['global', 'videoPlayer']);
 			isInVideoMode = true;
@@ -331,18 +433,30 @@
 
 	// 暴露控制方法
 	export function playPause() {
+		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.playPause === 'function') {
+			animatedPlayerRef.playPause();
+			return;
+		}
 		if (videoPlayerRef && typeof videoPlayerRef.playPause === 'function') {
 			videoPlayerRef.playPause();
 		}
 	}
 
 	export function seekForward() {
+		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.seekForward === 'function') {
+			animatedPlayerRef.seekForward();
+			return;
+		}
 		if (videoPlayerRef && typeof videoPlayerRef.seekForward === 'function') {
 			videoPlayerRef.seekForward();
 		}
 	}
 
 	export function seekBackward() {
+		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.seekBackward === 'function') {
+			animatedPlayerRef.seekBackward();
+			return;
+		}
 		if (videoPlayerRef && typeof videoPlayerRef.seekBackward === 'function') {
 			videoPlayerRef.seekBackward();
 		}
@@ -379,7 +493,23 @@
 </script>
 
 <div class="video-container h-full w-full">
-	{#if videoUrl}
+	{#if frontendAnimatedUrl}
+		<AnimatedImagePlayer
+			bind:this={animatedPlayerRef}
+			src={frontendAnimatedUrl}
+			initialPlaybackRate={videoStore.settings.playbackRate}
+			initialLoopMode={videoStore.settings.loopMode}
+			onSettingsChange={(settings) => {
+				videoStore.updateSettings({
+					...videoStore.settings,
+					playbackRate: settings.playbackRate,
+					loopMode: settings.loopMode
+				});
+			}}
+			onEnded={handleVideoEnded}
+			onError={(error) => onError(error)}
+		/>
+	{:else if videoUrl}
 		<VideoPlayer
 			bind:this={videoPlayerRef}
 			src={videoUrl}

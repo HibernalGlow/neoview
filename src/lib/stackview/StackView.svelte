@@ -34,7 +34,7 @@
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
-	import { convertFileSrc } from '@tauri-apps/api/core';
+	import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 	// 导入外部 stores
 	import {
@@ -54,6 +54,12 @@
 	import { settingsManager } from '$lib/settings/settingsManager';
 	import VideoContainer from '$lib/components/viewer/VideoContainer.svelte';
 	import { isVideoFile } from '$lib/utils/videoUtils';
+	import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
+	import {
+		isAnimatedImageVideoCandidate,
+		isAnimatedWebpCandidate
+	} from '$lib/utils/animatedVideoModeUtils';
+	import { isAnimatedImage } from '$lib/utils/imageUtils';
 	import { upscaleStore } from './stores/upscaleStore.svelte';
 	import SlideshowControl from '$lib/components/viewer/SlideshowControl.svelte';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
@@ -332,14 +338,73 @@
 	let currentSplitHalf = $state<'left' | 'right' | null>(null);
 
 
+	const animatedWebpProbeCache = new Map<string, boolean>();
+	let webpAnimatedForCurrentPage = $state(false);
+	let webpProbeVersion = 0;
+
+	$effect(() => {
+		const page = bookStore.currentPage;
+		const filename = page?.name || page?.innerPath || page?.path || '';
+		const bookPath = bookStore.currentBook?.path ?? '';
+		const probeKey = page ? `${bookPath}::${page.innerPath ?? page.path}` : '';
+
+		webpAnimatedForCurrentPage = false;
+
+		if (!page || !animatedVideoModeStore.canUse || !isAnimatedWebpCandidate(filename)) {
+			return;
+		}
+
+		const cached = animatedWebpProbeCache.get(probeKey);
+		if (cached !== undefined) {
+			webpAnimatedForCurrentPage = cached;
+			return;
+		}
+
+		const probeId = ++webpProbeVersion;
+
+		void (async () => {
+			try {
+				let probePath = page.path;
+				if (page.innerPath && bookStore.currentBook?.type === 'archive') {
+					probePath = await invoke<string>('extract_image_to_temp', {
+						archivePath: bookStore.currentBook.path,
+						filePath: page.innerPath,
+						traceId: `animated-webp-probe-${Date.now()}`,
+						pageIndex: page.index
+					});
+				}
+
+				const animated = await isAnimatedImage(convertFileSrc(probePath));
+				if (probeId !== webpProbeVersion) return;
+				animatedWebpProbeCache.set(probeKey, animated);
+				webpAnimatedForCurrentPage = animated;
+			} catch (error) {
+				if (probeId !== webpProbeVersion) return;
+				animatedWebpProbeCache.set(probeKey, false);
+				webpAnimatedForCurrentPage = false;
+				console.warn('WebP 动图检测失败，按静态图处理:', error);
+			}
+		})();
+	});
+
+	let isAnimatedVideoModePage = $derived.by(() => {
+		const page = bookStore.currentPage;
+		if (!page || !animatedVideoModeStore.canUse) return false;
+		const filename = page.name || page.innerPath || page.path || '';
+		if (!filename) return false;
+		if (isAnimatedImageVideoCandidate(filename)) return true;
+		if (isAnimatedWebpCandidate(filename)) return webpAnimatedForCurrentPage;
+		return false;
+	});
+
 	// 是否为视频
 	let isVideoMode = $derived.by(() => {
 		const page = bookStore.currentPage;
 		if (!page) return false;
 		// 优先检查 name，然后检查 innerPath（压缩包内文件），最后检查 path
-		const filename = page.name || page.innerPath || '';
+		const filename = page.name || page.innerPath || page.path || '';
 		if (!filename) return false;
-		return isVideoFile(filename);
+		return isVideoFile(filename) || isAnimatedVideoModePage;
 	});
 
 	// 视频 URL（用于背景层提取首帧颜色）
@@ -348,6 +413,10 @@
 		if (!isVideoMode) return '';
 		const page = bookStore.currentPage;
 		if (!page) return '';
+		if (isAnimatedVideoModePage) {
+			// Animated images are converted in VideoContainer, so we do not have a direct playable video path here.
+			return '';
+		}
 		// 只处理文件系统的视频（非压缩包）
 		if (page.innerPath && bookStore.currentBook?.type === 'archive') {
 			// 压缩包内的视频暂不支持背景提取（需要先提取到临时文件）

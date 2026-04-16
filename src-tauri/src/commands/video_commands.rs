@@ -170,3 +170,98 @@ pub async fn extract_video_to_temp(
     
     Ok(temp_path.to_string_lossy().to_string())
 }
+
+/// 将动图转码为临时 MP4 文件，供视频播放器复用倍速/循环等能力
+#[command]
+pub async fn convert_animated_image_to_video_temp(
+    image_path: String,
+    trace_id: Option<String>,
+) -> Result<String, String> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    use std::process::Command;
+    use std::time::UNIX_EPOCH;
+    use tokio::task::spawn_blocking;
+
+    let trace_id = trace_id.unwrap_or_else(|| "animated-to-video".to_string());
+    let source_path = PathBuf::from(&image_path);
+
+    if !source_path.exists() {
+        return Err(format!("动图文件不存在: {}", image_path));
+    }
+
+    if !VideoThumbnailGenerator::is_ffmpeg_available() {
+        return Err("FFmpeg 不可用，无法将动图转为视频".to_string());
+    }
+
+    println!("[{}] 开始动图转码: {}", trace_id, image_path);
+
+    let result = spawn_blocking(move || -> Result<String, String> {
+        let metadata = std::fs::metadata(&source_path)
+            .map_err(|e| format!("读取动图文件信息失败: {}", e))?;
+
+        let modified_secs = metadata
+            .modified()
+            .ok()
+            .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let mut hasher = DefaultHasher::new();
+        source_path.hash(&mut hasher);
+        metadata.len().hash(&mut hasher);
+        modified_secs.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        let temp_dir = std::env::temp_dir().join("neoview_animated_video_cache");
+        std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
+
+        let output_path = temp_dir.join(format!("{:x}.mp4", hash));
+        if output_path.exists() {
+            return Ok(output_path.to_string_lossy().to_string());
+        }
+
+        let input = source_path.to_string_lossy().to_string();
+        let output = output_path.to_string_lossy().to_string();
+
+        let ffmpeg_output = Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                &input,
+                "-an",
+                "-movflags",
+                "+faststart",
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos",
+                &output,
+            ])
+            .output()
+            .map_err(|e| format!("执行 FFmpeg 失败: {}", e))?;
+
+        if !ffmpeg_output.status.success() {
+            let stderr = String::from_utf8_lossy(&ffmpeg_output.stderr);
+            let message = stderr.trim();
+            return Err(if message.is_empty() {
+                "FFmpeg 转码失败".to_string()
+            } else {
+                format!("FFmpeg 转码失败: {}", message)
+            });
+        }
+
+        Ok(output)
+    })
+    .await
+    .map_err(|e| format!("动图转码任务执行失败: {}", e))?;
+
+    if let Ok(path) = &result {
+        println!("[{}] 动图转码成功: {}", trace_id, path);
+    }
+
+    result
+}

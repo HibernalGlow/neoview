@@ -7,6 +7,7 @@ import {
 	CheckSquare,
 	Trash2,
 	FolderTree,
+	Folder,
 	ListTree,
 	Search,
 	ClipboardPaste,
@@ -26,12 +27,18 @@ import {
 	FileType,
 	Shuffle,
 	Star,
-	Heart
+	Heart,
+	Filter,
+	Package,
+	Film,
+	Check
 } from '@lucide/svelte';
 import { Button } from '$lib/components/ui/button';
 import * as Tooltip from '$lib/components/ui/tooltip';
+import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
 import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
+import type { VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
 
 interface Props {
 	/** 虚拟模式 */
@@ -54,6 +61,8 @@ interface Props {
 	showSearchBar: boolean;
 	/** 显示迁移栏 */
 	showMigrationBar: boolean;
+	/** 虚拟面板类型筛选 */
+	itemTypeFilter?: VirtualItemTypeFilter;
 	/** 显示随机标签栏 */
 	showRandomTagBar?: boolean;
 	/** 穿透模式 */
@@ -82,6 +91,7 @@ interface Props {
 	onToggleTreePanel: () => void;
 	onToggleShowSearchBar: () => void;
 	onToggleShowMigrationBar: () => void;
+	onSetItemTypeFilter?: (value: VirtualItemTypeFilter) => void;
 	onToggleRandomTagBar?: () => void;
 	onTogglePenetrateMode: () => void;
 	onToggleShowPenetrateSettingsBar: () => void;
@@ -102,6 +112,7 @@ let {
 	inlineTreeMode,
 	showSearchBar,
 	showMigrationBar,
+	itemTypeFilter = 'all',
 	showRandomTagBar = false,
 	penetrateMode,
 	openInNewTabMode,
@@ -119,6 +130,7 @@ let {
 	onToggleTreePanel,
 	onToggleShowSearchBar,
 	onToggleShowMigrationBar,
+	onSetItemTypeFilter,
 	onToggleRandomTagBar,
 	onTogglePenetrateMode,
 	onToggleShowPenetrateSettingsBar,
@@ -127,6 +139,39 @@ let {
 	onToggleViewPanel,
 	onToggleMoreSettings
 }: Props = $props();
+
+const TYPE_FILTER_OPTIONS: Array<{ value: VirtualItemTypeFilter; label: string }> = [
+	{ value: 'all', label: '全部' },
+	{ value: 'archive', label: '压缩包' },
+	{ value: 'folder', label: '文件夹' },
+	{ value: 'video', label: '视频' }
+];
+
+function getTypeFilterLabel(value: VirtualItemTypeFilter): string {
+	switch (value) {
+		case 'archive':
+			return '压缩包';
+		case 'folder':
+			return '文件夹';
+		case 'video':
+			return '视频';
+		default:
+			return '全部';
+	}
+}
+
+function getTypeFilterIcon() {
+	switch (itemTypeFilter) {
+		case 'archive':
+			return Package;
+		case 'folder':
+			return Folder;
+		case 'video':
+			return Film;
+		default:
+			return Filter;
+	}
+}
 
 // 获取当前排序图标
 function getCurrentSortIcon() {
@@ -263,6 +308,40 @@ function getCurrentViewIcon() {
 			<p>{showSearchBar ? '隐藏搜索栏' : '显示搜索栏'}</p>
 		</Tooltip.Content>
 	</Tooltip.Root>
+
+	{#if virtualMode}
+		<DropdownMenu.Root>
+			<Tooltip.Root disabled={!showToolbarTooltip}>
+				<Tooltip.Trigger>
+					<DropdownMenu.Trigger>
+						<Button
+							variant={itemTypeFilter === 'all' ? 'ghost' : 'default'}
+							size="icon"
+							class="h-7 w-7"
+						>
+							{@const TypeFilterIcon = getTypeFilterIcon()}
+							<TypeFilterIcon class="h-4 w-4" />
+						</Button>
+					</DropdownMenu.Trigger>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					<p>类型筛选：{getTypeFilterLabel(itemTypeFilter)}</p>
+				</Tooltip.Content>
+			</Tooltip.Root>
+			<DropdownMenu.Content align="end">
+				{#each TYPE_FILTER_OPTIONS as option}
+					<DropdownMenu.Item onclick={() => onSetItemTypeFilter?.(option.value)}>
+						<div class="flex w-full items-center justify-between gap-4">
+							<span>{option.label}</span>
+							{#if itemTypeFilter === option.value}
+								<Check class="h-3.5 w-3.5 text-primary" />
+							{/if}
+						</div>
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+	{/if}
 
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>

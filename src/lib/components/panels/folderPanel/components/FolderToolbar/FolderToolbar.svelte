@@ -310,6 +310,7 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		{inlineTreeMode}
 		{showSearchBar}
 		{showMigrationBar}
+		{itemTypeFilter}
 		{showRandomTagBar}
 		{penetrateMode}
 		{openInNewTabMode}
@@ -327,6 +328,7 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		onToggleTreePanel={toggleTreePanel}
 		onToggleShowSearchBar={handleToggleShowSearchBar}
 		onToggleShowMigrationBar={handleToggleShowMigrationBar}
+		onSetItemTypeFilter={handleSetItemTypeFilter}
 		onToggleRandomTagBar={() => onToggleRandomTagBar?.()}
 		onTogglePenetrateMode={handleTogglePenetrateMode}
 		onToggleShowPenetrateSettingsBar={handleToggleShowPenetrateSettingsBar}
@@ -376,11 +378,9 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		{thumbnailWidthPercent}
 		{bannerWidthPercent}
 		{itemCount}
-		{itemTypeFilter}
 		onSetThumbnailWidthPercent={handleSetThumbnailWidthPercent}
 		onSetBannerWidthPercent={handleSetBannerWidthPercent}
 		onToggleShowToolbarTooltip={handleToggleShowToolbarTooltip}
-		onSetItemTypeFilter={handleSetItemTypeFilter}
 		onRefresh={() => onRefresh?.()}
 	/>
 {/if}

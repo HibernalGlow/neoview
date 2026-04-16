@@ -9,34 +9,21 @@ import { historySettingsStore } from '$lib/stores/historySettings.svelte';
 import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 import { getDefaultRating, saveDefaultRating } from '$lib/stores/emm/storage';
 import type { VirtualMode } from '../types';
-import type { VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
 
 interface Props {
 	/** 虚拟模式 */
 	virtualMode?: VirtualMode;
 	/** 是否显示工具栏提示 */
 	showToolbarTooltip?: boolean;
-	/** 虚拟面板条目类型筛选 */
-	itemTypeFilter?: VirtualItemTypeFilter;
 	/** 回调函数 */
 	onToggleShowToolbarTooltip: () => void;
-	onSetItemTypeFilter?: (value: VirtualItemTypeFilter) => void;
 }
 
 let {
 	virtualMode = null,
 	showToolbarTooltip = false,
-	itemTypeFilter = 'all',
-	onToggleShowToolbarTooltip,
-	onSetItemTypeFilter
+	onToggleShowToolbarTooltip
 }: Props = $props();
-
-const ITEM_FILTER_OPTIONS: Array<{ value: VirtualItemTypeFilter; label: string }> = [
-	{ value: 'all', label: '全部' },
-	{ value: 'archive', label: '压缩包' },
-	{ value: 'folder', label: '文件夹' },
-	{ value: 'video', label: '视频' }
-];
 </script>
 
 <div class="flex flex-wrap items-center gap-4 text-xs">
@@ -87,26 +74,6 @@ const ITEM_FILTER_OPTIONS: Array<{ value: VirtualItemTypeFilter; label: string }
 			<span class="text-muted-foreground/60 text-[10px]">
 				点击项目时自动在文件夹页签打开所在目录
 			</span>
-		</div>
-	{/if}
-
-	{#if virtualMode}
-		<div class="flex items-center gap-2">
-			<Settings2 class="h-3.5 w-3.5 text-muted-foreground" />
-			<span class="text-muted-foreground">类型筛选:</span>
-			<div class="flex items-center gap-1">
-				{#each ITEM_FILTER_OPTIONS as option}
-					<Button
-						variant={itemTypeFilter === option.value ? 'default' : 'outline'}
-						size="sm"
-						class="h-6 text-[10px] px-2"
-						onclick={() => onSetItemTypeFilter?.(option.value)}
-					>
-						{option.label}
-					</Button>
-				{/each}
-			</div>
-			<span class="text-muted-foreground/60 text-[10px]">仅影响历史/书签列表显示</span>
 		</div>
 	{/if}
 

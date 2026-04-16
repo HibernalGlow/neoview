@@ -6,7 +6,6 @@
  */
 import * as Tabs from '$lib/components/ui/tabs';
 import type { VirtualMode } from './types';
-import type { VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
 
 // 子组件导入
 import ActionTab from './tabs/ActionTab.svelte';
@@ -26,13 +25,10 @@ interface Props {
 	bannerWidthPercent: number;
 	/** 文件数量 */
 	itemCount: number;
-	/** 虚拟面板条目类型筛选 */
-	itemTypeFilter?: VirtualItemTypeFilter;
 	/** 回调函数 */
 	onSetThumbnailWidthPercent: (value: number) => void;
 	onSetBannerWidthPercent: (value: number) => void;
 	onToggleShowToolbarTooltip: () => void;
-	onSetItemTypeFilter?: (value: VirtualItemTypeFilter) => void;
 	onRefresh?: () => void;
 }
 
@@ -43,11 +39,9 @@ let {
 	thumbnailWidthPercent,
 	bannerWidthPercent,
 	itemCount,
-	itemTypeFilter = 'all',
 	onSetThumbnailWidthPercent,
 	onSetBannerWidthPercent,
 	onToggleShowToolbarTooltip,
-	onSetItemTypeFilter,
 	onRefresh
 }: Props = $props();
 
@@ -84,9 +78,7 @@ let settingsTab = $state<'action' | 'display' | 'other'>('action');
 			<OtherTab
 				{virtualMode}
 				{showToolbarTooltip}
-				{itemTypeFilter}
 				{onToggleShowToolbarTooltip}
-				onSetItemTypeFilter={onSetItemTypeFilter}
 			/>
 		</Tabs.Content>
 	</Tabs.Root>

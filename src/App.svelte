@@ -85,6 +85,8 @@
 	} from '$lib/utils/viewerActionDispatcher';
 	import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActionHandlers';
 
+	const WINDOW_STATE_SAFE_FLAGS = StateFlags.SIZE | StateFlags.POSITION | StateFlags.MAXIMIZED;
+
 	// 卡片显示/隐藏状态
 	let showProjectCard = $state(true);
 	let loading = $state(false);
@@ -263,7 +265,7 @@
 
 		// 显式恢复窗口状态（位置/尺寸/最大化/全屏），避免自动恢复时序差异。
 		try {
-			await restoreStateCurrent(StateFlags.ALL);
+			await restoreStateCurrent(WINDOW_STATE_SAFE_FLAGS);
 			console.log('✅ Window state restored');
 		} catch (error) {
 			console.warn('⚠️ Window state restore failed:', error);
@@ -433,7 +435,7 @@
 
 	// 清理语音命令监听器和全屏状态监听器
 	onDestroy(() => {
-		void saveWindowState(StateFlags.ALL).catch((error) => {
+		void saveWindowState(WINDOW_STATE_SAFE_FLAGS).catch((error) => {
 			console.warn('⚠️ Window state save failed:', error);
 		});
 

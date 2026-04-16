@@ -157,6 +157,11 @@ class WindowManager {
 	async setFullscreen(fullscreen: boolean): Promise<void> {
 		try {
 			const win = getCurrentWindow();
+			try {
+				await win.setDecorations(false);
+			} catch (error) {
+				console.warn('保持无边框状态失败，将继续执行全屏切换:', error);
+			}
 			if (fullscreen) {
 				const isMaximized = await win.isMaximized();
 				if (isMaximized) {
@@ -165,6 +170,13 @@ class WindowManager {
 				}
 			}
 			await win.setFullscreen(fullscreen);
+			if (!fullscreen) {
+				try {
+					await win.setDecorations(false);
+				} catch (error) {
+					console.warn('退出全屏后恢复无边框失败:', error);
+				}
+			}
 		} catch (error) {
 			console.error('设置全屏状态失败:', error);
 		}

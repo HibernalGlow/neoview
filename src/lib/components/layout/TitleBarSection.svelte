@@ -4,11 +4,14 @@
 	 * 包含窗口控制、主题切换、钉住按钮等
 	 */
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { LogicalSize } from '@tauri-apps/api/dpi';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import {
+		toggleFullscreen as toggleAppFullscreen,
+		setFullscreenState,
 		topToolbarPinned,
 		bottomThumbnailBarPinned,
 		leftSidebarPinned,
@@ -63,6 +66,11 @@
 	let { opacity = 85, blur = 12, onMouseEnter, onMouseLeave, onPinContextMenu }: Props = $props();
 
 	const appWindow = getCurrentWebviewWindow();
+	const WINDOW_CONTROL_LONG_PRESS_MS = 650;
+	const DEFAULT_WINDOW_WIDTH = 1200;
+	const DEFAULT_WINDOW_HEIGHT = 800;
+	let windowControlPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let windowControlLongPressTriggered = false;
 
 	// 设置状态
 	let settings = $state(settingsManager.getSettings());
@@ -253,8 +261,97 @@
 		await appWindow.minimize();
 	}
 
-	async function maximizeWindow() {
-		await appWindow.toggleMaximize();
+	function clearWindowControlLongPressTimer() {
+		if (!windowControlPressTimer) return;
+		clearTimeout(windowControlPressTimer);
+		windowControlPressTimer = null;
+	}
+
+	async function restoreDefaultWindowSize() {
+		try {
+			const isFullscreen = await appWindow.isFullscreen();
+			if (isFullscreen) {
+				await appWindow.setFullscreen(false);
+				setFullscreenState(false);
+				await new Promise((resolve) => setTimeout(resolve, 32));
+			}
+
+			const isMaximized = await appWindow.isMaximized();
+			if (isMaximized) {
+				await appWindow.unmaximize();
+				await new Promise((resolve) => setTimeout(resolve, 32));
+			}
+
+			await appWindow.setDecorations(false);
+			await appWindow.setResizable(true);
+			await appWindow.setSize(new LogicalSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT));
+			await appWindow.center();
+			showToast({
+				title: '已恢复默认窗口大小',
+				description: '窗口尺寸已重置为 1200x800 并居中',
+				variant: 'success'
+			});
+		} catch (error) {
+			console.warn('恢复默认窗口大小失败:', error);
+		}
+	}
+
+	function handleWindowControlMouseDown(event: MouseEvent) {
+		if (event.button !== 0) return;
+		event.stopPropagation();
+		windowControlLongPressTriggered = false;
+		clearWindowControlLongPressTimer();
+		windowControlPressTimer = setTimeout(() => {
+			windowControlLongPressTriggered = true;
+			void restoreDefaultWindowSize();
+		}, WINDOW_CONTROL_LONG_PRESS_MS);
+	}
+
+	function handleWindowControlMouseUp(event?: MouseEvent) {
+		event?.stopPropagation();
+		clearWindowControlLongPressTimer();
+	}
+
+	async function handleWindowControlClick(event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		if (windowControlLongPressTriggered) {
+			windowControlLongPressTriggered = false;
+			return;
+		}
+
+		const before = await appWindow.isFullscreen();
+		await toggleAppFullscreen();
+		const after = await appWindow.isFullscreen();
+
+		if (after !== before) {
+			setFullscreenState(after);
+			return;
+		}
+
+		// 回退：若 store 路径未生效，直接调用原生 API 兜底。
+		const next = !before;
+		try {
+			await appWindow.setDecorations(false);
+		} catch (error) {
+			console.warn('回退路径设置无边框失败:', error);
+		}
+		if (next) {
+			const isMaximized = await appWindow.isMaximized();
+			if (isMaximized) {
+				await appWindow.unmaximize();
+				await new Promise((resolve) => setTimeout(resolve, 16));
+			}
+		}
+		await appWindow.setFullscreen(next);
+		if (!next) {
+			try {
+				await appWindow.setDecorations(false);
+			} catch (error) {
+				console.warn('回退路径退出全屏后设置无边框失败:', error);
+			}
+		}
+		setFullscreenState(next);
 	}
 
 	function isInteractiveElement(target: EventTarget | null): boolean {
@@ -351,6 +448,7 @@
 		};
 		window.addEventListener('storage', handleStorage);
 		return () => {
+			clearWindowControlLongPressTimer();
 			window.removeEventListener('storage', handleStorage);
 			window.clearTimeout(delayedCheck);
 		};
@@ -686,8 +784,12 @@
 			variant="ghost"
 			size="icon"
 			class="h-6 w-6"
-			style="pointer-events: auto;"
-			onclick={maximizeWindow}
+			style="pointer-events: auto; -webkit-app-region: no-drag;"
+			title="短按切换全屏，长按恢复默认窗口大小"
+			onmousedown={handleWindowControlMouseDown}
+			onmouseup={handleWindowControlMouseUp}
+			onmouseleave={handleWindowControlMouseUp}
+			onclick={handleWindowControlClick}
 		>
 			<Maximize class="h-3 w-3" />
 		</Button>

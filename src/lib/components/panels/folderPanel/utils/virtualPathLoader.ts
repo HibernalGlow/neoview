@@ -6,6 +6,7 @@
 import type { FsItem } from '$lib/types';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
+import { virtualPanelSettingsStore, type VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
 import { get } from 'svelte/store';
 import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore';
 
@@ -47,6 +48,69 @@ interface BookmarkEntry {
 	type: 'folder' | 'file';
 	starred?: boolean;
 	createdAt: Date;
+}
+
+const ARCHIVE_EXTENSIONS = new Set(['zip', 'rar', '7z', 'cbz', 'cbr', 'cb7']);
+const VIDEO_EXTENSIONS = new Set([
+	'mp4',
+	'mkv',
+	'avi',
+	'mov',
+	'nov',
+	'flv',
+	'webm',
+	'wmv',
+	'm4v',
+	'mpg',
+	'mpeg'
+]);
+
+function getFileExtension(path: string): string {
+	const normalized = path.replace(/\\/g, '/');
+	const fileName = normalized.split('/').pop() || normalized;
+	const dot = fileName.lastIndexOf('.');
+	if (dot < 0 || dot === fileName.length - 1) return '';
+	return fileName.slice(dot + 1).toLowerCase();
+}
+
+function isArchiveItem(item: FsItem): boolean {
+	if (item.isDir) return false;
+	return ARCHIVE_EXTENSIONS.has(getFileExtension(item.path));
+}
+
+function isVideoItem(item: FsItem): boolean {
+	if (item.isDir) return false;
+	return VIDEO_EXTENSIONS.has(getFileExtension(item.path));
+}
+
+function filterItemsByType(items: FsItem[], filter: VirtualItemTypeFilter): FsItem[] {
+	if (filter === 'all') return items;
+
+	if (filter === 'folder') {
+		return items.filter((item) => item.isDir);
+	}
+
+	if (filter === 'archive') {
+		return items.filter((item) => isArchiveItem(item));
+	}
+
+	if (filter === 'video') {
+		return items.filter((item) => isVideoItem(item));
+	}
+
+	return items;
+}
+
+function getVirtualItemTypeFilter(type: VirtualPathType): VirtualItemTypeFilter {
+	if (type === 'bookmark') {
+		return virtualPanelSettingsStore.bookmarkItemTypeFilter;
+	}
+
+	if (type === 'history') {
+		return virtualPanelSettingsStore.historyItemTypeFilter;
+	}
+
+	return 'all';
 }
 
 /**
@@ -126,19 +190,20 @@ function historyToFsItem(entry: UnifiedHistoryEntry): FsItem {
  */
 export function loadVirtualPathData(path: string): FsItem[] {
 	const type = getVirtualPathType(path);
+	const itemTypeFilter = getVirtualItemTypeFilter(type);
 
 	switch (type) {
 		case 'bookmark': {
 			// 触发后台清理（首次加载时执行一次，不阻塞）
 			triggerBookmarkCleanup();
-			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
-			return bookmarks.map(bookmarkToFsItem);
+			const bookmarks = bookmarkStore.getVisibleBookmarks() as BookmarkEntry[];
+			return filterItemsByType(bookmarks.map(bookmarkToFsItem), itemTypeFilter);
 		}
 		case 'history': {
 			// 触发后台清理（首次加载时执行一次，不阻塞）
 			triggerHistoryCleanup();
 			const history = get(unifiedHistoryStore) as UnifiedHistoryEntry[];
-			return history.map(historyToFsItem);
+			return filterItemsByType(history.map(historyToFsItem), itemTypeFilter);
 		}
 		case 'search': {
 			// 搜索结果从 tabSearchResults 获取
@@ -160,13 +225,28 @@ export function subscribeVirtualPathData(
 
 	switch (type) {
 		case 'bookmark': {
-			return bookmarkStore.subscribe((bookmarks: BookmarkEntry[]) => {
-				callback(bookmarks.map(bookmarkToFsItem));
-			});
+			const emit = () => {
+				const itemTypeFilter = getVirtualItemTypeFilter(type);
+				const bookmarks = bookmarkStore.getVisibleBookmarks() as BookmarkEntry[];
+				callback(filterItemsByType(bookmarks.map(bookmarkToFsItem), itemTypeFilter));
+			};
+
+			emit();
+
+			const unsubBookmarks = bookmarkStore.subscribe(() => emit());
+			const unsubLists = bookmarkStore.subscribeLists(() => emit());
+			const unsubActiveList = bookmarkStore.subscribeActiveList(() => emit());
+
+			return () => {
+				unsubBookmarks();
+				unsubLists();
+				unsubActiveList();
+			};
 		}
 		case 'history': {
 			return unifiedHistoryStore.subscribe((history: UnifiedHistoryEntry[]) => {
-				callback(history.map(historyToFsItem));
+				const itemTypeFilter = getVirtualItemTypeFilter(type);
+				callback(filterItemsByType(history.map(historyToFsItem), itemTypeFilter));
 			});
 		}
 		case 'search': {
@@ -188,7 +268,7 @@ export function removeVirtualPathItem(path: string, itemPath: string): boolean {
 
 	switch (type) {
 		case 'bookmark': {
-			const bookmarks = get(bookmarkStore) as BookmarkEntry[];
+			const bookmarks = bookmarkStore.getAll() as BookmarkEntry[];
 			const bookmark = bookmarks.find(b => b.path === itemPath);
 			if (bookmark) {
 				bookmarkStore.remove(bookmark.id);

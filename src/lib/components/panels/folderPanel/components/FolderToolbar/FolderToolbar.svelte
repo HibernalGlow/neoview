@@ -4,7 +4,11 @@
  * 参考 NeeView 的 FolderListView 工具栏设计
  * 将原有 1500+ 行代码拆分为多个子组件
  */
-import { virtualPanelSettingsStore, type TreePosition } from '$lib/stores/virtualPanelSettings.svelte';
+import {
+	virtualPanelSettingsStore,
+	type TreePosition,
+	type VirtualItemTypeFilter
+} from '$lib/stores/virtualPanelSettings.svelte';
 import {
 	folderTabActions,
 	tabCanGoBack,
@@ -133,6 +137,12 @@ let sortConfig = $derived<SortConfig>(virtualMode
 	}
 	: globalSortConfigValue);
 
+let itemTypeFilter = $derived<VirtualItemTypeFilter>(virtualMode
+	? (virtualMode === 'history'
+		? virtualPanelSettingsStore.historyItemTypeFilter
+		: virtualPanelSettingsStore.bookmarkItemTypeFilter)
+	: 'all');
+
 let showSearchBar = $derived(virtualMode 
 	? (virtualMode === 'history' ? virtualPanelSettingsStore.historyShowSearchBar : virtualPanelSettingsStore.bookmarkShowSearchBar)
 	: globalShowSearchBarValue);
@@ -240,6 +250,19 @@ function handleSetThumbnailWidthPercent(value: number) {
 }
 
 function handleSetBannerWidthPercent(value: number) { folderTabActions.setBannerWidthPercent(value); }
+
+function handleSetItemTypeFilter(value: VirtualItemTypeFilter) {
+	if (virtualMode === 'history') {
+		virtualPanelSettingsStore.setHistoryItemTypeFilter(value);
+		onRefresh?.();
+		return;
+	}
+
+	if (virtualMode === 'bookmark') {
+		virtualPanelSettingsStore.setBookmarkItemTypeFilter(value);
+		onRefresh?.();
+	}
+}
 
 function handleSetFolderTreeLayout(layout: TreePosition) {
 	if (virtualMode === 'history') virtualPanelSettingsStore.setHistoryFolderTreeLayout(layout);
@@ -353,9 +376,11 @@ function handleToggleShowPenetrateSettingsBar() { folderTabActions.toggleShowPen
 		{thumbnailWidthPercent}
 		{bannerWidthPercent}
 		{itemCount}
+		{itemTypeFilter}
 		onSetThumbnailWidthPercent={handleSetThumbnailWidthPercent}
 		onSetBannerWidthPercent={handleSetBannerWidthPercent}
 		onToggleShowToolbarTooltip={handleToggleShowToolbarTooltip}
+		onSetItemTypeFilter={handleSetItemTypeFilter}
 		onRefresh={() => onRefresh?.()}
 	/>
 {/if}

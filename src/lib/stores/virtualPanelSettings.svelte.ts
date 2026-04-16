@@ -6,11 +6,13 @@
 import type { FolderViewStyle, FolderSortField, FolderSortOrder } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
 export type TreePosition = 'left' | 'right' | 'top' | 'bottom';
+export type VirtualItemTypeFilter = 'all' | 'archive' | 'folder' | 'video';
 
 export interface VirtualPanelSettings {
     viewStyle: FolderViewStyle;
     sortField: FolderSortField;
     sortOrder: FolderSortOrder;
+    itemTypeFilter: VirtualItemTypeFilter;
     multiSelectMode: boolean;
     deleteMode: boolean;
     showSearchBar: boolean;
@@ -32,6 +34,7 @@ function createDefaultSettings(): VirtualPanelSettings {
         viewStyle: 'list',
         sortField: 'date',
         sortOrder: 'desc',
+        itemTypeFilter: 'all',
         multiSelectMode: false,
         deleteMode: false,
         showSearchBar: false,
@@ -75,6 +78,7 @@ class VirtualPanelSettingsStore {
     get historyViewStyle() { return this.historySettings.viewStyle; }
     get historySortField() { return this.historySettings.sortField; }
     get historySortOrder() { return this.historySettings.sortOrder; }
+    get historyItemTypeFilter() { return this.historySettings.itemTypeFilter; }
     get historyMultiSelectMode() { return this.historySettings.multiSelectMode; }
     get historyDeleteMode() { return this.historySettings.deleteMode; }
     get historyShowSearchBar() { return this.historySettings.showSearchBar; }
@@ -92,6 +96,7 @@ class VirtualPanelSettingsStore {
     get bookmarkViewStyle() { return this.bookmarkSettings.viewStyle; }
     get bookmarkSortField() { return this.bookmarkSettings.sortField; }
     get bookmarkSortOrder() { return this.bookmarkSettings.sortOrder; }
+    get bookmarkItemTypeFilter() { return this.bookmarkSettings.itemTypeFilter; }
     get bookmarkMultiSelectMode() { return this.bookmarkSettings.multiSelectMode; }
     get bookmarkDeleteMode() { return this.bookmarkSettings.deleteMode; }
     get bookmarkShowSearchBar() { return this.bookmarkSettings.showSearchBar; }
@@ -121,6 +126,10 @@ class VirtualPanelSettingsStore {
     }
     setHistorySortOrder(value: FolderSortOrder) {
         this.historySettings.sortOrder = value;
+        saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
+    }
+    setHistoryItemTypeFilter(value: VirtualItemTypeFilter) {
+        this.historySettings.itemTypeFilter = value;
         saveSettings(STORAGE_KEY_HISTORY, this.historySettings);
     }
     toggleHistoryMultiSelectMode() {
@@ -189,6 +198,10 @@ class VirtualPanelSettingsStore {
     }
     setBookmarkSortOrder(value: FolderSortOrder) {
         this.bookmarkSettings.sortOrder = value;
+        saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
+    }
+    setBookmarkItemTypeFilter(value: VirtualItemTypeFilter) {
+        this.bookmarkSettings.itemTypeFilter = value;
         saveSettings(STORAGE_KEY_BOOKMARK, this.bookmarkSettings);
     }
     toggleBookmarkMultiSelectMode() {

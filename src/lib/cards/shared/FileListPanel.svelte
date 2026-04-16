@@ -7,6 +7,9 @@
 	import { onMount, untrack } from 'svelte';
 	import { get } from 'svelte/store';
 	import { homeDir } from '@tauri-apps/api/path';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 
 	// 卡片组件
 	import ToolbarCard from '../folder/cards/ToolbarCard.svelte';
@@ -29,8 +32,17 @@
 	import BreadcrumbBar from '$lib/components/panels/folderPanel/components/BreadcrumbBar.svelte';
 	import FolderTabBar from '$lib/components/panels/folderPanel/components/FolderTabBar.svelte';
 	import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
+	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { favoriteTagStore } from '$lib/stores/emm/favoriteTagStore.svelte';
+	import {
+		bookmarkStore,
+		BOOKMARK_LIST_IDS,
+		type BookmarkList,
+		type BookmarkListFilter
+	} from '$lib/stores/bookmark.svelte';
 	import { createKeyboardHandler } from '$lib/components/panels/folderPanel/utils/keyboardHandler';
+	import { showErrorToast, showSuccessToast } from '$lib/utils/toast';
+	import type { FsItem } from '$lib/types';
 
 	// 共享操作
 	import { createAllFileActions } from './useFileActions';
@@ -59,6 +71,116 @@
 
 	// ==================== 共享操作初始化 ====================
 	const actions = createAllFileActions(ctx, initialPathSnapshot);
+
+	// ==================== 书签列表（仅书签面板） ====================
+	let bookmarkLists = $state<BookmarkList[]>([]);
+	let activeBookmarkListId = $state<BookmarkListFilter>(BOOKMARK_LIST_IDS.all);
+
+	// 添加书签弹窗状态
+	let addBookmarkDialogOpen = $state(false);
+	let addBookmarkTargets = $state<FsItem[]>([]);
+	let addBookmarkSelectedListIds = $state<string[]>([BOOKMARK_LIST_IDS.default]);
+	let newBookmarkListName = $state('');
+	let newBookmarkListIsFavorite = $state(false);
+
+	function getBookmarkListsForTags(): BookmarkList[] {
+		return bookmarkLists;
+	}
+
+	function refreshVirtualBookmarkView() {
+		if (ctx.panelMode !== 'bookmark') return;
+		if (!initialPathSnapshot || !isVirtualPath(initialPathSnapshot)) return;
+		ctx.navigationCommand.set({ type: 'init', path: initialPathSnapshot });
+	}
+
+	function switchBookmarkList(listId: BookmarkListFilter) {
+		bookmarkStore.setActiveListId(listId);
+		refreshVirtualBookmarkView();
+	}
+
+	function createBookmarkListFromTopBar() {
+		const name = window.prompt('请输入新书签列表名称');
+		if (!name || !name.trim()) return;
+
+		const list = bookmarkStore.createList(name.trim());
+		bookmarkStore.setActiveListId(list.id);
+		showSuccessToast('书签列表已创建', list.name);
+		refreshVirtualBookmarkView();
+	}
+
+	function resolveBookmarkTargets(item: FsItem): FsItem[] {
+		const selectedPaths = Array.from(get(ctx.selectedItems));
+		if (selectedPaths.length <= 1 || !selectedPaths.includes(item.path)) {
+			return [item];
+		}
+
+		const sourceItems = ctx.isVirtualInstance && initialPathSnapshot
+			? loadVirtualPathData(initialPathSnapshot)
+			: (get(ctx.items) as FsItem[]);
+
+		const byPath = new Map(sourceItems.map((entry) => [entry.path, entry] as const));
+		const targets = selectedPaths
+			.map((path) => byPath.get(path))
+			.filter((entry): entry is FsItem => Boolean(entry));
+
+		if (!targets.some((entry) => entry.path === item.path)) {
+			targets.unshift(item);
+		}
+
+		return targets.length > 0 ? targets : [item];
+	}
+
+	function openAddBookmarkDialog(item: FsItem) {
+		addBookmarkTargets = resolveBookmarkTargets(item);
+
+		const activeList = bookmarkStore.getActiveListId();
+		addBookmarkSelectedListIds = [
+			activeList === BOOKMARK_LIST_IDS.all ? BOOKMARK_LIST_IDS.default : activeList
+		];
+
+		newBookmarkListName = '';
+		newBookmarkListIsFavorite = false;
+		addBookmarkDialogOpen = true;
+	}
+
+	function toggleBookmarkDialogList(listId: string) {
+		if (addBookmarkSelectedListIds.includes(listId)) {
+			addBookmarkSelectedListIds = addBookmarkSelectedListIds.filter((id) => id !== listId);
+			return;
+		}
+
+		addBookmarkSelectedListIds = [...addBookmarkSelectedListIds, listId];
+	}
+
+	function createBookmarkListInDialog() {
+		const name = newBookmarkListName.trim();
+		if (!name) return;
+
+		const list = bookmarkStore.createList(name, { isFavorite: newBookmarkListIsFavorite });
+		addBookmarkSelectedListIds = Array.from(new Set([...addBookmarkSelectedListIds, list.id]));
+		newBookmarkListName = '';
+		newBookmarkListIsFavorite = false;
+		showSuccessToast('书签列表已创建', list.name);
+	}
+
+	function confirmAddBookmarkToLists() {
+		if (addBookmarkTargets.length === 0) {
+			addBookmarkDialogOpen = false;
+			return;
+		}
+
+		if (addBookmarkSelectedListIds.length === 0) {
+			showErrorToast('请选择列表', '至少选择一个书签列表');
+			return;
+		}
+
+		bookmarkStore.addManyToLists(addBookmarkTargets, addBookmarkSelectedListIds);
+		showSuccessToast(
+			'书签已添加',
+			`${addBookmarkTargets.length} 项已添加到 ${addBookmarkSelectedListIds.length} 个列表`
+		);
+		addBookmarkDialogOpen = false;
+	}
 
 	// 计算当前活动路径（用于面包屑同步）
 	const effectiveCurrentPath = $derived.by(() => {
@@ -115,6 +237,24 @@
 			}
 		});
 		return unsub;
+	});
+
+	$effect(() => {
+		bookmarkLists = bookmarkStore.getLists();
+		activeBookmarkListId = bookmarkStore.getActiveListId();
+
+		const unsubLists = bookmarkStore.subscribeLists((lists) => {
+			bookmarkLists = lists;
+		});
+
+		const unsubActiveList = bookmarkStore.subscribeActiveList((listId) => {
+			activeBookmarkListId = listId;
+		});
+
+		return () => {
+			unsubLists();
+			unsubActiveList();
+		};
 	});
 
 	// ==================== 生命周期 ====================
@@ -181,6 +321,42 @@
 	<!-- 面包屑在顶部 -->
 	{#if $breadcrumbPosition === 'top'}
 		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} externalPath={effectiveCurrentPath} />
+	{/if}
+
+	<!-- 书签列表顶栏 Tag（仅书签面板） -->
+	{#if ctx.panelMode === 'bookmark'}
+		<div class="border-b border-border/50 bg-muted/20">
+			<div class="flex items-center gap-1 overflow-x-auto px-2 py-1.5">
+				<button
+					type="button"
+					class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId === BOOKMARK_LIST_IDS.all
+						? 'border-primary/60 bg-primary/15 text-primary'
+						: 'border-border bg-background/80 hover:bg-accent'}"
+					onclick={() => switchBookmarkList(BOOKMARK_LIST_IDS.all)}
+				>
+					全部
+				</button>
+				{#each getBookmarkListsForTags() as list (list.id)}
+					<button
+						type="button"
+						class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId === list.id
+							? 'border-primary/60 bg-primary/15 text-primary'
+							: 'border-border bg-background/80 hover:bg-accent'}"
+						onclick={() => switchBookmarkList(list.id)}
+					>
+						{list.name}
+					</button>
+				{/each}
+				<Button
+					variant="outline"
+					size="sm"
+					class="h-7 shrink-0 rounded-full px-3 text-xs"
+					onclick={createBookmarkListFromTopBar}
+				>
+					+ 新建列表
+				</Button>
+			</div>
+		</div>
 	{/if}
 
 	<!-- 中间主区域（标签栏+工具栏+文件列表） -->
@@ -363,7 +539,7 @@
 	onPaste={actions.handlePaste}
 	onDelete={actions.handleDelete}
 	onRename={actions.handleRename}
-	onAddBookmark={actions.handleAddBookmark}
+	onAddBookmark={openAddBookmarkDialog}
 	onToggleFolderTreePin={actions.handleToggleFolderTreePin}
 	onCopyPath={actions.handleCopyPath}
 	onCopyName={actions.handleCopyName}
@@ -373,6 +549,83 @@
 	onEditTags={handleEditTags}
 	onUndoDelete={actions.handleUndoDelete}
 />
+
+<!-- 添加书签到列表弹窗 -->
+<Dialog.Root bind:open={addBookmarkDialogOpen}>
+	<Dialog.Content class="sm:max-w-xl">
+		<Dialog.Header>
+			<Dialog.Title>添加到书签列表</Dialog.Title>
+			<Dialog.Description>
+				为选中的 {addBookmarkTargets.length} 项选择要加入的书签列表（支持多选）。
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<div class="space-y-3 py-2">
+			<div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+				<div class="mb-1 text-xs text-muted-foreground">待添加项目</div>
+				<div class="max-h-24 space-y-1 overflow-y-auto text-xs">
+					{#if addBookmarkTargets.length === 0}
+						<div class="text-muted-foreground">无可添加项目</div>
+					{:else}
+						{#each addBookmarkTargets as target (target.path)}
+							<div class="truncate">{target.name}</div>
+						{/each}
+					{/if}
+				</div>
+			</div>
+
+			<div>
+				<div class="mb-1 text-xs text-muted-foreground">选择列表</div>
+				<div class="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border/60 p-2">
+					{#each bookmarkLists as list (list.id)}
+						<label class="hover:bg-accent/60 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm">
+							<input
+								type="checkbox"
+								checked={addBookmarkSelectedListIds.includes(list.id)}
+								onchange={() => toggleBookmarkDialogList(list.id)}
+							/>
+							<span class="truncate">{list.name}</span>
+						</label>
+					{/each}
+				</div>
+			</div>
+
+			<div class="rounded-md border border-border/60 bg-muted/20 p-2">
+				<div class="mb-2 text-xs text-muted-foreground">新建列表</div>
+				<div class="flex flex-wrap items-center gap-2">
+					<Input
+						placeholder="输入新列表名称"
+						value={newBookmarkListName}
+						oninput={(e) => (newBookmarkListName = (e.target as HTMLInputElement).value)}
+						class="h-8 min-w-40 flex-1"
+					/>
+					<label class="flex items-center gap-1 text-xs text-muted-foreground">
+						<input
+							type="checkbox"
+							checked={newBookmarkListIsFavorite}
+							onchange={(e) => (newBookmarkListIsFavorite = (e.target as HTMLInputElement).checked)}
+						/>
+						收藏夹列表
+					</label>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-8"
+						onclick={createBookmarkListInDialog}
+						disabled={!newBookmarkListName.trim()}
+					>
+						新建并选中
+					</Button>
+				</div>
+			</div>
+		</div>
+
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (addBookmarkDialogOpen = false)}>取消</Button>
+			<Button onclick={confirmAddBookmarkToLists}>添加书签</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
 <!-- 确认对话框 -->
 <ConfirmDialog

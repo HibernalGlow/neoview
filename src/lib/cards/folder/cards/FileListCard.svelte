@@ -44,6 +44,13 @@
 	let searchResultItems = $state<FsItem[]>([]);
 	// 当前标签页路径
 	let currentPath = $state<string>('');
+	let virtualItemTypeFilter = $derived(
+		ctx.panelMode === 'history'
+			? virtualPanelSettingsStore.historyItemTypeFilter
+			: ctx.panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkItemTypeFilter
+				: 'all'
+	);
 	
 	// 订阅全局 store
 	$effect(() => {
@@ -70,6 +77,7 @@
 	// 订阅虚拟路径数据（如果是虚拟实例）
 	$effect(() => {
 		if (!ctx.isVirtualInstance || !ctx.initialPath) return;
+		virtualItemTypeFilter;
 		// 初始加载
 		virtualItems = loadVirtualPathData(ctx.initialPath);
 		// 订阅变化

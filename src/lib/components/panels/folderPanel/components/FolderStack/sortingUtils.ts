@@ -6,6 +6,7 @@ import type { FsItem } from '$lib/types';
 import { folderRatingStore } from '$lib/stores/emm/folderRating';
 import { collectTagCountStore } from '$lib/stores/emm/collectTagCountStore';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { getCachedFolderSizeForSort, requestFolderSizes } from '$lib/stores/folderSizeCache.svelte';
 
 // ============ 随机排序种子缓存 ============
 const randomSeedCache = new Map<string, number>();
@@ -120,9 +121,19 @@ export function sortItems(
       case 'date':
         comparison = (a.modified || 0) - (b.modified || 0);
         break;
-      case 'size':
-        comparison = (a.size || 0) - (b.size || 0);
+      case 'size': {
+        let sizeA = a.size || 0;
+        let sizeB = b.size || 0;
+        // 文件夹 size 在后端快速模式下默认为 0，使用 folderSizeCache 的缓存值
+        if (a.isDir && sizeA === 0) {
+          sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
+        }
+        if (b.isDir && sizeB === 0) {
+          sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
+        }
+        comparison = sizeA - sizeB;
         break;
+      }
       case 'type': {
         const extA = a.name.split('.').pop()?.toLowerCase() || '';
         const extB = b.name.split('.').pop()?.toLowerCase() || '';
@@ -133,6 +144,15 @@ export function sortItems(
 
     return order === 'desc' ? -comparison : comparison;
   });
+
+  // 按 size 排序时，异步触发文件夹大小加载（缓存为空时），加载完成后 UI 会因响应式更新而重新排序
+  if (field === 'size') {
+    const foldersNeedingSize = items.filter(item => item.isDir && (item.size || 0) === 0 && getCachedFolderSizeForSort(item.path) === null);
+    if (foldersNeedingSize.length > 0) {
+      requestFolderSizes(foldersNeedingSize.map(item => item.path));
+    }
+  }
+
   return sorted;
 }
 

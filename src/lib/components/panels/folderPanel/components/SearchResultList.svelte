@@ -16,6 +16,7 @@ import { Button } from '$lib/components/ui/button';
 import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { getCachedFolderSizeForSort, requestFolderSizes } from '$lib/stores/folderSizeCache.svelte';
 
 interface Props {
 	onItemClick?: (item: FsItem) => void | Promise<void>;
@@ -92,9 +93,14 @@ let sortedResults = $derived.by(() => {
 			case 'name':
 				cmp = a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
 				break;
-			case 'size':
-				cmp = (a.size || 0) - (b.size || 0);
-				break;
+		case 'size': {
+			let sizeA = a.size || 0;
+			let sizeB = b.size || 0;
+			if (a.isDir && sizeA === 0) sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
+			if (b.isDir && sizeB === 0) sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
+			cmp = sizeA - sizeB;
+			break;
+		}
 			case 'date':
 				cmp = (a.modified || 0) - (b.modified || 0);
 				break;
@@ -127,6 +133,14 @@ let sortedResults = $derived.by(() => {
 		
 		return order === 'asc' ? cmp : -cmp;
 	});
+	
+	// 按 size 排序时，异步触发文件夹大小加载（缓存为空时）
+	if (field === 'size') {
+		const foldersNeedingSize = results.filter(item => item.isDir && (item.size || 0) === 0 && getCachedFolderSizeForSort(item.path) === null);
+		if (foldersNeedingSize.length > 0) {
+			requestFolderSizes(foldersNeedingSize.map(item => item.path));
+		}
+	}
 	
 	return results;
 });

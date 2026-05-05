@@ -166,6 +166,22 @@ export function getCachedFolderSize(path: string, modifiedHint?: number): number
 	return entry.size;
 }
 
+/**
+ * 获取文件夹大小缓存值（用于排序，接受过期但未过期的缓存）
+ * 相比 getCachedFolderSize，此函数接受 STALE_TTL_MS 内的缓存（6小时），
+ * 因为排序时即使数据稍旧，也比 size=0 更有意义
+ */
+export function getCachedFolderSizeForSort(path: string): number | null {
+	const key = normalizePath(path);
+	const entry = cache.get(key);
+	if (!entry) return null;
+
+	const age = Date.now() - entry.fetchedAt;
+	if (age > STALE_TTL_MS) return null;
+
+	return entry.size;
+}
+
 export function notifyFolderSizeNavigation(path: string): void {
 	if (!path) return;
 	lastPathChangeAt = Date.now();
@@ -221,4 +237,20 @@ export async function getFolderSizeSmart(
 
 	inFlight.set(key, request);
 	return request;
+}
+
+/**
+ * 批量异步请求文件夹大小（用于按大小排序时触发后台加载）
+ * 加载完成后，缓存更新会通过 Svelte 响应式系统自动触发 UI 重排
+ */
+export function requestFolderSizes(paths: string[]): void {
+	if (paths.length === 0) return;
+	// 使用微任务避免在排序循环中阻塞
+	Promise.resolve().then(() => {
+		for (const path of paths) {
+			void getFolderSizeSmart(path).catch(() => {
+				// 忽略单个路径加载失败
+			});
+		}
+	});
 }

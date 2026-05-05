@@ -11,6 +11,7 @@ import type { StreamHandle } from '$lib/api/filesystem';
 import { isVideoFile } from '$lib/utils/videoUtils';
 import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
+import { getCachedFolderSizeForSort, requestFolderSizes } from '$lib/stores/folderSizeCache.svelte';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
@@ -334,9 +335,14 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder, p
       case 'modified':
         comparison = (a.modified || 0) - (b.modified || 0);
         break;
-      case 'size':
-        comparison = a.size - b.size;
+      case 'size': {
+        let sizeA = a.size;
+        let sizeB = b.size;
+        if (a.isDir && sizeA === 0) sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
+        if (b.isDir && sizeB === 0) sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
+        comparison = sizeA - sizeB;
         break;
+      }
       case 'type':
         comparison = getItemType(a).localeCompare(getItemType(b));
         if (comparison === 0) {
@@ -347,6 +353,14 @@ export function sortItems(items: FsItem[], field: SortField, order: SortOrder, p
 
     return order === 'asc' ? comparison : -comparison;
   });
+
+  // 按 size 排序时，异步触发文件夹大小加载（缓存为空时）
+  if (field === 'size') {
+    const foldersNeedingSize = items.filter(item => item.isDir && item.size === 0 && getCachedFolderSizeForSort(item.path) === null);
+    if (foldersNeedingSize.length > 0) {
+      requestFolderSizes(foldersNeedingSize.map(item => item.path));
+    }
+  }
 }
 
 function createFileBrowserStore() {

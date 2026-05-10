@@ -42,7 +42,7 @@ export interface CacheStats {
 export type LoadImageFn = (key: string) => Promise<{ blob: Blob; width?: number; height?: number }>;
 
 const DEFAULT_CONFIG: ImagePoolConfig = {
-  maxMemoryMB: 512,
+  maxMemoryMB: 64,
   preloadAhead: 3,
   preloadBehind: 1,
   lowPriorityDelayMs: 100,

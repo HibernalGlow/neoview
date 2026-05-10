@@ -216,7 +216,7 @@ pub struct CacheEntryInfo {
 
 impl Default for ImageCache {
     fn default() -> Self {
-        Self::new(256) // 默认 256MB 缓存
+        Self::new(64) // 默认 64MB 缓存（仅服务旧版命令）
     }
 }
 

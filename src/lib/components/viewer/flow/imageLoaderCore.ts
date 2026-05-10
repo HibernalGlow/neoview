@@ -66,7 +66,7 @@ export class ImageLoaderCore {
 		this.options = options;
 		// 【关键】每个实例创建独立的 BlobCache 和 LoadQueue，避免切书时数据污染
 		this.blobCache = new BlobCache({
-			maxSizeBytes: (options.maxCacheSizeMB ?? 500) * 1024 * 1024
+			maxSizeBytes: (options.maxCacheSizeMB ?? 128) * 1024 * 1024
 		});
 		// 【优化】提高默认并发数从 4 到 6，充分利用现代多核 CPU
 		this.loadQueue = new LoadQueueManager(options.maxConcurrentLoads ?? 6);

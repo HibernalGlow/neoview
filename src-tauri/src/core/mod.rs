@@ -49,11 +49,9 @@ pub mod video_exts;
 pub mod video_thumbnail;
 pub mod wic_decoder;
 // 新增模块
-pub mod app_context;
 pub mod buffer_pool;
 pub mod custom_protocol;
 pub mod fast_path;
-pub mod lru_image_cache;
 pub mod mmap_archive;
 pub mod profiling;
 pub mod rkyv_index;
@@ -75,6 +73,4 @@ pub use fs_manager::FsManager;
 // pub use file_indexer::FileIndexer;
 
 // 新增导出
-pub use app_context::{AppConfig, AppContext};
-pub use lru_image_cache::{CacheEntry, CacheStats, LruImageCache};
 pub use thumbnail_db::CompressionStats;

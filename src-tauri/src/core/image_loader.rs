@@ -14,7 +14,7 @@ use std::sync::Arc;
 use threadpool::ThreadPool;
 
 /// 默认大文件阈值 (10MB)
-const DEFAULT_LARGE_FILE_THRESHOLD: u64 = 10 * 1024 * 1024;
+const DEFAULT_LARGE_FILE_THRESHOLD: u64 = 1 * 1024 * 1024;
 
 /// 图像数据源
 #[derive(Debug)]
@@ -375,7 +375,7 @@ impl ImageLoader {
 
 impl Default for ImageLoader {
     fn default() -> Self {
-        Self::new(512, 4) // 默认 512MB 缓存，4个线程
+        Self::new(128, 4) // 默认 128MB 缓存，4个线程（仅服务旧版命令）
     }
 }
 

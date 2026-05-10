@@ -1171,4 +1171,28 @@
 		isolation: isolate;
 		contain: layout style;
 	}
+
+	/* 页面容器：离屏页面跳过绘制 */
+	:global(.neoview-page-container) {
+		content-visibility: auto;
+		contain-intrinsic-size: auto 500px;
+	}
+
+	/* 活跃页面：启用 GPU 合成层 */
+	:global(.neoview-page-container.active) {
+		content-visibility: visible;
+		will-change: transform;
+	}
+
+	/* 非活跃页面：严格隔离，减少重绘影响 */
+	:global(.neoview-page-container.inactive) {
+		contain: strict;
+		will-change: auto;
+	}
+
+	/* 图片元素：避免解码阻塞 */
+	:global(.neoview-page-container img) {
+		content-visibility: auto;
+		contain: paint;
+	}
 </style>

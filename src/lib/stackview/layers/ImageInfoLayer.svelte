@@ -183,9 +183,19 @@
           <!-- 链路延迟追踪 -->
           {#if latencyTrace}
             <div class="latency-row">
-              <span class={latencyTrace.cacheHit ? 'text-green' : 'text-yellow'}>
-                {latencyTrace.dataSource === 'blob' ? '⚡' : '💾'}
-                {latencyTrace.dataSource}
+              <!-- 传输模式指示 -->
+              <span class="transport-badge {latencyTrace.dataSource === 'protocol' ? 'protocol' : latencyTrace.dataSource === 'file-url' ? 'direct' : 'ipc'}">
+                {#if latencyTrace.dataSource === 'protocol'}
+                  🌐 协议直连
+                {:else if latencyTrace.dataSource === 'file-url'}
+                  📁 文件直连
+                {:else if latencyTrace.dataSource === 'tempfile'}
+                  💾 临时文件
+                {:else if latencyTrace.dataSource === 'tempfile-url'}
+                  💾 临时URL
+                {:else}
+                  📡 IPC传输
+                {/if}
               </span>
               <span class="text-muted">
                 {latencyTrace.renderMode === 'img' ? '🖼️img' : '🎨canvas'}
@@ -300,6 +310,27 @@
     font-family: monospace;
   }
 
+  .transport-badge {
+    font-weight: 600;
+    font-size: 11px;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .transport-badge.protocol {
+    color: #22c55e;
+    background: rgb(34 197 94 / 0.12);
+    border: 1px solid rgb(34 197 94 / 0.3);
+  }
+  .transport-badge.direct {
+    color: #3b82f6;
+    background: rgb(59 130 246 / 0.12);
+    border: 1px solid rgb(59 130 246 / 0.3);
+  }
+  .transport-badge.ipc {
+    color: #f59e0b;
+    background: rgb(245 158 11 / 0.12);
+    border: 1px solid rgb(245 158 11 / 0.3);
+  }
   .text-green { color: #22c55e; }
   .text-yellow { color: #eab308; }
   .text-blue { color: #3b82f6; }

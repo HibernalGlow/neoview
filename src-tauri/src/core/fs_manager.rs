@@ -704,6 +704,15 @@ impl FsManager {
 
         let include_subfolders = options.include_subfolders.unwrap_or(false);
         let max_results = options.max_results.unwrap_or(1000);
+        let search_in_path = options.search_in_path.unwrap_or(false);
+
+        let normalize_path_for_compare = |value: &str| {
+            let mut normalized = value.replace('\\', "/").to_lowercase();
+            if normalized.ends_with('/') && normalized.len() > 3 {
+                normalized.pop();
+            }
+            normalized
+        };
 
         println!(
             "🔍 [Rust Search] include_subfolders: {}, max_results: {}",
@@ -711,125 +720,143 @@ impl FsManager {
         );
 
         // 尝试使用索引搜索（更快）
+        let mut can_use_index = false;
         if let Ok(has_index) = self.has_index() {
             println!("🔍 [Rust Search] has_index: {}", has_index);
-            if has_index {
-                // 使用索引搜索
-                if let Ok(mut results) = self.search_with_index(query, max_results) {
+            if has_index && !search_in_path {
+                if let Ok(stats) = self.indexer.get_stats() {
+                    let normalized_root = normalize_path_for_compare(&path.to_string_lossy());
+                    let is_indexed_root = stats.indexed_paths.iter().any(|indexed_path| {
+                        let normalized_index = normalize_path_for_compare(indexed_path);
+                        if normalized_index.ends_with('/') {
+                            normalized_root.starts_with(&normalized_index)
+                        } else if normalized_root == normalized_index {
+                            true
+                        } else {
+                            let mut prefix = normalized_index.clone();
+                            prefix.push('/');
+                            normalized_root.starts_with(&prefix)
+                        }
+                    });
+                    if is_indexed_root {
+                        can_use_index = true;
+                    } else {
+                        println!("🔍 [Rust Search] Index does not cover path, fallback to rust_search");
+                    }
+                }
+            } else if has_index && search_in_path {
+                println!("🔍 [Rust Search] search_in_path enabled, skip index search");
+            }
+        }
+
+        if can_use_index {
+            // 使用索引搜索
+            if let Ok(mut results) = self.search_with_index(query, max_results) {
                     println!(
                         "🔍 [Rust Search] Index search returned {} results",
                         results.len()
                     );
 
-                    // 如果指定了路径，过滤结果
+                    // 如果指定了路径，过滤结果（Windows 使用大小写不敏感 + 统一分隔符）
                     if path.to_string_lossy() != "/" {
                         let path_str = path.to_string_lossy();
+                        let normalized_root = normalize_path_for_compare(&path_str);
+
                         results = results
                             .into_iter()
-                            .filter(|item| item.path.starts_with(&*path_str))
+                            .filter(|item| normalize_path_for_compare(&item.path).starts_with(&normalized_root))
                             .collect();
                         println!(
                             "🔍 [Rust Search] After path filter: {} results",
                             results.len()
                         );
+
+                        // 如果不包含子文件夹，只返回当前目录的结果
+                        if !include_subfolders {
+                            results = results
+                                .into_iter()
+                                .filter(|item| {
+                                    let item_path = Path::new(&item.path);
+                                    if let Some(parent) = item_path.parent() {
+                                        normalize_path_for_compare(&parent.to_string_lossy()) == normalized_root
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .collect();
+                            println!(
+                                "🔍 [Rust Search] After subfolder filter: {} results",
+                                results.len()
+                            );
+                        }
                     }
 
-                    // 如果不包含子文件夹，只返回当前目录的结果
-                    if !include_subfolders {
-                        results = results
-                            .into_iter()
-                            .filter(|item| {
-                                let item_path = Path::new(&item.path);
-                                if let Some(parent) = item_path.parent() {
-                                    parent == path
-                                } else {
-                                    false
-                                }
-                            })
-                            .collect();
-                        println!(
-                            "🔍 [Rust Search] After subfolder filter: {} results",
-                            results.len()
-                        );
-                    }
-
-                    println!("🔍 [Rust Search] Returning {} index results", results.len());
-                    return Ok(results);
-                }
+                println!("🔍 [Rust Search] Returning {} index results", results.len());
+                return Ok(results);
             }
         }
 
-        // 使用 rust_search 进行搜索
-        println!("🔍 [Rust Search] Using rust_search fallback");
+        // 使用 jwalk 进行并行目录遍历搜索
+        println!("🔍 [Rust Search] Using jwalk parallel search");
 
-        let search_in_path = options.search_in_path.unwrap_or(false);
-        println!("🔍 [Rust Search] search_in_path: {}", search_in_path);
-
-        // rust_search 默认会搜索完整路径
-        let mut search_builder = rust_search::SearchBuilder::default()
-            .location(path)
-            .search_input(query)
-            .ignore_case()
-            .hidden(); // 默认忽略隐藏文件
+        let query_lower = query.to_lowercase();
+        let max_depth = if include_subfolders { 20 } else { 1 };
 
         println!(
-            "🔍 [Rust Search] Search will match in {}",
+            "🔍 [Rust Search] Search will match in {}, max_depth: {}",
             if search_in_path {
                 "full path"
             } else {
                 "file name only"
-            }
+            },
+            max_depth
         );
 
-        if !include_subfolders {
-            search_builder = search_builder.depth(1);
-            println!("🔍 [Rust Search] Set depth to 1 (no subfolders)");
-        } else {
-            // 限制最大深度以防止无限循环或过深
-            search_builder = search_builder.depth(20);
-            println!("🔍 [Rust Search] Set depth to 20 (with subfolders)");
-        }
-
-        // rust_search 返回 Vec<String>
-        println!("🔍 [Rust Search] Building search...");
-        let paths: Vec<String> = search_builder.build().collect();
-        println!(
-            "🔍 [Rust Search] rust_search returned {} paths",
-            paths.len()
-        );
-
+        use jwalk::WalkDir;
         let mut results = Vec::new();
 
-        for p in paths {
+        // 使用 jwalk 并行遍历目录
+        for entry_result in WalkDir::new(path)
+            .min_depth(1)
+            .max_depth(max_depth)
+            .skip_hidden(false)
+        {
             if results.len() >= max_results {
                 break;
             }
 
-            let path_buf = PathBuf::from(&p);
+            let entry = match entry_result {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let entry_path = entry.path();
+            let name = entry_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            // 根据 search_in_path 选项过滤结果
+            let matches = if search_in_path {
+                // 在完整路径中搜索
+                entry_path.to_string_lossy().to_lowercase().contains(&query_lower)
+            } else {
+                // 只在文件名中搜索
+                name.to_lowercase().contains(&query_lower)
+            };
+
+            if !matches {
+                continue;
+            }
+
+            let path_str = entry_path.to_string_lossy().to_string();
+
             // 获取元数据
-            if let Ok(metadata) = fs::metadata(&path_buf) {
-                let name = path_buf
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                // 根据 search_in_path 选项过滤结果
-                let query_lower = query.to_lowercase();
-                let matches = if search_in_path {
-                    // 在完整路径中搜索
-                    p.to_lowercase().contains(&query_lower)
-                } else {
-                    // 只在文件名中搜索
-                    name.to_lowercase().contains(&query_lower)
-                };
-
-                if !matches {
-                    continue;
-                }
+            if let Ok(metadata) = entry.metadata() {
 
                 let is_dir = metadata.is_dir();
                 let size = if is_dir {
-                    0 // 搜索时不计算目录大小以提高速度
+                    0
                 } else {
                     metadata.len()
                 };
@@ -846,11 +873,11 @@ impl FsManager {
                     .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs());
 
-                let is_image = !is_dir && Self::is_image_file(&path_buf);
+                let is_image = !is_dir && Self::is_image_file(&entry_path);
 
                 let (folder_count, image_count, archive_count, video_count, final_size) = if is_dir
                 {
-                    let stats = self.get_directory_stats(&path_buf, false);
+                    let stats = self.get_directory_stats(&entry_path, false);
                     (
                         Some(stats.folders),
                         Some(stats.images),
@@ -863,7 +890,7 @@ impl FsManager {
                         None,
                         None,
                         None,
-                        if Self::is_video_file(&path_buf) {
+                        if Self::is_video_file(&entry_path) {
                             Some(1)
                         } else {
                             None
@@ -874,7 +901,7 @@ impl FsManager {
 
                 results.push(FsItem {
                     name,
-                    path: p,
+                    path: path_str,
                     is_dir,
                     size: final_size,
                     modified,

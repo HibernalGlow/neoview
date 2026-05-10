@@ -14,7 +14,12 @@ import {
 	VIRTUAL_PATHS
 } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-import { mixedGenderStore, hasTagSearch, parseSearchTags, removeTagsFromSearch } from '$lib/stores/emm/favoriteTagStore.svelte';
+import {
+	mixedGenderStore,
+	hasTagSearch,
+	parseSearchTags,
+	removeTagsFromSearch
+} from '$lib/stores/emm/favoriteTagStore.svelte';
 import { searchByManualTag } from '$lib/stores/emm/manualTagStore.svelte';
 import type { SearchSettings } from '../types';
 
@@ -42,14 +47,14 @@ export function createSearchActions() {
 		const searchSettings = get(tabSearchSettings);
 
 		console.log('[useSearchActions] 后端搜索', { searchPath, keyword, searchSettings });
-		
+
 		// 在当前标签页显示搜索中状态
 		folderTabActions.setIsSearching(true);
 		folderTabActions.setSearchKeyword(keyword);
 
 		try {
 			let results: FsItem[] = [];
-			
+
 			// 检查是否包含标签搜索
 			const hasTagInSearch = hasTagSearch(keyword);
 
@@ -60,13 +65,18 @@ export function createSearchActions() {
 
 				if (tags.length > 0) {
 					// 转换为后端期望的格式: [namespace, tag, prefix]
-					const searchTags: [string, string, string][] = tags.map(t => [t.cat, t.tag, t.prefix]);
-					
+					const searchTags: [string, string, string][] = tags.map((t) => [t.cat, t.tag, t.prefix]);
+
 					// 获取 EMM 数据库路径
 					const dbPaths = emmMetadataStore.getDatabasePaths();
-					
-					console.log('[useSearchActions] 标签搜索', { searchTags, textPart, enableMixed: mixedGenderStore.enabled, dbPaths });
-					
+
+					console.log('[useSearchActions] 标签搜索', {
+						searchTags,
+						textPart,
+						enableMixed: mixedGenderStore.enabled,
+						dbPaths
+					});
+
 					// 调用后端标签搜索（直接查询 EMM 数据库）
 					const emmMatchedPaths: string[] = await invoke('search_by_tags_from_emm', {
 						dbPaths,
@@ -74,38 +84,43 @@ export function createSearchActions() {
 						enableMixedGender: mixedGenderStore.enabled,
 						basePath: searchSettings.includeSubfolders ? searchPath : null
 					});
-					
+
 					// 同时搜索手动标签
 					const manualMatchedPaths: string[] = [];
 					for (const t of tags) {
 						const paths = searchByManualTag(t.cat || null, t.tag);
 						manualMatchedPaths.push(...paths);
 					}
-					
+
 					// 合并 EMM 和手动标签搜索结果（去重）
 					const allMatchedPaths = [...new Set([...emmMatchedPaths, ...manualMatchedPaths])];
-					console.log('[useSearchActions] EMM结果:', emmMatchedPaths.length, '手动标签结果:', manualMatchedPaths.length);
-					
+					console.log(
+						'[useSearchActions] EMM结果:',
+						emmMatchedPaths.length,
+						'手动标签结果:',
+						manualMatchedPaths.length
+					);
+
 					// 将路径转换为 FsItem（获取文件信息）
 					if (allMatchedPaths.length > 0) {
 						const matchedPaths = allMatchedPaths;
 						// 如果有文本部分，再过滤
 						const filteredPaths = textPart.trim()
-							? matchedPaths.filter(p => p.toLowerCase().includes(textPart.toLowerCase()))
+							? matchedPaths.filter((p) => p.toLowerCase().includes(textPart.toLowerCase()))
 							: matchedPaths;
-						
+
 						// 限制结果数量，避免性能问题
 						const limitedPaths = filteredPaths.slice(0, 200);
-						
+
 						// 批量获取文件信息
 						const fileInfoResults = await Promise.allSettled(
-							limitedPaths.map(path => invoke<FsItem>('get_file_info', { path }))
+							limitedPaths.map((path) => invoke<FsItem>('get_file_info', { path }))
 						);
-						
+
 						// 处理结果，失败的使用基本信息
 						const archiveExts = ['zip', 'rar', '7z', 'cbz', 'cbr', 'cb7', 'epub'];
 						const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp', 'jxl'];
-						
+
 						results = limitedPaths.map((path, index) => {
 							const result = fileInfoResults[index];
 							if (result.status === 'fulfilled' && result.value) {
@@ -117,7 +132,7 @@ export function createSearchActions() {
 							const isArchive = archiveExts.includes(ext);
 							const isImage = imageExts.includes(ext);
 							const isDir = !isArchive && !isImage && !ext;
-							
+
 							return {
 								name,
 								path,
@@ -144,18 +159,14 @@ export function createSearchActions() {
 				});
 				console.log('[useSearchActions] 文件搜索结果:', results.length);
 			}
-			
+
 			// 搜索完成：先设置结果，再创建新标签页
 			folderTabActions.setSearchResults(results);
-			
-			// 清除当前标签页的搜索状态
 			folderTabActions.setIsSearching(false);
-			folderTabActions.clearSearch();
-			
+
 			// 创建新标签页显示搜索结果（此时 searchResults 已有数据）
 			folderTabActions.createTab(VIRTUAL_PATHS.SEARCH);
 			folderTabActions.setSearchKeyword(keyword);
-			
 		} catch (err) {
 			console.error('[useSearchActions] 后端搜索失败:', err);
 			folderTabActions.setIsSearching(false);

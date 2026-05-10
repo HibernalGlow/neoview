@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find ~/.cargo/registry/src -type d -name \"rust_search-2*\" 2>/dev/null | head -5)",
+      "Read(//c/Users/30902/.cargo/registry/src/**)"
+    ]
+  }
+}

@@ -5,9 +5,9 @@
 //! - 使用 mini_moka LRU 缓存避免重复的路径查找
 //! - 缓存压缩包条目列表，减少重复解析
 
-use crate::commands::ThumbnailState;
 use crate::commands::thumbnail_v3_commands::ThumbnailServiceV3State;
 use crate::core::archive::ArchiveManager;
+use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
 use log::{debug, error, warn};
@@ -109,7 +109,7 @@ pub struct CachedArchiveEntry {
 
 /// 缓存的压缩包元数据
 #[derive(Clone, Debug)]
-struct CachedArchiveMetadata {
+pub struct CachedArchiveMetadata {
     /// 图片和视频条目（按 entry_index 直接索引）
     image_entries: Vec<Option<CachedArchiveEntry>>,
 }
@@ -335,7 +335,7 @@ impl ProtocolState {
     }
 
     #[inline]
-    fn parse_book_key(book_hash: &str) -> u64 {
+    pub fn parse_book_key(book_hash: &str) -> u64 {
         u64::from_str_radix(book_hash, 16).unwrap_or_else(|_| {
             use std::hash::{Hash, Hasher};
             let mut hasher = ahash::AHasher::default();
@@ -345,7 +345,7 @@ impl ProtocolState {
     }
 
     /// 获取或缓存压缩包元数据
-    fn get_or_cache_metadata(
+    pub fn get_or_cache_metadata(
         &self,
         book_key: u64,
         book_hash: &str,
@@ -584,6 +584,42 @@ fn get_mime_type_from_path(path: &Path) -> &'static str {
 }
 
 /// 构建成功响应
+/// 解析查询参数中的 w 和 h（用于按需缩放）
+fn parse_scale_params(uri: &str) -> Option<(u32, u32)> {
+    let query = uri.split('?').nth(1)?;
+    let mut w: Option<u32> = None;
+    let mut h: Option<u32> = None;
+    for pair in query.split('&') {
+        let mut kv = pair.splitn(2, '=');
+        let key = kv.next()?;
+        let val = kv.next()?;
+        match key {
+            "w" => w = val.parse().ok(),
+            "h" => h = val.parse().ok(),
+            _ => {}
+        }
+    }
+    match (w, h) {
+        (Some(width), Some(height)) if width > 0 && height > 0 => Some((width, height)),
+        _ => None,
+    }
+}
+
+/// 解码图片并按目标尺寸缩放，输出 WebP
+fn decode_and_scale(data: &[u8], target_w: u32, target_h: u32) -> Option<(Vec<u8>, &'static str)> {
+    use image::ImageFormat;
+    use std::io::Cursor;
+
+    let decoder = UnifiedDecoder::new();
+    let decoded = decoder.decode_with_scale(data, target_w, target_h).ok()?;
+    let img = decoded.to_dynamic_image().ok()?;
+
+    // 使用有损 WebP 编码（质量 80，性能和大小平衡）
+    let mut buffer = Vec::new();
+    img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP).ok()?;
+    Some((buffer, "image/webp"))
+}
+
 fn build_response(data: Vec<u8>, mime_type: &str) -> Response<Vec<u8>> {
     Response::builder()
         .status(StatusCode::OK)
@@ -679,10 +715,15 @@ fn handle_archive_image(
     book_key: u64,
     entry_index: usize,
 ) -> Response<Vec<u8>> {
-    let cache_key = (book_key, entry_index);
-    if let Some(cached) = state.archive_image_cache.get(&cache_key) {
-        state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
-        return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+    let scale_params = parse_scale_params(&request.uri().to_string());
+
+    // 缩放请求不命中完整尺寸缓存
+    if scale_params.is_none() {
+        let cache_key = (book_key, entry_index);
+        if let Some(cached) = state.archive_image_cache.get(&cache_key) {
+            state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
+            return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+        }
     }
 
     // 从注册表获取路径
@@ -733,6 +774,18 @@ fn handle_archive_image(
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
         }
     };
+
+    // 按需缩放：如果请求指定了 w/h，解码并缩放到目标尺寸
+    if let Some((target_w, target_h)) = scale_params {
+        if let Some((scaled_data, scaled_mime)) = decode_and_scale(&shared, target_w, target_h) {
+            debug!("📦 Protocol: 按需缩放 {}x{} -> {}x{}", 
+                entry_index, shared.len(), target_w, target_h);
+            return build_response(scaled_data, scaled_mime);
+        }
+        // 缩放失败时回退到原始数据
+    }
+
+    let cache_key = (book_key, entry_index);
     state.archive_image_cache.insert(
         cache_key,
         CachedProtocolImage {
@@ -767,55 +820,39 @@ fn handle_file_image(
         }
     };
 
+    // 按需缩放
+    if let Some((target_w, target_h)) = parse_scale_params(&request.uri().to_string()) {
+        if let Some((scaled_data, scaled_mime)) = decode_and_scale(data.as_slice(), target_w, target_h) {
+            debug!("📁 Protocol: 按需缩放 {} -> {}x{}", file_path.display(), target_w, target_h);
+            return build_response(scaled_data, scaled_mime);
+        }
+    }
+
     let mime_type = get_mime_type_from_path(file_path.as_ref());
     build_response_from_slice(request, data.as_slice(), mime_type)
 }
 
 /// 处理缩略图请求
+/// V3 是唯一的缩略图来源，旧版 ThumbnailState 已废弃
 fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) -> Response<Vec<u8>> {
+    // 缓存层：短 TTL 内存缓存，避免重复查询 V3
     if let Some(cached) = state.get_cached_legacy_thumbnail(key) {
-        debug!("🖼️ Protocol: 旧路缓存命中缩略图, key={key}");
+        debug!("🖼️ Protocol: 缓存命中缩略图, key={key}");
         return build_response(cached.as_ref().to_vec(), "image/webp");
     }
 
     if state.is_legacy_thumbnail_known_missing(key) {
-        debug!("🖼️ Protocol: 旧路未命中缓存命中, key={key}");
+        debug!("🖼️ Protocol: 已知缺失缩略图, key={key}");
         return build_error_response_static(StatusCode::NOT_FOUND, b"Thumbnail not found");
     }
 
-    // 优先查 ThumbnailServiceV3：内存缓存（O(1)）→ DB
-    // 这是 IPC 去-blob 优化的关锎：前端不再通过 IPC 接收 blob，而是通过此协议 URL 取
+    // V3 是唯一数据源：内存缓存（O(1)）→ SQLite DB
     if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
         if let Some(data) = v3_state.service.lookup_thumbnail(key) {
             debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
             state.put_cached_legacy_thumbnail(key, data.clone());
             state.clear_legacy_thumbnail_missing(key);
             return build_response(data.as_ref().to_vec(), "image/webp");
-        }
-    }
-
-    // 回落到旧 ThumbnailState DB（兴趣点：只查 DB）
-    let Some(thumb_state) = app.try_state::<ThumbnailState>() else {
-        warn!("🖼️ Protocol: ThumbnailState 未初始化");
-        return build_error_response_static(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            b"Thumbnail state not initialized",
-        );
-    };
-
-    let db = &thumb_state.db;
-    let categories: [&'static str; 2] = match state.get_legacy_thumbnail_hint(key) {
-        Some("folder") => ["folder", "file"],
-        _ => ["file", "folder"],
-    };
-
-    for category in categories {
-        if let Ok(Some(data)) = db.load_thumbnail_by_key_and_category(key, category) {
-            debug!("🖼️ Protocol: 旧路加载缩略图成功, key={key}, category={category}");
-            state.put_cached_legacy_thumbnail(key, Arc::<[u8]>::from(data.clone()));
-            state.put_legacy_thumbnail_hint(key, category);
-            state.clear_legacy_thumbnail_missing(key);
-            return build_response(data, "image/webp");
         }
     }
 

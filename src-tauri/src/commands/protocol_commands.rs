@@ -8,6 +8,7 @@ use tauri::State;
 
 /// 注册书籍路径并返回哈希
 /// 前端使用此哈希构建 Custom Protocol URL
+/// 对于压缩包，会立即预热元数据缓存（首图加载提速）
 #[tauri::command]
 pub fn register_book_path(path: String, state: State<'_, ProtocolState>) -> Result<String, String> {
     let path_buf = PathBuf::from(&path);
@@ -16,6 +17,17 @@ pub fn register_book_path(path: String, state: State<'_, ProtocolState>) -> Resu
     }
     let hash = state.path_registry.register(&path_buf);
     log::debug!("📝 注册路径: {} -> {}", path, hash);
+
+    // 压缩包：立即预热元数据缓存，避免首图请求时的延迟
+    let ext = path_buf
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    if matches!(ext.to_lowercase().as_str(), "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7") {
+        let book_key = ProtocolState::parse_book_key(&hash);
+        let _ = state.get_or_cache_metadata(book_key, &hash, &path_buf);
+    }
+
     Ok(hash)
 }
 

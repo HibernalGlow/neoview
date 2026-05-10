@@ -290,6 +290,17 @@
 
 	// ============ 选择和交互处理 ============
 	let scrollToSelectedToken = $state(0);
+	
+	// 穿透模式下区分单击和双击的延迟机制
+	let pendingPenetrateClick: { item: FsItem; index: number; timeoutId: ReturnType<typeof setTimeout> } | null = null;
+	const PENETRATE_CLICK_DELAY = 200; // ms
+
+	function clearPendingPenetrateClick() {
+		if (pendingPenetrateClick) {
+			clearTimeout(pendingPenetrateClick.timeoutId);
+			pendingPenetrateClick = null;
+		}
+	}
 
 	$effect(() => {
 		const focusPath = $tabPendingFocusPath;
@@ -316,6 +327,46 @@
 		
 		stackState.updateSelectedIndex(layerIndex, payload.index);
 		const displayItems = getDisplayItems(stackState.layers[layerIndex]);
+
+		// 穿透模式下，文件夹单击需要延迟处理，等待可能的双击
+		if ($penetrateMode && payload.item.isDir && !payload.multiSelect && !$multiSelectMode) {
+			// 清除之前的待处理点击
+			clearPendingPenetrateClick();
+			
+			// 延迟执行穿透逻辑
+			pendingPenetrateClick = {
+				item: payload.item,
+				index: payload.index,
+				timeoutId: setTimeout(async () => {
+					pendingPenetrateClick = null;
+					// 执行原来的选择逻辑
+					await handleItemSelection(
+						payload,
+						{
+							tabId,
+							multiSelectMode: $multiSelectMode || payload.multiSelect,
+							penetrateMode: $penetrateMode,
+							openInNewTabMode: $openInNewTabMode,
+							skipGlobalStore,
+							displayItems,
+							selectedItems: get(tabSelectedItems)
+						},
+						{
+							selectItem: globalStore.selectItem,
+							setSelectedItems: globalStore.setSelectedItems,
+							selectRange: globalStore.selectRange,
+							deselectAll: globalStore.deselectAll,
+							onItemOpen,
+							onOpenFolderAsBook,
+							onOpenInNewTab,
+							onNavigate: pushLayer
+						},
+						setChainAnchor
+					);
+				}, PENETRATE_CLICK_DELAY)
+			};
+			return;
+		}
 
 		await handleItemSelection(
 			payload,
@@ -344,6 +395,10 @@
 
 	function handleItemDoubleClick(layerIndex: number, payload: { item: FsItem; index: number }) {
 		if (layerIndex !== stackState.activeIndex) return;
+		
+		// 清除待处理的穿透单击，双击优先
+		clearPendingPenetrateClick();
+		
 		if (payload.item.isDir) {
 			onOpenFolderAsBook?.(payload.item);
 		} else {
@@ -403,6 +458,7 @@
 
 	onDestroy(() => {
 		dataLoader.cleanup();
+		clearPendingPenetrateClick();
 	});
 </script>
 

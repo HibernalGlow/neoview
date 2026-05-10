@@ -217,38 +217,25 @@ onDestroy(() => {
 </script>
 
 <div class="space-y-3 text-xs">
-	<!-- 传输模式指示 -->
-	{#if latencyTrace}
-		<div class="px-2 py-1.5 rounded border {latencyTrace.dataSource === 'protocol' ? 'border-green-500/40 bg-green-500/10' : latencyTrace.dataSource === 'file-url' ? 'border-blue-500/40 bg-blue-500/10' : 'border-amber-500/40 bg-amber-500/10'}">
-			<div class="flex items-center justify-between">
-				<span class="text-xs text-muted-foreground">传输模式</span>
-				<span class="text-xs font-semibold {latencyTrace.dataSource === 'protocol' ? 'text-green-500' : latencyTrace.dataSource === 'file-url' ? 'text-blue-500' : 'text-amber-500'}">
-					{#if latencyTrace.dataSource === 'protocol'}
-						🌐 协议直连
-					{:else if latencyTrace.dataSource === 'file-url'}
-						📁 文件直连
-					{:else if latencyTrace.dataSource === 'tempfile' || latencyTrace.dataSource === 'tempfile-url'}
-						💾 临时文件
-					{:else}
-						📡 IPC ({latencyTrace.dataSource})
-					{/if}
-				</span>
-			</div>
-			{#if latencyTrace.totalMs != null}
-				<div class="flex items-center justify-between mt-0.5">
-					<span class="text-[10px] text-muted-foreground">加载耗时</span>
-					<span class="text-[10px] font-mono {latencyTrace.totalMs < 100 ? 'text-green-500' : latencyTrace.totalMs < 300 ? 'text-amber-500' : 'text-red-400'}">
-						{latencyTrace.loadMs?.toFixed(0) ?? '-'}ms
-						{#if latencyTrace.totalMs}
-							<span class="text-muted-foreground"> / {latencyTrace.totalMs.toFixed(0)}ms</span>
-						{/if}
-					</span>
-				</div>
-			{/if}
+		<!-- 传输模式 -->
+		<div class="flex items-center justify-between">
+			<span class="text-xs text-muted-foreground">传输</span>
+			<span class="text-xs font-mono {latencyTrace?.dataSource === 'protocol' ? 'text-green-500' : latencyTrace?.dataSource === 'file-url' ? 'text-blue-500' : 'text-amber-500'}">
+				{#if latencyTrace?.dataSource === 'protocol'}
+					协议直连
+				{:else if latencyTrace?.dataSource === 'file-url'}
+					文件直连
+				{:else if latencyTrace?.dataSource === 'tempfile' || latencyTrace?.dataSource === 'tempfile-url'}
+					临时文件
+				{:else if latencyTrace}
+					IPC ({latencyTrace.dataSource})
+				{:else}
+					--
+				{/if}
+			</span>
 		</div>
-	{/if}
 
-	<!-- 自适应开关 -->
+		<!-- 自适应开关 -->
 	<div class="flex items-center justify-between">
 		<Label class="text-xs font-medium">自适应预加载</Label>
 		<Switch

@@ -695,9 +695,7 @@ export async function readPageSourceV2(
 
 		// 【性能优化】仅对超过阈值的文件使用协议直连，其余走传统的 Blob -> ObjectURL 流程
 		// 这兼顾了小文件的缓存一致性和大文件的内存压力
-		const sizeMB = (page.size || 0) / 1024 / 1024;
-		if (sizeMB >= loadModeStore.directUrlThresholdMB) {
-			// 验证协议可用性（首次调用会探测，后续使用缓存结果）
+// 压缩包始终使用 neoview:// 协议直连（绕过 IPC 序列化）
 			if (await ensureProtocolAvailable()) {
 				if (updateLatencyTrace) {
 					infoPanelStore.setLatencyTrace({
@@ -714,8 +712,7 @@ export async function readPageSourceV2(
 				return readArchiveUrl(currentBook.path, entryIndex, pageIndex, traceId);
 			}
 			// 协议不可用（如 dev 模式下未注册），自动回退到 IPC
-			logImageTrace(traceId, "protocol unavailable, fallback to IPC");
-		}
+			console.warn('[Protocol] neoview:// 协议不可用，回退到 IPC 传输。请检查协议注册状态。');
 	}
 
 	const { blob } = await readPageBlobV2(pageIndex, options);

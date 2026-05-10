@@ -24,6 +24,7 @@ import {
 	type ProgressiveLoadState 
 } from '$lib/stackview/stores/renderQueue';
 import { settingsManager } from '$lib/settings/settingsManager';
+	import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 
 // 响应式依赖
 const totalPages = $derived(bookStore.totalPages);
@@ -33,6 +34,7 @@ const imagePoolVersion = $derived(imagePool.version);
 
 // 预加载配置状态
 let config = $state<PreloadConfig>(renderQueue.getConfig());
+	let latencyTrace = $state<LatencyTrace | null>(null);
 let adaptiveEnabled = $state(true);
 
 // 递进加载配置和状态
@@ -170,7 +172,9 @@ function onStateChange() {
 	progressiveState = renderQueue.getProgressiveState();
 }
 
-onMount(() => {
+let unsubscribeLatency: (() => void) | null = null;
+
+	onMount(() => {
 	renderQueue.setOnStateChange(onStateChange);
 	
 	// 【持久化】从设置加载配置

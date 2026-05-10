@@ -672,6 +672,7 @@ export async function readPageSourceV2(
 				traceId
 			});
 		}
+		console.log(`[传输] 文件直连  page=${pageIndex + 1}`);
 		return readFileUrl(page.path, pageIndex, traceId);
 	}
 
@@ -709,13 +710,15 @@ export async function readPageSourceV2(
 					});
 				}
 				const entryIndex = page.entryIndex ?? pageIndex;
+				console.log(`[传输] 协议直连  page=${pageIndex + 1}`);
 				return readArchiveUrl(currentBook.path, entryIndex, pageIndex, traceId);
 			}
 			// 协议不可用（如 dev 模式下未注册），自动回退到 IPC
 			console.warn('[Protocol] neoview:// 协议不可用，回退到 IPC 传输。请检查协议注册状态。');
 	}
 
-	const { blob } = await readPageBlobV2(pageIndex, options);
+	console.log(`[传输] IPC       page=${pageIndex + 1}`);
+		const { blob } = await readPageBlobV2(pageIndex, options);
 	return { kind: 'blob', blob, traceId };
 }
 

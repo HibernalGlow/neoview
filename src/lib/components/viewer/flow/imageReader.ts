@@ -675,7 +675,7 @@ export async function readPageSourceV2(
 		return readFileUrl(page.path, pageIndex, traceId);
 	}
 
-	if (currentBook.type === 'archive' && isProtocolModeEnabled() && page.entryIndex != null) {
+	if (currentBook.type === 'archive' && isProtocolModeEnabled()) {
 		// 优先使用 Tempfile 模式（如果显式启用）
 		if (loadModeStore.isTempfileMode) {
 			const innerPath = page.innerPath ?? page.path;
@@ -710,7 +710,8 @@ export async function readPageSourceV2(
 						traceId
 					});
 				}
-				return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
+				const entryIndex = page.entryIndex ?? pageIndex;
+				return readArchiveUrl(currentBook.path, entryIndex, pageIndex, traceId);
 			}
 			// 协议不可用（如 dev 模式下未注册），自动回退到 IPC
 			logImageTrace(traceId, "protocol unavailable, fallback to IPC");

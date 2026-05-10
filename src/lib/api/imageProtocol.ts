@@ -16,9 +16,9 @@ function isWindowsRuntime(): boolean {
 	return /windows/i.test(navigator.userAgent);
 }
 
-/** 
+/**
  * 获取基础协议 URL
- * 
+ *
  * 【性能与平台适配关键】
  * - Windows (WebView2): 自定义协议会映射到 Hostname。由于 tauri.conf.json 设置了 useHttpsScheme: false，
  *   必须使用 http://neoview.localhost 格式，否则会被浏览器拦截 (ERR_UNKNOWN_URL_SCHEME)。
@@ -41,9 +41,9 @@ function getBaseUrl(): string {
 	return getBaseUrlCandidates()[0];
 }
 
-async function probeProtocolBase(baseUrl: string): Promise<boolean> {
+async function probeProtocolBase(baseUrl: string, timeoutMs: number = 800): Promise<boolean> {
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 1200);
+	const timeout = setTimeout(() => controller.abort(), timeoutMs);
 	try {
 		const response = await fetch(`${baseUrl}/health`, {
 			method: 'GET',
@@ -60,12 +60,24 @@ async function probeProtocolBase(baseUrl: string): Promise<boolean> {
 
 export async function resolveProtocolBaseUrl(): Promise<string | null> {
 	if (resolvedBaseUrl) return resolvedBaseUrl;
-	for (const base of getBaseUrlCandidates()) {
-		if (await probeProtocolBase(base)) {
-			resolvedBaseUrl = base;
-			return base;
+	const candidates = getBaseUrlCandidates();
+
+	// 尝试验证协议可用性，失败时短延时重试（处理 Tauri 启动时序问题）
+	for (let attempt = 0; attempt < 3; attempt++) {
+		for (const base of candidates) {
+			if (await probeProtocolBase(base, attempt === 0 ? 800 : 400)) {
+				resolvedBaseUrl = base;
+				if (attempt > 0) {
+					console.log(`[Protocol] 第 ${attempt + 1} 次尝试成功: ${base}`);
+				}
+				return base;
+			}
+		}
+		if (attempt < 2) {
+			await new Promise(r => setTimeout(r, 300));
 		}
 	}
+	console.warn(`[Protocol] 协议不可用，已尝试: ${candidates.join(', ')}`);
 	return null;
 }
 

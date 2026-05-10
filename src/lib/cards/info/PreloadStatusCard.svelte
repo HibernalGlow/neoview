@@ -2,14 +2,13 @@
 /**
  * 预加载状态卡片
  * 显示递进预加载状态，参考递进超分卡片的设计
- *
+ * 
  * 功能：
  * - 显示预加载配置（高/普通/低优先级范围）
  * - 显示当前预加载窗口
  * - 显示预解码缓存统计
  * - 支持动态调整预加载参数
  * - 递进加载：停留时间后自动向后扩展加载
- * - 传输模式指示（协议直连/IPC/文件）
  */
 import { onMount, onDestroy } from 'svelte';
 import { Switch } from '$lib/components/ui/switch';
@@ -18,11 +17,11 @@ import { Progress } from '$lib/components/ui/progress';
 import { bookStore } from '$lib/stores/book.svelte';
 import { preDecodeCache } from '$lib/stackview/stores/preDecodeCache.svelte';
 import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
-import {
-	renderQueue,
-	type PreloadConfig,
+import { 
+	renderQueue, 
+	type PreloadConfig, 
 	type ProgressiveLoadConfig,
-	type ProgressiveLoadState
+	type ProgressiveLoadState 
 } from '$lib/stackview/stores/renderQueue';
 import { settingsManager } from '$lib/settings/settingsManager';
 
@@ -173,33 +172,28 @@ function onStateChange() {
 
 onMount(() => {
 	renderQueue.setOnStateChange(onStateChange);
-
-	// 订阅传输模式变化（来自当前页面加载的延迟追踪）
-	unsubscribeLatency = infoPanelStore.subscribe((s) => {
-		latencyTrace = s.latencyTrace;
-	});
-
+	
 	// 【持久化】从设置加载配置
 	const settings = settingsManager.getSettings();
 	const perf = settings.performance;
-
+	
 	// 自适应开关
 	if (perf.adaptivePreload !== undefined) {
 		adaptiveEnabled = perf.adaptivePreload;
 	}
-
+	
 	// 预解码缓存容量
 	if (perf.preDecodeCacheSize !== undefined && perf.preDecodeCacheSize > 0) {
 		preDecodeCache.setMaxCount(perf.preDecodeCacheSize);
 		preDecodeCacheMaxSize = perf.preDecodeCacheSize;
 	}
-
+	
 	// 递进加载配置
 	if (perf.progressiveLoad) {
 		renderQueue.setProgressiveConfig(perf.progressiveLoad);
 		progressiveConfig = renderQueue.getProgressiveConfig();
 	}
-
+	
 	console.log('📋 [PreloadStatusCard] 已从设置加载配置', {
 		adaptivePreload: adaptiveEnabled,
 		preDecodeCacheSize: preDecodeCacheMaxSize,
@@ -209,12 +203,11 @@ onMount(() => {
 
 onDestroy(() => {
 	renderQueue.setOnStateChange(null);
-	unsubscribeLatency?.();
 });
 </script>
 
 <div class="space-y-3 text-xs">
-		<!-- 自适应开关 -->
+	<!-- 自适应开关 -->
 	<div class="flex items-center justify-between">
 		<Label class="text-xs font-medium">自适应预加载</Label>
 		<Switch
@@ -230,7 +223,7 @@ onDestroy(() => {
 	<!-- 预加载范围配置 -->
 	<div class="pt-2 border-t space-y-2">
 		<div class="text-xs font-medium text-muted-foreground">预加载范围</div>
-
+		
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">高优先级 (±N页)</span>
 			<select
@@ -360,7 +353,7 @@ onDestroy(() => {
 	<!-- 状态统计 -->
 	<div class="pt-2 border-t space-y-2">
 		<div class="text-xs font-medium text-muted-foreground">预解码缓存</div>
-
+		
 		<!-- 缓存大小设置 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">缓存容量</span>
@@ -374,7 +367,7 @@ onDestroy(() => {
 				{/each}
 			</select>
 		</div>
-
+		
 		<!-- 预解码数 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">已预解码</span>
@@ -383,7 +376,7 @@ onDestroy(() => {
 				<span class="text-xs font-mono text-green-500">{preDecodedCount} / {cacheStats.maxCount}</span>
 			</div>
 		</div>
-
+		
 		<!-- 已预加载数 -->
 		<div class="flex items-center justify-between">
 			<span class="text-xs text-muted-foreground">已预加载</span>
@@ -441,7 +434,7 @@ onDestroy(() => {
 	<!-- 预加载窗口可视化 -->
 	<div class="pt-2 border-t space-y-2">
 		<div class="text-xs font-medium text-muted-foreground">预加载窗口</div>
-
+		
 		<div class="flex items-center gap-1 text-[10px]">
 			<span class="text-muted-foreground">当前页:</span>
 			<span class="font-mono text-primary">{currentPageIndex + 1}</span>
@@ -455,29 +448,29 @@ onDestroy(() => {
 		{#if totalPages > 0}
 			<div class="relative h-3 bg-muted rounded overflow-hidden">
 				<!-- 低优先级范围 -->
-				<div
+				<div 
 					class="absolute h-full bg-gray-400/30"
 					style="left: {(Math.max(0, currentPageIndex - config.lowRange) / totalPages) * 100}%; width: {((config.lowRange * 2 + 1) / totalPages) * 100}%"
 				></div>
 				<!-- 普通优先级范围 -->
-				<div
+				<div 
 					class="absolute h-full bg-blue-400/40"
 					style="left: {(Math.max(0, currentPageIndex - config.normalRange) / totalPages) * 100}%; width: {((config.normalRange * 2 + 1) / totalPages) * 100}%"
 				></div>
 				<!-- 高优先级范围 -->
-				<div
+				<div 
 					class="absolute h-full bg-green-400/50"
 					style="left: {(Math.max(0, currentPageIndex - config.highRange) / totalPages) * 100}%; width: {((config.highRange * 2 + 1) / totalPages) * 100}%"
 				></div>
 				<!-- 递进加载范围 -->
 				{#if progressiveState.furthestLoadedIndex >= 0}
-					<div
+					<div 
 						class="absolute h-full bg-cyan-400/40"
 						style="left: {((currentPageIndex + config.lowRange + 1) / totalPages) * 100}%; width: {((progressiveState.furthestLoadedIndex - currentPageIndex - config.lowRange) / totalPages) * 100}%"
 					></div>
 				{/if}
 				<!-- 当前页指示器 -->
-				<div
+				<div 
 					class="absolute h-full w-0.5 bg-primary"
 					style="left: {(currentPageIndex / totalPages) * 100}%"
 				></div>

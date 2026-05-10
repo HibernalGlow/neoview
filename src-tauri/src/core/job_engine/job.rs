@@ -10,7 +10,15 @@ use tokio_util::sync::CancellationToken;
 pub enum JobPriority {
     /// 缩略图加载 (最低)
     Thumbnail = 10,
-    /// 预加载页面
+    /// 空闲预加载 (最远的预加载页)
+    PreloadIdle = 20,
+    /// 低优先级预加载 (+3/+4)
+    PreloadLow = 30,
+    /// 普通预加载 (-1)
+    PreloadNormal = 40,
+    /// 高优先级预加载 (+1，阅读方向下一页)
+    PreloadHigh = 60,
+    /// 预加载页面 (默认)
     Preload = 50,
     /// 当前页面加载
     CurrentPage = 90,

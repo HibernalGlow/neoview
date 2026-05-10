@@ -654,22 +654,34 @@ impl PageContentManager {
         self.submit_preload_jobs().await;
     }
 
-    /// 提交预加载任务
+    /// 提交预加载任务（渐进式，方向感知）
     async fn submit_preload_jobs(&self) {
         let Some(ref book) = self.current_book else {
             return;
         };
 
-        let preload_indices = book.preload_range(PRELOAD_RANGE);
+        let preload_indices = book.progressive_preload_range(PRELOAD_RANGE);
         let book_path = book.path.clone();
         let book_type = book.book_type;
 
+        // 检查内存压力
+        {
+            let pool = self.memory_pool.lock().await;
+            let stats = pool.stats();
+            // 内存池使用率 > 90% 时减少预加载范围
+            if stats.usage_percent > 90 {
+                log::debug!("⚡ PageManager: 内存压力 ({:.0}%)，跳过预加载", stats.usage_percent);
+                return;
+            }
+        }
+
         // 过滤已缓存的页面
-        let indices_to_load: Vec<usize> = {
+        let indices_to_load: Vec<(usize, usize)> = {
             let pool = self.memory_pool.lock().await;
             preload_indices
                 .into_iter()
-                .filter(|&idx| !pool.contains(&PageKey::new(&book_path, idx)))
+                .enumerate()
+                .filter(|&(_, idx)| !pool.contains(&PageKey::new(&book_path, idx)))
                 .collect()
         };
 
@@ -678,15 +690,15 @@ impl PageContentManager {
         }
 
         log::debug!(
-            "⚡ PageManager: 预加载 {} 页: {:?}",
+            "⚡ PageManager: 渐进预加载 {} 页: {:?}",
             indices_to_load.len(),
-            indices_to_load
+            indices_to_load.iter().map(|(_, idx)| idx).collect::<Vec<_>>()
         );
 
-        // 创建预加载任务
+        // 创建预加载任务（带渐进优先级）
         let jobs: Vec<Job> = indices_to_load
             .iter()
-            .filter_map(|&idx| {
+            .filter_map(|&(position, idx)| {
                 let page_info = book.get_page(idx)?.clone();
                 let book_path_for_job = book_path.clone();
                 let book_path_for_closure = book_path.clone();
@@ -695,10 +707,18 @@ impl PageContentManager {
                 let current_index = book.current_index;
                 let read_direction = book.read_direction;
 
+                // 渐进优先级：位置 0 (阅读方向+1) → PreloadHigh, 位置 1 (-1) → PreloadNormal, 位置 2-3 → PreloadLow, 其余 → PreloadIdle
+                let priority = match position {
+                    0 => JobPriority::PreloadHigh,
+                    1 => JobPriority::PreloadNormal,
+                    2..=3 => JobPriority::PreloadLow,
+                    _ => JobPriority::PreloadIdle,
+                };
+
                 Some(Job::page_load(
                     &book_path_for_job,
                     idx,
-                    JobPriority::Preload,
+                    priority,
                     move |token| async move {
                         let book_path = book_path_for_closure;
                         if token.is_cancelled() {

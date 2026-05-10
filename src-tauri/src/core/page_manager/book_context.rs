@@ -363,25 +363,44 @@ impl BookContext {
 
     /// 获取需要预加载的页面索引
     pub fn preload_range(&self, range: usize) -> Vec<usize> {
-        let mut indices = Vec::new();
+        self.progressive_preload_range(range)
+    }
 
-        // 向前预加载
-        for i in 1..=range {
-            let idx = self.current_index.saturating_add(i);
-            if idx < self.total_pages {
-                indices.push(idx);
-            }
-        }
+    /// 渐进式预加载范围（阅读方向优先）
+    ///
+    /// 参考 NeeView 的 BookPageLoader 策略：
+    /// 按阅读方向交替扩展：+1, -1, +2, -2, +3, -3, +4, +5
+    /// 阅读方向上的下一页优先级最高，其次是反方向最近页
+    pub fn progressive_preload_range(&self, range: usize) -> Vec<usize> {
+        let mut indices = Vec::with_capacity(range * 2);
+        let dir = self.read_direction;
 
-        // 向后预加载
-        for i in 1..=range {
-            if self.current_index >= i {
-                indices.push(self.current_index - i);
+        for offset in 1..=range {
+            // 阅读方向优先
+            if dir > 0 {
+                if let Some(idx) = self.current_index.checked_add(offset) {
+                    if idx < self.total_pages {
+                        indices.push(idx);
+                    }
+                }
+                if offset <= self.current_index {
+                    indices.push(self.current_index - offset);
+                }
+            } else {
+                if offset <= self.current_index {
+                    indices.push(self.current_index - offset);
+                }
+                if let Some(idx) = self.current_index.checked_add(offset) {
+                    if idx < self.total_pages {
+                        indices.push(idx);
+                    }
+                }
             }
         }
 
         indices
     }
+
 
     /// 是否为第一页
     pub fn is_first_page(&self) -> bool {

@@ -25,7 +25,6 @@ import {
 	type ProgressiveLoadState
 } from '$lib/stackview/stores/renderQueue';
 import { settingsManager } from '$lib/settings/settingsManager';
-import { infoPanelStore, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 
 // 响应式依赖
 const totalPages = $derived(bookStore.totalPages);
@@ -35,9 +34,7 @@ const imagePoolVersion = $derived(imagePool.version);
 
 // 预加载配置状态
 let config = $state<PreloadConfig>(renderQueue.getConfig());
-let latencyTrace = $state<LatencyTrace | null>(null);
 let adaptiveEnabled = $state(true);
-let unsubscribeLatency: (() => void) | null = null;
 
 // 递进加载配置和状态
 let progressiveConfig = $state<ProgressiveLoadConfig>(renderQueue.getProgressiveConfig());
@@ -217,24 +214,6 @@ onDestroy(() => {
 </script>
 
 <div class="space-y-3 text-xs">
-		<!-- 传输模式 -->
-		<div class="flex items-center justify-between">
-			<span class="text-xs text-muted-foreground">传输</span>
-			<span class="text-xs font-mono {latencyTrace?.dataSource === 'protocol' ? 'text-green-500' : latencyTrace?.dataSource === 'file-url' ? 'text-blue-500' : 'text-amber-500'}">
-				{#if latencyTrace?.dataSource === 'protocol'}
-					协议直连
-				{:else if latencyTrace?.dataSource === 'file-url'}
-					文件直连
-				{:else if latencyTrace?.dataSource === 'tempfile' || latencyTrace?.dataSource === 'tempfile-url'}
-					临时文件
-				{:else if latencyTrace}
-					IPC ({latencyTrace.dataSource})
-				{:else}
-					--
-				{/if}
-			</span>
-		</div>
-
 		<!-- 自适应开关 -->
 	<div class="flex items-center justify-between">
 		<Label class="text-xs font-medium">自适应预加载</Label>

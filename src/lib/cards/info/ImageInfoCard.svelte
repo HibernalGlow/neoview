@@ -3,7 +3,7 @@
  * 媒体信息卡片（图片/视频）
  * 从 InfoPanel 提取
  */
-import { infoPanelStore, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
+import { infoPanelStore, type ViewerImageInfo, type LatencyTrace } from '$lib/stores/infoPanel.svelte';
 
 let imageInfo = $state<ViewerImageInfo | null>(null);
 

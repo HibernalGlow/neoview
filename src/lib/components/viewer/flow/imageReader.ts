@@ -696,19 +696,24 @@ export async function readPageSourceV2(
 		// 【性能优化】仅对超过阈值的文件使用协议直连，其余走传统的 Blob -> ObjectURL 流程
 		// 这兼顾了小文件的缓存一致性和大文件的内存压力
 		const sizeMB = (page.size || 0) / 1024 / 1024;
-		if (sizeMB > loadModeStore.directUrlThresholdMB) {
-			if (updateLatencyTrace) {
-				infoPanelStore.setLatencyTrace({
-					dataSource: 'protocol',
-					renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-					loadMs: 0,
-					totalMs: 0,
-					cacheHit: false,
-					dataSize: page.size,
-					traceId
-				});
+		if (sizeMB >= loadModeStore.directUrlThresholdMB) {
+			// 验证协议可用性（首次调用会探测，后续使用缓存结果）
+			if (await ensureProtocolAvailable()) {
+				if (updateLatencyTrace) {
+					infoPanelStore.setLatencyTrace({
+						dataSource: 'protocol',
+						renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
+						loadMs: 0,
+						totalMs: 0,
+						cacheHit: false,
+						dataSize: page.size,
+						traceId
+					});
+				}
+				return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
 			}
-			return readArchiveUrl(currentBook.path, page.entryIndex, pageIndex, traceId);
+			// 协议不可用（如 dev 模式下未注册），自动回退到 IPC
+			logImageTrace(traceId, "protocol unavailable, fallback to IPC");
 		}
 	}
 

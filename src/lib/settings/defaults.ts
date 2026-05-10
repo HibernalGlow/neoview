@@ -36,7 +36,7 @@ export const defaultSettings: NeoViewSettings = {
       maxPages: 50
     },
     archiveTempfileThresholdMB: 500,
-    directUrlThresholdMB: 500,
+    directUrlThresholdMB: 0,
     protocolDirectEnabled: true
   },
   image: {

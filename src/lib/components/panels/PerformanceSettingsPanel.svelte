@@ -34,7 +34,7 @@
 	let enableVideoThumbnail = $state(false);
 
 	let archiveTempfileThresholdMB = $state(currentSettings.performance.archiveTempfileThresholdMB ?? 500);
-	let directUrlThresholdMB = $state(currentSettings.performance.directUrlThresholdMB ?? 500);
+	let directUrlThresholdMB = $state(currentSettings.performance.directUrlThresholdMB ?? 0);
 	let protocolDirectEnabled = $state(currentSettings.performance.protocolDirectEnabled ?? true);
 
 
@@ -56,7 +56,7 @@
 
 			const s = settingsManager.getSettings();
 			archiveTempfileThresholdMB = s.performance.archiveTempfileThresholdMB ?? loaded.archive_tempfile_threshold_mb ?? 500;
-			directUrlThresholdMB = s.performance.directUrlThresholdMB ?? loaded.direct_url_threshold_mb ?? 500;
+			directUrlThresholdMB = s.performance.directUrlThresholdMB ?? loaded.direct_url_threshold_mb ?? 0;
 			protocolDirectEnabled = s.performance.protocolDirectEnabled ?? true;
 		} catch (err) {
 			console.error('Failed to load performance settings:', err);
@@ -209,22 +209,22 @@
 					</p>
 				</div>
 
-				<!-- 前端直连阈值 -->
+					<!-- 协议直连阈值 -->
 				<div class="space-y-1.5">
 					<div class="flex items-center justify-between">
-						<span class="text-xs">协议直连触发阈值</span>
-						<span class="text-muted-foreground text-[10px]">{directUrlThresholdMB} MB</span>
+						<span class="text-xs">IPC 回退阈值</span>
+						<span class="text-muted-foreground text-[10px]">{directUrlThresholdMB === 0 ? "始终直连" : directUrlThresholdMB + " MB"}</span>
 					</div>
 					<Slider
 						min={0}
-						max={2000}
-						step={100}
+						max={500}
+						step={10}
 						type="single"
 						bind:value={directUrlThresholdMB}
 						class="w-full py-2"
 					/>
-					<p class="text-[9px] text-muted-foreground leading-tight italic opacity-70">
-						超过此大小时强制启用直连模式，绕过 Blob 转换以降低 IPC 内存消耗。
+						<p class="text-[9px] text-muted-foreground leading-tight italic opacity-70">
+							图片超过此大小时使用 neoview:// 协议直连（0 = 全部直连）。设大可通过 IPC 加载小文件。
 					</p>
 				</div>
 			</div>

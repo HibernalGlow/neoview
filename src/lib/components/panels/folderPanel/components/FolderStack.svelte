@@ -344,7 +344,11 @@
 
 	function handleItemDoubleClick(layerIndex: number, payload: { item: FsItem; index: number }) {
 		if (layerIndex !== stackState.activeIndex) return;
-		if (!payload.item.isDir) onItemOpen?.(payload.item);
+		if (payload.item.isDir) {
+			onOpenFolderAsBook?.(payload.item);
+		} else {
+			onItemOpen?.(payload.item);
+		}
 	}
 
 	function handleSelectedIndexChange(layerIndex: number, payload: { index: number }) {

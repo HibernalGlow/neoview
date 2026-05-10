@@ -148,6 +148,7 @@ interface Props {
 	onItemOpen?: (item: FsItem) => void;
 	onItemDelete?: (item: FsItem) => void;
 	onItemContextMenu?: (event: MouseEvent, item: FsItem) => void;
+	onOpenFolderAsBook?: (item: FsItem) => void;
 	getThumbnail?: (item: FsItem) => string | null;
 	// 待恢复的状态
 	pendingRestore?: { scrollTop: number; selectedItemPath: string | null } | null;
@@ -163,7 +164,7 @@ interface Props {
 	showBackButton?: boolean;
 }
 
-let { onItemOpen, onItemDelete, onItemContextMenu, getThumbnail, pendingRestore, onRestoreComplete, onEmptyDoubleClick, onEmptySingleClick, onBackButtonClick, showBackButton = false }: Props = $props();
+let { onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook, getThumbnail, pendingRestore, onRestoreComplete, onEmptyDoubleClick, onEmptySingleClick, onBackButtonClick, showBackButton = false }: Props = $props();
 
 // 显示项（不过滤 - 搜索在 SearchResultList 中处理）
 let filteredItems = $derived(() => {
@@ -245,8 +246,9 @@ async function handleVideoClick(item: FsItem) {
 
 // 处理项双击
 function handleItemDoubleClick(payload: { item: FsItem; index: number }) {
-	// 文件双击打开
-	if (!payload.item.isDir) {
+	if (payload.item.isDir) {
+		onOpenFolderAsBook?.(payload.item);
+	} else {
 		onItemOpen?.(payload.item);
 	}
 }

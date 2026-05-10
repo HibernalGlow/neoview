@@ -871,6 +871,14 @@
 				onClick?.();
 			}
 		}}
+		onDoubleClick={() => {
+			// 双击文件夹进入内部
+			if (item.isDir) {
+				onOpenAsBook?.();
+			} else {
+				onDoubleClick?.();
+			}
+		}}
 		{onContextMenu}
 		{onToggleSelection}
 		{onDelete}
@@ -916,6 +924,14 @@
 				onOpenAsBook?.();
 			} else {
 				onClick?.();
+			}
+		}}
+		onDoubleClick={() => {
+			// 双击文件夹进入内部
+			if (item.isDir) {
+				onOpenAsBook?.();
+			} else {
+				onDoubleClick?.();
 			}
 		}}
 		{onContextMenu}

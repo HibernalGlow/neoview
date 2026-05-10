@@ -56,6 +56,7 @@
 		getEffectiveRating: () => number | null;
 		// 事件
 		onClick?: () => void;
+		onDoubleClick?: () => void;
 		onContextMenu?: (e: MouseEvent) => void;
 		onOpenAsBook?: () => void;
 		onSetRating: (rating: number | null) => void;
@@ -86,6 +87,7 @@
 		displayTags,
 		getEffectiveRating,
 		onClick,
+		onDoubleClick,
 		onContextMenu,
 		onOpenAsBook,
 		onSetRating
@@ -105,6 +107,10 @@
 	onclick={(e) => {
 		e.stopPropagation();
 		onClick?.();
+	}}
+	ondblclick={(e) => {
+		e.stopPropagation();
+		onDoubleClick?.();
 	}}
 	oncontextmenu={onContextMenu}
 

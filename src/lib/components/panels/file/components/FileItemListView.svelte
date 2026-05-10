@@ -71,6 +71,7 @@
 		previewIconElement?: HTMLElement | null;
 		// 事件
 		onClick?: () => void;
+		onDoubleClick?: () => void;
 		onContextMenu?: (e: MouseEvent) => void;
 		onToggleSelection?: () => void;
 		onDelete?: () => void;
@@ -114,6 +115,7 @@
 		previewItems,
 		previewIconElement = $bindable(),
 		onClick,
+		onDoubleClick,
 		onContextMenu,
 		onToggleSelection,
 		onDelete,
@@ -140,6 +142,10 @@
 	onclick={(e) => {
 		e.stopPropagation();
 		onClick?.();
+	}}
+	ondblclick={(e) => {
+		e.stopPropagation();
+		onDoubleClick?.();
 	}}
 	oncontextmenu={onContextMenu}
 

@@ -37,7 +37,7 @@ function toggleDetails() {
 			<span class="text-muted-foreground">层数:</span>
 			<select
 				class="h-6 bg-background border rounded text-xs px-1"
-				value={$fileBrowserStore.penetrateMaxDepth}
+				value={String($fileBrowserStore.penetrateMaxDepth)}
 				onchange={(e) => fileBrowserStore.setPenetrateMaxDepth(parseInt((e.target as HTMLSelectElement).value))}
 			>
 				<option value="1">1层</option>
@@ -101,7 +101,7 @@ function toggleDetails() {
 						<span class="text-foreground font-medium">穿透层数</span>
 						<select
 							class="h-6 bg-background border rounded text-xs px-1"
-							value={$fileBrowserStore.penetrateMaxDepth}
+							value={String($fileBrowserStore.penetrateMaxDepth)}
 							onchange={(e) => fileBrowserStore.setPenetrateMaxDepth(parseInt((e.target as HTMLSelectElement).value))}
 						>
 							<option value="1">1层</option>

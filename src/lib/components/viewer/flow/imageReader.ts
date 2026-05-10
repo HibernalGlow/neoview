@@ -641,92 +641,48 @@ export async function readPageBlobV2(
 }
 
 export async function readPageSourceV2(
-	pageIndex: number,
-	options: ReadPageOptions & { isCurrentPage?: boolean } = {}
-): Promise<ReadSourceResult> {
-	const { updateLatencyTrace = true, isCurrentPage = true } = options;
-	const traceId = createImageTraceId('pm', pageIndex);
+		pageIndex: number,
+		options: ReadPageOptions & { isCurrentPage?: boolean } = {}
+	): Promise<ReadSourceResult> {
+		const { updateLatencyTrace = true, isCurrentPage = true } = options;
+		const traceId = createImageTraceId('pm', pageIndex);
 
-	logImageTrace(traceId, 'readPageSourceV2 start', { pageIndex, isCurrentPage });
+		const currentBook = bookStore.currentBook;
+		if (!currentBook) throw new Error('没有打开的书籍');
 
-	const currentBook = bookStore.currentBook;
-	if (!currentBook) {
-		throw new Error('没有打开的书籍');
-	}
+		const page = currentBook.pages?.[pageIndex];
+		if (!page) throw new Error(`页面不存在: ${pageIndex}`);
 
-	const page = currentBook.pages?.[pageIndex];
-	if (!page) {
-		throw new Error(`页面不存在: ${pageIndex}`);
-	}
-
-	// 文件系统：始终使用直连 URL (convertFileSrc)
-	if (currentBook.type !== 'archive') {
-		if (updateLatencyTrace) {
-			infoPanelStore.setLatencyTrace({
-				dataSource: 'file-url',
-				renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-				loadMs: 0,
-				totalMs: 0,
-				cacheHit: true,
-				dataSize: page.size,
-				traceId
-			});
+		// 文件夹/单文件：asset:// 直连
+		if (currentBook.type !== 'archive') {
+			console.log(`[传输] 文件直连  page=${pageIndex + 1}`);
+			return readFileUrl(page.path, pageIndex, traceId);
 		}
-		console.log(`[传输] 文件直连  page=${pageIndex + 1}`);
-		return readFileUrl(page.path, pageIndex, traceId);
-	}
 
-	if (currentBook.type === 'archive' && isProtocolModeEnabled()) {
-		// 优先使用 Tempfile 模式（如果显式启用）
-		if (loadModeStore.isTempfileMode) {
-			const innerPath = page.innerPath ?? page.path;
-			if (updateLatencyTrace) {
-				infoPanelStore.setLatencyTrace({
-					dataSource: 'tempfile-url',
-					renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-					loadMs: 0,
-					totalMs: 0,
-					cacheHit: false,
-					dataSize: page.size,
-					traceId
-				});
+		// 压缩包
+		if (isProtocolModeEnabled()) {
+			// Tempfile 模式
+			if (loadModeStore.isTempfileMode) {
+				const innerPath = page.innerPath ?? page.path;
+				console.log(`[传输] 临时文件  page=${pageIndex + 1}`);
+				return readArchiveTempfileUrl(currentBook.path, innerPath, pageIndex, traceId);
 			}
-			return readArchiveTempfileUrl(currentBook.path, innerPath, pageIndex, traceId);
-		}
 
-		// 【性能优化】仅对超过阈值的文件使用协议直连，其余走传统的 Blob -> ObjectURL 流程
-		// 这兼顾了小文件的缓存一致性和大文件的内存压力
-// 压缩包始终使用 neoview:// 协议直连（绕过 IPC 序列化）
+			// neoview:// 协议直连
 			if (await ensureProtocolAvailable()) {
-				if (updateLatencyTrace) {
-					infoPanelStore.setLatencyTrace({
-						dataSource: 'protocol',
-						renderMode: loadModeStore.isImgMode ? 'img' : 'canvas',
-						loadMs: 0,
-						totalMs: 0,
-						cacheHit: false,
-						dataSize: page.size,
-						traceId
-					});
-				}
 				const entryIndex = page.entryIndex ?? pageIndex;
 				console.log(`[传输] 协议直连  page=${pageIndex + 1}`);
 				return readArchiveUrl(currentBook.path, entryIndex, pageIndex, traceId);
 			}
-			// 协议不可用（如 dev 模式下未注册），自动回退到 IPC
-			console.warn('[Protocol] neoview:// 协议不可用，回退到 IPC 传输。请检查协议注册状态。');
+			console.warn(`[传输] 协议不可用，回退 IPC  page=${pageIndex + 1}`);
+		}
+
+		// IPC 回退（base64/binary）
+		console.log(`[传输] IPC       page=${pageIndex + 1}`);
+		const { blob } = await readPageBlobV2(pageIndex, options);
+		return { kind: 'blob', blob, traceId };
 	}
 
-	console.log(`[传输] IPC       page=${pageIndex + 1}`);
-		const { blob } = await readPageBlobV2(pageIndex, options);
-	return { kind: 'blob', blob, traceId };
-}
-
-/**
- * 创建缩略图 DataURL
- * 如果 blob 已经是小图片（< 100KB），直接转换为 data URL，无需 canvas 重绘
- * 后端已返回正确尺寸的 webp 缩略图
- */
 export async function createThumbnailDataURL(blob: Blob, height: number = 120): Promise<string> {
 	// 小于 100KB 的图片直接转换为 data URL（后端返回的 webp 缩略图通常很小）
 	if (blob.size < 100 * 1024) {

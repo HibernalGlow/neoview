@@ -4,7 +4,7 @@
 //! NOTE: PageFrame 命令已迁移到前端本地计算 (2024-01)
 //! 请使用前端的 pageFrameStore 进行布局计算
 
-use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, PageMode, PageFrame, PagePosition};
+use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, PageMode, ReadOrder, PageFrame, PagePosition};
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageInfo, PageManagerStats, ThumbnailItem,
     ThumbnailReadyEvent,
@@ -682,7 +682,7 @@ pub async fn pm_get_frame_snapshot(
         _ => None,
     };
 
-    let manager = state.manager.read().await;
+    let mut manager = state.manager.write().await;
     manager.get_frame_snapshot(mode, order, split_horizontal, wide_page, single_first, single_last, divide_rate, half)
         .ok_or_else(|| "无法获取帧快照：书籍未打开或帧构建器未初始化".to_string())
 }
@@ -692,12 +692,14 @@ pub async fn pm_get_frame_snapshot(
 /// 前端上报视口信息，后端据此决定图片尺寸和缓存策略
 #[tauri::command]
 pub async fn pm_report_viewport(
-    width: u32,
-    height: u32,
+    width: f64,
+    height: f64,
     dpr: f64,
     view_mode: String,  // "single" | "double" | "panorama"
     state: State<'_, PageManagerState>,
 ) -> Result<(), String> {
+    let width = width.max(0.0).round() as u32;
+    let height = height.max(0.0).round() as u32;
     log::debug!("📐 [PageCommand] report_viewport: {}x{} @ {}x ({})", width, height, dpr, view_mode);
     // TODO: 后端根据 viewport 调整预加载策略和图片尺寸
     // 目前先记录，后续实现

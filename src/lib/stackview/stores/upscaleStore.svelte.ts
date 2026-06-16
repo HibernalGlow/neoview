@@ -4,16 +4,16 @@
  *
  * 核心设计：
  * 1. 后端主导，前端只负责发请求和接收事件
- * 2. 超分图进入 imagePool，复用现有缩放/视图功能
+ * 2. 使用 pageStatus 内部跟踪超分状态，通过 cachePath + convertFileSrc 获取 URL
  * 3. 使用 convertFileSrc 转换缓存路径为 URL
- * 4. 关闭超分时清除所有超分图，回退到原图
+ * 4. 关闭超分时清除所有超分状态，回退到原图
  */
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { SvelteMap } from 'svelte/reactivity';
-import { imagePool } from './imagePool.svelte';
+
 import { isVideoFile } from '$lib/utils/videoUtils';
 import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
 import { isAnimatedImageVideoCandidate } from '$lib/utils/animatedVideoModeUtils';
@@ -76,7 +76,7 @@ export interface PageUpscaleStatus {
   upscaledSize?: [number, number] | null;
 }
 
-/** Store 状态（V2：简化，超分图进入 imagePool） */
+/** Store 状态（V2：简化，超分状态内部跟踪） */
 interface UpscaleStoreState {
   /** 是否启用超分 */
   enabled: boolean;
@@ -108,7 +108,7 @@ interface UpscaleStoreState {
 }
 
 // ============================================================================
-// Store 实现（V2：简化，超分图进入 imagePool）
+// Store 实现（V2：简化，超分状态内部跟踪）
 // ============================================================================
 
 class UpscaleStore {
@@ -176,12 +176,17 @@ class UpscaleStore {
 
   /** 检查指定页面是否已完成超分 */
   isPageUpscaled(pageIndex: number): boolean {
-    return imagePool.hasUpscaled(pageIndex);
+    const status = this.state.pageStatus.get(pageIndex);
+    return status?.status === 'completed' && !!status?.cachePath;
   }
 
-  /** 获取指定页面的超分 URL（从 imagePool） */
+  /** 获取指定页面的超分 URL */
   getPageUpscaleUrl(pageIndex: number): string | null {
-    return imagePool.getUpscaledUrl(pageIndex);
+    const status = this.state.pageStatus.get(pageIndex);
+    if (status?.status === 'completed' && status.cachePath) {
+      return convertFileSrc(status.cachePath);
+    }
+    return null;
   }
 
   /** 获取指定页面的状态 */
@@ -335,9 +340,7 @@ class UpscaleStore {
       this.unlistenReady = null;
     }
 
-    // 清除 imagePool 中的超分图
-    imagePool.clearAllUpscaled();
-
+    // 清除超分状态
     this.state.pageStatus.clear();
     this.initialized = false;
     console.log('🛑 UpscaleStore destroyed');
@@ -459,7 +462,7 @@ class UpscaleStore {
     // 找到已超分的最后一页（从当前页开始向后查找）
     let lastUpscaledIndex = currentPageIndex - 1;
     for (let i = currentPageIndex; i < book.pages.length; i++) {
-      if (imagePool.hasUpscaled(i)) {
+      if (this.isPageUpscaled(i)) {
         lastUpscaledIndex = i;
       } else {
         break; // 遇到未超分的页面就停止
@@ -485,7 +488,7 @@ class UpscaleStore {
     const endPage = Math.min(startPage + maxPages, book.pages.length);
     for (let i = startPage; i < endPage; i++) {
       // 跳过已超分的页面
-      if (imagePool.hasUpscaled(i)) continue;
+      if (this.isPageUpscaled(i)) continue;
       
       const page = book.pages[i];
       if (page) {
@@ -537,6 +540,10 @@ class UpscaleStore {
       oldPath: this.state.currentBookPath,
       enabled: this.state.enabled 
     });
+
+    if (!this.initialized) {
+      await this.init();
+    }
     
     if (this.state.currentBookPath === bookPath) {
       console.log('📚 [upscaleStore] 书籍路径未变化，跳过');
@@ -731,7 +738,7 @@ class UpscaleStore {
 
   // === 事件处理 ===
 
-  /** 处理超分结果事件（V2：将超分图放入 imagePool） */
+  /** 处理超分结果事件 */
   handleUpscaleReadyPublic(payload: UpscaleReadyPayload) {
     console.log(`📦 收到超分事件:`, {
       bookPath: payload.bookPath?.slice(-30),
@@ -769,18 +776,9 @@ class UpscaleStore {
       upscaledSize,
     });
 
-    // 如果完成且有缓存路径，将超分图放入 imagePool
+    // 如果完成且有缓存路径，记录超分完成
     if (status === 'completed' && cachePath) {
-      // 使用 convertFileSrc 将本地路径转为 URL
-      const url = convertFileSrc(cachePath);
-      imagePool.setUpscaled(pageIndex, url);
-      console.log(`✅ 超分图已加入 imagePool: page ${pageIndex} -> ${url}`);
-      
-      // 【关键优化】对超分图进行预解码，替换原图缓存
-      // 后台执行，不阻塞事件处理
-      this.preDecodeUpscaledImage(pageIndex, url);
-    } else {
-      console.log(`⏭️ 未加入 imagePool: status=${status}, cachePath=${cachePath ? 'yes' : 'no'}`);
+      console.log(`✅ 超分完成: page ${pageIndex}, cachePath=${cachePath.slice(-50)}`);
     }
 
     // 更新 loading 状态
@@ -800,31 +798,12 @@ class UpscaleStore {
     this._version++;
   }
 
-  /** 清除所有超分状态和 imagePool 中的超分图 */
+  /** 清除所有超分状态 */
   private clearAll() {
     this.state.pageStatus = new SvelteMap();
-    imagePool.clearAllUpscaled();
   }
 
-  /** 
-   * 对超分图进行预解码（后台执行）
-   * 替换 preDecodeCache 中的原图缓存为超分图
-   */
-  private async preDecodeUpscaledImage(pageIndex: number, upscaledUrl: string): Promise<void> {
-    try {
-      // 动态导入避免循环依赖
-      const { preDecodeCache } = await import('./preDecodeCache.svelte');
-      
-      // 使用新方法替换原图缓存
-      const entry = await preDecodeCache.replaceWithUpscaled(pageIndex, upscaledUrl);
-      
-      if (entry) {
-        console.log(`✨ 超分图已预解码并替换缓存: page ${pageIndex + 1}, 尺寸 ${entry.width}x${entry.height}`);
-      }
-    } catch (error) {
-      console.warn(`⚠️ 超分图预解码失败: page ${pageIndex + 1}`, error);
-    }
-  }
+
 }
 
 // ============================================================================

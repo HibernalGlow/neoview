@@ -7,7 +7,6 @@
  * Requirements: 1.1, 1.2, 1.5
  */
 
-import { imagePool } from './imagePool';
 import { getAdaptiveConfig } from '$lib/utils/systemCapabilities';
 
 export interface PreloaderConfig {
@@ -156,16 +155,13 @@ class PreloaderImpl {
       this.direction
     );
 
-    // 取消不再需要的预加载
+    // 取消不再需要的预加载（imagePool removed - no-op）
     const pagesToCancel: string[] = [];
     for (const page of this.pendingPages) {
       if (!pagesToPreload.includes(page) && page !== currentPage) {
         pagesToCancel.push(this.getPageKey(page));
         this.pendingPages.delete(page);
       }
-    }
-    if (pagesToCancel.length > 0) {
-      imagePool.cancelPreload(pagesToCancel);
     }
 
     // 添加新的预加载
@@ -174,27 +170,6 @@ class PreloaderImpl {
       if (!this.pendingPages.has(page)) {
         keysToPreload.push(this.getPageKey(page));
         this.pendingPages.add(page);
-      }
-    }
-
-    if (keysToPreload.length > 0) {
-      // 按相对方向设置优先级，不依赖固定分割位置。
-      const forwardKeys: string[] = [];
-      const backwardKeys: string[] = [];
-      for (const page of pagesToPreload) {
-        const key = this.getPageKey(page);
-        if (page > currentPage) {
-          forwardKeys.push(key);
-        } else {
-          backwardKeys.push(key);
-        }
-      }
-
-      if (forwardKeys.length > 0) {
-        imagePool.preload(forwardKeys, 'normal');
-      }
-      if (backwardKeys.length > 0) {
-        imagePool.preload(backwardKeys, 'low');
       }
     }
 
@@ -226,10 +201,7 @@ class PreloaderImpl {
       }
     }
 
-    if (keysToCancel.length > 0) {
-      imagePool.cancelPreload(keysToCancel);
-      console.log(`⚡ [Preloader] Cancelled ${keysToCancel.length} skipped pages`);
-    }
+    // imagePool removed - no-op for cancellation
   }
 
   /**
@@ -250,10 +222,7 @@ class PreloaderImpl {
    * 清除所有预加载
    */
   clear(): void {
-    if (this.getPageKey) {
-      const keysToCancel = Array.from(this.pendingPages).map(p => this.getPageKey!(p));
-      imagePool.cancelPreload(keysToCancel);
-    }
+    // imagePool removed - no-op for clearing
     this.pendingPages.clear();
     this.direction = 'unknown';
     this.velocityEma = 0;

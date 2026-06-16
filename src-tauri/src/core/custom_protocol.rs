@@ -707,6 +707,18 @@ fn build_error_response_static(status: StatusCode, message: &'static [u8]) -> Re
         .unwrap()
 }
 
+fn get_query_param<'a>(query: &'a str, key: &str) -> Option<Cow<'a, str>> {
+    for pair in query.split('&') {
+        let mut kv = pair.splitn(2, '=');
+        let k = kv.next()?;
+        let v = kv.next().unwrap_or_default();
+        if k == key {
+            return urlencoding::decode(v).ok();
+        }
+    }
+    None
+}
+
 /// 处理压缩包图片请求
 fn handle_archive_image(
     state: &ProtocolState,
@@ -794,6 +806,42 @@ fn handle_archive_image(
         },
     );
     state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
+    build_response_from_slice(request, shared.as_ref(), mime_type)
+}
+
+/// 处理旧版压缩包图片请求
+/// 兼容 `/archive?path=...&entry=...`
+fn handle_legacy_archive_image(
+    state: &ProtocolState,
+    request: &Request<Vec<u8>>,
+    archive_path: &str,
+    entry_path: &str,
+) -> Response<Vec<u8>> {
+    debug!(
+        "📦 Protocol: 兼容旧 archive 请求, path={}, entry={}",
+        archive_path,
+        entry_path
+    );
+
+    let shared = match state
+        .archive_manager
+        .load_image_from_archive_shared_with_hint(Path::new(archive_path), entry_path, None)
+    {
+        Ok(data) => data,
+        Err(e) => {
+            error!("📦 Protocol: 旧 archive 请求提取失败: {e}");
+            return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, &e);
+        }
+    };
+
+    let mime_type = get_mime_type(entry_path);
+
+    if let Some((target_w, target_h)) = parse_scale_params(&request.uri().to_string()) {
+        if let Some((scaled_data, scaled_mime)) = decode_and_scale(&shared, target_w, target_h) {
+            return build_response(scaled_data, scaled_mime);
+        }
+    }
+
     build_response_from_slice(request, shared.as_ref(), mime_type)
 }
 
@@ -892,6 +940,23 @@ pub fn handle_protocol_request(
 
     if path == "/health" {
         return handle_health_check();
+    }
+
+    if path == "/archive" {
+        if let Some(query) = uri.query() {
+            let archive_path = get_query_param(query, "path");
+            let entry_path = get_query_param(query, "entry");
+            if let (Some(archive_path), Some(entry_path)) = (archive_path, entry_path) {
+                return handle_legacy_archive_image(
+                    &state,
+                    request,
+                    archive_path.as_ref(),
+                    entry_path.as_ref(),
+                );
+            }
+        }
+        warn!("🌐 Protocol: 非法 legacy archive 请求路径: {}", uri);
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
     }
 
     if let Some(rest) = path.strip_prefix("/image/") {

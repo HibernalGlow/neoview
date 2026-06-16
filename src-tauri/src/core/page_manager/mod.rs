@@ -1024,7 +1024,7 @@ impl PageContentManager {
     ///
     /// 后端主导 frame 组合，前端拿到后直接渲染
     pub fn get_frame_snapshot(
-        &self,
+        &mut self,
         page_mode: PageMode,
         read_order: ReadOrder,
         split_horizontal: bool,
@@ -1035,9 +1035,20 @@ impl PageContentManager {
         split_half: Option<SplitHalf>,
     ) -> Option<FrameSnapshot> {
         let ctx = self.current_book.as_ref()?;
-        let builder = self.frame_builder.as_ref()?;
+        let builder = self.frame_builder.as_mut()?;
 
-        // 构建 PagePosition
+        // 根据前端传入的参数构建上下文
+        let frame_context = PageFrameContext::new()
+            .with_page_mode(page_mode)
+            .with_read_order(read_order)
+            .with_divide_page(split_horizontal)
+            .with_divide_rate(divide_rate)
+            .with_wide_page(wide_page)
+            .with_single_first(single_first)
+            .with_single_last(single_last);
+
+        // 更新 builder 上下文（会重新计算 split cache）
+        builder.set_context(frame_context.clone());
         let part = match split_half {
             Some(SplitHalf::Right) => 1,
             _ => 0,

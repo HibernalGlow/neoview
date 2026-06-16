@@ -12,7 +12,6 @@
   import { onMount } from 'svelte';
   import { LayerZIndex } from '../types/layer';
   import { getUpscaleStore } from '../stores/upscaleStore.svelte';
-  import { imagePool } from '../stores/imagePool.svelte';
   
   // ============================================================================
   // Props
@@ -49,12 +48,12 @@
   /** 是否正在加载（如果已有超分图则不显示 loading） */
   let isLoading = $derived(
     enabled && 
-    !imagePool.hasUpscaled(pageIndex) && 
+    !upscaleStore.isPageUpscaled(pageIndex) && 
     (status === 'pending' || status === 'processing' || status === 'checking')
   );
   
   /** 是否已完成超分 */
-  let isUpscaled = $derived(enabled && imagePool.hasUpscaled(pageIndex));
+  let isUpscaled = $derived(enabled && upscaleStore.isPageUpscaled(pageIndex));
   
   // ============================================================================
   // Lifecycle

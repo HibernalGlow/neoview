@@ -5,7 +5,8 @@
  */
 import { Loader2, Check, X, SkipForward, ImageOff } from '@lucide/svelte';
 import { upscaleStore, type UpscaleStatus } from '$lib/stackview/stores/upscaleStore.svelte';
-import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
+import { bookStore } from '$lib/stores/book.svelte';
+import { registerBookPath, getArchiveImageUrl } from '$lib/api/imageProtocol';
 import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svelte';
 
 // 当前页面索引
@@ -79,22 +80,28 @@ function stopResize() {
 	window.removeEventListener('mouseup', stopResize);
 }
 
-// 原图 URL
-let originalUrl = $derived.by(() => {
-	const img = imagePool.getSync(currentPageIndex);
-	return img?.url ?? null;
+// 原图 URL（使用 protocol URL，同步版本）
+let bookHash = $state<string>('');
+$effect(() => {
+	const book = bookStore.currentBook;
+	if (book) {
+		registerBookPath(book.path).then(h => { bookHash = h; });
+	}
 });
+let originalUrl = $derived(bookHash ? getArchiveImageUrl(bookHash, currentPageIndex) : null);
 
 // 超分图 URL
-let upscaledUrl = $derived(imagePool.getUpscaledUrl(currentPageIndex));
+let upscaledUrl = $derived(upscaleStore.getPageUpscaleUrl(currentPageIndex));
 
 // 当前显示的 URL
 let displayUrl = $derived(useUpscaled && upscaledUrl ? upscaledUrl : originalUrl);
 
-// 当前图片尺寸（从 imagePool 获取）
+// 当前图片尺寸（从 bookStore 元数据获取）
 let originalDimensions = $derived.by(() => {
-	const img = imagePool.getSync(currentPageIndex);
-	return img ? { width: img.width || 0, height: img.height || 0 } : null;
+	const book = bookStore.currentBook;
+	const page = book?.pages?.[currentPageIndex];
+	if (!page?.width || !page?.height) return null;
+	return { width: page.width, height: page.height };
 });
 
 // 实际使用的模型名称（优先从状态获取，否则用默认值）

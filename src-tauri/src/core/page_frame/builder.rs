@@ -315,7 +315,7 @@ impl PageFrameBuilder {
     /// 2. 下一页横向 → 步进 1
     /// 3. 首页/尾页检查 → 步进 1
     /// 4. 正常双页 → 步进 2
-    fn get_frame_step(&self, index: usize) -> usize {
+    pub fn get_frame_step(&self, index: usize) -> usize {
         let page = match self.pages.get(index) {
             Some(p) => p,
             None => return 1,

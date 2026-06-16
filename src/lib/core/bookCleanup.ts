@@ -12,10 +12,8 @@
  * 5. thumbnailCacheStore — 缩略图 URL 缓存
  */
 
-import { switchToNextInstance } from '$lib/components/viewer/flow/imageLoaderCore';
 import { clearTempfileCache } from '$lib/components/viewer/flow/imageReader';
 import { thumbnailPersistence } from '$lib/core/cache';
-import { imagePool } from '$lib/services/imagePool';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 
 /**
@@ -28,12 +26,8 @@ import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 export function cleanupBookResources(): void {
 	const startTime = performance.now();
 
-	// 1. ImageLoaderCore: 切换实例池，旧实例异步清理 BlobCache（revoke URLs + close bitmaps）
-	try {
-		switchToNextInstance();
-	} catch (e) {
-		console.warn('🧹 [BookCleanup] ImageLoaderCore cleanup failed:', e);
-	}
+	// 1. ImageLoaderCore: instance pool switching removed (imagePool deprecated)
+	// switchToNextInstance() removed - no longer needed
 
 	// 2. 缩略图持久化适配器: 释放从 IndexedDB 恢复到内存的 Object URLs
 	try {
@@ -42,12 +36,7 @@ export function cleanupBookResources(): void {
 		console.warn('🧹 [BookCleanup] thumbnailPersistence cleanup failed:', e);
 	}
 
-	// 3. 图像池: 释放所有 Object URLs + Blobs
-	try {
-		imagePool.evict();
-	} catch (e) {
-		console.warn('🧹 [BookCleanup] imagePool cleanup failed:', e);
-	}
+	// 3. 图像池: removed (imagePool deprecated)
 
 	// 4. 临时文件缓存: 清空 imageReader 的 tempfileCache
 	try {

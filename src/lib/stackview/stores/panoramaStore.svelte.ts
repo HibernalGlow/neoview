@@ -1,10 +1,10 @@
 /**
  * 全景模式状态管理
- * 使用共享 ImagePool，避免重复加载
+ * 使用后端 Protocol API，直接构建 URL
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { imagePool } from './imagePool.svelte';
+import { getArchiveImageUrl, registerBookPath } from '$lib/api/imageProtocol';
 import type { PageMode } from '$lib/stores/bookContext.svelte';
 
 // ============================================================================
@@ -36,7 +36,7 @@ export interface PanoramaState {
 }
 
 // ============================================================================
-// 创建全景 Store（使用共享 ImagePool）
+// 创建全景 Store（使用后端 Protocol API）
 // ============================================================================
 
 export function createPanoramaStore() {
@@ -51,6 +51,10 @@ export function createPanoramaStore() {
   // 追踪已构建的单元
   let lastBuildParams = { start: -1, end: -1, pageMode: '' as string };
   
+  // 缓存当前书籍的 Protocol 哈希
+  let cachedBookHash: string | null = null;
+  let cachedBookPath: string | null = null;
+  
   /**
    * 启用/禁用全景模式
    */
@@ -63,7 +67,7 @@ export function createPanoramaStore() {
   }
   
   /**
-   * 加载全景视图 - 使用共享池
+   * 加载全景视图 - 使用 Protocol URL
    * 支持动态扩展：滚动时会扩展已加载的范围
    */
   async function loadPanorama(centerIndex: number, pageMode: PageMode) {
@@ -72,8 +76,11 @@ export function createPanoramaStore() {
     const book = bookStore.currentBook;
     if (!book) return;
     
-    // 设置书本路径
-    imagePool.setCurrentBook(book.path);
+    // 注册书籍路径，获取 Protocol 哈希
+    if (cachedBookPath !== book.path) {
+      cachedBookHash = await registerBookPath(book.path);
+      cachedBookPath = book.path;
+    }
     
     const totalPages = book.pages.length;
     const step = pageMode === 'double' ? 2 : 1;
@@ -84,60 +91,33 @@ export function createPanoramaStore() {
     const newStartUnit = Math.max(0, centerUnit - range);
     const newEndUnit = Math.min(Math.ceil(totalPages / step) - 1, centerUnit + range);
     
-    console.log(`🎯 loadPanorama: centerIndex=${centerIndex}, centerUnit=${centerUnit}, newRange=[${newStartUnit}, ${newEndUnit}], lastRange=[${lastBuildParams.start}, ${lastBuildParams.end}]`);
-    
     // 如果 pageMode 变化，重置
     if (lastBuildParams.pageMode !== pageMode) {
       lastBuildParams = { start: -1, end: -1, pageMode };
     }
     
-    // 计算扩展后的范围（合并旧范围和新范围）
+    // 计算扩展后的范围
     let startUnit: number;
     let endUnit: number;
     
     if (lastBuildParams.start === -1) {
-      // 首次加载
       startUnit = newStartUnit;
       endUnit = newEndUnit;
     } else {
-      // 扩展范围：取并集，确保新范围被包含
       startUnit = Math.min(lastBuildParams.start, newStartUnit);
       endUnit = Math.max(lastBuildParams.end, newEndUnit);
     }
     
     state.centerIndex = centerIndex;
     
-    // 检查范围是否有变化
     const rangeChanged = startUnit !== lastBuildParams.start || endUnit !== lastBuildParams.end;
     
-    // 构建所有单元，收集缺失的页面
-    const missingPages: number[] = [];
-    
-    for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
-      const startPageIndex = unitIdx * step;
-      const unit = buildUnit(startPageIndex, pageMode, totalPages);
-      if (!unit || unit.images.length === 0) {
-        // 记录缺失的页面
-        missingPages.push(startPageIndex);
-        if (pageMode === 'double' && startPageIndex + 1 < totalPages) {
-          missingPages.push(startPageIndex + 1);
-        }
-      }
-    }
-    
-    // 如果有缺失，异步加载
-    if (missingPages.length > 0) {
-      state.loading = true;
-      await imagePool.preload(missingPages);
-      state.loading = false;
-    }
-    
-    // 范围有变化或有新加载的页面时，重新构建所有单元
-    if (rangeChanged || missingPages.length > 0) {
+    // 构建所有单元（使用 protocol URL，无需预加载）
+    if (rangeChanged || state.units.length === 0) {
       const newUnits: PanoramaUnit[] = [];
       for (let unitIdx = startUnit; unitIdx <= endUnit; unitIdx++) {
         const startPageIndex = unitIdx * step;
-        const unit = buildUnit(startPageIndex, pageMode, totalPages);
+        const unit = buildUnit(startPageIndex, pageMode, totalPages, book.path);
         if (unit) {
           newUnits.push(unit);
         }
@@ -147,37 +127,40 @@ export function createPanoramaStore() {
     
     // 更新已加载范围
     lastBuildParams = { start: startUnit, end: endUnit, pageMode };
-    
-    // 后台预加载更多
-    imagePool.preloadRange(centerIndex, 5);
   }
   
   /**
-   * 从共享池构建单元（同步）
+   * 使用 Protocol URL 构建单元
    */
-  function buildUnit(startIndex: number, pageMode: PageMode, totalPages: number): PanoramaUnit | null {
+  function buildUnit(startIndex: number, pageMode: PageMode, totalPages: number, bookPath: string): PanoramaUnit | null {
     const images: PanoramaImage[] = [];
+    const book = bookStore.currentBook;
+    if (!book || !cachedBookHash) return null;
     
-    // 主图片
-    const primary = imagePool.getSync(startIndex);
-    if (primary) {
+    // 主图片 - 使用 protocol URL
+    const page = book.pages[startIndex];
+    if (page) {
+      const entryIndex = page.entryIndex ?? startIndex;
+      const url = getArchiveImageUrl(cachedBookHash, entryIndex);
       images.push({
-        url: primary.url,
+        url,
         pageIndex: startIndex,
-        width: primary.width,
-        height: primary.height,
+        width: page.width || undefined,
+        height: page.height || undefined,
       });
     }
     
     // 双页模式副图片
     if (pageMode === 'double' && startIndex + 1 < totalPages) {
-      const secondary = imagePool.getSync(startIndex + 1);
-      if (secondary) {
+      const secondPage = book.pages[startIndex + 1];
+      if (secondPage) {
+        const entryIndex = secondPage.entryIndex ?? startIndex + 1;
+        const url = getArchiveImageUrl(cachedBookHash, entryIndex);
         images.push({
-          url: secondary.url,
+          url,
           pageIndex: startIndex + 1,
-          width: secondary.width,
-          height: secondary.height,
+          width: secondPage.width || undefined,
+          height: secondPage.height || undefined,
         });
       }
     }
@@ -188,10 +171,12 @@ export function createPanoramaStore() {
   }
   
   /**
-   * 重置状态（不清理共享池）
+   * 重置状态
    */
   function reset() {
     lastBuildParams = { start: -1, end: -1, pageMode: '' };
+    cachedBookHash = null;
+    cachedBookPath = null;
     state.units = [];
     state.centerIndex = 0;
     state.loading = false;

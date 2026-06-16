@@ -12,7 +12,6 @@ import { bookStore } from '$lib/stores/book.svelte';
 import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
 
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
-import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import type { Page } from '$lib/types';
 import { requestAllThumbnails } from '$lib/stores/thumbnailStoreV3.svelte';
@@ -94,11 +93,11 @@ const filteredItems = $derived(
 
 const currentPageIndex = $derived(bookStore.currentPageIndex);
 const upscaleEnabled = $derived(upscaleStore.enabled);
-const imagePoolVersion = $derived(imagePool.version);
+const upscaleStoreVersion = $derived(upscaleStore.version);
 
 function isPageUpscaled(pageIndex: number): boolean {
-	void imagePoolVersion;
-	return imagePool.hasUpscaled(pageIndex);
+	void upscaleStoreVersion;
+	return upscaleStore.isPageUpscaled(pageIndex);
 }
 
 // 预览页码（用于关闭跟随时显示 Slider 位置）

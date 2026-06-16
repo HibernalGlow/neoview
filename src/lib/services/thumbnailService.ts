@@ -19,7 +19,6 @@ import {
 } from '$lib/api/pageManager';
 import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
-import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 import { isVideoFile } from '$lib/utils/videoUtils';
 import {
 	getThumbnailUrl,
@@ -434,9 +433,6 @@ function handleBookChange(bookPath: string): void {
 	// 取消旧的加载任务
 	cancelLoading();
 	loadingIndices.clear();
-
-	// 设置 imagePool 当前书籍
-	imagePool.setCurrentBook(bookPath);
 
 	// 设置 thumbnailCacheStore 当前书籍（清空旧缓存）
 	thumbnailCacheStore.setBook(bookPath);

@@ -8,7 +8,6 @@
   【性能优势】
   - 在 Worker 中预解码，不阻塞主线程
   - ImageBitmap 可直接绘制到 Canvas，无需重复解码
-  - 复用 ImageBitmap 计算背景色，避免二次解码
   - 支持 GPU 加速
   
   【无闪烁切换】
@@ -18,9 +17,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { decodeImageInWorker } from '$lib/workers/imageDecoderManager';
-  import { imagePool } from '../stores/imagePool.svelte';
-  import { computeBackgroundColorFromBitmap } from '$lib/utils/autoBackground';
-  import { stackImageLoader } from '../utils/stackImageLoader';
   
   interface Props {
     /** 页面索引（用于超分图替换） */
@@ -65,14 +61,7 @@
   // 当前正在加载的 URL（用于取消过时的加载）
   let pendingUrl = '';
   
-  // 获取显示 URL（优先超分图，响应式）
-  let displayUrl = $derived.by(() => {
-    const version = imagePool.version;
-    const hasUpscaled = imagePool.hasUpscaled(pageIndex);
-    return hasUpscaled 
-      ? imagePool.getUpscaledUrl(pageIndex) ?? url 
-      : url;
-  });
+  let displayUrl = $derived(url);
   
   // 当 displayUrl 或 Blob 变化时重新加载
   $effect(() => {
@@ -136,13 +125,6 @@
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high'; // 'low' | 'medium' | 'high'
         ctx.drawImage(result.bitmap, 0, 0);
-      }
-      
-      // 【性能优化】复用 ImageBitmap 计算背景色，避免二次解码
-      const bgColor = computeBackgroundColorFromBitmap(result.bitmap, imageUrl);
-      if (bgColor) {
-        // 缓存背景色到 stackImageLoader
-        stackImageLoader.cacheBackgroundColor(pageIndex, bgColor);
       }
       
       // 绘制完成后再释放旧的 bitmap

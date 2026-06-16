@@ -7,7 +7,6 @@
   import { bookStore } from '$lib/stores/book.svelte';
   import { upscaleState } from '$lib/stores/upscale/upscaleState.svelte';
   import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
-  import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
   import { settingsManager } from '$lib/settings/settingsManager';
   import type { ReadingDirection } from '$lib/settings/settingsManager';
   import { LayerZIndex } from '../types/layer';
@@ -52,18 +51,16 @@
   );
 
   // 计算已完成超分的页面数（用于超分实时进度条）
-  // 使用 imagePool.hasUpscaled() 判断，与 UpscaleLayer 保持一致
-  // 依赖 imagePool.version 和 upscaleStore.version 触发响应式更新
+  // 使用 upscaleStore.isPageUpscaled() 判断
+  // 依赖 upscaleStore.version 触发响应式更新
   const upscaleEnabled = $derived(upscaleStore.enabled);
-  const imagePoolVersion = $derived(imagePool.version);
   const upscaleStoreVersion = $derived(upscaleStore.version);
   const upscaledPagesCount = $derived(() => {
-    // 依赖两个 version 触发更新
-    void imagePoolVersion;
+    // 依赖 upscaleStore.version 触发响应式更新
     void upscaleStoreVersion;
     let count = 0;
     for (let i = 0; i < totalPages; i++) {
-      if (imagePool.hasUpscaled(i)) {
+      if (upscaleStore.isPageUpscaled(i)) {
         count++;
       }
     }

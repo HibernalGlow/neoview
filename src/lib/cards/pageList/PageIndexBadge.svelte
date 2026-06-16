@@ -4,10 +4,7 @@
   三个视图模式共用
 -->
 <script lang="ts">
-  import { Zap, Download } from '@lucide/svelte';
-  import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
   import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
-  import { preDecodeCache } from '$lib/stackview/stores/preDecodeCache.svelte';
 
   interface Props {
     pageIndex: number;
@@ -29,31 +26,16 @@
   }: Props = $props();
 
   // 响应式依赖
-  const imagePoolVersion = $derived(imagePool.version);
   const upscaleStoreVersion = $derived(upscaleStore.version);
   const upscaleEnabled = $derived(upscaleStore.enabled);
-  const preDecodeVersion = $derived(preDecodeCache.version);
-
-  // 预加载状态
-  type PreloadStatusType = 'decoded' | 'loaded' | 'none';
-  
-  let preloadStatus = $derived.by((): PreloadStatusType => {
-    // 依赖 preDecodeCache.version 和 imagePool.version
-    void preDecodeVersion;
-    void imagePoolVersion;
-    if (preDecodeCache.has(pageIndex)) return 'decoded';
-    if (imagePool.has(pageIndex)) return 'loaded';
-    return 'none';
-  });
 
   // 超分状态
   type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
 
   let upscaleStatus = $derived.by((): UpscaleStatusType => {
-    void imagePoolVersion;
     void upscaleStoreVersion;
     if (!upscaleEnabled) return 'none';
-    if (imagePool.hasUpscaled(pageIndex)) return 'completed';
+    if (upscaleStore.isPageUpscaled(pageIndex)) return 'completed';
     const status = upscaleStore.getPageStatus(pageIndex);
     if (status === 'pending' || status === 'checking') return 'pending';
     if (status === 'processing') return 'processing';
@@ -68,13 +50,6 @@
     return upscaleStore.getPageConditionName(pageIndex);
   });
 
-  // 配置
-  const preloadConfig = {
-    decoded: { icon: 'zap', class: 'text-green-500', tooltip: '已预解码（翻页即时）' },
-    loaded: { icon: 'download', class: 'text-blue-500', tooltip: '已预加载（需解码）' },
-    none: null,
-  } as const;
-
   const upscaleConfig = {
     none: null,
     pending: { label: '队列中', class: 'bg-amber-500/80 text-white' },
@@ -84,7 +59,6 @@
     failed: { label: '失败', class: 'bg-red-500/80 text-white' },
   } as const;
 
-  let preloadCfg = $derived(preloadConfig[preloadStatus]);
   let upscaleCfg = $derived(upscaleConfig[upscaleStatus]);
 
   // 尺寸样式
@@ -98,17 +72,6 @@
 
 <div class="flex items-center gap-1 flex-wrap">
   <span class="{sizeClasses.pageNum} font-mono font-semibold text-primary">#{pageIndex + 1}</span>
-  
-  <!-- 预解码/预加载状态图标 -->
-  {#if preloadCfg}
-    <span class="{preloadCfg.class}" title={preloadCfg.tooltip}>
-      {#if preloadCfg.icon === 'zap'}
-        <Zap class="{sizeClasses.icon} fill-current" />
-      {:else}
-        <Download class={sizeClasses.icon} />
-      {/if}
-    </span>
-  {/if}
 
   <!-- 页面名称 -->
   {#if showName && name}

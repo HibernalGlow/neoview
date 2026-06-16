@@ -8,7 +8,6 @@
 
 import { perfMonitor } from '$lib/utils/perfMonitor';
 import { detectSystemCapabilities, getAdaptiveConfig, onMemoryPressure } from '$lib/utils/systemCapabilities';
-import { imagePool } from './imagePool';
 import { preloader } from './preloader';
 import { thumbnailManager } from './thumbnailManager';
 import { ipcBatcher } from './ipcBatcher';
@@ -50,9 +49,8 @@ export async function initPerformanceServices(
   const adaptiveConfig = await getAdaptiveConfig();
   console.log('⚙️ [PerformanceServices] Adaptive config:', adaptiveConfig);
 
-  // 初始化各服务
+  // 初始化各服务（imagePool removed）
   await Promise.all([
-    imagePool.init(),
     preloader.init(),
     thumbnailManager.init(),
   ]);
@@ -88,8 +86,7 @@ export async function initPerformanceServices(
 function handleGlobalMemoryPressure(): void {
   console.warn('⚠️ [PerformanceServices] Global memory pressure detected');
 
-  // 清理各服务的缓存
-  imagePool.evict();
+  // 清理各服务的缓存（imagePool removed）
   thumbnailManager.clearCache();
   preloader.clear();
 
@@ -102,14 +99,12 @@ function handleGlobalMemoryPressure(): void {
  */
 export function getPerformanceStats(): {
   perfMonitor: ReturnType<typeof perfMonitor.getStats>;
-  imagePool: ReturnType<typeof imagePool.getStats>;
   thumbnailManager: ReturnType<typeof thumbnailManager.getStats>;
   preloader: ReturnType<typeof preloader.getStatus>;
   ipcBatcher: ReturnType<typeof ipcBatcher.getStats>;
 } {
   return {
     perfMonitor: perfMonitor.getStats(),
-    imagePool: imagePool.getStats(),
     thumbnailManager: thumbnailManager.getStats(),
     preloader: preloader.getStatus(),
     ipcBatcher: ipcBatcher.getStats(),
@@ -134,7 +129,7 @@ export function getOptimizationSuggestions(): string[] {
  * 清理所有缓存
  */
 export function clearAllCaches(): void {
-  imagePool.evict();
+  // imagePool removed - no eviction needed
   thumbnailManager.clearCache();
   preloader.clear();
   console.log('🧹 [PerformanceServices] All caches cleared');
@@ -148,7 +143,7 @@ export function destroyPerformanceServices(): void {
 
   perfMonitor.stopFrameRateMonitor();
   perfMonitor.clear();
-  imagePool.destroy();
+  // imagePool removed - no destroy needed
   thumbnailManager.destroy();
   preloader.clear();
   ipcBatcher.cancelAll();
@@ -163,4 +158,4 @@ export function destroyPerformanceServices(): void {
 }
 
 // 导出各服务的单例
-export { perfMonitor, imagePool, preloader, thumbnailManager, ipcBatcher };
+export { perfMonitor, preloader, thumbnailManager, ipcBatcher };

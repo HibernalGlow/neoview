@@ -21,8 +21,10 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { getFrameSnapshot, reportViewport, type FrameSnapshot, type FrameImageInfo, type GetFrameSnapshotParams } from '$lib/api/frameApi';
+import { getArchiveImageUrl, getFileImageUrl, registerBookPath, resolveProtocolBaseUrl } from '$lib/api/imageProtocol';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
+import { thumbnailService } from '$lib/services/thumbnailService';
 
 // ============================================================================
 // 类型定义
@@ -53,6 +55,65 @@ export function createImageStore() {
 
   let lastBookPath: string | null = null;
   let pendingRequestToken = 0;
+
+  async function normalizeSnapshotUrls(snapshot: FrameSnapshot): Promise<FrameSnapshot> {
+    const book = bookStore.currentBook;
+    if (!book || snapshot.images.length === 0) {
+      return snapshot;
+    }
+
+    const needsNormalization = snapshot.images.some((img) =>
+      typeof img.url === 'string' &&
+      (img.url.includes('://localhost/archive?') || img.url.includes('://localhost/image?'))
+    );
+
+    if (!needsNormalization) {
+      return snapshot;
+    }
+
+    await resolveProtocolBaseUrl().catch(() => null);
+
+    const isArchiveLike = book.type === 'archive' || book.type === 'epub';
+    const bookHash = isArchiveLike ? await registerBookPath(book.path).catch(() => null) : null;
+
+    const normalizedImages = await Promise.all(
+      snapshot.images.map(async (img) => {
+        if (!img.url || img.isDummy) {
+          return img;
+        }
+
+        const page = book.pages[img.pageIndex];
+        if (!page) {
+          return img;
+        }
+
+        try {
+          if (isArchiveLike) {
+            if (bookHash == null) {
+              return img;
+            }
+            return {
+              ...img,
+              url: getArchiveImageUrl(bookHash, page.entryIndex),
+            };
+          }
+
+          const pathHash = await registerBookPath(page.path);
+          return {
+            ...img,
+            url: getFileImageUrl(pathHash),
+          };
+        } catch {
+          return img;
+        }
+      })
+    );
+
+    return {
+      ...snapshot,
+      images: normalizedImages,
+    };
+  }
 
   /**
    * 请求当前帧快照
@@ -92,8 +153,15 @@ export function createImageStore() {
     state.loading = true;
 
     try {
-      const snapshot = await getFrameSnapshot(params);
+      const rawSnapshot = await getFrameSnapshot(params);
       const resourceReadyMs = performance.now() - flipStartTime;
+
+      if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== rawSnapshot.pageIndex) {
+        console.log(`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`);
+        return;
+      }
+
+      const snapshot = await normalizeSnapshotUrls(rawSnapshot);
 
       // 【关键】只有 token 匹配且页码未变时才提交新帧
       if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== snapshot.pageIndex) {
@@ -109,6 +177,9 @@ export function createImageStore() {
       }
       state.currentFrame = snapshot;
       state.loading = false;
+      if (snapshot.ready && snapshot.images.length > 0) {
+        thumbnailService.notifyMainImageReady();
+      }
     } catch (err) {
       if (myToken === pendingRequestToken) {
         state.error = String(err);
@@ -121,7 +192,10 @@ export function createImageStore() {
    * 上报视口尺寸
    */
   function reportViewportSize(width: number, height: number, dpr: number, viewMode: 'single' | 'double' | 'panorama') {
-    reportViewport(width, height, dpr, viewMode).catch(err => {
+    // Rust 端期望 u32，必须取整
+    const safeWidth = Math.max(0, Math.round(width));
+    const safeHeight = Math.max(0, Math.round(height));
+    reportViewport(safeWidth, safeHeight, dpr, viewMode).catch(err => {
       console.warn('[imageStore] 上报视口失败:', err);
     });
   }

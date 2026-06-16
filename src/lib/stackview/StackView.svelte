@@ -477,7 +477,7 @@
 		}
 	});
 
-	let currentFrameData = $derived.by((): Frame => {
+	let resolvedCurrentFrame = $derived.by((): Frame => {
 		// 全景模式时不使用此组件，由 PanoramaFrameLayer 处理
 		if (isPanorama) {
 			return emptyFrame;
@@ -486,23 +486,32 @@
 		// 【后端主导架构】直接从 imageStore 获取后端计算的帧
 		const frame = imageStore.getCurrentFrame();
 
-		if (frame.images.length === 0) {
-			// 【双缓冲防护】如果 viewer 仍有 book/page，返回上次非空帧
-			if (bookStore.currentBook && bookStore.currentPage && lastNonEmptyFrame) {
-				return lastNonEmptyFrame;
-			}
-			return emptyFrame;
-		}
-
-		// 【双缓冲】更新非空帧缓存
-		lastNonEmptyFrame = frame;
-
 		return frame;
 	});
 
 	// 【双缓冲】上次非空帧缓存，防止翻页时空帧闪烁
 	// 仅在切书/reset/关闭 viewer 时清空
 	let lastNonEmptyFrame: Frame | null = $state(null);
+
+	$effect(() => {
+		const frame = resolvedCurrentFrame;
+		if (frame.images.length > 0) {
+			lastNonEmptyFrame = frame;
+		}
+	});
+
+	let currentFrameData = $derived.by((): Frame => {
+		const frame = resolvedCurrentFrame;
+		if (frame.images.length > 0) {
+			return frame;
+		}
+
+		if (bookStore.currentBook && bookStore.currentPage && lastNonEmptyFrame) {
+			return lastNonEmptyFrame;
+		}
+
+		return emptyFrame;
+	});
 
 	// 实际显示模式：当双页模式下只有一张图时（横向图独占），使用 single 布局
 	// 这样图片可以占满视口宽度，而不是被限制在 50%

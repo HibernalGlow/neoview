@@ -19,7 +19,6 @@ import {
 } from '$lib/stores/upscale/upscalePanelStore.svelte';
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { bookStore } from '$lib/stores/book.svelte';
-import { imagePool } from '$lib/stackview/stores/imagePool.svelte';
 
 // 递进超分状态
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
@@ -33,15 +32,14 @@ const upscaleEnabled = $derived(upscaleStore.enabled);
 const isAutoUpscaleEnabled = $derived(autoUpscaleEnabled.value);
 const totalPages = $derived(bookStore.totalPages);
 const currentPageIndex = $derived(bookStore.currentPageIndex);
-const imagePoolVersion = $derived(imagePool.version);
 const upscaleStoreVersion = $derived(upscaleStore.version);
 
 // 计算已超分页数
 const upscaledCount = $derived(() => {
-	void imagePoolVersion;
+	void upscaleStoreVersion;
 	let count = 0;
 	for (let i = 0; i < totalPages; i++) {
-		if (imagePool.hasUpscaled(i)) {
+		if (upscaleStore.isPageUpscaled(i)) {
 			count++;
 		}
 	}

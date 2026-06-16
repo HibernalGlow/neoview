@@ -78,17 +78,34 @@
 	let thumbnailScrollProgress = $state(0);
 
 	// 从统一缩略图缓存获取缩略图
-	function getThumbnailForPage(pageIndex: number, pagePath: string): ThumbnailEntry | null {
+	function buildThumbnailSource(pageIndex: number): ThumbnailSource | null {
 		const book = bookStore.currentBook;
 		if (!book) return null;
+		const page = book.pages[pageIndex];
+		if (!page) return null;
 
-		const source: ThumbnailSource = {
+		if (book.type === 'archive' || book.type === 'epub') {
+			return {
+				kind: 'archiveEntry',
+				archivePath: book.path,
+				innerPath: page.innerPath || page.name || page.path,
+				entryIndex: page.entryIndex ?? pageIndex,
+				fileSize: page.size ?? 0,
+			};
+		}
+
+		return {
 			kind: 'bookPage',
 			bookPath: book.path,
 			pageIndex,
-			pagePath,
-			fileSize: book.pages[pageIndex]?.size ?? 0,
+			pagePath: page.path,
+			fileSize: page.size ?? 0,
 		};
+	}
+
+	function getThumbnailForPage(pageIndex: number): ThumbnailEntry | null {
+		const source = buildThumbnailSource(pageIndex);
+		if (!source) return null;
 		const key = generateThumbKey(source, 256);
 		const entry = unifiedThumbnailStore.getEntry(key);
 		return entry && entry.status === 'ready' ? entry : null;
@@ -301,15 +318,8 @@
 		// 构建请求项
 		const items = [];
 		for (const idx of visibleIndices) {
-			const page = book.pages[idx];
-			if (!page) continue;
-			const source: ThumbnailSource = {
-				kind: 'bookPage',
-				bookPath: book.path,
-				pageIndex: idx,
-				pagePath: page.innerPath || page.path,
-				fileSize: page.size ?? 0,
-			};
+			const source = buildThumbnailSource(idx);
+			if (!source) continue;
 			const key = generateThumbKey(source, 256);
 			if (!unifiedThumbnailStore.hasThumbnail(key)) {
 				items.push({ key, source, maxSize: 256 });
@@ -366,15 +376,8 @@
 		const end = Math.min(totalPages - 1, safeCenter + PRELOAD_RANGE);
 		const items = [];
 		for (let idx = start; idx <= end; idx++) {
-			const page = book.pages[idx];
-			if (!page) continue;
-			const source: ThumbnailSource = {
-				kind: 'bookPage',
-				bookPath: book.path,
-				pageIndex: idx,
-				pagePath: page.innerPath || page.path,
-				fileSize: page.size ?? 0,
-			};
+			const source = buildThumbnailSource(idx);
+			if (!source) continue;
 			const key = generateThumbKey(source, 256);
 			if (!unifiedThumbnailStore.hasThumbnail(key)) {
 				items.push({ key, source, maxSize: 256 });
@@ -401,10 +404,10 @@
 		thumbnailScrollContainer.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
 	}
 
-	function getThumbnailStyle(pageIndex: number, pagePath: string): string {
+	function getThumbnailStyle(pageIndex: number): string {
 		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
 		const minWidth = 32;
-		const thumb = getThumbnailForPage(pageIndex, pagePath);
+		const thumb = getThumbnailForPage(pageIndex);
 		if (!thumb) {
 			const placeholderWidth = Math.max(containerHeight * 0.6, minWidth);
 			return `height:${containerHeight}px;min-width:${placeholderWidth}px;`;
@@ -661,7 +664,7 @@
 					onscroll={handleScroll}
 					bind:this={thumbnailScrollContainer}
 				>
-					{#each getOrderedPages() as page, index (page.path)}
+					{#each getOrderedPages() as page, index (`${page.originalIndex}-${page.entryIndex ?? page.originalIndex}-${page.innerPath || page.path}`)}
 						{@const originalIndex = page.originalIndex}
 						{@const status = bookStore.getPageUpscaleStatus(originalIndex)}
 						<Tooltip.Root>
@@ -673,13 +676,13 @@
 										{status === 'done' ? 'ring-primary ring-2' : ''}
 										{status === 'failed' ? 'ring-destructive ring-2' : ''}
 										hover:border-primary/50"
-									style={getThumbnailStyle(originalIndex, page.path)}
+									style={getThumbnailStyle(originalIndex)}
 									onclick={() => jumpToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>
-									{#if getThumbnailForPage(originalIndex, page.path)}
+									{#if getThumbnailForPage(originalIndex)}
 										<img
-											src={getThumbnailForPage(originalIndex, page.path)?.url}
+											src={getThumbnailForPage(originalIndex)?.url}
 											alt="Page {originalIndex + 1}"
 											class="h-full w-full object-contain"
 											style="object-position: center;"

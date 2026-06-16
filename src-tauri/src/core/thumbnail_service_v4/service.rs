@@ -206,8 +206,15 @@ fn generate_thumbnail_blob(
 ) -> Option<Vec<u8>> {
     match source {
         ThumbnailSource::File { path, .. } => generate_path_thumbnail(generator, db, path),
-        ThumbnailSource::ArchiveEntry { archive_path, .. } => {
-            generator.generate_archive_thumbnail(archive_path).ok()
+        ThumbnailSource::ArchiveEntry {
+            archive_path,
+            inner_path,
+            entry_index,
+            file_size,
+        } => {
+            generator
+                .generate_archive_entry_thumbnail(archive_path, inner_path, *entry_index, *file_size)
+                .ok()
         }
         ThumbnailSource::DirectoryCover { representative, .. } => {
             generate_path_thumbnail(generator, db, representative)

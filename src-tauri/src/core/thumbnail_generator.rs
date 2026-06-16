@@ -19,6 +19,10 @@ use unrar;
 /// 反向查找父文件夹的最大层级（可配置）
 const MAX_PARENT_LEVELS: usize = 2;
 
+fn normalize_archive_entry_name(path: &str) -> String {
+    path.replace('\\', "/").trim_start_matches("./").to_string()
+}
+
 /// 缩略图生成器配置
 #[derive(Clone)]
 pub struct ThumbnailGeneratorConfig {
@@ -867,7 +871,84 @@ impl ThumbnailGenerator {
         )
     }
 
-    /// 从 RAR 压缩包生成缩略图
+    /// Generate a thumbnail for a specific entry inside an archive.
+    pub fn generate_archive_entry_thumbnail(
+        &self,
+        archive_path: &str,
+        inner_path: &str,
+        entry_index: usize,
+        entry_file_size: u64,
+    ) -> Result<Vec<u8>, String> {
+        let metadata =
+            std::fs::metadata(archive_path).map_err(|e| format!("archive metadata failed: {}", e))?;
+        let archive_size = metadata.len() as i64;
+        let cache_size = archive_size.wrapping_add(entry_file_size as i64);
+        let entry_key = format!("{}#{}", inner_path, entry_index);
+        let path_key = self.build_path_key(archive_path, Some(&entry_key));
+        let ghash = Self::generate_hash(&path_key, cache_size);
+
+        if let Ok(Some(cached)) = self.db.load_thumbnail(&path_key, cache_size, ghash) {
+            let _ = self.db.update_access_time(&path_key);
+            return Ok(cached);
+        }
+
+        let real_path = Self::resolve_real_path(Path::new(archive_path));
+        let mut handler = archive_manager::open_archive(&real_path)?;
+        let target_entry = {
+            let entries = handler.list_entries()?;
+            let normalized_target = normalize_archive_entry_name(inner_path);
+            entries
+                .iter()
+                .find(|entry| {
+                    entry.index == entry_index
+                        && normalize_archive_entry_name(&entry.name) == normalized_target
+                })
+                .or_else(|| {
+                    entries
+                        .iter()
+                        .find(|entry| normalize_archive_entry_name(&entry.name) == normalized_target)
+                })
+                .or_else(|| entries.iter().find(|entry| entry.index == entry_index))
+                .cloned()
+                .ok_or_else(|| {
+                    format!(
+                        "archive entry not found: {}#{}",
+                        inner_path, entry_index
+                    )
+                })?
+        };
+
+        let data = handler.read_entry(target_entry.index)?;
+        let ext = target_entry
+            .extension()
+            .or_else(|| {
+                Path::new(inner_path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
+            })
+            .unwrap_or_default();
+
+        let webp_data = if target_entry.is_video() {
+            self.generate_thumbnail_from_video_data(&data, &ext, &path_key)?
+        } else {
+            Self::generate_webp_from_image_data(&data, &ext, &self.config)
+                .ok_or_else(|| format!("thumbnail generation failed: {}", target_entry.name))?
+        };
+
+        if let Err(e) = self
+            .db
+            .save_thumbnail(&path_key, cache_size, ghash, &webp_data)
+        {
+            eprintln!(
+                "failed to save archive entry thumbnail: {} - {}",
+                path_key, e
+            );
+        }
+
+        Ok(webp_data)
+    }
+
     fn generate_rar_archive_thumbnail(
         &self,
         archive_path: &str,

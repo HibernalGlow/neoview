@@ -1,10 +1,12 @@
 /**
  * Window Manager
  * 窗口管理器 - 支持应用多开和多窗口管理
+ * 主窗口为无边框（decorations: false），所有新窗口保持一致
+ * 窗口位置/大小持久化由 tauri-plugin-window-state 负责
  */
 
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, PhysicalSize } from '@tauri-apps/api/window';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export interface WindowInfo {
@@ -19,9 +21,10 @@ class WindowManager {
 	private windows = new Map<string, WebviewWindow>();
 	private windowCounter = 0;
 	private fullscreenUnlisten: UnlistenFn | null = null;
+	private resizeDebounce: ReturnType<typeof setTimeout> | null = null;
 
 	/**
-	 * 创建新窗口
+	 * 创建新窗口（无边框，和主窗口一致）
 	 */
 	async createWindow(
 		label: string,
@@ -41,16 +44,16 @@ class WindowManager {
 				width: options?.width || 1200,
 				height: options?.height || 800,
 				center: options?.center !== false,
-				decorations: true,
+				decorations: false,
 				resizable: true,
 				minimizable: true,
 				maximizable: true,
-				closable: true
+				closable: true,
+				transparent: false
 			});
 
 			this.windows.set(windowId, window);
 
-			// 监听窗口关闭事件
 			window.once('tauri://close-requested', () => {
 				this.windows.delete(windowId);
 			});
@@ -109,9 +112,7 @@ class WindowManager {
 	 */
 	async closeWindow(windowId: string): Promise<boolean> {
 		const window = this.windows.get(windowId);
-		if (!window) {
-			return false;
-		}
+		if (!window) return false;
 
 		try {
 			await window.close();
@@ -138,13 +139,16 @@ class WindowManager {
 		}
 	}
 
+	// =========================================================================
+	// 全屏
+	// =========================================================================
+
 	/**
 	 * 获取当前窗口是否为全屏
 	 */
 	async isFullscreen(): Promise<boolean> {
 		try {
-			const win = getCurrentWindow();
-			return await win.isFullscreen();
+			return await getCurrentWindow().isFullscreen();
 		} catch (error) {
 			console.error('获取全屏状态失败:', error);
 			return false;
@@ -153,29 +157,24 @@ class WindowManager {
 
 	/**
 	 * 设置当前窗口全屏状态
+	 *
+	 * 主窗口已经是 decorations: false，不需要额外调 setDecorations。
+	 * 全屏前如果窗口是最大化状态，先取消最大化避免退出全屏后窗口状态异常。
 	 */
 	async setFullscreen(fullscreen: boolean): Promise<void> {
 		try {
 			const win = getCurrentWindow();
-			try {
-				await win.setDecorations(false);
-			} catch (error) {
-				console.warn('保持无边框状态失败，将继续执行全屏切换:', error);
-			}
+
 			if (fullscreen) {
+				// 进入全屏前取消最大化，避免退出全屏后窗口状态异常
 				const isMaximized = await win.isMaximized();
 				if (isMaximized) {
 					await win.unmaximize();
 					await new Promise((resolve) => setTimeout(resolve, 32));
 				}
-			}
-			await win.setFullscreen(fullscreen);
-			if (!fullscreen) {
-				try {
-					await win.setDecorations(false);
-				} catch (error) {
-					console.warn('退出全屏后恢复无边框失败:', error);
-				}
+				await win.setFullscreen(true);
+			} else {
+				await win.setFullscreen(false);
 			}
 		} catch (error) {
 			console.error('设置全屏状态失败:', error);
@@ -193,12 +192,9 @@ class WindowManager {
 
 	/**
 	 * 初始化全屏状态同步
-	 * 监听原生窗口的全屏状态变化事件，并在状态变化时调用回调
-	 * @param onStateChange 状态变化时的回调函数
-	 * Requirements: 4.1, 4.3
+	 * 监听窗口 resize 事件，防抖检查全屏状态
 	 */
 	async initFullscreenSync(onStateChange: (isFullscreen: boolean) => void): Promise<void> {
-		// 清理之前的监听器（如果存在）
 		if (this.fullscreenUnlisten) {
 			this.fullscreenUnlisten();
 			this.fullscreenUnlisten = null;
@@ -206,16 +202,15 @@ class WindowManager {
 
 		try {
 			const win = getCurrentWindow();
-			
-			// 监听窗口进入全屏事件
-			const unlistenEnter = await win.onResized(async () => {
-				// 当窗口大小变化时检查全屏状态
-				const isFs = await this.isFullscreen();
-				onStateChange(isFs);
-			});
 
-			// 存储 unlisten 函数用于清理
-			this.fullscreenUnlisten = unlistenEnter;
+			this.fullscreenUnlisten = await win.onResized(() => {
+				// 防抖：resize 事件会频繁触发，延迟 150ms 再检查
+				if (this.resizeDebounce) clearTimeout(this.resizeDebounce);
+				this.resizeDebounce = setTimeout(async () => {
+					const isFs = await this.isFullscreen();
+					onStateChange(isFs);
+				}, 150);
+			});
 		} catch (error) {
 			console.error('初始化全屏状态同步失败:', error);
 		}
@@ -223,9 +218,6 @@ class WindowManager {
 
 	/**
 	 * 同步全屏状态
-	 * 查询当前原生窗口的全屏状态并返回
-	 * @returns 当前全屏状态
-	 * Requirements: 1.1
 	 */
 	async syncFullscreenState(): Promise<boolean> {
 		return await this.isFullscreen();
@@ -233,13 +225,71 @@ class WindowManager {
 
 	/**
 	 * 清理全屏状态监听器
-	 * 移除之前注册的事件监听器
-	 * Requirements: 4.1
 	 */
 	cleanupFullscreenSync(): void {
 		if (this.fullscreenUnlisten) {
 			this.fullscreenUnlisten();
 			this.fullscreenUnlisten = null;
+		}
+		if (this.resizeDebounce) {
+			clearTimeout(this.resizeDebounce);
+			this.resizeDebounce = null;
+		}
+	}
+
+	// =========================================================================
+	// 窗口置顶
+	// =========================================================================
+
+	/**
+	 * 设置窗口置顶
+	 */
+	async setAlwaysOnTop(onTop: boolean): Promise<void> {
+		try {
+			await getCurrentWindow().setAlwaysOnTop(onTop);
+		} catch (error) {
+			console.error('设置窗口置顶失败:', error);
+		}
+	}
+
+	/**
+	 * 切换窗口置顶
+	 */
+	async toggleAlwaysOnTop(): Promise<boolean> {
+		try {
+			const win = getCurrentWindow();
+			const current = await win.isAlwaysOnTop();
+			await win.setAlwaysOnTop(!current);
+			return !current;
+		} catch (error) {
+			console.error('切换窗口置顶失败:', error);
+			return false;
+		}
+	}
+
+	// =========================================================================
+	// 窗口大小限制
+	// =========================================================================
+
+	/**
+	 * 设置窗口最小尺寸
+	 */
+	async setMinSize(width: number, height: number): Promise<void> {
+		try {
+			await getCurrentWindow().setMinSize(new PhysicalSize(width, height));
+		} catch (error) {
+			console.error('设置窗口最小尺寸失败:', error);
+		}
+	}
+
+	/**
+	 * 设置窗口最大尺寸
+	 */
+	async setMaxSize(width: number, height: number): Promise<void> {
+		try {
+			await getCurrentWindow().setMaxSize(new PhysicalSize(width, height));
+		} catch (error) {
+			console.error('设置窗口最大尺寸失败:', error);
 		}
 	}
 }

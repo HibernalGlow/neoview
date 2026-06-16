@@ -482,9 +482,11 @@ export function toggleZoomModeLock(mode: ZoomMode) {
 export function requestZoomMode(mode: ZoomMode): boolean {
 	const locked = appState.getSnapshot().viewer.lockedZoomMode as ZoomMode | null;
 	if (locked && locked !== mode) {
+		console.warn('[zoomMode] request blocked by lockedZoomMode', { requested: mode, locked });
 		applyZoomModeWithTracking(locked);
 		return false;
 	}
+	console.log('[zoomMode] applying', { requested: mode, locked });
 	applyZoomModeWithTracking(mode);
 	return true;
 }

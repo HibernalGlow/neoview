@@ -512,6 +512,39 @@
 		return emptyFrame;
 	});
 
+	let displayFrameData = $derived.by((): Frame => {
+		void upscaleStore.version;
+
+		const frame = currentFrameData;
+		if (!upscaleStore.enabled || frame.images.length === 0) {
+			return frame;
+		}
+
+		let hasReplacement = false;
+		const replacedImages = frame.images.map((img) => {
+			const upscaledUrl = upscaleStore.getPageUpscaleUrl(img.physicalIndex);
+			if (!upscaledUrl || upscaledUrl === img.url) {
+				return img;
+			}
+
+			hasReplacement = true;
+			return {
+				...img,
+				url: upscaledUrl
+			};
+		});
+
+		if (!hasReplacement) {
+			return frame;
+		}
+
+		return {
+			...frame,
+			id: `${frame.id}:upscaled:${bookStore.currentPageIndex}:${upscaleStore.version}`,
+			images: replacedImages
+		};
+	});
+
 	// 实际显示模式：当双页模式下只有一张图时（横向图独占），使用 single 布局
 	// 这样图片可以占满视口宽度，而不是被限制在 50%
 	let effectivePageMode = $derived.by((): 'single' | 'double' => {
@@ -521,16 +554,6 @@
 			return 'single';
 		}
 		return 'double';
-	});
-
-	let upscaledFrameData = $derived.by((): Frame => {
-		const url = bookStore.upscaledImageData;
-		if (!url) return emptyFrame;
-		return {
-			id: 'upscaled',
-			images: [{ url, physicalIndex: bookStore.currentPageIndex, virtualIndex: 0 }],
-			layout: 'single'
-		};
 	});
 
 	// ============================================================================
@@ -879,6 +902,7 @@
 		if (newDefault !== lastDefaultZoomMode) {
 			lastDefaultZoomMode = newDefault;
 			currentZoomMode = newDefault as ZoomMode;
+			manualScale = 1.0;
 		}
 	});
 
@@ -947,6 +971,12 @@
 	function handleApplyZoomMode(event: Event) {
 		const detail = (event as CustomEvent<ApplyZoomModeDetail>).detail;
 		const mode = detail.mode ?? settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
+		console.log('[StackView] handleApplyZoomMode', {
+			requestedMode: detail.mode,
+			resolvedMode: mode,
+			prevMode: currentZoomMode,
+			prevManualScale: manualScale
+		});
 		if (currentZoomMode !== mode) {
 			currentZoomMode = mode as ZoomMode;
 			// 切换缩放模式时重置手动缩放系数，避免旧的 manualScale 叠加到新模式上
@@ -997,7 +1027,7 @@
 	<BackgroundLayer
 		color={settings.view.backgroundColor || backgroundColor}
 		mode={settings.view.backgroundMode ?? 'solid'}
-		imageSrc={currentFrameData.images[0]?.url ?? ''}
+		imageSrc={displayFrameData.images[0]?.url ?? ''}
 		preloadedColor=""
 		ambientSpeed={settings.view.ambient?.speed ?? 8}
 		ambientBlur={settings.view.ambient?.blur ?? 80}
@@ -1037,7 +1067,7 @@
 		<!-- 标准模式：显示当前帧 -->
 		<!-- 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 -->
 		<CurrentFrameLayer
-			frame={currentFrameData}
+			frame={displayFrameData}
 			layout={effectivePageMode}
 			{direction}
 			{orientation}
@@ -1050,21 +1080,6 @@
 			{hoverScrollEnabled}
 			onImageLoad={handleImageLoad}
 		/>
-
-		{#if upscaledFrameData.images.length > 0}
-			<CurrentFrameLayer
-				frame={upscaledFrameData}
-				layout="single"
-				{direction}
-				scale={effectiveScale}
-				{rotation}
-				{viewportSize}
-				imageSize={hoverImageSize}
-				{alignMode}
-				zoomMode={currentZoomMode}
-				{hoverScrollEnabled}
-			/>
-		{/if}
 	{/if}
 
 	<InfoLayer
@@ -1126,9 +1141,9 @@
 </div>
 
 	<!-- 放大镜层 (Simple Implementation) -->
-	{#if currentFrameData && currentFrameData.images.length > 0}
+	{#if displayFrameData && displayFrameData.images.length > 0}
 		<Magnifier
-			imageUrl={currentFrameData.images[0].url}
+			imageUrl={displayFrameData.images[0].url}
 			{containerRect}
 			imageWidth={hoverImageSize.width}
 			imageHeight={hoverImageSize.height}

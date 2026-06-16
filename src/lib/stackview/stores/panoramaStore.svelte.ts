@@ -7,7 +7,7 @@
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { getArchiveImageUrl, registerBookPath } from '$lib/api/imageProtocol';
+import { getArchiveImageUrl, getFileImageUrl, registerBookPath } from '$lib/api/imageProtocol';
 import type { PageMode } from '$lib/stores/bookContext.svelte';
 import {
   PageFrameBuilder,
@@ -68,10 +68,12 @@ export function createPanoramaStore() {
   let cachedBookPath: string | null = null;
   let lastBuildSignature = '';
   let lastCenterIndex = -1;
+  let pendingLoadToken = 0;
 
   function setEnabled(enabled: boolean) {
     state.enabled = enabled;
     if (!enabled) {
+      pendingLoadToken += 1;
       state.units = [];
       lastBuildSignature = '';
       lastCenterIndex = -1;
@@ -86,15 +88,19 @@ export function createPanoramaStore() {
 
     const options = normalizeOptions(optionsOrPageMode);
     const safeCenterIndex = clamp(centerIndex, 0, book.pages.length - 1);
+    const requestToken = ++pendingLoadToken;
+
+    const isArchiveLike = book.type === 'archive' || book.type === 'epub';
 
     if (cachedBookPath !== book.path) {
-      cachedBookHash = await registerBookPath(book.path);
+      cachedBookHash = isArchiveLike ? await registerBookPath(book.path) : null;
+      if (requestToken !== pendingLoadToken || bookStore.currentBook?.path !== book.path) return;
       cachedBookPath = book.path;
       lastBuildSignature = '';
       lastCenterIndex = -1;
     }
 
-    if (!cachedBookHash) return;
+    if (isArchiveLike && !cachedBookHash) return;
 
     const signature = buildSignature(book.path, book.pages.length, options);
     const centerChanged = safeCenterIndex !== lastCenterIndex;
@@ -102,7 +108,11 @@ export function createPanoramaStore() {
     state.centerIndex = safeCenterIndex;
     lastCenterIndex = safeCenterIndex;
 
-    if (signature === lastBuildSignature && !centerChanged && state.units.length > 0) {
+    if (
+      signature === lastBuildSignature &&
+      state.units.length > 0 &&
+      (!centerChanged || canReuseLoadedWindow(safeCenterIndex))
+    ) {
       return;
     }
 
@@ -110,10 +120,14 @@ export function createPanoramaStore() {
     try {
       const builder = createBuilder(options);
       const centerPosition = builder.framePositionForIndex(safeCenterIndex);
-      state.units = buildWindowUnits(builder, centerPosition, state.preloadRange);
+      const nextUnits = await buildWindowUnits(builder, centerPosition, state.preloadRange);
+      if (requestToken !== pendingLoadToken || bookStore.currentBook?.path !== book.path) return;
+      state.units = nextUnits;
       lastBuildSignature = signature;
     } finally {
-      state.loading = false;
+      if (requestToken === pendingLoadToken) {
+        state.loading = false;
+      }
     }
   }
 
@@ -149,12 +163,26 @@ export function createPanoramaStore() {
     ].join('|');
   }
 
+  function canReuseLoadedWindow(pageIndex: number): boolean {
+    if (state.units.length === 0) return false;
+
+    const unitIndex = state.units.findIndex((unit) =>
+      unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
+    );
+    if (unitIndex < 0) return false;
+
+    // Keep the existing DOM stable while scrolling through the middle of the window.
+    // Rebuild only near the edges so the window can extend in the scroll direction.
+    const edgeMargin = Math.min(2, Math.floor(state.units.length / 2));
+    return unitIndex >= edgeMargin && unitIndex < state.units.length - edgeMargin;
+  }
+
   function createBuilder(options: PanoramaLoadOptions): PageFrameBuilder {
     const pages: Page[] = (bookStore.currentBook?.pages ?? []).map((page, i) => {
       const width = page.width ?? 0;
       const height = page.height ?? 0;
       return {
-        index: page.index ?? i,
+        index: i,
         path: page.path ?? '',
         innerPath: page.innerPath ?? page.name ?? '',
         name: page.name ?? '',
@@ -182,11 +210,11 @@ export function createPanoramaStore() {
     return new PageFrameBuilder(pages, context);
   }
 
-  function buildWindowUnits(
+  async function buildWindowUnits(
     builder: PageFrameBuilder,
     centerPosition: PagePosition,
     range: number
-  ): PanoramaUnit[] {
+  ): Promise<PanoramaUnit[]> {
     const positions: PagePosition[] = [centerPosition];
 
     let prev = centerPosition;
@@ -205,28 +233,32 @@ export function createPanoramaStore() {
       next = nextPos;
     }
 
-    return positions
-      .map((position) => {
+    const units = await Promise.all(
+      positions.map((position) => {
         const frame = builder.buildFrame(position);
-        return frame ? buildUnitFromFrame(frame, position) : null;
+        return frame ? buildUnitFromFrame(frame, position) : Promise.resolve(null);
       })
-      .filter((unit): unit is PanoramaUnit => Boolean(unit));
+    );
+
+    return units.filter((unit): unit is PanoramaUnit => Boolean(unit));
   }
 
-  function buildUnitFromFrame(frame: PageFrame, position: PagePosition): PanoramaUnit | null {
+  async function buildUnitFromFrame(frame: PageFrame, position: PagePosition): Promise<PanoramaUnit | null> {
     const book = bookStore.currentBook;
-    if (!book || !cachedBookHash) return null;
+    if (!book) return null;
 
-    const images = frame.elements
+    const imageCandidates = await Promise.all(frame.elements
       .filter((element) => !element.isDummy)
-      .map((element): PanoramaImage | null => {
+      .map(async (element): Promise<PanoramaImage | null> => {
         const pageIndex = element.page.index;
         const page = book.pages[pageIndex];
         if (!page) return null;
 
-        const entryIndex = page.entryIndex ?? pageIndex;
+        const url = await resolvePageUrl(page, pageIndex).catch(() => null);
+        if (!url) return null;
+
         return {
-          url: getArchiveImageUrl(cachedBookHash!, entryIndex),
+          url,
           pageIndex,
           width: element.page.width || page.width || undefined,
           height: element.page.height || page.height || undefined,
@@ -234,7 +266,9 @@ export function createPanoramaStore() {
           scale: element.scale,
         };
       })
-      .filter((image): image is PanoramaImage => Boolean(image));
+    );
+
+    const images = imageCandidates.filter((image): image is PanoramaImage => Boolean(image));
 
     if (images.length === 0) return null;
 
@@ -246,6 +280,21 @@ export function createPanoramaStore() {
     };
   }
 
+  async function resolvePageUrl(page: NonNullable<typeof bookStore.currentBook>['pages'][number], pageIndex: number): Promise<string | null> {
+    const book = bookStore.currentBook;
+    if (!book) return null;
+
+    const isArchiveLike = book.type === 'archive' || book.type === 'epub';
+    if (isArchiveLike) {
+      if (!cachedBookHash) return null;
+      const entryIndex = page.entryIndex ?? pageIndex;
+      return getArchiveImageUrl(cachedBookHash, entryIndex);
+    }
+
+    const pathHash = await registerBookPath(page.path);
+    return getFileImageUrl(pathHash);
+  }
+
   function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
   }
@@ -255,6 +304,7 @@ export function createPanoramaStore() {
     cachedBookPath = null;
     lastBuildSignature = '';
     lastCenterIndex = -1;
+    pendingLoadToken += 1;
     state.units = [];
     state.centerIndex = 0;
     state.loading = false;

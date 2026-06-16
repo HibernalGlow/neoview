@@ -12,6 +12,7 @@ import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
 import { pageFrameStore } from './pageFrame.svelte';
 import { showInfoToast } from '$lib/utils/toast';
+import { getPanoramaStore, type PanoramaLoadOptions } from '$lib/stackview/stores/panoramaStore.svelte';
 
 // ============================================================================
 // 类型定义
@@ -572,6 +573,11 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 
 export async function pageLeft() {
 	try {
+		if (isPanoramaActive()) {
+			await navigatePanoramaGlobal('prev');
+			return;
+		}
+
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = subPageIndex.value;
 
@@ -611,6 +617,11 @@ export async function pageLeft() {
 
 export async function pageRight() {
 	try {
+		if (isPanoramaActive()) {
+			await navigatePanoramaGlobal('next');
+			return;
+		}
+
 		const currentIndex = bookStore.currentPageIndex;
 		const currentSub = subPageIndex.value;
 		const shouldSplit = shouldSplitPage(currentIndex);
@@ -645,6 +656,136 @@ export async function pageRight() {
 	} catch (err) {
 		console.error('Failed to turn page right:', err);
 	}
+}
+
+function isPanoramaActive(): boolean {
+	return viewMode.value === 'panorama' || (bookContextManager.current?.panoramaEnabled ?? false);
+}
+
+function buildPanoramaLoadOptions(): PanoramaLoadOptions {
+	const settings = settingsManager.getSettings();
+	const ctx = bookContextManager.current;
+	const pageLayout = settings.view.pageLayout;
+
+	return {
+		pageMode: ctx?.pageMode ?? (viewMode.value === 'double' ? 'double' : 'single'),
+		readOrder: settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr',
+		splitHorizontal: pageLayout?.splitHorizontalPages ?? false,
+		widePage: pageLayout?.treatHorizontalAsDoublePage ?? false,
+		singleFirst: pageLayout?.singleFirstPageMode === 'default'
+			? true
+			: pageLayout?.singleFirstPageMode === 'continue'
+				? false
+				: true,
+		singleLast: pageLayout?.singleLastPageMode === 'default'
+			? false
+			: pageLayout?.singleLastPageMode === 'continue'
+				? true
+				: false,
+		divideRate: 1.0,
+		widePageStretch: pageLayout?.widePageStretch ?? 'uniformHeight',
+	};
+}
+
+async function navigatePanoramaGlobal(dir: 'prev' | 'next') {
+	const panoramaStore = getPanoramaStore();
+	const options = buildPanoramaLoadOptions();
+	const currentIndex = bookStore.currentPageIndex;
+	const currentPart = subPageIndex.value;
+	const maxIndex = Math.max(bookStore.totalPages - 1, 0);
+
+	panoramaStore.setEnabled(true);
+
+	if (panoramaStore.state.units.length === 0) {
+		await panoramaStore.loadPanorama(currentIndex, options);
+	}
+
+	const units = panoramaStore.state.units;
+	if (units.length === 0) {
+		const fallbackIndex = dir === 'next'
+			? Math.min(currentIndex + 1, maxIndex)
+			: Math.max(currentIndex - 1, 0);
+		if (fallbackIndex === currentIndex) {
+			showInfoToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+			return;
+		}
+		await bookStore.navigateToPage(fallbackIndex);
+		subPageIndex.set(0);
+		await panoramaStore.loadPanorama(fallbackIndex, options);
+		return;
+	}
+
+	const currentUnitIndex = findPanoramaUnitIndex(units, currentIndex, currentPart);
+	const targetUnit = units[currentUnitIndex + (dir === 'next' ? 1 : -1)];
+
+	if (targetUnit) {
+		await bookStore.navigateToPage(targetUnit.startIndex);
+		subPageIndex.set(targetUnit.position.part);
+		await panoramaStore.loadPanorama(targetUnit.startIndex, options);
+		return;
+	}
+
+	const edgeFallbackIndex = getPanoramaEdgeFallbackIndex(units, dir, currentUnitIndex);
+	if (edgeFallbackIndex !== null) {
+		await bookStore.navigateToPage(edgeFallbackIndex);
+		subPageIndex.set(0);
+		await panoramaStore.loadPanorama(edgeFallbackIndex, options);
+		return;
+	}
+
+	showInfoToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+}
+
+function findPanoramaUnitIndex(
+	units: ReturnType<typeof getPanoramaStore>['state']['units'],
+	pageIndex: number,
+	part: number
+): number {
+	const exactPosition = units.findIndex((unit) =>
+		unit.position.index === pageIndex && unit.position.part === part
+	);
+	if (exactPosition >= 0) return exactPosition;
+
+	const exactPage = units.findIndex((unit) =>
+		unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
+	);
+	if (exactPage >= 0) return exactPage;
+
+	let closestIndex = 0;
+	let closestDistance = Infinity;
+	units.forEach((unit, index) => {
+		const distance = Math.abs(unit.startIndex - pageIndex);
+		if (distance < closestDistance) {
+			closestDistance = distance;
+			closestIndex = index;
+		}
+	});
+	return closestIndex;
+}
+
+function getPanoramaEdgeFallbackIndex(
+	units: ReturnType<typeof getPanoramaStore>['state']['units'],
+	dir: 'prev' | 'next',
+	currentUnitIndex: number
+): number | null {
+	if (units.length === 0) return null;
+
+	if (dir === 'next' && currentUnitIndex >= units.length - 1) {
+		const lastUnit = units[units.length - 1];
+		const lastLoadedPage = lastUnit.images.reduce(
+			(max, image) => Math.max(max, image.pageIndex),
+			lastUnit.startIndex
+		);
+		const maxIndex = Math.max(bookStore.totalPages - 1, 0);
+		return lastLoadedPage < maxIndex ? lastLoadedPage + 1 : null;
+	}
+
+	if (dir === 'prev' && currentUnitIndex <= 0) {
+		const firstLoadedPage = units[0].startIndex;
+		return firstLoadedPage > 0 ? firstLoadedPage - 1 : null;
+	}
+
+	return null;
 }
 
 export async function jumpToPage(index: number) {

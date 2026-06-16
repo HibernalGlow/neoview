@@ -26,7 +26,7 @@
 	import type { GetFrameSnapshotParams } from '$lib/api/frameApi';
 	import { emptyFrame } from './types/frame';
 	import { getImageStore } from './stores/imageStore.svelte';
-	import { getPanoramaStore } from './stores/panoramaStore.svelte';
+	import { getPanoramaStore, type PanoramaLoadOptions } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
 	import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
@@ -633,6 +633,19 @@
 		};
 	}
 
+	function buildPanoramaLoadOptions(): PanoramaLoadOptions {
+		return {
+			pageMode,
+			readOrder: direction,
+			splitHorizontal: splitHorizontalPages,
+			widePage: treatHorizontalAsDoublePage,
+			singleFirst: singleFirstPage,
+			singleLast: singleLastPage,
+			divideRate: 1.0,
+			widePageStretch
+		};
+	}
+
 	function shouldSplitTargetPage(index: number): boolean {
 		if (!splitHorizontalPages || pageMode !== 'single') {
 			return false;
@@ -739,11 +752,19 @@
 	// 所有翻页入口最终都调用 pageLeft/pageRight，确保逻辑一致
 
 	function handlePrevPage() {
+		if (isPanorama) {
+			void navigatePanorama('prev');
+			return;
+		}
 		resetScrollPosition();
 		void navigateReader('prev');
 	}
 
 	function handleNextPage() {
+		if (isPanorama) {
+			void navigatePanorama('next');
+			return;
+		}
 		resetScrollPosition();
 		void navigateReader('next');
 	}
@@ -752,14 +773,110 @@
 	function handlePanoramaScroll(e: Event) {
 		// 检查是否是自定义事件
 		if (e instanceof CustomEvent && e.detail?.visiblePageIndex !== undefined) {
-			const { visiblePageIndex } = e.detail;
+			const { visiblePageIndex, visiblePart, preloadPageIndex } = e.detail as {
+				visiblePageIndex: number;
+				visiblePart?: number;
+				preloadPageIndex?: number;
+			};
+			if (visiblePart !== undefined && visiblePart !== $subPageIndex) {
+				subPageIndex.set(visiblePart);
+			}
 			// 日志已移除，避免滚动时的性能损耗
 			// 触发预加载：以目标页为中心预加载
-			panoramaStore.loadPanorama(visiblePageIndex, pageMode);
+			panoramaStore.loadPanorama(
+				preloadPageIndex ?? visiblePageIndex,
+				buildPanoramaLoadOptions()
+			);
 		}
 	}
 
 	// 悬停滚动状态
+	async function navigatePanorama(dir: 'prev' | 'next') {
+		const units = panoramaStore.state.units;
+		const currentIndex = bookStore.currentPageIndex;
+		const currentPart = $subPageIndex;
+		const maxIndex = Math.max(bookStore.totalPages - 1, 0);
+
+		if (units.length === 0) {
+			const fallbackIndex = dir === 'next'
+				? Math.min(currentIndex + 1, maxIndex)
+				: Math.max(currentIndex - 1, 0);
+			if (fallbackIndex === currentIndex) {
+				showBoundaryToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+				return;
+			}
+			await bookStore.navigateToPage(fallbackIndex);
+			subPageIndex.set(0);
+			return;
+		}
+
+		const currentUnitIndex = findCurrentPanoramaUnitIndex(currentIndex, currentPart);
+		const targetUnitIndex = currentUnitIndex + (dir === 'next' ? 1 : -1);
+		const targetUnit = units[targetUnitIndex];
+
+		if (!targetUnit) {
+			const edgeFallbackIndex = getPanoramaEdgeFallbackIndex(dir, currentUnitIndex);
+			if (edgeFallbackIndex !== null) {
+				await bookStore.navigateToPage(edgeFallbackIndex);
+				subPageIndex.set(0);
+				panoramaStore.loadPanorama(edgeFallbackIndex, buildPanoramaLoadOptions());
+				return;
+			}
+			showBoundaryToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+			return;
+		}
+
+		await bookStore.navigateToPage(targetUnit.startIndex);
+		subPageIndex.set(targetUnit.position.part);
+		panoramaStore.loadPanorama(targetUnit.startIndex, buildPanoramaLoadOptions());
+	}
+
+	function getPanoramaEdgeFallbackIndex(dir: 'prev' | 'next', currentUnitIndex: number): number | null {
+		const units = panoramaStore.state.units;
+		if (units.length === 0) return null;
+
+		if (dir === 'next' && currentUnitIndex >= units.length - 1) {
+			const lastUnit = units[units.length - 1];
+			const lastLoadedPage = lastUnit.images.reduce(
+				(max, image) => Math.max(max, image.pageIndex),
+				lastUnit.startIndex
+			);
+			const maxIndex = Math.max(bookStore.totalPages - 1, 0);
+			return lastLoadedPage < maxIndex ? lastLoadedPage + 1 : null;
+		}
+
+		if (dir === 'prev' && currentUnitIndex <= 0) {
+			const firstLoadedPage = units[0].startIndex;
+			return firstLoadedPage > 0 ? firstLoadedPage - 1 : null;
+		}
+
+		return null;
+	}
+
+	function findCurrentPanoramaUnitIndex(pageIndex: number, part: number): number {
+		const units = panoramaStore.state.units;
+		const exactPosition = units.findIndex((unit) =>
+			unit.position.index === pageIndex && unit.position.part === part
+		);
+		if (exactPosition >= 0) return exactPosition;
+
+		const exactPage = units.findIndex((unit) =>
+			unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
+		);
+		if (exactPage >= 0) return exactPage;
+
+		let closestIndex = 0;
+		let closestDistance = Infinity;
+		units.forEach((unit, index) => {
+			const distance = Math.abs(unit.startIndex - pageIndex);
+			if (distance < closestDistance) {
+				closestDistance = distance;
+				closestIndex = index;
+			}
+		});
+		return closestIndex;
+	}
+
 	let hoverScrollEnabled = $derived(settings.image?.hoverScrollEnabled ?? false);
 
 	// 幻灯片控制
@@ -868,7 +985,7 @@
 			// 根据模式加载
 			if (currentPanorama) {
 				panoramaStore.setEnabled(true);
-				panoramaStore.loadPanorama(pageIndex, currentPageMode);
+				panoramaStore.loadPanorama(pageIndex, buildPanoramaLoadOptions());
 			} else {
 				panoramaStore.setEnabled(false);
 				const params = buildFrameSnapshotParams();
@@ -1059,6 +1176,7 @@
 			{orientation}
 			{direction}
 			currentPageIndex={bookStore.currentPageIndex}
+			currentPart={$subPageIndex}
 			{viewportSize}
 			{widePageStretch}
 			onScroll={handlePanoramaScroll}

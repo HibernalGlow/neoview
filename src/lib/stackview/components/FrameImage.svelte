@@ -17,11 +17,6 @@
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
   import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
-  import {
-    pageTransitionStore,
-    easingCssMap,
-    type PageTransitionSettings
-  } from '$lib/stores/pageTransitionStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
   
   interface Props {
@@ -117,69 +112,42 @@
     return url;
   });
 
-  // 标记当前是否命中了预解码 URL，用于减少不必要的渲染延迟
-  let usingPreDecodedUrl = $derived.by(() => {
-    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(pageIndex);
-    return !!preDecodedUrl && preDecodedUrl === displayUrl;
-  });
-  
-  // 获取动画设置
-  let transitionSettings = $state<PageTransitionSettings>(pageTransitionStore.getSettings());
-  $effect(() => {
-    const unsubscribe = pageTransitionStore.subscribe((s) => {
-      transitionSettings = s;
-    });
-    return unsubscribe;
-  });
-
-  // 仅在「淡入淡出」模式下启用图片加载淡入，避免覆盖其它翻页动画
-  let shouldFadeOnLoad = $derived(
-    transitionSettings.enabled && transitionSettings.type === 'fade'
-  );
-
-  let fadeTransitionCss = $derived.by(() => {
-    if (!shouldFadeOnLoad) return 'none';
-    const easing = easingCssMap[transitionSettings.easing];
-    return `opacity ${transitionSettings.duration}ms ${easing}`;
-  });
-
-  // ==================== 【性能优化 #4】ViewSource 渲染延迟 ====================
-  // 快速翻页时延迟渲染图片，减少主线程解码压力
-  // 但在非淡入翻页动画中，优先保证图片尽快出现以展示位移动画
+  // ==================== 【Phase 1 修复】移除主图渲染延迟 ====================
+  // settledUrl 立即跟随 displayUrl，不再人为延迟 60ms
   let settledUrl = $state('');
-  let settleTimer = 0;
 
   $effect(() => {
     // 依赖 displayUrl
     const targetUrl = displayUrl;
-    
-    // 如果已经在渲染同个 URL，直接跳过
-    if (settledUrl === targetUrl) return;
-
-    // 清理旧定时器
-    if (settleTimer) clearTimeout(settleTimer);
-
-    const settleDelay = usingPreDecodedUrl
-      ? 0
-      : transitionSettings.enabled && transitionSettings.type !== 'none' && transitionSettings.type !== 'fade'
-        ? 0
-        : 60;
-
-    // 如果还没有 settledUrl（第一次加载），或者是在快速翻页
-    // 默认使用 60ms 延迟；非淡入翻页动画时禁用延迟避免吞掉位移效果
-    settleTimer = window.setTimeout(() => {
-      settledUrl = targetUrl;
-    }, settleDelay);
-
-    return () => {
-      if (settleTimer) clearTimeout(settleTimer);
-    };
+    // 立即切换，不延迟
+    settledUrl = targetUrl;
   });
 
-  // 【性能优化 #5】Mini-Thumbnail (BlurHash) 占位符
+  // 【Phase 1 修复】缩略图仅用于冷启动
+  // 如果之前已有可显示图（翻页场景），不再显示缩略图占位
   let thumbnailUrl = $derived(bookStore.currentBook?.pages[pageIndex]?.thumbnail || '');
-  let showThumbnail = $state(true);
+  let showThumbnail = $state(false);
+  let hadPreviousSettledUrl = $state(false);
   let hasSettledUrl = $derived(settledUrl.length > 0);
+
+  // 追踪是否曾经有过 settledUrl（区分冷启动 vs 翻页）
+  $effect(() => {
+    if (settledUrl.length > 0) {
+      hadPreviousSettledUrl = true;
+    }
+  });
+
+  // 当 url prop 变化时（翻页），决定是否显示缩略图
+  $effect(() => {
+    const _url = url;
+    if (hadPreviousSettledUrl) {
+      // 翻页场景：不显示缩略图，旧图保持直到新图 ready
+      showThumbnail = false;
+    } else {
+      // 冷启动场景：显示缩略图作为占位
+      showThumbnail = true;
+    }
+  });
 
   // 当 Full Image 加载完成后隐藏缩略图
   function handleMainImageLoad(e: Event) {
@@ -231,11 +199,9 @@
         {alt}
         class="frame-image"
         class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
-        class:loading={showThumbnail && shouldFadeOnLoad}
         style:transform={transform || undefined}
         style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
         style:filter={filterCss || undefined}
-        style:--fade-transition={fadeTransitionCss}
         style={style || undefined}
         onload={handleMainImageLoad}
         draggable="false"
@@ -272,12 +238,7 @@
     /* 使用高质量渲染，避免锯齿 */
     image-rendering: auto;
     content-visibility: visible;
-    /* 【优化】主图加载前透明，根据全局开关决定是否有渐入动画 */
-    transition: var(--fade-transition, opacity 0.2s ease-in-out);
-  }
-
-  .frame-image.loading {
-    opacity: 0;
+    /* 【Phase 1 修复】移除图片级 fade transition，只保留页面层动画 */
   }
 
   .frame-image.is-split {

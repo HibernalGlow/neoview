@@ -569,7 +569,13 @@
 			return emptyFrame;
 		}
 
-		if (!currentUrl) return emptyFrame;
+		if (!currentUrl) {
+			// 【双缓冲防护】如果 viewer 仍有 book/page，返回上次非空帧
+			if (bookStore.currentBook && bookStore.currentPage && lastNonEmptyFrame) {
+				return lastNonEmptyFrame;
+			}
+			return emptyFrame;
+		}
 
 		// 【修复】使用索引化缓存获取尺寸
 		const pageIndex = bookStore.currentPageIndex;
@@ -607,8 +613,19 @@
 		// 使用 buildFrameImages 构建图片列表
 		const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
 
-		return { id: `frame-${bookStore.currentPageIndex}-${currentSplitHalf ?? 'full'}`, images, layout: pageMode };
+		const frame: Frame = { id: `frame-${bookStore.currentPageIndex}-${currentSplitHalf ?? 'full'}`, images, layout: pageMode };
+
+		// 【双缓冲】更新非空帧缓存
+		if (images.length > 0) {
+			lastNonEmptyFrame = frame;
+		}
+
+		return frame;
 	});
+
+	// 【双缓冲】上次非空帧缓存，防止翻页时空帧闪烁
+	// 仅在切书/reset/关闭 viewer 时清空
+	let lastNonEmptyFrame: Frame | null = $state(null);
 
 	// 实际显示模式：当双页模式下只有一张图时（横向图独占），使用 single 布局
 	// 这样图片可以占满视口宽度，而不是被限制在 50%
@@ -838,6 +855,8 @@
 				panoramaStore.reset();
 				zoomModeManager.reset();
 				resetScrollPosition();
+				// 【双缓冲】切书时清空旧帧缓存，防止跨书污染
+				lastNonEmptyFrame = null;
 
 				// 通知 upscaleStore 书籍切换
 				console.log('📚 [StackView] 调用 upscaleStore.setCurrentBook:', currentPath);
@@ -1008,6 +1027,7 @@
 		cursorAutoHide?.destroy();
 		upscaleStore.destroy();
 		slideshowStore.destroy();
+		lastNonEmptyFrame = null;
 		window.removeEventListener(applyZoomModeEventName, handleApplyZoomMode);
 		window.removeEventListener('neoview-viewer-action', handleViewerAction);
 	});

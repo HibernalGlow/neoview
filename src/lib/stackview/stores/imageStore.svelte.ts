@@ -127,19 +127,27 @@ export function createImageStore() {
     loading: false,
     error: null,
   });
-  
+
   let lastLoadedIndex = -1;
   let currentBookPath: string | null = null;
+
+  // 【双缓冲】翻页时旧帧保留直到新帧 ready
+  let pendingPageToken = 0;
+  let currentDisplayPageIndex: number | null = null;
+  let secondDisplayPageIndex: number | null = null;
+  // 诊断计数
+  let tokenMismatchDrops = 0;
   
   /**
    * 加载当前页面
-   * 【翻页性能优化】优先使用预解码缓存
+   * 【双缓冲语义】翻页时旧帧保留直到新帧 ready，不出现空帧
    */
   async function loadCurrentPage(pageMode: 'single' | 'double' = 'single', force = false) {
     const currentIndex = bookStore.currentPageIndex;
     const book = bookStore.currentBook;
     const page = bookStore.currentPage;
-    
+
+    // 场景：关闭 viewer / 无书 / 无页 → 允许清空
     if (!book || !page) {
       state.currentUrl = null;
       state.secondUrl = null;
@@ -147,10 +155,12 @@ export function createImageStore() {
       state.secondDimensions = null;
       state.backgroundColor = null;
       state.loading = false;
+      currentDisplayPageIndex = null;
+      secondDisplayPageIndex = null;
       return;
     }
-    
-    // 检测书本变化
+
+    // 检测书本变化 → 切书时必须清空旧帧
     const bookChanged = currentBookPath !== book.path;
     if (bookChanged) {
       currentBookPath = book.path;
@@ -160,192 +170,214 @@ export function createImageStore() {
       state.secondDimensions = null;
       state.backgroundColor = null;
       lastLoadedIndex = -1;
+      currentDisplayPageIndex = null;
+      secondDisplayPageIndex = null;
       imagePool.setCurrentBook(book.path);
     }
-    
+
     // 避免重复加载
     if (!force && !bookChanged && currentIndex === lastLoadedIndex && state.currentUrl) {
       return;
     }
-    
-    // 【性能优化】页面切换时立即清除旧尺寸
-    // 这确保了不会使用旧页面的尺寸渲染新页面
-    if (currentIndex !== lastLoadedIndex) {
-      state.dimensions = null;
-      state.secondDimensions = null;
-    }
-    
+
+    // 【关键】翻页时不再清空 dimensions / currentUrl
+    // 旧图必须保留，直到新图 ready 后再原子替换
     lastLoadedIndex = currentIndex;
-    
+
+    // 递增 token，用于丢弃过期的异步结果
+    const myToken = ++pendingPageToken;
+
     // 记录翻页开始时间
     const flipStartTime = performance.now();
-    
+
     // 【翻页优化】优先检查预解码缓存
     const preDecodedUrl = stackImageLoader.getPreDecodedUrl(currentIndex);
     if (preDecodedUrl) {
-      const flipLatency = performance.now() - flipStartTime;
-      console.log(`⚡ 使用预解码缓存: 页码 ${currentIndex + 1}, 延迟 ${flipLatency.toFixed(1)}ms`);
+      const resourceReadyMs = performance.now() - flipStartTime;
+      console.log(`[imageStore] page=${currentIndex} source=predecoded resourceReadyMs=${resourceReadyMs.toFixed(1)} tokenDrops=${tokenMismatchDrops}`);
+      // 原子替换：新图 ready，一次性更新
       state.currentUrl = preDecodedUrl;
       state.dimensions = stackImageLoader.getCachedDimensions(currentIndex) ?? null;
       state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
       state.loading = false;
+      currentDisplayPageIndex = currentIndex;
       // 更新延迟追踪（预解码命中）
       const cached = imagePool.getSync(currentIndex);
       if (cached?.blob) {
         updateCacheHitLatencyTrace(cached.blob, currentIndex);
       }
-      // 【关键】通知缩略图服务主图已就绪
       thumbnailService.notifyMainImageReady();
-      // 【翻页优化】触发分层预加载
+      // 【唯一预加载入口】只保留分层预加载
       stackImageLoader.triggerLayeredPreload(currentIndex);
       // 处理双页模式
-      await loadSecondPageIfNeeded(pageMode, currentIndex, book);
+      await loadSecondPageIfNeeded(pageMode, currentIndex, book, myToken);
       return;
     }
-    
+
     // 优先使用 Blob 缓存
     const cached = imagePool.getSync(currentIndex);
     if (cached) {
-      console.log(`🖼️ ImageStore: 使用缓存 page=${currentIndex} url=${cached.url?.substring(0, 60)}...`);
+      const resourceReadyMs = performance.now() - flipStartTime;
+      console.log(`[imageStore] page=${currentIndex} source=cache resourceReadyMs=${resourceReadyMs.toFixed(1)} tokenDrops=${tokenMismatchDrops}`);
+      // 原子替换
       state.currentUrl = cached.url;
-      state.dimensions = cached.width && cached.height 
-        ? { width: cached.width, height: cached.height } 
+      state.dimensions = cached.width && cached.height
+        ? { width: cached.width, height: cached.height }
         : null;
-      // 获取预加载的背景色
       state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
       state.loading = false;
-      // 更新延迟追踪（缓存命中）
+      currentDisplayPageIndex = currentIndex;
       if (cached.blob) {
         updateCacheHitLatencyTrace(cached.blob, currentIndex);
       }
-      // 【关键】通知缩略图服务主图已就绪
       thumbnailService.notifyMainImageReady();
-      // 【翻页优化】触发分层预加载
+      // 【唯一预加载入口】只保留分层预加载
       stackImageLoader.triggerLayeredPreload(currentIndex);
     } else {
+      // 异步加载：旧帧保留，loading=true 但不清空 currentUrl
       state.loading = true;
     }
-    
+
     // 双页模式：获取第二张（同步尝试）
-    // 先检查是否应该加载第二张图片（考虑横向页面等情况）
     let secondCached: ReturnType<typeof imagePool.getSync> = null;
     const secondIndex = currentIndex + 1;
     const shouldLoadSecond = pageMode === 'double' && shouldLoadSecondPage(currentIndex, secondIndex);
-    
+
     if (shouldLoadSecond) {
       if (secondIndex < book.pages.length) {
         secondCached = imagePool.getSync(secondIndex);
-        state.secondUrl = secondCached?.url ?? null;
-        state.secondDimensions = secondCached?.width && secondCached?.height 
-          ? { width: secondCached.width, height: secondCached.height } 
-          : null;
-      } else {
-        state.secondUrl = null;
-        state.secondDimensions = null;
+        if (secondCached) {
+          // 第二张也 ready，原子替换
+          state.secondUrl = secondCached.url;
+          state.secondDimensions = secondCached?.width && secondCached?.height
+            ? { width: secondCached.width, height: secondCached.height }
+            : null;
+          secondDisplayPageIndex = secondIndex;
+        }
+        // 如果第二张未缓存，不先清空旧的 secondUrl，等异步加载完再替换
       }
-    } else {
-      state.secondUrl = null;
-      state.secondDimensions = null;
+      // 不再在 shouldLoadSecond=false 时清空 secondUrl
+      // secondUrl 只在切书/reset/双页模式关闭时清空
     }
-    
+
     // 异步加载当前图片
     if (!cached) {
       try {
         const image = await imagePool.get(currentIndex);
-        const flipLatency = performance.now() - flipStartTime;
-        console.log(`🖼️ ImageStore: 异步加载完成 page=${currentIndex} url=${image?.url?.substring(0, 60)}... 延迟=${flipLatency.toFixed(1)}ms`);
-        
-        // 【性能监控】延迟超过 100ms 打印警告
-        if (flipLatency > 100) {
-          console.warn(`⚠️ 翻页延迟过高: ${flipLatency.toFixed(1)}ms (目标 <50ms)`);
+        const resourceReadyMs = performance.now() - flipStartTime;
+
+        // 【关键】只有 token 匹配且页码未变时才提交新图
+        if (myToken !== pendingPageToken || currentIndex !== bookStore.currentPageIndex) {
+          tokenMismatchDrops++;
+          console.log(`[imageStore] page=${currentIndex} source=async DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)} tokenDrops=${tokenMismatchDrops}`);
+          return;
         }
-        
-        if (image && lastLoadedIndex === currentIndex) {
+
+        console.log(`[imageStore] page=${currentIndex} source=async resourceReadyMs=${resourceReadyMs.toFixed(1)} tokenDrops=${tokenMismatchDrops}`);
+
+        if (resourceReadyMs > 100) {
+          console.warn(`⚠️ 翻页延迟过高: ${resourceReadyMs.toFixed(1)}ms (目标 <50ms)`);
+        }
+
+        if (image) {
+          // 原子替换：新图 ready，一次性更新
           state.currentUrl = image.url;
-          state.dimensions = image.width && image.height 
-            ? { width: image.width, height: image.height } 
+          state.dimensions = image.width && image.height
+            ? { width: image.width, height: image.height }
             : null;
-          // 获取背景色（可能已在加载时计算好）
           state.backgroundColor = imagePool.getBackgroundColor(currentIndex) ?? null;
-          // 【关键】主图加载完成，通知缩略图服务开始加载
+          currentDisplayPageIndex = currentIndex;
           thumbnailService.notifyMainImageReady();
-          // 【翻页优化】触发分层预加载
+          // 【唯一预加载入口】只保留分层预加载
           stackImageLoader.triggerLayeredPreload(currentIndex);
         }
       } catch (err) {
         state.error = String(err);
       } finally {
-        if (lastLoadedIndex === currentIndex) {
+        if (currentIndex === bookStore.currentPageIndex) {
           state.loading = false;
         }
       }
     }
-    
+
     // 双页模式：异步加载第二张（独立于当前图片是否缓存）
-    // 使用之前计算的 shouldLoadSecond 来决定是否加载
-    if (shouldLoadSecond && !secondCached && lastLoadedIndex === currentIndex) {
+    if (shouldLoadSecond && !secondCached && currentIndex === bookStore.currentPageIndex) {
       if (secondIndex < book.pages.length) {
         try {
           const secondImage = await imagePool.get(secondIndex);
-          if (lastLoadedIndex === currentIndex) {
+          // 只有页码未变且 token 匹配时才提交
+          if (myToken === pendingPageToken && currentIndex === bookStore.currentPageIndex) {
             state.secondUrl = secondImage?.url ?? null;
-            state.secondDimensions = secondImage?.width && secondImage?.height 
-              ? { width: secondImage.width, height: secondImage.height } 
+            state.secondDimensions = secondImage?.width && secondImage?.height
+              ? { width: secondImage.width, height: secondImage.height }
               : null;
+            if (secondImage) {
+              secondDisplayPageIndex = secondIndex;
+            }
           }
         } catch (err) {
           console.warn('Failed to load second page:', err);
         }
       }
     }
-    
-    // 后台预加载（旧逻辑，保留兼容）
-    imagePool.preloadRange(currentIndex, 4);
+    // 【已删除】imagePool.preloadRange(currentIndex, 4) — 重复预加载，由 triggerLayeredPreload 统一调度
   }
   
   /**
    * 加载双页模式的第二张图片（辅助函数）
+   * 【双缓冲】第二张未 ready 时不先清空旧帧
    */
   async function loadSecondPageIfNeeded(
     pageMode: 'single' | 'double',
     currentIndex: number,
-    book: NonNullable<typeof bookStore.currentBook>
+    book: NonNullable<typeof bookStore.currentBook>,
+    token?: number
   ) {
     const secondIndex = currentIndex + 1;
     const shouldLoadSecond = pageMode === 'double' && shouldLoadSecondPage(currentIndex, secondIndex);
-    
+
     if (!shouldLoadSecond || secondIndex >= book.pages.length) {
-      state.secondUrl = null;
-      state.secondDimensions = null;
+      // 只在明确不需要双页时才清空 secondUrl
+      if (pageMode !== 'double') {
+        state.secondUrl = null;
+        state.secondDimensions = null;
+        secondDisplayPageIndex = null;
+      }
       return;
     }
-    
+
     // 优先使用预解码缓存
     const preDecodedUrl = stackImageLoader.getPreDecodedUrl(secondIndex);
     if (preDecodedUrl) {
       state.secondUrl = preDecodedUrl;
       state.secondDimensions = stackImageLoader.getCachedDimensions(secondIndex) ?? null;
+      secondDisplayPageIndex = secondIndex;
       return;
     }
-    
+
     // 使用 Blob 缓存
     const secondCached = imagePool.getSync(secondIndex);
     if (secondCached) {
       state.secondUrl = secondCached.url;
-      state.secondDimensions = secondCached.width && secondCached.height 
-        ? { width: secondCached.width, height: secondCached.height } 
+      state.secondDimensions = secondCached.width && secondCached.height
+        ? { width: secondCached.width, height: secondCached.height }
         : null;
+      secondDisplayPageIndex = secondIndex;
       return;
     }
-    
-    // 异步加载
+
+    // 异步加载：不清空旧 secondUrl，等 ready 后再替换
     try {
       const secondImage = await imagePool.get(secondIndex);
-      if (lastLoadedIndex === currentIndex) {
+      // token 检查：确保页码未变
+      if (currentIndex === bookStore.currentPageIndex && (token === undefined || token === pendingPageToken)) {
         state.secondUrl = secondImage?.url ?? null;
-        state.secondDimensions = secondImage?.width && secondImage?.height 
-          ? { width: secondImage.width, height: secondImage.height } 
+        state.secondDimensions = secondImage?.width && secondImage?.height
+          ? { width: secondImage.width, height: secondImage.height }
           : null;
+        if (secondImage) {
+          secondDisplayPageIndex = secondIndex;
+        }
       }
     } catch (err) {
       console.warn('Failed to load second page:', err);
@@ -373,6 +405,9 @@ export function createImageStore() {
     state.error = null;
     lastLoadedIndex = -1;
     currentBookPath = null;
+    currentDisplayPageIndex = null;
+    secondDisplayPageIndex = null;
+    pendingPageToken++;
     imagePool.clear();
   }
   

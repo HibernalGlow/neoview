@@ -41,6 +41,7 @@ pub mod startup_init;
 pub mod thumbnail_db;
 pub mod thumbnail_generator;
 pub mod thumbnail_service_v3;
+pub mod thumbnail_service_v4;
 pub mod upscale;
 pub mod upscale_scheduler;
 pub mod upscale_service;

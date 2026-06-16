@@ -9,13 +9,12 @@ import { Input } from '$lib/components/ui/input';
 import { Slider } from '$lib/components/ui/slider';
 import { Search, Grid3x3, List, Image as ImageIcon, Navigation, Sparkles } from '@lucide/svelte';
 import { bookStore } from '$lib/stores/book.svelte';
-import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
+import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailEntry } from '$lib/stores/unifiedThumbnailStore.svelte';
 
 import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 import { settingsManager } from '$lib/settings/settingsManager';
 import type { Page } from '$lib/types';
-import { requestAllThumbnails } from '$lib/stores/thumbnailStoreV3.svelte';
-import { thumbnailService } from '$lib/services/thumbnailService';
+
 import PageContextMenu from './PageContextMenu.svelte';
 import PageIndexBadge from './PageIndexBadge.svelte';
 
@@ -29,7 +28,6 @@ interface PageItem {
 }
 
 let items = $state<PageItem[]>([]);
-let unsubscribeThumbnailCache: (() => void) | null = null;
 let searchQuery = $state('');
 let viewMode = $state<ViewMode>('list');
 let scrollContainer: HTMLDivElement | undefined;
@@ -138,18 +136,24 @@ $effect(() => {
 let updateTrigger = $state(0);
 
 onMount(() => {
-	unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
-		updateTrigger++;
-	});
+	// unifiedThumbnailStore uses SvelteMap (reactive), no manual subscription needed
 });
 
 onDestroy(() => {
-	unsubscribeThumbnailCache?.();
+	// No manual cleanup needed for unifiedThumbnailStore
 });
 
 function getThumbnail(pageIndex: number): ThumbnailEntry | null {
 	void updateTrigger;
-	return thumbnailCacheStore.getThumbnail(pageIndex);
+	const book = bookStore.currentBook;
+	const page = book?.pages?.[pageIndex];
+	if (!book || !page) return null;
+
+	const source: ThumbnailSource = book.type === 'archive' || book.type === 'epub'
+		? { kind: 'archiveEntry', archivePath: book.path, innerPath: page.innerPath ?? page.path, entryIndex: page.entryIndex, fileSize: page.size }
+		: { kind: 'bookPage', bookPath: book.path, pageIndex, pagePath: page.path, fileSize: page.size };
+	const key = generateThumbKey(source, 256);
+	return unifiedThumbnailStore.getEntry(key);
 }
 
 function goToPage(index: number) {
@@ -157,18 +161,22 @@ function goToPage(index: number) {
 }
 
 async function requestThumbnail(pageIndex: number) {
-	if (thumbnailCacheStore.hasThumbnail(pageIndex)) return;
-	if (thumbnailService.isLoading(pageIndex)) return;
-
 	const book = bookStore.currentBook;
 	const page = book?.pages?.[pageIndex];
 	if (!book || !page) return;
 
-	// Use thumbnailService so the request goes through the proper backend pipeline
-	// and results are written back to thumbnailCacheStore via the event listener.
-	// thumbnailManager.getThumbnail() returns null immediately for uncached pages
-	// and incorrectly marks them as failed, so we avoid it here.
-	void thumbnailService.loadThumbnails(pageIndex);
+	const source: ThumbnailSource = book.type === 'archive' || book.type === 'epub'
+		? { kind: 'archiveEntry', archivePath: book.path, innerPath: page.innerPath ?? page.path, entryIndex: page.entryIndex, fileSize: page.size }
+		: { kind: 'bookPage', bookPath: book.path, pageIndex, pagePath: page.path, fileSize: page.size };
+	const key = generateThumbKey(source, 256);
+	if (unifiedThumbnailStore.hasThumbnail(key)) return;
+	if (unifiedThumbnailStore.isLoading(key)) return;
+
+	await unifiedThumbnailStore.requestThumbnails(
+		[{ key, source, maxSize: 256 }],
+		`pageList-${book.path}`,
+		'visible'
+	);
 }
 
 async function prefetchAllThumbnails() {
@@ -176,14 +184,17 @@ async function prefetchAllThumbnails() {
 	if (!book?.pages?.length) return;
 	if (prefetching) return;
 
-	const paths = book.pages.map((p) => p.path).filter(Boolean);
-	if (paths.length === 0) return;
-
 	prefetching = true;
 	prefetchError = null;
 
 	try {
-		await requestAllThumbnails(paths, book.path, book.currentPage);
+		const items = book.pages.map((page, pageIndex) => {
+			const source: ThumbnailSource = book.type === 'archive' || book.type === 'epub'
+				? { kind: 'archiveEntry', archivePath: book.path, innerPath: page.innerPath ?? page.path, entryIndex: page.entryIndex, fileSize: page.size }
+				: { kind: 'bookPage', bookPath: book.path, pageIndex, pagePath: page.path, fileSize: page.size };
+			return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+		});
+		await unifiedThumbnailStore.requestThumbnails(items, `pageList-${book.path}`, 'background');
 		prefetchDone = true;
 	} catch (err) {
 		prefetchError = err instanceof Error ? err.message : String(err);
@@ -309,7 +320,11 @@ async function prefetchAllThumbnails() {
 						<div class="w-12 h-16 rounded bg-muted flex items-center justify-center overflow-hidden relative shrink-0">
 							{#if thumb?.url}
 								<img src={thumb.url} alt="" class="absolute inset-0 w-full h-full object-contain" />
-							{:else if thumbnailCacheStore.isLoading(item.index)}
+							{:else if unifiedThumbnailStore.isLoading(generateThumbKey(
+							bookStore.currentBook?.type === 'archive' || bookStore.currentBook?.type === 'epub'
+								? { kind: 'archiveEntry', archivePath: bookStore.currentBook!.path, innerPath: item.innerPath ?? item.path, entryIndex: item.index, fileSize: 0 }
+								: { kind: 'bookPage', bookPath: bookStore.currentBook!.path, pageIndex: item.index, pagePath: item.path, fileSize: 0 }
+							, 256))}
 								<div class="w-3 h-3 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
 							{:else}
 								<ImageIcon class="h-4 w-4 text-muted-foreground" />
@@ -342,7 +357,11 @@ async function prefetchAllThumbnails() {
 						<div class="bg-muted rounded overflow-hidden relative w-full aspect-3/4 flex items-center justify-center">
 							{#if thumb?.url}
 								<img src={thumb.url} alt="" class="absolute inset-0 w-full h-full object-contain" />
-							{:else if thumbnailCacheStore.isLoading(item.index)}
+							{:else if unifiedThumbnailStore.isLoading(generateThumbKey(
+							bookStore.currentBook?.type === 'archive' || bookStore.currentBook?.type === 'epub'
+								? { kind: 'archiveEntry', archivePath: bookStore.currentBook!.path, innerPath: item.innerPath ?? item.path, entryIndex: item.index, fileSize: 0 }
+								: { kind: 'bookPage', bookPath: bookStore.currentBook!.path, pageIndex: item.index, pagePath: item.path, fileSize: 0 }
+							, 256))}
 								<div class="w-4 h-4 border-2 border-muted-foreground/40 border-t-foreground rounded-full animate-spin"></div>
 							{:else}
 								<ImageIcon class="h-6 w-6 text-muted-foreground" />

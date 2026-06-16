@@ -4,7 +4,6 @@
  */
 
 import { writable } from 'svelte/store';
-import { toAssetUrl } from '$lib/utils/assetProxy';
 import type { FsItem } from '$lib/types';
 import { FileSystemAPI } from '$lib/api';
 import type { StreamHandle } from '$lib/api/filesystem';
@@ -12,6 +11,7 @@ import { isVideoFile } from '$lib/utils/videoUtils';
 import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
 import { getCachedFolderSizeForSort, requestFolderSizes } from '$lib/stores/folderSizeCache.svelte';
+import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailRequest } from '$lib/stores/unifiedThumbnailStore.svelte';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
@@ -710,68 +710,43 @@ function createFileBrowserStore() {
       }
       return bookItems[targetIndex].path;
     },
-    addThumbnail: (path: string, thumbnail: string) =>
-      update(state => {
-        // blob/data/协议 URL 直接使用，减少 toAssetUrl 分支与 convertFileSrc 调用
-        const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
-          ? thumbnail
-          : thumbnail.startsWith('http:') || thumbnail.startsWith('neoview:')
-            ? thumbnail
-            : (toAssetUrl(thumbnail) || thumbnail) as string;
-
-        const current = state.thumbnails.get(path);
-        if (current === normalized) {
-          return state;
-        }
-
-        // 就地更新，避免每次单项更新都复制整个 thumbnails Map
-        state.thumbnails.set(path, normalized);
-        return { ...state };
-      }),
-    addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) =>
-      update(state => {
-        if (thumbnailsBatch.size === 0) return state;
-
-        let changed = false;
-
-        for (const [path, thumbnail] of thumbnailsBatch.entries()) {
-          const normalized = thumbnail.startsWith('blob:') || thumbnail.startsWith('data:')
-            ? thumbnail
-            : thumbnail.startsWith('http:') || thumbnail.startsWith('neoview:')
-              ? thumbnail
-              : (toAssetUrl(thumbnail) || thumbnail) as string;
-
-          if (state.thumbnails.get(path) === normalized) continue;
-          state.thumbnails.set(path, normalized);
-          changed = true;
-        }
-
-        return changed ? { ...state } : state;
-      }),
-    removeThumbnail: (path: string) =>
-      update(state => {
-        if (!state.thumbnails.has(path)) {
-          return state;
-        }
-        state.thumbnails.delete(path);
-        return { ...state };
-      }),
-    removeThumbnailsBatch: (paths: string[]) =>
-      update(state => {
-        if (paths.length === 0) return state;
-
-        let changed = false;
-        for (const path of paths) {
-          if (!state.thumbnails.has(path)) continue;
-          state.thumbnails.delete(path);
-          changed = true;
-        }
-
-        return changed ? { ...state } : state;
-      }),
-    setThumbnails: (thumbnails: Map<string, string>) =>
-      update(state => ({ ...state, thumbnails: new Map(thumbnails) })),
-    clearThumbnails: () => update(state => ({ ...state, thumbnails: new Map() })),
+    addThumbnail: (path: string, thumbnail: string) => {
+      // Thumbnails are managed by unifiedThumbnailStore
+      // This method is kept for compatibility but no longer needs to do anything
+      // since the UI reads directly from unifiedThumbnailStore
+    },
+    addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) => {
+      // Thumbnails are already in unifiedThumbnailStore cache
+      // This method is kept for compatibility but no longer needs to do anything
+      // since the UI reads directly from unifiedThumbnailStore
+    },
+    removeThumbnail: (path: string) => {
+      // Thumbnails are managed by unifiedThumbnailStore
+    },
+    removeThumbnailsBatch: (paths: string[]) => {
+      // Thumbnails are managed by unifiedThumbnailStore
+    },
+    setThumbnails: (thumbnails: Map<string, string>) => {
+      // Thumbnails are managed by unifiedThumbnailStore
+    },
+    clearThumbnails: () => {
+      // Thumbnails are managed by unifiedThumbnailStore
+    },
+    /**
+     * Get thumbnail URL for a file entry from the unified thumbnail store.
+     * Generates a thumb key from the file source and looks up the URL.
+     */
+    getThumbnailUrlForEntry: (path: string, fileSize: number, modified: number): string | null => {
+      const source: ThumbnailSource = { kind: 'file', path, fileSize, modified };
+      const key = generateThumbKey(source, 256);
+      return unifiedThumbnailStore.getThumbnailUrl(key);
+    },
+    /**
+     * Request thumbnails for visible items using the unified thumbnail store.
+     */
+    requestVisibleThumbnails: (items: ThumbnailRequest[], contextId: string, centerIndex?: number): Promise<void> => {
+      return unifiedThumbnailStore.requestThumbnails(items, contextId, 'visible', centerIndex);
+    },
     reset: () => set(initialState)
   };
 }

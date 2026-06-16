@@ -6,6 +6,7 @@
 //! - 缓存压缩包条目列表，减少重复解析
 
 use crate::commands::thumbnail_v3_commands::ThumbnailServiceV3State;
+use crate::commands::thumbnail_v4_commands::ThumbnailV4State;
 use crate::core::archive::ArchiveManager;
 use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
 use crate::core::mmap_archive::MmapCache;
@@ -889,12 +890,23 @@ fn handle_thumbnail(state: &ProtocolState, app: &tauri::AppHandle, key: &str) ->
         return build_response(cached.as_ref().to_vec(), "image/webp");
     }
 
+    if let Some(v4_state) = app.try_state::<ThumbnailV4State>() {
+        if let Ok(service) = v4_state.service.try_read() {
+            if let Some(data) = service.lookup_thumbnail(key) {
+                debug!("🖼️ Protocol: V4 命中缩略图, key={key}");
+                state.put_cached_legacy_thumbnail(key, data.clone());
+                state.clear_legacy_thumbnail_missing(key);
+                return build_response(data.as_ref().to_vec(), "image/webp");
+            }
+        }
+    }
+
     if state.is_legacy_thumbnail_known_missing(key) {
         debug!("🖼️ Protocol: 已知缺失缩略图, key={key}");
         return build_error_response_static(StatusCode::NOT_FOUND, b"Thumbnail not found");
     }
 
-    // V3 是唯一数据源：内存缓存（O(1)）→ SQLite DB
+    // V3 fallback：内存缓存（O(1)）→ SQLite DB
     if let Some(v3_state) = app.try_state::<ThumbnailServiceV3State>() {
         if let Some(data) = v3_state.service.lookup_thumbnail(key) {
             debug!("🖼️ Protocol: V3 命中缩略图, key={key}");
@@ -977,6 +989,16 @@ pub fn handle_protocol_request(
             return handle_file_image(&state, request, path_hash);
         }
         warn!("🌐 Protocol: 非法 file 请求路径: {path}");
+        return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
+    }
+
+    if path == "/thumb" {
+        if let Some(query) = uri.query() {
+            if let Some(key) = get_query_param(query, "key") {
+                return handle_thumbnail(&state, app, key.as_ref());
+            }
+        }
+        warn!("🌐 Protocol: 非法 thumb query 请求路径: {}", uri);
         return build_error_response_static(StatusCode::NOT_FOUND, b"Unknown request");
     }
 

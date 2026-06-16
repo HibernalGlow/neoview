@@ -9,7 +9,7 @@ import { get } from 'svelte/store';
 import { folderThumbnailLoader, type WarmupProgress } from '$lib/utils/thumbnail';
 import { addExcludedPath, isPathExcluded, removeExcludedPath } from '$lib/stores/excludedPaths.svelte';
 import { directoryTreeCache } from '../../../utils/directoryTreeCache';
-import { reloadThumbnail } from '$lib/stores/thumbnailStoreV3.svelte';
+import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailRequest } from '$lib/stores/unifiedThumbnailStore.svelte';
 import { showSuccessToast, showErrorToast } from '$lib/utils/toast';
 import {
 	folderTabActions,
@@ -72,29 +72,24 @@ async function handleReloadAllThumbnails() {
 	const path = get(currentPathStore);
 	if (!path || isReloadingThumbnails) return;
 	
-	const items = get(tabItems);
-	if (items.length === 0) {
+	const tabItemsList = get(tabItems);
+	if (tabItemsList.length === 0) {
 		showErrorToast('重载缩略图', '当前目录为空');
 		return;
 	}
 	
 	isReloadingThumbnails = true;
-	reloadThumbnailsProgress = { current: 0, total: items.length };
+	reloadThumbnailsProgress = { current: 0, total: tabItemsList.length };
 	
 	try {
-		let reloadedCount = 0;
-		for (let i = 0; i < items.length; i++) {
-			const item = items[i];
-			reloadThumbnailsProgress = { current: i + 1, total: items.length };
-			
-			try {
-				await reloadThumbnail(item.path, path);
-				reloadedCount++;
-			} catch (e) {
-				console.debug(`重载缩略图失败: ${item.path}`, e);
-			}
-		}
-		showSuccessToast('重载缩略图', `已重载 ${reloadedCount} 个缩略图`);
+		unifiedThumbnailStore.clear();
+		const requests: ThumbnailRequest[] = tabItemsList.map((item) => {
+			const source: ThumbnailSource = { kind: 'file', path: item.path, fileSize: 0, modified: 0 };
+			return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+		});
+		await unifiedThumbnailStore.requestThumbnails(requests, path, 'visible');
+		reloadThumbnailsProgress = { current: tabItemsList.length, total: tabItemsList.length };
+		showSuccessToast('重载缩略图', `已重载 ${tabItemsList.length} 个缩略图`);
 	} catch (e) {
 		console.error('批量重载缩略图失败:', e);
 		showErrorToast('重载缩略图', '操作失败');
@@ -118,20 +113,14 @@ async function handleReloadSelectedThumbnails() {
 	reloadThumbnailsProgress = { current: 0, total: selectedItemsSet.size };
 	
 	try {
-		let reloadedCount = 0;
-		let i = 0;
-		for (const itemPath of selectedItemsSet) {
-			i++;
-			reloadThumbnailsProgress = { current: i, total: selectedItemsSet.size };
-			
-			try {
-				await reloadThumbnail(itemPath, path);
-				reloadedCount++;
-			} catch (e) {
-				console.debug(`重载缩略图失败: ${itemPath}`, e);
-			}
-		}
-		showSuccessToast('重载缩略图', `已重载 ${reloadedCount} 个缩略图`);
+		unifiedThumbnailStore.clear();
+		const requests: ThumbnailRequest[] = [...selectedItemsSet].map((itemPath) => {
+			const source: ThumbnailSource = { kind: 'file', path: itemPath, fileSize: 0, modified: 0 };
+			return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+		});
+		await unifiedThumbnailStore.requestThumbnails(requests, path, 'visible');
+		reloadThumbnailsProgress = { current: selectedItemsSet.size, total: selectedItemsSet.size };
+		showSuccessToast('重载缩略图', `已重载 ${selectedItemsSet.size} 个缩略图`);
 	} catch (e) {
 		console.error('批量重载选中缩略图失败:', e);
 		showErrorToast('重载缩略图', '操作失败');

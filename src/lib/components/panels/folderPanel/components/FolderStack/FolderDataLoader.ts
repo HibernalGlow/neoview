@@ -6,7 +6,7 @@
 import type { FsItem } from '$lib/types';
 import type { FolderLayer } from './FolderStackState.svelte';
 import * as FileSystemAPI from '$lib/api/filesystem';
-import { preloadDirectory } from '$lib/stores/thumbnailStoreV3.svelte';
+import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailRequest } from '$lib/stores/unifiedThumbnailStore.svelte';
 import { isVirtualPath } from '../../stores/folderTabStore';
 import { isArchiveFile } from './folderStackUtils';
 import {
@@ -15,9 +15,12 @@ import {
 } from '../../utils/virtualPathLoader';
 import { directoryTreeCache } from '../../utils/directoryTreeCache';
 
+const BACKGROUND_THUMBNAIL_WARMUP_LIMIT = 48;
+const BACKGROUND_THUMBNAIL_WARMUP_DELAY_MS = 700;
+
 /**
  * 加载目录缩略图 (V3 优化版)
- * 1. 触发后端全目录预加载（低优先级车道）
+ * 1. 触发后端小批量预热（低优先级车道）
  * 2. 预热压缩包列表
  */
 export function loadThumbnailsForLayer(items: FsItem[], path: string): void {
@@ -26,9 +29,17 @@ export function loadThumbnailsForLayer(items: FsItem[], path: string): void {
 		return;
 	}
 
-	// 1. 触发后端 V3 全目录缩略图预加载（异步不阻塞）
-	// 这会将该目录下的文件缩略图缓慢载入 SQLite 缓存
-	void preloadDirectory(path, 1);
+	// 1. 只预热靠前的小批量项目。整目录请求会把大量 key 标记为 inFlight，
+	// 导致可见区无法提权，体感反而更慢。
+	const thumbRequests: ThumbnailRequest[] = items.slice(0, BACKGROUND_THUMBNAIL_WARMUP_LIMIT).map((item) => {
+		const source: ThumbnailSource = { kind: 'file', path: item.path, fileSize: 0, modified: 0 };
+		return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+	});
+	if (thumbRequests.length > 0) {
+		setTimeout(() => {
+			void unifiedThumbnailStore.requestThumbnails(thumbRequests, path, 'background');
+		}, BACKGROUND_THUMBNAIL_WARMUP_DELAY_MS);
+	}
 
 	// 2. 预热压缩包（如果是压缩包内的列表，前端已处理；这里处理文件列表中的压缩包）
 	const topItems = items.slice(0, 20);

@@ -6,7 +6,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { thumbnailCacheStore, type ThumbnailEntry } from '$lib/stores/thumbnailCache.svelte';
+	import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailEntry } from '$lib/stores/unifiedThumbnailStore.svelte';
 	import {
 		bottomThumbnailBarPinned,
 		bottomBarLockState,
@@ -21,9 +21,7 @@
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3, Sparkles } from '@lucide/svelte';
-	import { thumbnailService } from '$lib/services/thumbnailService';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
-	import { getThumbnailUrl } from '$lib/stores/thumbnailStoreV3.svelte';
 	import MagicCard from '../ui/MagicCard.svelte';
 	import {
 		THUMBNAIL_DEBOUNCE_MS,
@@ -65,11 +63,6 @@
 	let isVisible = $state(false);
 	let hideTimeout: number | undefined;
 	let showTimeout: number | undefined;
-	// 版本计数器：每次缩略图更新自增，触发 Svelte 响应式重绘（避免全量 Map 拷贝）
-	let thumbnailVersion = $state(0);
-	let unsubscribeThumbnailCache: (() => void) | null = null;
-	// rAF 句柄：批量合并同帧内的版本自增，避免快速批量到来时触发多次重绘
-	let thumbnailVersionRaf: number | null = null;
 	let thumbnailScrollContainer = $state<HTMLDivElement | null>(null);
 	let isResizing = $state(false);
 	let resizeStartY = 0;
@@ -84,24 +77,21 @@
 	// 缩略图列表滚动进度（用于 HorizontalListSlider）
 	let thumbnailScrollProgress = $state(0);
 
-	// 从全局缓存获取缩略图（优先 thumbnailCacheStore，fallback 到 thumbnailStoreV3）
-	// 读取 thumbnailVersion 让 Svelte 追踪该函数的响应式依赖（版本自增时重新执行）
-	function getThumbnailFromCache(pageIndex: number): ThumbnailEntry | null {
-		void thumbnailVersion; // 建立响应式依赖
-		const cached = thumbnailCacheStore.getThumbnail(pageIndex);
-		if (cached) return cached;
-		
-		// Fallback: 检查 thumbnailStoreV3（FileItem 的缩略图系统）
-		const currentBook = bookStore.currentBook;
-		if (currentBook && currentBook.pages[pageIndex]) {
-			const pagePath = currentBook.pages[pageIndex].path;
-			const v3Url = getThumbnailUrl(pagePath);
-			if (v3Url) {
-				// 返回虚拟 ThumbnailEntry
-				return { url: v3Url, width: 120, height: 120, timestamp: Date.now() };
-			}
-		}
-		return null;
+	// 从统一缩略图缓存获取缩略图
+	function getThumbnailForPage(pageIndex: number, pagePath: string): ThumbnailEntry | null {
+		const book = bookStore.currentBook;
+		if (!book) return null;
+
+		const source: ThumbnailSource = {
+			kind: 'bookPage',
+			bookPath: book.path,
+			pageIndex,
+			pagePath,
+			fileSize: book.pages[pageIndex]?.size ?? 0,
+		};
+		const key = generateThumbKey(source, 256);
+		const entry = unifiedThumbnailStore.getEntry(key);
+		return entry && entry.status === 'ready' ? entry : null;
 	}
 
 	// 响应钉住状态、锁定状态和 open 状态
@@ -293,23 +283,41 @@
 	const PRELOAD_RANGE = 20;
 
 	/**
-	 * 触发缩略图加载（使用 thumbnailService）
-	 * 视频缩略图通过 getThumbnailFromCache 自动 fallback 到 thumbnailStoreV3
+	 * 触发缩略图加载（使用 unifiedThumbnailStore）
 	 */
 	function loadVisibleThumbnails() {
-		const currentBook = bookStore.currentBook;
-		if (!currentBook) return;
-
-		// 【关键】如果正在等待主图，跳过加载
-		if (thumbnailService.isWaitingForMainImage()) {
-			console.log('🖼️ BottomThumbnailBar: Skipping load, waiting for main image');
-			return;
-		}
+		const book = bookStore.currentBook;
+		if (!book) return;
 
 		const centerIndex = bookStore.currentPageIndex;
-		// 直接调用 thumbnailService，它内部会处理中央优先和去重
-		// 视频缩略图通过渲染时的 getThumbnailFromCache fallback 处理
-		thumbnailService.loadThumbnails(centerIndex);
+		const totalPages = book.pages.length;
+		const start = Math.max(0, centerIndex - PRELOAD_RANGE);
+		const end = Math.min(totalPages - 1, centerIndex + PRELOAD_RANGE);
+		const visibleIndices: number[] = [];
+		for (let i = start; i <= end; i++) {
+			visibleIndices.push(i);
+		}
+
+		// 构建请求项
+		const items = [];
+		for (const idx of visibleIndices) {
+			const page = book.pages[idx];
+			if (!page) continue;
+			const source: ThumbnailSource = {
+				kind: 'bookPage',
+				bookPath: book.path,
+				pageIndex: idx,
+				pagePath: page.innerPath || page.path,
+				fileSize: page.size ?? 0,
+			};
+			const key = generateThumbKey(source, 256);
+			if (!unifiedThumbnailStore.hasThumbnail(key)) {
+				items.push({ key, source, maxSize: 256 });
+			}
+		}
+		if (items.length > 0) {
+			unifiedThumbnailStore.requestThumbnails(items, `reader-bar-${book.path}`, 'reader-visible', centerIndex);
+		}
 	}
 
 	// 滚动处理防抖
@@ -335,11 +343,10 @@
 
 	/**
 	 * 滚动时加载可见缩略图
-	 * 视频缩略图通过 getThumbnailFromCache 自动 fallback 到 thumbnailStoreV3
 	 */
 	function loadVisibleThumbnailsOnScroll(container: HTMLElement) {
-		const currentBook = bookStore.currentBook;
-		if (!currentBook) return;
+		const book = bookStore.currentBook;
+		if (!book) return;
 
 		const containerRect = container.getBoundingClientRect();
 		const thumbnailWidth = 80; // 估算缩略图宽度
@@ -349,13 +356,33 @@
 		const visibleWidth = containerRect.width;
 		const centerScrollPos = scrollLeft + visibleWidth / 2;
 		const centerIdx = Math.floor(centerScrollPos / thumbnailWidth);
-		
+
 		// 限制在有效范围内
-		const totalPages = currentBook.pages.length;
+		const totalPages = book.pages.length;
 		const safeCenter = Math.max(0, Math.min(totalPages - 1, centerIdx));
-		
-		// 直接调用 thumbnailService 加载
-		thumbnailService.loadThumbnails(safeCenter);
+
+		// 构建请求项
+		const start = Math.max(0, safeCenter - PRELOAD_RANGE);
+		const end = Math.min(totalPages - 1, safeCenter + PRELOAD_RANGE);
+		const items = [];
+		for (let idx = start; idx <= end; idx++) {
+			const page = book.pages[idx];
+			if (!page) continue;
+			const source: ThumbnailSource = {
+				kind: 'bookPage',
+				bookPath: book.path,
+				pageIndex: idx,
+				pagePath: page.innerPath || page.path,
+				fileSize: page.size ?? 0,
+			};
+			const key = generateThumbKey(source, 256);
+			if (!unifiedThumbnailStore.hasThumbnail(key)) {
+				items.push({ key, source, maxSize: 256 });
+			}
+		}
+		if (items.length > 0) {
+			unifiedThumbnailStore.requestThumbnails(items, `reader-bar-${book.path}`, 'reader-visible', safeCenter);
+		}
 	}
 
 	function scrollCurrentThumbnailIntoCenter() {
@@ -374,10 +401,10 @@
 		thumbnailScrollContainer.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
 	}
 
-	function getThumbnailStyle(pageIndex: number): string {
+	function getThumbnailStyle(pageIndex: number, pagePath: string): string {
 		const containerHeight = Math.max(40, $bottomThumbnailBarHeight - 40);
 		const minWidth = 32;
-		const thumb = getThumbnailFromCache(pageIndex);
+		const thumb = getThumbnailForPage(pageIndex, pagePath);
 		if (!thumb) {
 			const placeholderWidth = Math.max(containerHeight * 0.6, minWidth);
 			return `height:${containerHeight}px;min-width:${placeholderWidth}px;`;
@@ -389,35 +416,14 @@
 	}
 
 	onMount(async () => {
-		// 初始化缩略图服务
-		await thumbnailService.init();
-
-		// 订阅全局缩略图缓存（仅递增版本号，避免全量 Map 拷贝）
-		unsubscribeThumbnailCache = thumbnailCacheStore.subscribe(() => {
-			if (!thumbnailVersionRaf) {
-				thumbnailVersionRaf = requestAnimationFrame(() => {
-					thumbnailVersionRaf = null;
-					thumbnailVersion += 1;
-				});
-			}
-		});
+		// 初始化统一缩略图服务
+		await unifiedThumbnailStore.init();
 
 		// 初始化时触发缩略图加载
 		scheduleLoadVisibleThumbnails();
 	});
 
 	onDestroy(() => {
-		// 销毁缩略图服务
-		thumbnailService.destroy();
-
-		if (unsubscribeThumbnailCache) {
-			unsubscribeThumbnailCache();
-			unsubscribeThumbnailCache = null;
-		}
-		if (thumbnailVersionRaf) {
-			cancelAnimationFrame(thumbnailVersionRaf);
-			thumbnailVersionRaf = null;
-		}
 		if (loadThumbnailsDebounce) {
 			clearTimeout(loadThumbnailsDebounce);
 			loadThumbnailsDebounce = null;
@@ -465,15 +471,16 @@
 	$effect(() => {
 		const currentBook = bookStore.currentBook;
 		if (currentBook && currentBook.path !== lastBookPath) {
+			const previousBookPath = lastBookPath;
 			lastBookPath = currentBook.path;
 			lastThumbnailRange = null;
 			// 【关键】清空加载状态，防止旧任务继续执行
 			loadingIndices.clear();
 			noThumbnailPaths.clear();
-			// 【关键】通知 thumbnailService 书籍变化，设置等待主图标志
-			thumbnailService.handleBookChange(currentBook.path);
-			// 注意：不再在这里调用 scheduleLoadVisibleThumbnails
-			// 缩略图加载会在主图完成后由 thumbnailService.notifyMainImageReady 触发
+			// 取消旧书籍的缩略图请求上下文
+			if (previousBookPath) {
+				unifiedThumbnailStore.cancelContext(`reader-bar-${previousBookPath}`);
+			}
 		}
 	});
 
@@ -666,13 +673,13 @@
 										{status === 'done' ? 'ring-primary ring-2' : ''}
 										{status === 'failed' ? 'ring-destructive ring-2' : ''}
 										hover:border-primary/50"
-									style={getThumbnailStyle(originalIndex)}
+									style={getThumbnailStyle(originalIndex, page.path)}
 									onclick={() => jumpToPage(originalIndex)}
 									data-page-index={originalIndex}
 								>
-									{#if getThumbnailFromCache(originalIndex)}
+									{#if getThumbnailForPage(originalIndex, page.path)}
 										<img
-											src={getThumbnailFromCache(originalIndex)?.url}
+											src={getThumbnailForPage(originalIndex, page.path)?.url}
 											alt="Page {originalIndex + 1}"
 											class="h-full w-full object-contain"
 											style="object-position: center;"

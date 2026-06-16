@@ -16,7 +16,7 @@ import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError }
 import { readPageSourceV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
 import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
-import { thumbnailService } from '$lib/services/thumbnailService';
+
 
 /**
  * 更新缓存命中时的延迟追踪
@@ -324,7 +324,6 @@ export class ImageLoaderCore {
 			}
 			
 			// 【关键】通知缩略图服务主图已就绪
-			thumbnailService.notifyMainImageReady();
 			return {
 				url: item.url,
 				blob: item.blob,
@@ -335,8 +334,6 @@ export class ImageLoaderCore {
 
 		// 否则使用最高优先级加载
 		const result = await this.loadPage(pageIndex, LoadPriority.CRITICAL);
-		// 【关键】主图加载完成，通知缩略图服务开始加载
-		thumbnailService.notifyMainImageReady();
 		// 触发预解码
 		this.schedulePreDecode(pageIndex);
 		return result;

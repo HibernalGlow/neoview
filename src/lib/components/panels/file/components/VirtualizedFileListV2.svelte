@@ -3,13 +3,14 @@
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
-	// V3 缩略图系统（复刻 NeeView 架构）
+	// 统一缩略图系统
 	import {
-		requestVisibleThumbnailsDelta,
-		requestVisibleThumbnailsDeltaWithPrefetch,
-		hasThumbnail,
-		getThumbnailUrl
-	} from '$lib/stores/thumbnailStoreV3.svelte';
+		unifiedThumbnailStore,
+		generateThumbKey,
+		getThumbProtocolUrl,
+		type ThumbnailSource,
+		type ThumbnailRequest
+	} from '$lib/stores/unifiedThumbnailStore.svelte';
 	// 保留旧的 thumbnailManager 用于兼容
 	import { thumbnailManager } from '$lib/utils/thumbnailManager';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
@@ -79,6 +80,23 @@
 	let stablePrefetchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const ARCHIVE_REGEX = /\.(zip|cbz|rar|cbr|7z|cb7)$/i;
+	const PREFETCH_VIEWPORTS = 1;
+	const MAX_STABLE_PREFETCH_ITEMS = 64;
+
+	// 辅助：从路径列表构造 ThumbnailRequest[]
+	function pathsToThumbRequests(paths: string[]): ThumbnailRequest[] {
+		return paths.map((p) => {
+			const source: ThumbnailSource = { kind: 'file', path: p, fileSize: 0, modified: 0 };
+			return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+		});
+	}
+
+	// 辅助：从路径获取缩略图 URL（通过 key 查找）
+	function getThumbUrl(path: string): string | null {
+		const source: ThumbnailSource = { kind: 'file', path, fileSize: 0, modified: 0 };
+		const key = generateThumbKey(source, 256);
+		return unifiedThumbnailStore.getThumbnailUrl(key);
+	}
 
 	// 滚动位置缓存
 	const scrollPositions = new Map<string, number>();
@@ -238,8 +256,6 @@
 		return { paths, set };
 	});
 
-	// 保留原有名称以兼容 scheduleStablePrefetch 调用（zero-cost，只是别名）
-	const thumbnailCandidatePaths = $derived(thumbnailCandidates.paths);
 	const thumbnailCandidateSet = $derived(thumbnailCandidates.set);
 
 	function collectVisiblePathsCenterFirst(startIndex: number, endIndex: number): string[] {
@@ -271,7 +287,43 @@
 		return result;
 	}
 
-	function scheduleStablePrefetch(visiblePaths: string[]) {
+	function collectPrefetchPaths(startIndex: number, endIndex: number, visiblePaths: string[]): string[] {
+		const visibleSet = new Set(visiblePaths);
+		const visibleCount = Math.max(1, endIndex - startIndex + 1);
+		const prefetchSpan = visibleCount * PREFETCH_VIEWPORTS;
+		const prefetchStart = Math.max(0, startIndex - prefetchSpan);
+		const prefetchEnd = Math.min(items.length - 1, endIndex + prefetchSpan);
+		const center = Math.floor((startIndex + endIndex) / 2);
+		const result: string[] = [];
+		const seen = new Set<string>();
+
+		for (let offset = 0; offset <= Math.max(center - prefetchStart, prefetchEnd - center); offset += 1) {
+			const left = center - offset;
+			const right = center + offset;
+
+			if (left >= prefetchStart) {
+				const item = items[left];
+				if (item && thumbnailCandidateSet.has(item.path) && !visibleSet.has(item.path) && !seen.has(item.path)) {
+					seen.add(item.path);
+					result.push(item.path);
+				}
+			}
+
+			if (right <= prefetchEnd && right !== left) {
+				const item = items[right];
+				if (item && thumbnailCandidateSet.has(item.path) && !visibleSet.has(item.path) && !seen.has(item.path)) {
+					seen.add(item.path);
+					result.push(item.path);
+				}
+			}
+
+			if (result.length >= MAX_STABLE_PREFETCH_ITEMS) break;
+		}
+
+		return result;
+	}
+
+	function scheduleStablePrefetch(startIndex: number, endIndex: number, visiblePaths: string[]) {
 		if (stablePrefetchTimer) {
 			clearTimeout(stablePrefetchTimer);
 		}
@@ -279,10 +331,12 @@
 		stablePrefetchTimer = setTimeout(() => {
 			stablePrefetchTimer = null;
 			scheduleIdleTask(() => {
-				void requestVisibleThumbnailsDeltaWithPrefetch(
-					visiblePaths,
-					thumbnailCandidatePaths,
-					currentPath
+				const allPaths = collectPrefetchPaths(startIndex, endIndex, visiblePaths);
+				if (allPaths.length === 0) return;
+				void unifiedThumbnailStore.requestThumbnails(
+					pathsToThumbRequests(allPaths),
+					currentPath,
+					'prefetch'
 				);
 			}, 500);
 		}, 180);
@@ -301,15 +355,16 @@
 		const visiblePaths = collectVisiblePathsCenterFirst(startIndex, endIndex);
 		if (visiblePaths.length === 0) return;
 
-		// V3: 调用后端，后端处理一切
-		requestVisibleThumbnailsDelta(
-			visiblePaths,
+		// 统一缩略图系统: 请求可见区域缩略图
+		unifiedThumbnailStore.requestThumbnails(
+			pathsToThumbRequests(visiblePaths),
 			currentPath,
+			'visible',
 			center
 		);
 
 		// 稳态触发增量预取（滚动停留后）
-		scheduleStablePrefetch(visiblePaths);
+		scheduleStablePrefetch(startIndex, endIndex, visiblePaths);
 	}, 24); // 24ms debounce（约1.5帧，兼顾响应与稳定）
 
 	function scheduleVisibleRangeChange() {
@@ -547,7 +602,7 @@
 							<div style="flex: 1; padding: 4px; box-sizing: border-box;">
 								<FileItemCard
 									{item}
-									thumbnail={getThumbnailUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
+									thumbnail={getThumbUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}
 									viewMode={viewMode === 'thumbnails' || viewMode === 'grid'
 										? 'thumbnail'
 										: (viewMode as 'list' | 'content' | 'banner' | 'thumbnail')}

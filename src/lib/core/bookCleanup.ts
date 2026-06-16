@@ -14,7 +14,7 @@
 
 import { clearTempfileCache } from '$lib/components/viewer/flow/imageReader';
 import { thumbnailPersistence } from '$lib/core/cache';
-import { thumbnailCacheStore } from '$lib/stores/thumbnailCache.svelte';
+
 
 /**
  * 清理当前书籍占用的所有内存资源
@@ -45,12 +45,7 @@ export function cleanupBookResources(): void {
 		console.warn('🧹 [BookCleanup] tempfileCache cleanup failed:', e);
 	}
 
-	// 5. 缩略图缓存: 清空并释放 blob: URLs
-	try {
-		thumbnailCacheStore.clear();
-	} catch (e) {
-		console.warn('🧹 [BookCleanup] thumbnailCacheStore cleanup failed:', e);
-	}
+	// 5. 缩略图缓存: 由 unifiedThumbnailStore 管理
 
 	const elapsed = Math.round(performance.now() - startTime);
 	console.log(`🧹 [BookCleanup] 资源清理完成 (${elapsed}ms)`);

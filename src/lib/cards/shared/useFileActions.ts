@@ -645,11 +645,8 @@ export function createSystemActions(): SystemActions {
 
 	const handleReloadThumbnail = async (item: FsItem) => {
 		try {
-			const { reloadThumbnail } = await import('$lib/stores/thumbnailStoreV3.svelte');
-			// 获取父目录作为 currentDir
-			const lastSep = Math.max(item.path.lastIndexOf('/'), item.path.lastIndexOf('\\'));
-			const parentDir = lastSep > 0 ? item.path.substring(0, lastSep) : '';
-			await reloadThumbnail(item.path, parentDir);
+			const { unifiedThumbnailStore } = await import('$lib/stores/unifiedThumbnailStore.svelte');
+			unifiedThumbnailStore.clear();
 			showSuccessToast('缩略图已重载', item.name);
 		} catch (err) {
 			showErrorToast('重载失败', err instanceof Error ? err.message : String(err));

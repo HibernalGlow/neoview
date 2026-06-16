@@ -24,7 +24,7 @@ import { getFrameSnapshot, reportViewport, type FrameSnapshot, type FrameImageIn
 import { getArchiveImageUrl, getFileImageUrl, registerBookPath, resolveProtocolBaseUrl } from '$lib/api/imageProtocol';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
-import { thumbnailService } from '$lib/services/thumbnailService';
+
 
 // ============================================================================
 // 类型定义
@@ -310,9 +310,7 @@ export function createImageStore() {
       }
       state.currentFrame = snapshot;
       state.loading = false;
-      if (snapshot.ready && snapshot.images.length > 0) {
-        thumbnailService.notifyMainImageReady();
-      }
+
     } catch (err) {
       if (myToken === pendingRequestToken) {
         state.error = String(err);

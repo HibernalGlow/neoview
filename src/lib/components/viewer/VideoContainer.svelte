@@ -32,7 +32,7 @@
 	import type { Page } from '$lib/types';
 	import { getArchiveImageUrl } from '$lib/api/imageProtocol';
 	import { getBookHash } from '$lib/components/viewer/flow/imageReader';
-	import { thumbnailService } from '$lib/services/thumbnailService';
+
 
 	// 视频操作事件监听器
 	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
@@ -93,12 +93,10 @@
 		}
 		videoUrl = url;
 		videoUrlRevokeNeeded = revokeNeeded;
-		thumbnailService.notifyMainImageReady();
 	}
 
 	function setFrontendAnimatedUrl(url: string) {
 		frontendAnimatedUrl = url;
-		thumbnailService.notifyMainImageReady();
 	}
 
 	function shouldOpenAnimatedAsVideo(filename: string): boolean {

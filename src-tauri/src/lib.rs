@@ -27,6 +27,7 @@ use commands::page_commands::PageManagerState;
 use commands::pyo3_upscale_commands::PyO3UpscalerState;
 use commands::task_queue_commands::BackgroundSchedulerState;
 use commands::thumbnail_commands::ThumbnailState;
+use commands::thumbnail_v4_commands::ThumbnailV4State;
 use commands::upscale_commands::UpscaleManagerState;
 use commands::upscale_service_commands::UpscaleServiceState;
 use commands::upscale_settings_commands::UpscaleSettingsState;
@@ -248,12 +249,25 @@ pub fn run() {
             ));
             let blob_registry = Arc::new(BlobRegistry::new(1000));
 
+            // 🖼️ 在移入 ThumbnailState 之前先 clone，供 V4 服务使用
+            let v4_db = Arc::clone(&thumbnail_db);
+            let v4_generator = Arc::clone(&thumbnail_generator);
+
             app.manage(ThumbnailState {
                 db: thumbnail_db,
                 generator: thumbnail_generator,
                 blob_registry,
             });
             log::info!("🖼️ ThumbnailState 初始化完成");
+
+            // 🖼️ 初始化 ThumbnailV4State（统一缩略图服务）
+            let v4_service = Arc::new(tokio::sync::RwLock::new(
+                core::thumbnail_service_v4::UnifiedThumbnailService::new(v4_generator, v4_db),
+            ));
+            app.manage(ThumbnailV4State {
+                service: v4_service,
+            });
+            log::info!("🖼️ ThumbnailV4State 初始化完成");
 
             Ok(())
         })
@@ -490,6 +504,11 @@ pub fn run() {
             commands::reload_thumbnail_v3,
             commands::clear_failed_thumbnails_v3,
             commands::get_failed_count_v3,
+            // Thumbnail V4 commands (统一缩略图服务)
+            commands::thumb_v4_request,
+            commands::thumb_v4_cancel_context,
+            commands::thumb_v4_get_url,
+            commands::thumb_v4_queue_status,
             // EMM JSON 缓存命令
             commands::thumbnail_commands::emm_commands::save_emm_json,
             commands::thumbnail_commands::emm_commands::batch_save_emm_json,

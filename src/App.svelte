@@ -49,11 +49,8 @@
 	import { updateUpscaleSettings } from '$lib/utils/upscale/settings';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
 	import { deleteArchiveEntry } from '$lib/api/archive';
-	// V3 缩略图系统（复刻 NeeView 架构）
-	import {
-		initThumbnailServiceV3,
-		cleanup as cleanupThumbnailService
-	} from '$lib/stores/thumbnailStoreV3.svelte';
+	// 统一缩略图系统
+	import { unifiedThumbnailStore } from '$lib/stores/unifiedThumbnailStore.svelte';
 	// 页面尺寸扫描事件监听
 	import {
 		initDimensionScanListener,
@@ -285,10 +282,9 @@
 		keyBindingsStore.setContexts(['global', 'viewer']);
 
 		try {
-			// V3 缩略图系统初始化
-			const thumbnailPath = 'D:\\temp\\neoview';
-			await initThumbnailServiceV3(thumbnailPath, 256);
-			console.log('✅ ThumbnailServiceV3 初始化成功');
+			// 统一缩略图系统初始化
+			await unifiedThumbnailStore.init();
+			console.log('✅ UnifiedThumbnailStore 初始化成功');
 		} catch (error) {
 			console.error('❌ 缩略图初始化失败:', error);
 		}

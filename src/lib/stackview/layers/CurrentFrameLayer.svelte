@@ -164,6 +164,13 @@
 	// 本地存储图片实际尺寸（从 onload 事件获取）
 	let loadedImageSize = $state<{ width: number; height: number }>({ width: 0, height: 0 });
 
+	$effect(() => {
+		const currentUrl = frame.images[0]?.url ?? '';
+		if (currentUrl) {
+			loadedImageSize = { width: 0, height: 0 };
+		}
+	});
+
 	// 计算 transform（仅包含旋转；手动缩放 scale 已乘入 getImageDisplayStyle 的像素尺寸，
 	// 不再用 CSS transform scale，否则 overflow:auto 容器的可滚动区域不会随之扩大）
 	let transformStyle = $derived.by(() => {
@@ -176,14 +183,16 @@
 	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
 	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
 	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
-		const imgWidth = img.width ?? 0;
-		const imgHeight = img.height ?? 0;
+		const imgWidth = img.width || imageSize.width || loadedImageSize.width || 0;
+		const imgHeight = img.height || imageSize.height || loadedImageSize.height || 0;
 		const frameScale = img.scale ?? 1.0;
 		const splitFactor = img.splitHalf ? 2 : 1;
 		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';
 
 		if (!imgWidth || !imgHeight) {
-			return `max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: ${objectFit};`;
+			const fallbackMaxWidth = Math.max(1, Math.round(viewportSize.width || 0));
+			const fallbackMaxHeight = Math.max(1, Math.round(viewportSize.height || 0));
+			return `max-width: ${fallbackMaxWidth}px; max-height: ${fallbackMaxHeight}px; width: auto; height: auto; object-fit: ${objectFit};`;
 		}
 
 		const finalWidth = imgWidth * frameScale * scale * splitFactor;
@@ -243,7 +252,7 @@
 			class="scroll-frame-content"
 			style:transform={transformStyle}
 		>
-			{#each frame.images as img, i (img.physicalIndex)}
+			{#each frame.images as img, i (i)}
 				<FrameImageWithOverlay
 					pageIndex={img.physicalIndex}
 					url={img.url}
@@ -420,5 +429,12 @@
 	.scroll-frame-container.page-transition-flip-enter-prev.active {
 		transform: perspective(1000px) rotateY(0deg);
 		opacity: 1;
+	}
+
+	.scroll-frame-container.frame-single .scroll-frame-content,
+	.scroll-frame-container.frame-double .scroll-frame-content,
+	.scroll-frame-container.hover-scroll-mode .scroll-frame-content {
+		width: max-content;
+		height: max-content;
 	}
 </style>

@@ -193,9 +193,12 @@
 <style>
   .image-container {
     position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
+    width: fit-content;
+    height: fit-content;
+    max-width: none;
+    max-height: none;
+    display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     background-size: cover;

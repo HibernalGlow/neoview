@@ -34,9 +34,9 @@ export interface PageTransitionSettings {
 
 // 默认设置
 export const defaultTransitionSettings: PageTransitionSettings = {
-  enabled: true,
-  type: 'fade',
-  duration: 200,
+  enabled: false,
+  type: 'none',
+  duration: 0,
   easing: 'easeOutQuad',
 };
 

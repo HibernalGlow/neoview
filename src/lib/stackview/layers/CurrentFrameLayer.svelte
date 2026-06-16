@@ -164,12 +164,6 @@
 	// 本地存储图片实际尺寸（从 onload 事件获取）
 	let loadedImageSize = $state<{ width: number; height: number }>({ width: 0, height: 0 });
 
-	// 优先使用 loadedImageSize，其次使用 props 传入的 imageSize
-	let effectiveImageSize = $derived({
-		width: loadedImageSize.width || imageSize.width,
-		height: loadedImageSize.height || imageSize.height
-	});
-
 	// 计算 transform（仅包含旋转；手动缩放 scale 已乘入 getImageDisplayStyle 的像素尺寸，
 	// 不再用 CSS transform scale，否则 overflow:auto 容器的可滚动区域不会随之扩大）
 	let transformStyle = $derived.by(() => {
@@ -182,98 +176,20 @@
 	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
 	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
 	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
-		// 使用图片自带的尺寸和 scale
 		const imgWidth = img.width ?? 0;
 		const imgHeight = img.height ?? 0;
-		const imgScale = img.scale ?? 1.0;
-		
-		// 应用 scale 后的显示尺寸
-		const displayWidth = imgWidth * imgScale;
-		const displayHeight = imgHeight * imgScale;
-		
-		let vp = viewportSize;
-		
-		if (!displayWidth || !displayHeight || !vp.width || !vp.height) {
-			// 没有尺寸信息时使用默认 contain 模式
-			return 'max-width: 100%; max-height: 100%;';
-		}
-		
-		// 双页模式：计算组合后的总尺寸，然后整体适应视口
-		if (layout === 'double' && frame.images.length === 2) {
-			// 计算两张图片的总宽度和最大高度（应用 scale 后）
-			const img1 = frame.images[0];
-			const img2 = frame.images[1];
-			const w1 = (img1.width ?? 0) * (img1.scale ?? 1);
-			const h1 = (img1.height ?? 0) * (img1.scale ?? 1);
-			const w2 = (img2.width ?? 0) * (img2.scale ?? 1);
-			const h2 = (img2.height ?? 0) * (img2.scale ?? 1);
-			
-			const totalWidth = w1 + w2;
-			const maxHeight = Math.max(h1, h2);
-			
-			if (totalWidth > 0 && maxHeight > 0) {
-				// 计算整体缩放比例以适应视口，再乘以手动缩放系数
-				const scaleX = vp.width / totalWidth;
-				const scaleY = vp.height / maxHeight;
-				const frameScale = Math.min(scaleX, scaleY) * scale;
-				
-				// 应用帧缩放到当前图片
-				const finalWidth = displayWidth * frameScale;
-				const finalHeight = displayHeight * frameScale;
-				
-				// 必须添加 max-width/max-height: none 覆盖 FrameImage 的默认限制
-				return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: fill;`;
-			}
-		}
-		
-		// 单页模式：各 zoomMode 先计算适配视口的基准尺寸，再乘以手动缩放系数 scale
-		const imgAspect = displayWidth / displayHeight;
-		
-		// 分割图倍率补偿 (图片标签渲染全宽，但逻辑宽度只有一半)
+		const frameScale = img.scale ?? 1.0;
 		const splitFactor = img.splitHalf ? 2 : 1;
+		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';
 
-		switch (zoomMode) {
-			case 'fit':
-			case 'fitLeftAlign':
-			case 'fitRightAlign': {
-				const vpAspect = vp.width / vp.height;
-				if (imgAspect > vpAspect) {
-					const height = vp.width / imgAspect;
-					return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
-				} else {
-					const width = vp.height * imgAspect;
-					return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
-				}
-			}
-			
-			case 'fill': {
-				const vpAspect = vp.width / vp.height;
-				if (imgAspect > vpAspect) {
-					const width = vp.height * imgAspect;
-					return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
-				} else {
-					const height = vp.width / imgAspect;
-					return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
-				}
-			}
-			
-			case 'fitWidth': {
-				const height = vp.width / imgAspect;
-				return `width: ${vp.width * splitFactor * scale}px; height: ${height * scale}px; max-width: none; max-height: none;`;
-			}
-			
-			case 'fitHeight': {
-				const width = vp.height * imgAspect;
-				return `width: ${width * splitFactor * scale}px; height: ${vp.height * scale}px; max-width: none; max-height: none;`;
-			}
-			
-			case 'original': {
-				return `width: ${displayWidth * splitFactor * scale}px; height: ${displayHeight * scale}px; max-width: none; max-height: none;`;
-			}
-			
-			default:
-				return 'max-width: 100%; max-height: 100%;';
+		if (!imgWidth || !imgHeight) {
+			return `max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: ${objectFit};`;
 		}
+
+		const finalWidth = imgWidth * frameScale * scale * splitFactor;
+		const finalHeight = imgHeight * frameScale * scale;
+
+		return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: ${objectFit};`;
 	}
 
 	// 图片加载完成时更新本地尺寸

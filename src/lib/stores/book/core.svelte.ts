@@ -424,10 +424,8 @@ class BookStore {
         // 【修复】直接 buildFrame 避免 framePositionForIndex 错误逆推导致 currentPosition 偏移
         pageFrameStore.buildFrame({ index, part: 0 });
 
-        // 异步通知后端（触发预加载）
-        bookApi.navigateToPage(index).catch(err => {
-          console.warn('⚠️ 后端导航通知失败:', err);
-        });
+        // 等待后端同步 PageManager，确保后续 frame snapshot 读取到正确页码
+        await bookApi.navigateToPage(index);
 
         // 异步更新面板信息
         this.syncInfoPanelBookInfo();

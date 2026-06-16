@@ -182,10 +182,16 @@ pub async fn navigate_to_page(
     page_index: usize,
     book_state: State<'_, Mutex<BookManager>>,
     image_state: State<'_, Mutex<ImageLoader>>,
+    page_state: State<'_, PageManagerState>,
 ) -> Result<(), String> {
-    let mut manager = book_state.lock().map_err(|e| e.to_string())?;
-    let _image_loader = image_state.lock().map_err(|e| e.to_string())?;
-    manager.navigate_to_page(page_index)?;
+    {
+        let mut manager = book_state.lock().map_err(|e| e.to_string())?;
+        let _image_loader = image_state.lock().map_err(|e| e.to_string())?;
+        manager.navigate_to_page(page_index)?;
+    }
+
+    let mut page_manager = page_state.manager.write().await;
+    page_manager.goto_page(page_index).await?;
     // 预加载已由 PageManager 处理
     Ok(())
 }

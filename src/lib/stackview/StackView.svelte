@@ -39,9 +39,7 @@
 		setZoomLevel,
 		viewerPageInfoVisible,
 		currentPageShouldSplit,
-		subPageIndex,
-		pageLeft,
-		pageRight
+		subPageIndex
 	} from '$lib/stores';
 	import { bookContextManager, type BookContext } from '$lib/stores/bookContext.svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -301,6 +299,7 @@
 
 	// 分割状态：当前显示的半边（仅在单页模式下启用分割时有效）
 	let currentSplitHalf = $state<'left' | 'right' | null>(null);
+	let viewportRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 
 	const animatedWebpProbeCache = new Map<string, boolean>();
@@ -594,6 +593,107 @@
 		}
 	}
 
+	function buildFrameSnapshotParams(): GetFrameSnapshotParams | null {
+		if (!bookStore.currentBook || !bookStore.currentPage || isPanorama) {
+			return null;
+		}
+
+		return {
+			pageMode,
+			readOrder: direction,
+			splitHorizontal: splitHorizontalPages,
+			widePage: treatHorizontalAsDoublePage,
+			singleFirst: singleFirstPage,
+			singleLast: singleLastPage,
+			divideRate: 1.0,
+			splitHalf: currentSplitHalf ?? undefined
+		};
+	}
+
+	function shouldSplitTargetPage(index: number): boolean {
+		if (!splitHorizontalPages || pageMode !== 'single') {
+			return false;
+		}
+
+		const book = bookStore.currentBook;
+		const page = book?.pages?.[index];
+		if (!book || !page) {
+			return false;
+		}
+
+		const width = page.width ?? 0;
+		const height = page.height ?? 0;
+		return width > 0 && height > 0 && width > height;
+	}
+
+	function showBoundaryToast(message: string) {
+		const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
+		if (enableBoundaryToast) {
+			showInfoToast(message);
+		}
+	}
+
+	async function navigateReader(dir: 'prev' | 'next') {
+		const book = bookStore.currentBook;
+		const page = bookStore.currentPage;
+		if (!book || !page) {
+			return;
+		}
+
+		const currentIndex = bookStore.currentPageIndex;
+		const currentSub = $subPageIndex;
+		const snapshot = imageStore.state.currentFrame;
+		const splitActive = isCurrentPageSplit;
+
+		if (dir === 'prev' && splitActive && currentSub === 1) {
+			subPageIndex.set(0);
+			return;
+		}
+
+		if (dir === 'next' && splitActive && currentSub === 0) {
+			subPageIndex.set(1);
+			return;
+		}
+
+		const step = Math.max(snapshot?.step ?? pageStep, 1);
+		const maxIndex = Math.max(bookStore.totalPages - 1, 0);
+		const targetIndex =
+			dir === 'next'
+				? Math.min(currentIndex + step, maxIndex)
+				: Math.max(currentIndex - step, 0);
+
+		const canMove = dir === 'next' ? (snapshot?.canNext ?? true) : (snapshot?.canPrev ?? true);
+		if (!canMove || targetIndex === currentIndex) {
+			showBoundaryToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+			return;
+		}
+
+		await bookStore.navigateToPage(targetIndex);
+
+		if (dir === 'prev' && shouldSplitTargetPage(targetIndex)) {
+			subPageIndex.set(1);
+			return;
+		}
+
+		subPageIndex.set(0);
+	}
+
+	function scheduleViewportFrameRefresh() {
+		if (viewportRefreshTimer !== null) {
+			clearTimeout(viewportRefreshTimer);
+		}
+
+		const params = buildFrameSnapshotParams();
+		if (!params) {
+			return;
+		}
+
+		viewportRefreshTimer = setTimeout(() => {
+			viewportRefreshTimer = null;
+			void imageStore.loadCurrentPage(params, true);
+		}, 80);
+	}
+
 	// 计算翻页步进：从后端帧快照中读取
 	let pageStep = $derived.by(() => {
 		const snapshot = imageStore.state.currentFrame;
@@ -616,15 +716,13 @@
 	// 所有翻页入口最终都调用 pageLeft/pageRight，确保逻辑一致
 
 	function handlePrevPage() {
-		// 日志已移除
 		resetScrollPosition();
-		void pageLeft();
+		void navigateReader('prev');
 	}
 
 	function handleNextPage() {
-		// 日志已移除
 		resetScrollPosition();
-		void pageRight();
+		void navigateReader('next');
 	}
 
 	// 处理全景模式滚动事件 - 触发预加载
@@ -750,18 +848,10 @@
 				panoramaStore.loadPanorama(pageIndex, currentPageMode);
 			} else {
 				panoramaStore.setEnabled(false);
-				// 【后端主导架构】请求后端 frame snapshot
-				const params: GetFrameSnapshotParams = {
-					pageMode: currentPageMode,
-					readOrder: direction,
-					splitHorizontal: splitHorizontalPages,
-					widePage: treatHorizontalAsDoublePage,
-					singleFirst: singleFirstPage,
-					singleLast: singleLastPage,
-					divideRate: 1.0,
-					splitHalf: currentSplitHalf ?? undefined,
-				};
-				imageStore.loadCurrentPage(params, modeChanged);
+				const params = buildFrameSnapshotParams();
+				if (params) {
+					imageStore.loadCurrentPage(params, modeChanged);
+				}
 			}
 		}
 	});
@@ -776,6 +866,7 @@
 				// 【后端主导架构】上报视口尺寸到后端
 				const dpr = window.devicePixelRatio || 1;
 				imageStore.reportViewportSize(rect.width, rect.height, dpr, isPanorama ? 'panorama' : pageMode);
+				scheduleViewportFrameRefresh();
 			}
 		}
 	}
@@ -889,6 +980,10 @@
 		upscaleStore.destroy();
 		slideshowStore.destroy();
 		lastNonEmptyFrame = null;
+		if (viewportRefreshTimer !== null) {
+			clearTimeout(viewportRefreshTimer);
+			viewportRefreshTimer = null;
+		}
 		window.removeEventListener(applyZoomModeEventName, handleApplyZoomMode);
 		window.removeEventListener('neoview-viewer-action', handleViewerAction);
 	});
@@ -946,7 +1041,7 @@
 			layout={effectivePageMode}
 			{direction}
 			{orientation}
-			scale={manualScale}
+			scale={effectiveScale}
 			{rotation}
 			{viewportSize}
 			imageSize={hoverImageSize}
@@ -961,7 +1056,7 @@
 				frame={upscaledFrameData}
 				layout="single"
 				{direction}
-				scale={manualScale}
+				scale={effectiveScale}
 				{rotation}
 				{viewportSize}
 				imageSize={hoverImageSize}

@@ -556,6 +556,7 @@ pub fn run() {
             commands::page_commands::pm_goto_page_base64,
             commands::page_commands::pm_get_page_base64,
             commands::page_commands::pm_get_page_info,
+            commands::page_commands::pm_update_page_dimensions,
             commands::page_commands::pm_get_stats,
             commands::page_commands::pm_get_memory_stats,
             commands::page_commands::pm_clear_cache,

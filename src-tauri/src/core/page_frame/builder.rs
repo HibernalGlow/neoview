@@ -64,6 +64,26 @@ impl PageFrameBuilder {
     }
 
     /// 检查页面是否应该分割
+    pub fn update_page_size(&mut self, index: usize, width: u32, height: u32) -> bool {
+        if width == 0 || height == 0 {
+            return false;
+        }
+
+        let Some(page) = self.pages.get_mut(index) else {
+            return false;
+        };
+
+        if page.width == width && page.height == height {
+            return false;
+        }
+
+        page.update_size(width, height);
+        if let Some(split) = self.split_cache.get_mut(index) {
+            *split = page.should_split(self.context.divide_page_rate);
+        }
+        true
+    }
+
     pub fn is_page_split(&self, index: usize) -> bool {
         // 只有在单页模式且启用分割时才分割
         if !self.context.is_single_mode() || !self.context.is_supported_divide_page {

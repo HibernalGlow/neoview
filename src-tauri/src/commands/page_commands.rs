@@ -165,6 +165,21 @@ pub async fn pm_get_page_info(
 
 /// 获取页面管理器统计
 #[tauri::command]
+pub async fn pm_update_page_dimensions(
+    page_index: usize,
+    width: u32,
+    height: u32,
+    state: State<'_, PageManagerState>,
+) -> Result<bool, String> {
+    if width == 0 || height == 0 {
+        return Ok(false);
+    }
+
+    let mut manager = state.manager.write().await;
+    Ok(manager.update_page_dimensions(page_index, width, height))
+}
+
+#[tauri::command]
 pub async fn pm_get_stats(state: State<'_, PageManagerState>) -> Result<PageManagerStats, String> {
     let manager = state.manager.read().await;
     Ok(manager.stats().await)
@@ -717,6 +732,7 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_goto_page",
         "pm_get_page",
         "pm_get_page_info",
+        "pm_update_page_dimensions",
         "pm_get_stats",
         "pm_get_memory_stats",
         "pm_clear_cache",

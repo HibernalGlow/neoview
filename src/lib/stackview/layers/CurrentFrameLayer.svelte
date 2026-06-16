@@ -161,15 +161,8 @@
 	// 【性能优化】原生滚动方案：不再使用 transform-origin
 	// HoverScrollLayer 直接操作容器的 scrollLeft/scrollTop
 
-	// 本地存储图片实际尺寸（从 onload 事件获取）
-	let loadedImageSize = $state<{ width: number; height: number }>({ width: 0, height: 0 });
-
-	$effect(() => {
-		const currentUrl = frame.images[0]?.url ?? '';
-		if (currentUrl) {
-			loadedImageSize = { width: 0, height: 0 };
-		}
-	});
+	// 按 URL 记录已加载的自然尺寸，避免翻页时短暂复用上一张图的尺寸。
+	let loadedImageSizes = $state<Record<string, { width: number; height: number }>>({});
 
 	// 计算 transform（仅包含旋转；手动缩放 scale 已乘入 getImageDisplayStyle 的像素尺寸，
 	// 不再用 CSS transform scale，否则 overflow:auto 容器的可滚动区域不会随之扩大）
@@ -183,8 +176,9 @@
 	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
 	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
 	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
-		const imgWidth = img.width || imageSize.width || loadedImageSize.width || 0;
-		const imgHeight = img.height || imageSize.height || loadedImageSize.height || 0;
+		const loadedImageSize = img.url ? loadedImageSizes[img.url] : undefined;
+		const imgWidth = img.width || imageSize.width || loadedImageSize?.width || 0;
+		const imgHeight = img.height || imageSize.height || loadedImageSize?.height || 0;
 		const frameScale = img.scale ?? 1.0;
 		const splitFactor = img.splitHalf ? 2 : 1;
 		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';
@@ -204,8 +198,12 @@
 	// 图片加载完成时更新本地尺寸
 	function handleImageLoad(e: Event, index: number) {
 		const img = e.target as HTMLImageElement;
-		if (img && img.naturalWidth && img.naturalHeight) {
-			loadedImageSize = { width: img.naturalWidth, height: img.naturalHeight };
+		const frameImage = frame.images[index];
+		if (img && img.naturalWidth && img.naturalHeight && frameImage?.url) {
+			loadedImageSizes = {
+				...loadedImageSizes,
+				[frameImage.url]: { width: img.naturalWidth, height: img.naturalHeight }
+			};
 		}
 		onImageLoad?.(e, index);
 	}

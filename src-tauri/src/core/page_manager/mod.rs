@@ -540,6 +540,9 @@ impl PageContentManager {
 
         // 读取图片尺寸
         let dims = get_image_dimensions(&data);
+        if let Some((width, height)) = dims {
+            self.update_page_dimensions(index, width, height);
+        }
 
         Ok((
             data,
@@ -602,6 +605,9 @@ impl PageContentManager {
 
         // 读取图片尺寸
         let dims = get_image_dimensions(&data);
+        if let Some((width, height)) = dims {
+            self.update_page_dimensions(index, width, height);
+        }
 
         Ok((
             data,
@@ -1018,6 +1024,36 @@ impl PageContentManager {
         self.current_book
             .as_ref()
             .and_then(|book| book.get_page(index).cloned())
+    }
+
+    pub fn update_page_dimensions(&mut self, page_index: usize, width: u32, height: u32) -> bool {
+        if width == 0 || height == 0 {
+            return false;
+        }
+
+        let Some(book) = self.current_book.as_mut() else {
+            return false;
+        };
+
+        let Some(page) = book.pages.get_mut(page_index) else {
+            return false;
+        };
+
+        let mut changed = false;
+        if page.width != Some(width) {
+            page.width = Some(width);
+            changed = true;
+        }
+        if page.height != Some(height) {
+            page.height = Some(height);
+            changed = true;
+        }
+
+        if let Some(builder) = self.frame_builder.as_mut() {
+            changed |= builder.update_page_size(page_index, width, height);
+        }
+
+        changed
     }
 
     /// 获取当前帧快照

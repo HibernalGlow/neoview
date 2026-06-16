@@ -14,6 +14,7 @@ import { showToast } from '$lib/utils/toast';
 import type { EMMMetadata } from '$lib/api/emm';
 import { pageNavigationDedup, RequestDeduplicator } from '$lib/utils/requestDedup';
 import * as dimensionApi from '$lib/api/dimensions';
+import * as pageManagerApi from '$lib/api/pageManager';
 
 import { SvelteMap } from 'svelte/reactivity';
 import {
@@ -814,6 +815,25 @@ class BookStore {
     this.upscaleStatusByPage = new SvelteMap();
   }
 
+  private syncPageDimensionsToBackend(pageIndex: number, width?: number | null, height?: number | null): void {
+    if (
+      typeof width !== 'number' ||
+      typeof height !== 'number' ||
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      return;
+    }
+
+    void pageManagerApi
+      .updatePageDimensions(pageIndex, Math.round(width), Math.round(height))
+      .catch((err) => {
+        console.warn('[BookStore] sync page dimensions failed:', err);
+      });
+  }
+
   updatePageDimensions(pageIndex: number, dimensions: { width?: number | null; height?: number | null }) {
     const book = this.state.currentBook;
     if (!book || !Array.isArray(book.pages)) return;
@@ -835,6 +855,9 @@ class BookStore {
     if (updated && pageIndex === book.currentPage) {
       void this.syncInfoPanelBookInfo();
     }
+    if (updated) {
+      this.syncPageDimensionsToBackend(pageIndex, page.width, page.height);
+    }
   }
 
   updatePageDimensionsBatch(updates: Array<{ pageIndex: number; width: number; height: number }>) {
@@ -842,17 +865,31 @@ class BookStore {
     if (!book || !Array.isArray(book.pages)) return;
 
     let currentPageUpdated = false;
+    const backendUpdates: Array<{ pageIndex: number; width: number; height: number }> = [];
     for (const update of updates) {
       const { pageIndex, width, height } = update;
       if (pageIndex < 0 || pageIndex >= book.pages.length) continue;
       const page = book.pages[pageIndex];
       if (!page) continue;
-      if (width > 0 && page.width !== width) page.width = width;
-      if (height > 0 && page.height !== height) page.height = height;
-      if (pageIndex === book.currentPage) currentPageUpdated = true;
+      let updated = false;
+      if (width > 0 && page.width !== width) {
+        page.width = width;
+        updated = true;
+      }
+      if (height > 0 && page.height !== height) {
+        page.height = height;
+        updated = true;
+      }
+      if (updated) {
+        backendUpdates.push({ pageIndex, width: page.width ?? width, height: page.height ?? height });
+        if (pageIndex === book.currentPage) currentPageUpdated = true;
+      }
     }
 
     if (currentPageUpdated) void this.syncInfoPanelBookInfo();
+    for (const update of backendUpdates) {
+      this.syncPageDimensionsToBackend(update.pageIndex, update.width, update.height);
+    }
   }
 
 

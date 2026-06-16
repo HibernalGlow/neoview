@@ -231,6 +231,14 @@ export async function getPageInfo(index: number): Promise<PageInfo> {
 /**
  * 获取页面管理器统计
  */
+export async function updatePageDimensions(
+	pageIndex: number,
+	width: number,
+	height: number
+): Promise<boolean> {
+	return invoke<boolean>('pm_update_page_dimensions', { pageIndex, width, height });
+}
+
 export async function getStats(): Promise<PageManagerStats> {
 	return invoke<PageManagerStats>('pm_get_stats');
 }

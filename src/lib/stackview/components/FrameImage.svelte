@@ -92,15 +92,78 @@
   // 不再查询 imagePool/stackImageLoader，图片资源由后端 protocol 提供
   let displayUrl = $derived(url);
 
-  // ==================== 【Phase 1 修复】移除主图渲染延迟 ====================
-  // settledUrl 立即跟随 displayUrl，不再人为延迟 60ms
+  // 当页内缩放变化时立即更新；翻页(url 变化)时，等新图 ready 再一起提交 URL 和样式，
+  // 避免旧图短暂套用新页尺寸而出现“缩放一下”的错觉。
   let settledUrl = $state('');
+  let settledTransform = $state('');
+  let settledClipPath = $state('');
+  let settledStyle = $state('');
+  let pendingSwapToken = 0;
+
+  function commitSettledRender(
+    nextUrl: string,
+    nextTransform: string,
+    nextClipPath: string,
+    nextStyle: string
+  ) {
+    settledUrl = nextUrl;
+    settledTransform = nextTransform;
+    settledClipPath = nextClipPath;
+    settledStyle = nextStyle;
+  }
+
+  function emitPreloadedDimensions(width: number, height: number) {
+    if (!onload || !width || !height) return;
+
+    const preloadEvent = new Event('load');
+    Object.defineProperty(preloadEvent, 'target', {
+      value: {
+        naturalWidth: width,
+        naturalHeight: height,
+        width,
+        height,
+      },
+      writable: false,
+    });
+    onload(preloadEvent);
+  }
 
   $effect(() => {
-    // 依赖 displayUrl
     const targetUrl = displayUrl;
-    // 立即切换，不延迟
-    settledUrl = targetUrl;
+    const targetTransform = transform;
+    const targetClipPath = effectiveClipPath;
+    const targetStyle = combinedStyle;
+
+    if (!targetUrl) {
+      pendingSwapToken++;
+      commitSettledRender('', targetTransform, targetClipPath, targetStyle);
+      return;
+    }
+
+    if (!settledUrl) {
+      commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
+      return;
+    }
+
+    if (targetUrl === settledUrl) {
+      settledTransform = targetTransform;
+      settledClipPath = targetClipPath;
+      settledStyle = targetStyle;
+      return;
+    }
+
+    const swapToken = ++pendingSwapToken;
+    const preloader = new Image();
+
+    const commitIfCurrent = () => {
+      if (swapToken !== pendingSwapToken) return;
+      emitPreloadedDimensions(preloader.naturalWidth, preloader.naturalHeight);
+      commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
+    };
+
+    preloader.onload = commitIfCurrent;
+    preloader.onerror = commitIfCurrent;
+    preloader.src = targetUrl;
   });
 
   // 【Phase 1 修复】缩略图仅用于冷启动
@@ -162,10 +225,10 @@
         {pageIndex}
         url={settledUrl}
         {alt}
-        {transform}
-        clipPath={effectiveClipPath}
-        style={combinedStyle}
-        class={effectiveClipPath && effectiveClipPath !== 'none' ? 'is-split' : ''}
+        transform={settledTransform}
+        clipPath={settledClipPath}
+        style={settledStyle}
+        class={settledClipPath && settledClipPath !== 'none' ? 'is-split' : ''}
         onload={handleMainImageLoad}
       />
     {/if}
@@ -178,11 +241,11 @@
         src={settledUrl}
         {alt}
         class="frame-image"
-        class:is-split={!!effectiveClipPath && effectiveClipPath !== 'none'}
-        style:transform={transform || undefined}
-        style:clip-path={effectiveClipPath && effectiveClipPath !== 'none' ? effectiveClipPath : undefined}
+        class:is-split={!!settledClipPath && settledClipPath !== 'none'}
+        style:transform={settledTransform || undefined}
+        style:clip-path={settledClipPath && settledClipPath !== 'none' ? settledClipPath : undefined}
         style:filter={filterCss || undefined}
-        style={style || undefined}
+        style={settledStyle || undefined}
         onload={handleMainImageLoad}
         draggable="false"
       />

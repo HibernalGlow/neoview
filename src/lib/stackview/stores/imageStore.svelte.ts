@@ -55,6 +55,7 @@ export function createImageStore() {
 
   let lastBookPath: string | null = null;
   let pendingRequestToken = 0;
+  const dimensionProbePromises = new Map<string, Promise<{ width: number; height: number } | null>>();
 
   async function normalizeSnapshotUrls(snapshot: FrameSnapshot): Promise<FrameSnapshot> {
     const book = bookStore.currentBook;
@@ -115,6 +116,131 @@ export function createImageStore() {
     };
   }
 
+  function resolvePageDimensions(pageIndex: number): { width: number; height: number } | null {
+    const page = bookStore.currentBook?.pages?.[pageIndex];
+    const width = page?.width;
+    const height = page?.height;
+    if (
+      typeof width === 'number' &&
+      typeof height === 'number' &&
+      Number.isFinite(width) &&
+      Number.isFinite(height) &&
+      width > 0 &&
+      height > 0
+    ) {
+      return { width, height };
+    }
+    return null;
+  }
+
+  function resolveImageDimensions(img: FrameImageInfo): { width: number; height: number } | null {
+    if (
+      typeof img.width === 'number' &&
+      typeof img.height === 'number' &&
+      Number.isFinite(img.width) &&
+      Number.isFinite(img.height) &&
+      img.width > 0 &&
+      img.height > 0
+    ) {
+      return { width: img.width, height: img.height };
+    }
+    return resolvePageDimensions(img.pageIndex);
+  }
+
+  function fillSnapshotDimensions(snapshot: FrameSnapshot): FrameSnapshot {
+    let changed = false;
+    const images = snapshot.images.map((img) => {
+      if (img.isDummy) return img;
+      const dimensions = resolveImageDimensions(img);
+      if (!dimensions || (img.width === dimensions.width && img.height === dimensions.height)) {
+        return img;
+      }
+      changed = true;
+      return {
+        ...img,
+        width: dimensions.width,
+        height: dimensions.height,
+      };
+    });
+
+    return changed ? { ...snapshot, images } : snapshot;
+  }
+
+  function probeImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
+    const existing = dimensionProbePromises.get(url);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = new Promise<{ width: number; height: number } | null>((resolve) => {
+      const image = new Image();
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const finish = (dimensions: { width: number; height: number } | null) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        image.onload = null;
+        image.onerror = null;
+        resolve(dimensions);
+      };
+
+      image.decoding = 'async';
+      image.onload = () => {
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        finish(width > 0 && height > 0 ? { width, height } : null);
+      };
+      image.onerror = () => finish(null);
+      timeoutId = setTimeout(() => finish(null), 1200);
+      image.src = url;
+    }).finally(() => {
+      dimensionProbePromises.delete(url);
+    });
+
+    dimensionProbePromises.set(url, promise);
+    return promise;
+  }
+
+  async function fillSnapshotDimensionsAsync(snapshot: FrameSnapshot): Promise<FrameSnapshot> {
+    const baseSnapshot = fillSnapshotDimensions(snapshot);
+    const missing = baseSnapshot.images.filter((img) => !img.isDummy && img.url && !resolveImageDimensions(img));
+    if (missing.length === 0) {
+      return baseSnapshot;
+    }
+
+    const probed = await Promise.all(
+      missing.map(async (img) => ({
+        pageIndex: img.pageIndex,
+        url: img.url,
+        dimensions: await probeImageDimensions(img.url),
+      }))
+    );
+
+    const dimensionsByUrl = new Map<string, { width: number; height: number }>();
+    for (const item of probed) {
+      if (!item.dimensions) continue;
+      dimensionsByUrl.set(item.url, item.dimensions);
+      bookStore.updatePageDimensions(item.pageIndex, item.dimensions);
+    }
+
+    if (dimensionsByUrl.size === 0) {
+      return baseSnapshot;
+    }
+
+    return {
+      ...baseSnapshot,
+      images: baseSnapshot.images.map((img) => {
+        const dimensions = dimensionsByUrl.get(img.url);
+        return dimensions ? { ...img, width: dimensions.width, height: dimensions.height } : img;
+      }),
+    };
+  }
+
+  function hasMissingImageDimensions(snapshot: FrameSnapshot): boolean {
+    return snapshot.images.some((img) => !img.isDummy && !resolveImageDimensions(img));
+  }
+
   /**
    * 请求当前帧快照
    * 【双缓冲】旧帧保留直到新帧 ready
@@ -138,6 +264,7 @@ export function createImageStore() {
       state.currentFrame = null;
       state.previousFrame = null;
       state.loading = false;
+      dimensionProbePromises.clear();
     }
 
     // 避免重复加载
@@ -161,11 +288,17 @@ export function createImageStore() {
         return;
       }
 
-      const snapshot = await normalizeSnapshotUrls(rawSnapshot);
+      const snapshot = await fillSnapshotDimensionsAsync(await normalizeSnapshotUrls(rawSnapshot));
 
       // 【关键】只有 token 匹配且页码未变时才提交新帧
       if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== snapshot.pageIndex) {
         console.log(`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`);
+        return;
+      }
+
+      if (state.currentFrame && hasMissingImageDimensions(snapshot)) {
+        console.warn(`[imageStore] page=${snapshot.pageIndex} DROPPED (missing dimensions)`);
+        state.loading = false;
         return;
       }
 
@@ -210,17 +343,20 @@ export function createImageStore() {
 
     const images: FrameImage[] = snapshot.images
       .filter(img => !img.isDummy && img.url)
-      .map((img: FrameImageInfo): FrameImage => ({
-        url: img.url,
-        physicalIndex: img.pageIndex,
-        virtualIndex: img.pageIndex,
-        width: img.width || undefined,
-        height: img.height || undefined,
-        splitHalf: img.splitHalf ?? undefined,
-        cropRect: img.cropRect ?? undefined,
-        scale: img.scale !== 1.0 ? img.scale : undefined,
-        rotation: img.rotation || undefined,
-      }));
+      .map((img: FrameImageInfo): FrameImage => {
+        const dimensions = resolveImageDimensions(img);
+        return {
+          url: img.url,
+          physicalIndex: img.pageIndex,
+          virtualIndex: img.pageIndex,
+          width: dimensions?.width,
+          height: dimensions?.height,
+          splitHalf: img.splitHalf ?? undefined,
+          cropRect: img.cropRect ?? undefined,
+          scale: img.scale !== 1.0 ? img.scale : undefined,
+          rotation: img.rotation || undefined,
+        };
+      });
 
     if (images.length === 0) {
       return emptyFrame;
@@ -262,8 +398,13 @@ export function createImageStore() {
       return { width: 0, height: 0 };
     }
     // 考虑裁剪区域
-    let width = mainImage.width;
-    let height = mainImage.height;
+    const dimensions = resolveImageDimensions(mainImage);
+    if (!dimensions) {
+      return { width: 0, height: 0 };
+    }
+
+    let width = dimensions.width;
+    let height = dimensions.height;
     if (mainImage.cropRect) {
       width = Math.round(width * mainImage.cropRect.width);
     }
@@ -280,6 +421,7 @@ export function createImageStore() {
     state.error = null;
     lastBookPath = null;
     pendingRequestToken++;
+    dimensionProbePromises.clear();
   }
 
   return {

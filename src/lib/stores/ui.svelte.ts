@@ -10,7 +10,7 @@ import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
-import { pageFrameStore } from './pageFrame.svelte';
+import { readerStore } from './readerStore.svelte';
 import { showInfoToast } from '$lib/utils/toast';
 import { getPanoramaStore, type PanoramaLoadOptions } from '$lib/stackview/stores/panoramaStore.svelte';
 
@@ -261,9 +261,10 @@ function getPageStep(): number {
 	
 	const currentIndex = bookStore.currentPageIndex;
 	
-	// 首选：pageFrameStore.getFrameStepAt() 只读查询，不修改任何状态
-	if (pageFrameStore.isInitialized()) {
-		return pageFrameStore.getFrameStepAt(currentIndex);
+	// 首选：从后端 snapshot 获取步长（只读，无副作用）
+	const step = readerStore.state.currentFrame?.step;
+	if (step && step > 0) {
+		return step;
 	}
 	
 	// 降级：使用原有的实时计算逻辑
@@ -425,23 +426,17 @@ export function toggleViewMode() {
 		const alt: ViewMode = locked === 'single' ? 'panorama' : 'single';
 		const next: ViewMode = currentMode === locked ? alt : locked;
 		viewMode.set(next);
-		// 【优化】同步更新本地 PageFrameBuilder
-		pageFrameStore.setPageMode(next === 'double' ? 'double' : 'single');
 		return;
 	}
 
 	viewMode.update((mode) => {
 		const next = mode === 'single' ? 'double' : mode === 'double' ? 'panorama' : 'single';
-		// 【优化】同步更新本地 PageFrameBuilder
-		pageFrameStore.setPageMode(next === 'double' ? 'double' : 'single');
 		return next;
 	});
 }
 
 export function setViewMode(mode: ViewMode) {
 	viewMode.set(mode);
-	// 【优化】同步更新本地 PageFrameBuilder
-	pageFrameStore.setPageMode(mode === 'double' ? 'double' : 'single');
 }
 
 export function toggleViewModeLock(mode: ViewMode) {

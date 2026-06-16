@@ -148,22 +148,10 @@ export class PageNavigationManager {
       const book = this.callbacks.getCurrentBook();
       if (!book) return;
 
-      // 【Phase 3】使用本地 PageFrameBuilder 计算下一帧位置
-      const { pageFrameStore } = await import('../pageFrame.svelte');
-      
-      let newIndex: number;
-      if (pageFrameStore.isInitialized()) {
-        const nextPos = pageFrameStore.getNextPosition();
-        if (nextPos) {
-          newIndex = nextPos.index;
-        } else {
-          // 降级：简单 +1
-          newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
-        }
-      } else {
-        // 降级：简单 +1
-        newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
-      }
+      // 使用后端 snapshot 的步长计算下一页
+      const { readerStore } = await import('$lib/stores/readerStore.svelte');
+      const step = readerStore.state.currentFrame?.step ?? 1;
+      const newIndex = Math.min(book.currentPage + step, book.totalPages - 1);
 
       // 仍然通知后端以触发预加载
       await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
@@ -172,9 +160,6 @@ export class PageNavigationManager {
       await this.callbacks.syncInfoPanel();
       this.callbacks.syncAppState('user');
       await this.updateHistoryAfterNavigation(newIndex);
-
-      // 更新 pageFrameStore 的当前位置
-      pageFrameStore.gotoPage(newIndex);
 
       if (this.callbacks.onPageChanged) {
         const page = this.getCurrentPage();
@@ -199,22 +184,10 @@ export class PageNavigationManager {
       const book = this.callbacks.getCurrentBook();
       if (!book) return;
 
-      // 【Phase 3】使用本地 PageFrameBuilder 计算上一帧位置
-      const { pageFrameStore } = await import('../pageFrame.svelte');
-      
-      let newIndex: number;
-      if (pageFrameStore.isInitialized()) {
-        const prevPos = pageFrameStore.getPrevPosition();
-        if (prevPos) {
-          newIndex = prevPos.index;
-        } else {
-          // 降级：简单 -1
-          newIndex = Math.max(book.currentPage - 1, 0);
-        }
-      } else {
-        // 降级：简单 -1
-        newIndex = Math.max(book.currentPage - 1, 0);
-      }
+      // 使用后端 snapshot 的步长计算上一页
+      const { readerStore } = await import('$lib/stores/readerStore.svelte');
+      const step = readerStore.state.currentFrame?.step ?? 1;
+      const newIndex = Math.max(book.currentPage - step, 0);
 
       // 仍然通知后端以触发预加载
       await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
@@ -223,9 +196,6 @@ export class PageNavigationManager {
       await this.callbacks.syncInfoPanel();
       this.callbacks.syncAppState('user');
       await this.updateHistoryAfterNavigation(newIndex);
-
-      // 更新 pageFrameStore 的当前位置
-      pageFrameStore.gotoPage(newIndex);
 
       if (this.callbacks.onPageChanged) {
         const page = this.getCurrentPage();

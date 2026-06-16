@@ -124,7 +124,7 @@ struct CachedProtocolImage {
 /// Custom Protocol 状态
 pub struct ProtocolState {
     /// 路径注册表
-    pub path_registry: PathRegistry,
+    pub path_registry: Arc<PathRegistry>,
     /// 内存映射缓存
     pub mmap_cache: MmapCache,
     /// 压缩包管理器
@@ -181,7 +181,7 @@ impl ProtocolState {
         };
 
         Self {
-            path_registry: PathRegistry::new(),
+            path_registry: Arc::new(PathRegistry::new()),
             mmap_cache: MmapCache::default(),
             archive_manager: shared_archive_manager,
             archive_metadata_cache,

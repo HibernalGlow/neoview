@@ -202,8 +202,11 @@ pub fn run() {
                 Arc::clone(&fs_state.archive_manager)
             };
 
-            let page_manager =
-                PageContentManager::new(Arc::clone(&job_engine), archive_manager_for_pm);
+            let page_manager = {
+                let protocol_state = app.state::<ProtocolState>();
+                let path_registry = Arc::clone(&protocol_state.path_registry);
+                PageContentManager::new(Arc::clone(&job_engine), archive_manager_for_pm, path_registry)
+            };
 
             app.manage(PageManagerState {
                 manager: Arc::new(tokio::sync::RwLock::new(page_manager)),
@@ -586,6 +589,7 @@ pub fn run() {
             commands::page_commands::pm_set_large_file_threshold,
             commands::page_commands::pm_preload_thumbnails,
             commands::page_commands::pm_get_frame_snapshot,
+            commands::page_commands::pm_get_reader_window,
             commands::page_commands::pm_report_viewport,
             // Dimension scan commands
             commands::start_dimension_scan,

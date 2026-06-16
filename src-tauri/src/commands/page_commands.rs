@@ -4,7 +4,7 @@
 //! NOTE: PageFrame 命令已迁移到前端本地计算 (2024-01)
 //! 请使用前端的 pageFrameStore 进行布局计算
 
-use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, PageMode, ReadOrder, PageFrame, PagePosition};
+use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow, PageMode, ReadOrder, PageFrame, PagePosition};
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageInfo, PageManagerStats, ThumbnailItem,
     ThumbnailReadyEvent,
@@ -702,6 +702,46 @@ pub async fn pm_get_frame_snapshot(
         .ok_or_else(|| "无法获取帧快照：书籍未打开或帧构建器未初始化".to_string())
 }
 
+/// 获取阅读窗口（多帧）
+///
+/// 返回中心页周围的多个帧，用于全景模式或预加载
+#[tauri::command]
+pub async fn pm_get_reader_window(
+    center_page: usize,
+    radius: usize,
+    page_mode: String,
+    read_order: String,
+    split_horizontal: bool,
+    wide_page: bool,
+    single_first: bool,
+    single_last: bool,
+    divide_rate: f64,
+    split_half: Option<String>,
+    state: State<'_, PageManagerState>,
+) -> Result<ReaderWindow, String> {
+    log::debug!("🖼️ [PageCommand] get_reader_window: center={}, radius={}", center_page, radius);
+
+    let mode = match page_mode.as_str() {
+        "double" => PageMode::Double,
+        _ => PageMode::Single,
+    };
+
+    let order = match read_order.as_str() {
+        "rtl" => ReadOrder::RightToLeft,
+        _ => ReadOrder::LeftToRight,
+    };
+
+    let half = match split_half.as_deref() {
+        Some("right") => Some(SplitHalf::Right),
+        Some("left") => Some(SplitHalf::Left),
+        _ => None,
+    };
+
+    let mut manager = state.manager.write().await;
+    manager.get_reader_window(center_page, radius, mode, order, split_horizontal, wide_page, single_first, single_last, divide_rate, half)
+        .ok_or_else(|| "无法获取阅读窗口：书籍未打开或帧构建器未初始化".to_string())
+}
+
 /// 上报视口尺寸
 ///
 /// 前端上报视口信息，后端据此决定图片尺寸和缓存策略
@@ -743,6 +783,7 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_preload_thumbnails",
         "pm_get_cache_status", // 【性能优化】前端可查询缓存状态
         "pm_get_frame_snapshot",
+        "pm_get_reader_window",
         "pm_report_viewport",
     ]
 }

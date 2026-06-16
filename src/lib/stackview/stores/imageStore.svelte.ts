@@ -21,9 +21,28 @@
 
 import { bookStore } from '$lib/stores/book.svelte';
 import { getFrameSnapshot, reportViewport, type FrameSnapshot, type FrameImageInfo, type GetFrameSnapshotParams } from '$lib/api/frameApi';
-import { getArchiveImageUrl, getFileImageUrl, registerBookPath, resolveProtocolBaseUrl } from '$lib/api/imageProtocol';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
+
+
+// ============================================================================
+// URL 平台适配（Windows 需要 http://neoview.localhost）
+// ============================================================================
+
+const PROTOCOL_BASE = (() => {
+  if (typeof navigator !== 'undefined' && /windows/i.test(navigator.userAgent)) {
+    return 'http://neoview.localhost';
+  }
+  return 'neoview://localhost';
+})();
+
+function fixUrl(url: string): string {
+  if (!url) return url;
+  if (PROTOCOL_BASE !== 'neoview://localhost' && url.startsWith('neoview://localhost')) {
+    return PROTOCOL_BASE + url.slice('neoview://localhost'.length);
+  }
+  return url;
+}
 
 
 // ============================================================================
@@ -55,66 +74,6 @@ export function createImageStore() {
 
   let lastBookPath: string | null = null;
   let pendingRequestToken = 0;
-  const dimensionProbePromises = new Map<string, Promise<{ width: number; height: number } | null>>();
-
-  async function normalizeSnapshotUrls(snapshot: FrameSnapshot): Promise<FrameSnapshot> {
-    const book = bookStore.currentBook;
-    if (!book || snapshot.images.length === 0) {
-      return snapshot;
-    }
-
-    const needsNormalization = snapshot.images.some((img) =>
-      typeof img.url === 'string' &&
-      (img.url.includes('://localhost/archive?') || img.url.includes('://localhost/image?'))
-    );
-
-    if (!needsNormalization) {
-      return snapshot;
-    }
-
-    await resolveProtocolBaseUrl().catch(() => null);
-
-    const isArchiveLike = book.type === 'archive' || book.type === 'epub';
-    const bookHash = isArchiveLike ? await registerBookPath(book.path).catch(() => null) : null;
-
-    const normalizedImages = await Promise.all(
-      snapshot.images.map(async (img) => {
-        if (!img.url || img.isDummy) {
-          return img;
-        }
-
-        const page = book.pages[img.pageIndex];
-        if (!page) {
-          return img;
-        }
-
-        try {
-          if (isArchiveLike) {
-            if (bookHash == null) {
-              return img;
-            }
-            return {
-              ...img,
-              url: getArchiveImageUrl(bookHash, page.entryIndex),
-            };
-          }
-
-          const pathHash = await registerBookPath(page.path);
-          return {
-            ...img,
-            url: getFileImageUrl(pathHash),
-          };
-        } catch {
-          return img;
-        }
-      })
-    );
-
-    return {
-      ...snapshot,
-      images: normalizedImages,
-    };
-  }
 
   function resolvePageDimensions(pageIndex: number): { width: number; height: number } | null {
     const page = bookStore.currentBook?.pages?.[pageIndex];
@@ -166,77 +125,6 @@ export function createImageStore() {
     return changed ? { ...snapshot, images } : snapshot;
   }
 
-  function probeImageDimensions(url: string): Promise<{ width: number; height: number } | null> {
-    const existing = dimensionProbePromises.get(url);
-    if (existing) {
-      return existing;
-    }
-
-    const promise = new Promise<{ width: number; height: number } | null>((resolve) => {
-      const image = new Image();
-      let settled = false;
-      let timeoutId: ReturnType<typeof setTimeout> | null = null;
-      const finish = (dimensions: { width: number; height: number } | null) => {
-        if (settled) return;
-        settled = true;
-        if (timeoutId) clearTimeout(timeoutId);
-        image.onload = null;
-        image.onerror = null;
-        resolve(dimensions);
-      };
-
-      image.decoding = 'async';
-      image.onload = () => {
-        const width = image.naturalWidth;
-        const height = image.naturalHeight;
-        finish(width > 0 && height > 0 ? { width, height } : null);
-      };
-      image.onerror = () => finish(null);
-      timeoutId = setTimeout(() => finish(null), 1200);
-      image.src = url;
-    }).finally(() => {
-      dimensionProbePromises.delete(url);
-    });
-
-    dimensionProbePromises.set(url, promise);
-    return promise;
-  }
-
-  async function fillSnapshotDimensionsAsync(snapshot: FrameSnapshot): Promise<FrameSnapshot> {
-    const baseSnapshot = fillSnapshotDimensions(snapshot);
-    const missing = baseSnapshot.images.filter((img) => !img.isDummy && img.url && !resolveImageDimensions(img));
-    if (missing.length === 0) {
-      return baseSnapshot;
-    }
-
-    const probed = await Promise.all(
-      missing.map(async (img) => ({
-        pageIndex: img.pageIndex,
-        url: img.url,
-        dimensions: await probeImageDimensions(img.url),
-      }))
-    );
-
-    const dimensionsByUrl = new Map<string, { width: number; height: number }>();
-    for (const item of probed) {
-      if (!item.dimensions) continue;
-      dimensionsByUrl.set(item.url, item.dimensions);
-      bookStore.updatePageDimensions(item.pageIndex, item.dimensions);
-    }
-
-    if (dimensionsByUrl.size === 0) {
-      return baseSnapshot;
-    }
-
-    return {
-      ...baseSnapshot,
-      images: baseSnapshot.images.map((img) => {
-        const dimensions = dimensionsByUrl.get(img.url);
-        return dimensions ? { ...img, width: dimensions.width, height: dimensions.height } : img;
-      }),
-    };
-  }
-
   function hasMissingImageDimensions(snapshot: FrameSnapshot): boolean {
     return snapshot.images.some((img) => !img.isDummy && !resolveImageDimensions(img));
   }
@@ -264,7 +152,6 @@ export function createImageStore() {
       state.currentFrame = null;
       state.previousFrame = null;
       state.loading = false;
-      dimensionProbePromises.clear();
     }
 
     // 避免重复加载
@@ -288,7 +175,12 @@ export function createImageStore() {
         return;
       }
 
-      const snapshot = await fillSnapshotDimensionsAsync(await normalizeSnapshotUrls(rawSnapshot));
+      // Fix URLs (platform adaptation only, no more per-page IPC registration)
+      // Fallback for missing dimensions (backend usually provides them now)
+      const snapshot = fillSnapshotDimensions({
+        ...rawSnapshot,
+        images: rawSnapshot.images.map(img => ({ ...img, url: fixUrl(img.url) }))
+      });
 
       // 【关键】只有 token 匹配且页码未变时才提交新帧
       if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== snapshot.pageIndex) {
@@ -419,7 +311,6 @@ export function createImageStore() {
     state.error = null;
     lastBookPath = null;
     pendingRequestToken++;
-    dimensionProbePromises.clear();
   }
 
   return {

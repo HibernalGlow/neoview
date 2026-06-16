@@ -36,9 +36,8 @@ import type {
 } from './types';
 import { isArchivePath } from './streamingLoader.svelte';
 import { renderSwitchToastTemplate } from './toast';
-import { pageFrameStore } from '../pageFrame.svelte';
-import type { PagePosition } from '$lib/core/pageFrame';
 import { cleanupBookResources } from '$lib/core/bookCleanup';
+import { readerStore } from '$lib/stores/readerStore.svelte';
 import { folderTabActions } from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { folderPanelActions, isBookCandidate, normalizePath as normalizeFolderPath } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 
@@ -295,16 +294,8 @@ class BookStore {
     this.syncAppStateBookSlice();
     this.state.viewerOpen = true;
     
-    // 初始化 pageFrameStore 用于本地布局计算（同步调用）
-    if (book.pages && book.pages.length > 0) {
-      pageFrameStore.initFromBookPages(book.pages);
-      // 【修复】reset() 会将 pageMode 重置为 'single'，必须在初始化后重新同步当前视图模式
-      const currentViewMode = appState.getSnapshot().viewer.viewMode;
-      if (currentViewMode === 'double') {
-        pageFrameStore.setPageMode('double');
-      }
-      console.log('📐 [PageFrame] 已初始化页面帧布局，共', book.pages.length, '页，模式:', currentViewMode);
-    }
+    // 后端 frame builder 负责布局计算，前端不再需要本地初始化
+    console.log('📐 [Reader] 书籍已打开，共', book.pages?.length ?? 0, '页，后端负责帧布局');
     
     if (targetPage > 0 && book.totalPages > 0 && this.isOpenBookRequestCurrent(ticket)) {
       bookApi.navigateToPage(targetPage).catch(navErr => {
@@ -364,8 +355,8 @@ class BookStore {
     infoPanelStore.resetAll();
     window.dispatchEvent(new CustomEvent('reset-pre-upscale-progress'));
     
-    // 重置 pageFrameStore（同步调用）
-    pageFrameStore.reset();
+    // 重置 readerStore
+    readerStore.reset();
   }
 
   async cancelCurrentLoad() {
@@ -420,10 +411,6 @@ class BookStore {
         // 【IPC优化】先更新本地状态以获得即时 UI 响应
         activeBook.currentPage = index;
         this.syncAppStateBookSlice('user');
-
-        // 更新 pageFrameStore 的当前位置
-        // 【修复】直接 buildFrame 避免 framePositionForIndex 错误逆推导致 currentPosition 偏移
-        pageFrameStore.buildFrame({ index, part: 0 });
 
         // 等待后端同步 PageManager，确保后续 frame snapshot 读取到正确页码
         await bookApi.navigateToPage(index);
@@ -484,12 +471,8 @@ class BookStore {
   //   nextPage/previousPage：按书本物理顺序「下一帧/上一帧」，不感知阅读方向。
   //   pageLeft/pageRight   ：感知阅读方向和分割页状态，通过 navigateToPage 跳转。
   //
-  // ⚠️ 避坑提醒（framePositionForIndex 逆推错误）：
-  //   pageFrameStore.gotoPage(n) 内部调用 framePositionForIndex(n)，
-  //   该函数会将 n 逆推为所在帧的起始页（如 index=3 判为 [2,3] 帧 → 返回 {index:2}），
-  //   导致 state.currentPosition 偏移，下次翻页起点错误（出现 12→23→34 滑窗现象）。
-  //   ✅ 正确做法：保存 getNextPosition/getPrevPosition 返回的精确 PagePosition，
-  //   直接调用 buildFrame(pos)，跳过逆推逻辑。
+  // 翻页步长由后端 frame snapshot 提供（readerStore.state.currentFrame.step），
+  // 已正确考虑双页模式，前端无需本地布局计算。
 
   async nextPage() {
     if (!this.canNextPage) {
@@ -505,20 +488,9 @@ class BookStore {
       const book = this.state.currentBook;
       if (!book) return;
 
-      // 从 pageFrameStore 获取下一帧起始位置（已正确考虑双页步长）
-      // nextPos 是精确位置，必须用 buildFrame(nextPos) 而非 gotoPage(index) 更新状态
-      let newIndex: number;
-      let nextPos: PagePosition | null = null;
-      if (pageFrameStore.isInitialized()) {
-        nextPos = pageFrameStore.getNextPosition();
-        if (nextPos) {
-          newIndex = nextPos.index;
-        } else {
-          newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
-        }
-      } else {
-        newIndex = Math.min(book.currentPage + 1, book.totalPages - 1);
-      }
+      // 从后端 snapshot 获取翻页步长（已正确考虑双页步长）
+      const step = readerStore.state.currentFrame?.step ?? 1;
+      let newIndex = Math.min(book.currentPage + step, book.totalPages - 1);
 
       // 通知后端以触发预加载
       await bookApi.navigateToPage(newIndex);
@@ -527,13 +499,6 @@ class BookStore {
       await this.syncInfoPanelBookInfo();
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);
-
-      // 用精确位置更新 pageFrameStore，避免 framePositionForIndex 逆推错误
-      if (nextPos) {
-        pageFrameStore.buildFrame(nextPos);
-      } else {
-        pageFrameStore.gotoPage(newIndex);
-      }
 
       this.showPageSwitchToastIfEnabled();
       return newIndex;
@@ -557,20 +522,9 @@ class BookStore {
       const book = this.state.currentBook;
       if (!book) return;
 
-      // 从 pageFrameStore 获取上一帧起始位置（已正确考虑双页步长）
-      // prevPos 是精确位置，必须用 buildFrame(prevPos) 而非 gotoPage(index) 更新状态
-      let newIndex: number;
-      let prevPos: PagePosition | null = null;
-      if (pageFrameStore.isInitialized()) {
-        prevPos = pageFrameStore.getPrevPosition();
-        if (prevPos) {
-          newIndex = prevPos.index;
-        } else {
-          newIndex = Math.max(book.currentPage - 1, 0);
-        }
-      } else {
-        newIndex = Math.max(book.currentPage - 1, 0);
-      }
+      // 从后端 snapshot 获取翻页步长（向后翻也用 step 近似）
+      const step = readerStore.state.currentFrame?.step ?? 1;
+      let newIndex = Math.max(book.currentPage - step, 0);
 
       // 通知后端以触发预加载
       await bookApi.navigateToPage(newIndex);
@@ -579,13 +533,6 @@ class BookStore {
       await this.syncInfoPanelBookInfo();
       this.syncAppStateBookSlice('user');
       await this.updateHistoryAfterNavigation(newIndex);
-
-      // 用精确位置更新 pageFrameStore，避免 framePositionForIndex 逆推错误
-      if (prevPos) {
-        pageFrameStore.buildFrame(prevPos);
-      } else {
-        pageFrameStore.gotoPage(newIndex);
-      }
 
       return newIndex;
     } catch (err) {
@@ -743,16 +690,7 @@ class BookStore {
       this.syncAppStateBookSlice('user');
       await this.syncInfoPanelBookInfo();
 
-      // 【Phase 4】排序后重新初始化 pageFrameStore
-      if (updatedBook.pages && updatedBook.pages.length > 0) {
-        pageFrameStore.initFromBookPages(updatedBook.pages);
-        // 【修复】同步当前视图模式，防止 reset 后 pageMode 丢失
-        const currentViewMode = appState.getSnapshot().viewer.viewMode;
-        if (currentViewMode === 'double') {
-          pageFrameStore.setPageMode('double');
-        }
-        console.log('📐 [PageFrame] 排序后重新初始化，模式:', sortMode);
-      }
+      // 排序后后端会重新构建帧布局，前端无需操作
 
       const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
       const pathStack = this.buildPathStack();

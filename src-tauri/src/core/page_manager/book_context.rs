@@ -98,6 +98,8 @@ impl PageContentType {
 pub struct PageInfo {
     /// 页面索引
     pub index: usize,
+    #[serde(default)]
+    pub entry_index: usize,
     /// 内部路径（压缩包内的路径）
     pub inner_path: String,
     /// 文件名
@@ -171,7 +173,7 @@ impl BookContext {
                 }
 
                 PageInfo {
-                    index,
+                    index, entry_index: index,
                     content_type,
                     inner_path,
                     name,
@@ -216,7 +218,7 @@ impl BookContext {
                     .to_string();
 
                 PageInfo {
-                    index,
+                    index, entry_index: index,
                     content_type: PageContentType::Image, // EPUB 内的图片
                     inner_path,
                     name,
@@ -259,6 +261,7 @@ impl BookContext {
 
                 PageInfo {
                     index,
+                    entry_index: index,
                     content_type: PageContentType::from_path(&full_path),
                     inner_path: full_path,
                     name,
@@ -291,6 +294,7 @@ impl BookContext {
 
         let page = PageInfo {
             index: 0,
+            entry_index: 0,
             content_type: PageContentType::Image,
             inner_path: path.to_string(),
             name,
@@ -319,6 +323,7 @@ impl BookContext {
 
         let page = PageInfo {
             index: 0,
+            entry_index: 0,
             content_type: PageContentType::Video,
             inner_path: path.to_string(),
             name,

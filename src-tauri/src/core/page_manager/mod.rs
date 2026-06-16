@@ -44,7 +44,7 @@ pub struct ThumbnailItem {
 use crate::core::archive::ArchiveManager;
 use crate::core::job_engine::{Job, JobEngine, JobOutput, JobPriority, JobResult};
 use crate::core::page_frame::{
-    FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf,
+    FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow,
     PageFrameBuilder, PageFrameContext, PagePosition, PageMode, ReadOrder,
     Page as FramePage,
 };
@@ -127,6 +127,8 @@ pub struct PageContentManager {
     archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
     /// 临时文件管理器
     temp_manager: Arc<TempFileManager>,
+    /// 路径注册表（用于 neoview:// 协议 URL 生成）
+    path_registry: Arc<crate::core::custom_protocol::PathRegistry>,
     /// 当前书籍上下文
     current_book: Option<BookContext>,
     /// 页面帧构建器（后端主导 frame 组合）
@@ -158,6 +160,7 @@ impl PageContentManager {
     pub fn new(
         job_engine: Arc<JobEngine>,
         archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
+        path_registry: Arc<crate::core::custom_protocol::PathRegistry>,
     ) -> Self {
         let temp_dir = std::env::temp_dir().join("neoview_pages");
         Self {
@@ -165,6 +168,7 @@ impl PageContentManager {
             memory_pool: Arc::new(Mutex::new(MemoryPool::new(DEFAULT_CACHE_SIZE_MB))),
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
+            path_registry,
             current_book: None,
             frame_builder: None,
             thumbnail_cache: std::collections::HashMap::new(),
@@ -176,6 +180,7 @@ impl PageContentManager {
     pub fn with_cache_size(
         job_engine: Arc<JobEngine>,
         archive_manager: Arc<std::sync::Mutex<ArchiveManager>>,
+        path_registry: Arc<crate::core::custom_protocol::PathRegistry>,
         cache_size_mb: usize,
     ) -> Self {
         let temp_dir = std::env::temp_dir().join("neoview_pages");
@@ -184,6 +189,7 @@ impl PageContentManager {
             memory_pool: Arc::new(Mutex::new(MemoryPool::new(cache_size_mb))),
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
+            path_registry,
             current_book: None,
             frame_builder: None,
             thumbnail_cache: std::collections::HashMap::new(),
@@ -255,9 +261,14 @@ impl PageContentManager {
                 .pages
                 .iter()
                 .map(|p| {
+                    let page_path = if matches!(ctx.book_type, BookType::Archive | BookType::Epub) {
+                        ctx.path.clone()
+                    } else {
+                        p.inner_path.clone()
+                    };
                     FramePage::new(
                         p.index,
-                        ctx.path.clone(),
+                        page_path,
                         p.inner_path.clone(),
                         p.name.clone(),
                         p.size.unwrap_or(0),
@@ -309,9 +320,14 @@ impl PageContentManager {
             .pages
             .iter()
             .map(|p| {
+                let page_path = if matches!(context.book_type, BookType::Archive | BookType::Epub) {
+                    context.path.clone()
+                } else {
+                    p.inner_path.clone()
+                };
                 FramePage::new(
                     p.index,
-                    context.path.clone(),
+                    page_path,
                     p.inner_path.clone(),
                     p.name.clone(),
                     p.size.unwrap_or(0),
@@ -334,6 +350,7 @@ impl PageContentManager {
         for (index, page) in book.pages.iter().enumerate() {
             pages.push(PageInfo {
                 index,
+                entry_index: page.entry_index,
                 inner_path: Self::resolve_inner_path(book_type, &book.path, page),
                 name: page.name.clone(),
                 size: Some(page.size),
@@ -1122,17 +1139,18 @@ impl PageContentManager {
 
             // 构建 protocol URL
             let url = if ctx.book_type == BookType::Archive || ctx.book_type == BookType::Epub {
-                format!(
-                    "neoview://localhost/archive?path={}&entry={}",
-                    urlencoding::encode(&ctx.path),
-                    urlencoding::encode(&page.inner_path)
-                )
+                // Register book path and use hash-based URL
+                let book_hash = self.path_registry.register(std::path::Path::new(&ctx.path));
+                let entry_index = ctx
+                    .pages
+                    .get(page.index)
+                    .map(|p| p.entry_index)
+                    .unwrap_or(page.index);
+                format!("neoview://localhost/image/{}/{}", book_hash, entry_index)
             } else {
-                format!(
-                    "neoview://localhost/image?path={}&index={}",
-                    urlencoding::encode(&ctx.path),
-                    page.index
-                )
+                // Register each page's file path and use file URL
+                let page_hash = self.path_registry.register(std::path::Path::new(&page.path));
+                format!("neoview://localhost/file/{}", page_hash)
             };
 
             images.push(FrameImageInfo {
@@ -1182,6 +1200,211 @@ impl PageContentManager {
             can_prev,
             ready: true,
             direction: read_order,
+        })
+    }
+
+    /// Get a reader window - multiple frames around a center page
+    /// For normal mode (radius=0): returns just the center frame
+    /// For panorama mode (radius>0): returns frames in both directions
+    pub fn get_reader_window(
+        &mut self,
+        center_page: usize,
+        radius: usize,
+        page_mode: PageMode,
+        read_order: ReadOrder,
+        split_horizontal: bool,
+        wide_page: bool,
+        single_first: bool,
+        single_last: bool,
+        divide_rate: f64,
+        split_half: Option<SplitHalf>,
+    ) -> Option<ReaderWindow> {
+        // Set the center page
+        {
+            let ctx = self.current_book.as_mut()?;
+            ctx.current_index = center_page;
+        }
+
+        // Build context from params and update builder
+        {
+            let builder = self.frame_builder.as_mut()?;
+            let frame_context = PageFrameContext::new()
+                .with_page_mode(page_mode)
+                .with_read_order(read_order)
+                .with_divide_page(split_horizontal)
+                .with_divide_rate(divide_rate)
+                .with_wide_page(wide_page)
+                .with_single_first(single_first)
+                .with_single_last(single_last);
+            builder.set_context(frame_context);
+        }
+
+        // Build center position
+        let part = match split_half {
+            Some(SplitHalf::Right) => 1,
+            _ => 0,
+        };
+        let center_position = PagePosition::new(center_page, part);
+
+        let mut frames = Vec::new();
+
+        // Get builder reference for building frames
+        let builder = self.frame_builder.as_ref()?;
+
+        // Build center frame
+        if let Some(snapshot) = self.build_single_snapshot(builder, center_position, &read_order) {
+            frames.push(snapshot);
+        }
+
+        // Build surrounding frames for panorama
+        if radius > 0 {
+            // Walk forward
+            let mut pos = center_position;
+            for _ in 0..radius {
+                if let Some(next) = builder.next_frame_position(pos) {
+                    if let Some(snapshot) = self.build_single_snapshot(builder, next, &read_order) {
+                        frames.push(snapshot);
+                    }
+                    pos = next;
+                } else {
+                    break;
+                }
+            }
+
+            // Walk backward
+            let mut pos = center_position;
+            for _ in 0..radius {
+                if let Some(prev) = builder.prev_frame_position(pos) {
+                    if let Some(snapshot) = self.build_single_snapshot(builder, prev, &read_order) {
+                        frames.insert(0, snapshot);
+                    }
+                    pos = prev;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Build preload hints
+        let mut preload_ahead = Vec::new();
+        let mut preload_behind = Vec::new();
+        let mut pos = center_position;
+        for _ in 0..(radius + 4) {
+            if let Some(next) = builder.next_frame_position(pos) {
+                preload_ahead.push(next.index);
+                pos = next;
+            } else {
+                break;
+            }
+        }
+        let mut pos = center_position;
+        for _ in 0..(radius + 4) {
+            if let Some(prev) = builder.prev_frame_position(pos) {
+                preload_behind.push(prev.index);
+                pos = prev;
+            } else {
+                break;
+            }
+        }
+
+        Some(ReaderWindow {
+            center_page,
+            frames,
+            preload_ahead,
+            preload_behind,
+        })
+    }
+
+    fn build_single_snapshot(
+        &self,
+        builder: &PageFrameBuilder,
+        position: PagePosition,
+        read_order: &ReadOrder,
+    ) -> Option<FrameSnapshot> {
+        let ctx = self.current_book.as_ref()?;
+        let frame = builder.build_frame(position)?;
+
+        let mut images = Vec::new();
+        for element in frame.get_directed_elements() {
+            if element.is_dummy {
+                images.push(FrameImageInfo {
+                    page_index: element.page_index(),
+                    url: String::new(),
+                    width: 0,
+                    height: 0,
+                    crop_rect: element.crop_rect,
+                    split_half: element.crop_rect.map(|c| {
+                        if c.x > 0.25 {
+                            SplitHalf::Right
+                        } else {
+                            SplitHalf::Left
+                        }
+                    }),
+                    scale: element.scale,
+                    is_dummy: true,
+                    rotation: 0.0,
+                });
+                continue;
+            }
+
+            let page = &element.page;
+
+            let url = if ctx.book_type == BookType::Archive || ctx.book_type == BookType::Epub {
+                let book_hash = self.path_registry.register(std::path::Path::new(&ctx.path));
+                let entry_index = ctx
+                    .pages
+                    .get(page.index)
+                    .map(|p| p.entry_index)
+                    .unwrap_or(page.index);
+                format!("neoview://localhost/image/{}/{}", book_hash, entry_index)
+            } else {
+                let page_hash = self.path_registry.register(std::path::Path::new(&page.path));
+                format!("neoview://localhost/file/{}", page_hash)
+            };
+
+            let crop_rect = element.crop_rect;
+            let split_half = crop_rect.map(|c| {
+                if c.x > 0.25 {
+                    SplitHalf::Right
+                } else {
+                    SplitHalf::Left
+                }
+            });
+
+            images.push(FrameImageInfo {
+                page_index: page.index,
+                url,
+                width: page.width,
+                height: page.height,
+                crop_rect,
+                split_half,
+                scale: element.scale,
+                is_dummy: false,
+                rotation: 0.0,
+            });
+        }
+
+        let step = builder.get_frame_step(position.index);
+        let can_next = builder.next_frame_position(position).is_some();
+        let can_prev = builder.prev_frame_position(position).is_some();
+        let layout = if frame.is_single() {
+            FrameLayoutType::Single
+        } else {
+            FrameLayoutType::Double
+        };
+        let frame_id = format!("frame-{}-{}", position.index, position.part);
+
+        Some(FrameSnapshot {
+            book_path: ctx.path.clone(),
+            page_index: position.index,
+            frame_id,
+            layout,
+            images,
+            step,
+            can_next,
+            can_prev,
+            ready: true,
+            direction: read_order.clone(),
         })
     }
 

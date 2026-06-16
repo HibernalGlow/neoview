@@ -112,3 +112,17 @@ impl FrameSnapshot {
         self.images.is_empty() || self.frame_id.is_empty()
     }
 }
+
+/// Reader window - multiple frames around a center page
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReaderWindow {
+    /// Center page index
+    pub center_page: usize,
+    /// Frames in the window (center + surrounding for panorama)
+    pub frames: Vec<FrameSnapshot>,
+    /// Pages to preload ahead
+    pub preload_ahead: Vec<usize>,
+    /// Pages to preload behind
+    pub preload_behind: Vec<usize>,
+}

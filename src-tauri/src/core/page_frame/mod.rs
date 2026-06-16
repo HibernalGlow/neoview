@@ -31,7 +31,7 @@ pub use calculator::{ContentSizeCalculator, StretchMode, AutoRotateType};
 pub use context::PageFrameContext;
 pub use error::{PageFrameError, PageFrameResult, PageFrameErrorInfo};
 pub use stretch::{WidePageStretch, ContentScaleCalculator as WidePageScaleCalculator};
-pub use snapshot::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf};
+pub use snapshot::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow};
 
 /// 页面模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

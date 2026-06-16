@@ -6,6 +6,7 @@
 
 1. 翻页时主图会短暂发黑或闪空。
 2. 当前图片加载架构存在重复缓存、重复解码、重复过渡和过多状态源，整体性能浪费明显。
+3. 现有阅读器存在多套历史系统并存，必须在优化过程中彻底收口并删除旧链路，而不是继续“保留兼容”。
 
 目标不是做局部补丁，而是把阅读器主链路收敛为一条清晰、可度量、可维护的高性能路径。
 
@@ -30,6 +31,61 @@
 - `renderQueue`
 
 这导致“能跑”的链路和“还留着但未完全退场”的链路叠在一起，代码量大、状态多、排障困难。
+
+## OpenComic 对比结论
+
+参考 `ref/OpenComic` 后，可以确认它性能更好的原因不是“前端框架不同”，而是阅读热路径更单纯。
+
+### OpenComic 做对了什么
+
+#### 1. 页位先算好，再填资源
+
+OpenComic 会先计算页面分布、双页组合、空白页、横图独占等布局结果，再把结果一次性渲染到 DOM 容器中。
+
+对应文件：
+
+- `ref/OpenComic/scripts/reading.js`
+- `ref/OpenComic/templates/reading.content.right.images.html`
+
+这意味着它不会在“图还没好”的阶段反复重建 frame 结构。
+
+#### 2. 只有一套阅读渲染队列
+
+OpenComic 的主链是单一的 `readingRender` 队列。状态变化时它会清空旧队列并重排，而不是让多套 preload/decode 队列同时竞争当前页。
+
+对应文件：
+
+- `ref/OpenComic/scripts/reading/render.js`
+- `ref/OpenComic/scripts/threads.js`
+
+#### 3. 当前页优先，邻近页渐进
+
+它围绕当前页做有限窗口预渲染，当前页、下一页、上一页的优先级非常明确，不会把大量后台任务和主图加载混在一起。
+
+#### 4. 显示层只负责显示，不自己承担复杂资源状态机
+
+OpenComic 的阅读显示层虽然也会做 `img.decode()`、Blob URL 和 canvas 渲染，但它没有把这些拆成多套长期并存的 store 系统。主路径始终是一条。
+
+### OpenComic 对 NeoView 的直接启发
+
+对 NeoView 来说，真正该抄的不是 UI，而是下面四点：
+
+1. 先有稳定的 frame，再有图片资源填充。
+2. 只有一套阅读任务队列和取消机制。
+3. 当前页永远高于预加载、缩略图、背景色、超分。
+4. 前端显示层不再自带多套缓存/预解码/补偿状态机。
+
+## 新增总原则：优化必须伴随旧系统删除
+
+本方案新增一条硬约束：
+
+> 任何新主链路落地后，都必须同步删除被替代的旧系统；禁止出现“新方案上线，但旧方案继续留在热路径或半热路径里”的状态。
+
+原因很直接：
+
+- 旧系统继续存在，会持续制造重复缓存、重复预加载、重复监听和重复心智负担。
+- 旧代码不删除，后续功能很容易再次绕回旧链路。
+- 对阅读器这种高频热路径来说，“保留备用方案”本身就是性能风险。
 
 ## 根因诊断
 
@@ -207,6 +263,24 @@
 
 所有后台任务都必须让路给当前页首帧。
 
+### 原则 5
+
+每一类职责只能有一个热路径实现。
+
+例如：
+
+- frame 计算：只能有一套
+- 图片读取：只能有一套
+- 预加载调度：只能有一套
+- 预解码缓存：只能有一套
+- 当前页显示状态：只能有一套
+
+### 原则 6
+
+旧系统必须在对应阶段完成后立即摘除或删除。
+
+不是“以后有空再清理”，而是把删除旧系统视为该阶段完成标准的一部分。
+
 ## 建议的最终目标架构
 
 ### 推荐方案：Canvas 单通道
@@ -259,6 +333,7 @@
 
 - 能按页打印每次翻页的完整时间线
 - 能区分 cache hit / blob hit / decoded hit / cold load
+- 能区分命中的是“唯一主链”而不是历史兼容链路
 
 ## Phase 1：立即止血，解决黑屏
 
@@ -330,6 +405,17 @@
 - `imagePool` 保留为轻量 facade，不再拥有自己的逻辑
 - `backgroundColorCache` 保留，但改为后台低优先级
 
+### 2.4 明确删除无效缓存层
+
+这一阶段不能只“减少使用”，必须明确删掉或完全摘出主链。
+
+优先删除/摘链目标：
+
+- `preDecodeCache.svelte.ts`
+- `imagePool.svelte.ts` 中非 facade 逻辑
+- `stackImageLoader.ts` 中前端主导的预加载与预解码职责
+- `viewer/flow/*` 中与 `stackview` 平行的图片热路径
+
 ### 2.2 把 `preDecodeCache` 从 `HTMLImageElement` 改为 `ImageBitmap`
 
 如果不直接退役，则至少要改成：
@@ -388,6 +474,17 @@
 - 切书后所有旧书任务必须失效
 - `renderQueue`、背景色、超分预载都要带 token/cancel
 
+### 3.4 只保留一套队列系统
+
+参考 OpenComic 的 `readingRender` 队列设计，NeoView 最终也应只保留一套阅读任务队列。
+
+要求：
+
+- 当前页任务优先级最高
+- 队列可整体清空
+- 页码变化后旧范围任务立即失效
+- 不允许 `renderQueue + imagePool preload + stackImageLoader preload + PageManager preload` 并行长期共存
+
 ## Phase 4：统一渲染模式
 
 ### 4.1 默认切到 Canvas 主渲染
@@ -443,6 +540,38 @@
 
 任何新功能都不能绕开这条边界直接加一套缓存。
 
+### 5.3 从“废弃”升级为“删除”
+
+这一阶段的完成标准不是加 `deprecated` 注释，而是：
+
+1. 从阅读热路径移除旧系统引用。
+2. 验证没有任何 UI 路径再经过旧系统。
+3. 直接删除旧文件或删除旧实现主体，仅保留极薄兼容壳。
+
+建议删除顺序：
+
+1. 删除 `pageStore.svelte.ts` 阅读链相关调用点。
+2. 删除 `stackview` 不再使用的前端资源调度逻辑。
+3. 删除 `viewer/flow/*` 中和当前主链重复的图片加载与缓存逻辑。
+4. 删除 `preDecodeCache` 与旧 `bitmap` 旁路。
+
+### 5.4 需要彻底清理的旧系统清单
+
+下列内容不应长期保留在仓库中作为“备用实现”：
+
+- [src/lib/stores/pageStore.svelte.ts](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/stores/pageStore.svelte.ts)
+- [src/lib/components/viewer/flow](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/components/viewer/flow)
+- [src/lib/stackview/stores/preDecodeCache.svelte.ts](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/stackview/stores/preDecodeCache.svelte.ts)
+- [src/lib/stackview/stores/bitmapCache.svelte.ts](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/stackview/stores/bitmapCache.svelte.ts) 中未成为主链的部分
+- [src/lib/stackview/stores/imagePool.svelte.ts](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/stackview/stores/imagePool.svelte.ts) 中缓存/预加载主体逻辑
+- [src/lib/stackview/stores/renderQueue.ts](/d:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src/lib/stackview/stores/renderQueue.ts) 如果最终后端统一调度
+
+如果某个模块还需要短期保留：
+
+- 必须从热路径完全断开
+- 必须有明确删除时点
+- 必须在文档中标明“过渡期存在原因”
+
 ## 推荐执行顺序
 
 ### 第一周
@@ -451,6 +580,7 @@
 2. 去掉 `settledUrl` 延迟
 3. 去掉图片级 fade
 4. 保留旧帧直到新帧 ready
+5. 识别并切断一切旧热路径入口
 
 预期收益：
 
@@ -463,6 +593,7 @@
 2. 统一预加载调度器
 3. 统一取消机制
 4. 降低背景色和缩略图优先级
+5. 把前端预解码/预加载旧链完全摘出主路径
 
 预期收益：
 
@@ -475,6 +606,7 @@
 2. `CanvasImage` 升级为主渲染
 3. `preDecodeCache` 退役
 4. 清理旧链路
+5. 删除无用旧系统文件
 
 预期收益：
 
@@ -517,6 +649,17 @@
 - 冷加载翻页首帧时间 `< 120ms`
 - 快速连续翻页时主线程 long task 数明显下降
 - 内存峰值可控且不会无限上涨
+- 阅读热路径中不再存在两套以上图片缓存/预加载/预解码系统
+- 搜索代码时不再能找到旧阅读系统仍被主链引用
+
+## 旧系统删除的验收标准
+
+删除旧系统必须满足下面 4 条，缺一不可：
+
+1. `rg` 搜索旧模块名时，结果只剩文档、测试或过渡注释，不再有主链调用。
+2. `StackView` 到图片显示的调用图只能追到唯一主链。
+3. `pnpm run check` 通过，且删除后没有靠注释掉功能硬过。
+4. 文档中明确记录“删掉了什么、替换成什么、为什么不会回退”。
 
 ## 最小可行落地建议
 
@@ -528,6 +671,10 @@
 4. 移除 `imagePool.preloadRange(currentIndex, 4)`，只保留一套分层预加载。
 
 这 4 项完成后，黑屏问题大概率就会从“明显可感知”降到“基本消失”，同时也为后续彻底收敛架构打好基础。
+
+如果要进入“极致性能优化”阶段，则必须额外追加第 5 项：
+
+5. 同步删掉已被替代的旧系统，不允许新老并存。
 
 ## 结论
 

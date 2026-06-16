@@ -43,6 +43,11 @@ pub struct ThumbnailItem {
 
 use crate::core::archive::ArchiveManager;
 use crate::core::job_engine::{Job, JobEngine, JobOutput, JobPriority, JobResult};
+use crate::core::page_frame::{
+    FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf,
+    PageFrameBuilder, PageFrameContext, PagePosition, PageMode, ReadOrder,
+    Page as FramePage,
+};
 use crate::models::{BookInfo as ModelBookInfo, BookType as ModelBookType, Page as ModelPage};
 use std::path::Path;
 use std::sync::Arc;
@@ -124,6 +129,8 @@ pub struct PageContentManager {
     temp_manager: Arc<TempFileManager>,
     /// 当前书籍上下文
     current_book: Option<BookContext>,
+    /// 页面帧构建器（后端主导 frame 组合）
+    frame_builder: Option<PageFrameBuilder>,
     /// 缩略图缓存（书籍路径 -> 页索引 -> 缩略图数据）
     thumbnail_cache: std::collections::HashMap<usize, ThumbnailItem>,
     /// 当前缩略图缓存对应的书籍路径
@@ -159,6 +166,7 @@ impl PageContentManager {
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
+            frame_builder: None,
             thumbnail_cache: std::collections::HashMap::new(),
             thumbnail_cache_book: None,
         }
@@ -177,6 +185,7 @@ impl PageContentManager {
             archive_manager,
             temp_manager: Arc::new(TempFileManager::new(temp_dir)),
             current_book: None,
+            frame_builder: None,
             thumbnail_cache: std::collections::HashMap::new(),
             thumbnail_cache_book: None,
         }
@@ -240,6 +249,27 @@ impl PageContentManager {
         let info = BookInfo::from(&book);
         self.current_book = Some(book);
 
+        // 创建帧构建器
+        if let Some(ctx) = self.current_book.as_ref() {
+            let frame_pages: Vec<FramePage> = ctx
+                .pages
+                .iter()
+                .map(|p| {
+                    FramePage::new(
+                        p.index,
+                        ctx.path.clone(),
+                        p.inner_path.clone(),
+                        p.name.clone(),
+                        p.size.unwrap_or(0),
+                        p.width.unwrap_or(0),
+                        p.height.unwrap_or(0),
+                    )
+                })
+                .collect();
+            let frame_builder = PageFrameBuilder::new(frame_pages, PageFrameContext::default());
+            self.frame_builder = Some(frame_builder);
+        }
+
         Ok(info)
     }
 
@@ -273,7 +303,27 @@ impl PageContentManager {
         let mut context = Self::build_context_from_model_book(book)?;
         let _ = context.goto(book.current_page.min(context.total_pages.saturating_sub(1)));
         let info = BookInfo::from(&context);
+
+        // 创建帧构建器
+        let frame_pages: Vec<FramePage> = context
+            .pages
+            .iter()
+            .map(|p| {
+                FramePage::new(
+                    p.index,
+                    context.path.clone(),
+                    p.inner_path.clone(),
+                    p.name.clone(),
+                    p.size.unwrap_or(0),
+                    p.width.unwrap_or(0),
+                    p.height.unwrap_or(0),
+                )
+            })
+            .collect();
+        let frame_builder = PageFrameBuilder::new(frame_pages, PageFrameContext::default());
+
         self.current_book = Some(context);
+        self.frame_builder = Some(frame_builder);
         Ok(info)
     }
 
@@ -845,6 +895,7 @@ impl PageContentManager {
             self.temp_manager.cleanup_book(&book.path);
         }
         self.current_book = None;
+        self.frame_builder = None;
     }
 
     /// 获取需要临时文件的页面路径（视频/PDF）
@@ -967,6 +1018,124 @@ impl PageContentManager {
         self.current_book
             .as_ref()
             .and_then(|book| book.get_page(index).cloned())
+    }
+
+    /// 获取当前帧快照
+    ///
+    /// 后端主导 frame 组合，前端拿到后直接渲染
+    pub fn get_frame_snapshot(
+        &self,
+        page_mode: PageMode,
+        read_order: ReadOrder,
+        split_horizontal: bool,
+        wide_page: bool,
+        single_first: bool,
+        single_last: bool,
+        divide_rate: f64,
+        split_half: Option<SplitHalf>,
+    ) -> Option<FrameSnapshot> {
+        let ctx = self.current_book.as_ref()?;
+        let builder = self.frame_builder.as_ref()?;
+
+        // 构建 PagePosition
+        let part = match split_half {
+            Some(SplitHalf::Right) => 1,
+            _ => 0,
+        };
+        let position = PagePosition::new(ctx.current_index, part);
+
+        // 使用 builder 构建帧
+        let frame = builder.build_frame(position)?;
+
+        // 转换为 FrameSnapshot
+        let mut images = Vec::new();
+        for element in frame.get_directed_elements() {
+            if element.is_dummy {
+                images.push(FrameImageInfo {
+                    page_index: element.page_index(),
+                    url: String::new(),
+                    width: 0,
+                    height: 0,
+                    crop_rect: element.crop_rect,
+                    split_half: element.crop_rect.map(|c| {
+                        if c.x > 0.25 {
+                            SplitHalf::Right
+                        } else {
+                            SplitHalf::Left
+                        }
+                    }),
+                    scale: element.scale,
+                    is_dummy: true,
+                    rotation: 0.0,
+                });
+                continue;
+            }
+
+            let page = &element.page;
+
+            // 构建 protocol URL
+            let url = if ctx.book_type == BookType::Archive || ctx.book_type == BookType::Epub {
+                format!(
+                    "neoview://localhost/archive?path={}&entry={}",
+                    urlencoding::encode(&ctx.path),
+                    urlencoding::encode(&page.inner_path)
+                )
+            } else {
+                format!(
+                    "neoview://localhost/image?path={}&index={}",
+                    urlencoding::encode(&ctx.path),
+                    page.index
+                )
+            };
+
+            images.push(FrameImageInfo {
+                page_index: page.index,
+                url,
+                width: page.width,
+                height: page.height,
+                crop_rect: element.crop_rect,
+                split_half: element.crop_rect.map(|c| {
+                    if c.x > 0.25 {
+                        SplitHalf::Right
+                    } else {
+                        SplitHalf::Left
+                    }
+                }),
+                scale: element.scale,
+                is_dummy: false,
+                rotation: 0.0,
+            });
+        }
+
+        // 计算步长
+        let step = builder.get_frame_step(ctx.current_index);
+
+        // 计算是否可以前进/后退
+        let can_next = builder.next_frame_position(position).is_some();
+        let can_prev = builder.prev_frame_position(position).is_some();
+
+        // 布局类型
+        let layout = if frame.is_single() {
+            FrameLayoutType::Single
+        } else {
+            FrameLayoutType::Double
+        };
+
+        // 帧 ID
+        let frame_id = format!("frame-{}-{}", ctx.current_index, part);
+
+        Some(FrameSnapshot {
+            book_path: ctx.path.clone(),
+            page_index: ctx.current_index,
+            frame_id,
+            layout,
+            images,
+            step,
+            can_next,
+            can_prev,
+            ready: true,
+            direction: read_order,
+        })
     }
 
     /// 【性能优化】检查页面是否在缓存中

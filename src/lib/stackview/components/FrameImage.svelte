@@ -10,10 +10,8 @@
   - 图像裁剪（四边百分比裁剪 + 自动去黑边/白边）
 -->
 <script lang="ts">
-  import { imagePool } from '../stores/imagePool.svelte';
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
-  import { stackImageLoader } from '../utils/stackImageLoader';
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
   import { generateCssFilter } from '$lib/utils/colorFilters';
   import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
@@ -90,27 +88,9 @@
     return filterStore.getCssFilter();
   });
   
-  // 获取显示 URL（优先级：超分图 > 预解码 > 原始 URL）
-  // 【翻页性能优化】优先使用预解码的 URL
-  let displayUrl = $derived.by(() => {
-    // 依赖版本号以建立响应式关系
-    const _version = imagePool.version;
-    
-    // 1. 检查超分图
-    const hasUpscaled = imagePool.hasUpscaled(pageIndex);
-    if (hasUpscaled) {
-      return imagePool.getUpscaledUrl(pageIndex) ?? url;
-    }
-    
-    // 2. 检查预解码缓存（关键优化点）
-    const preDecodedUrl = stackImageLoader.getPreDecodedUrl(pageIndex);
-    if (preDecodedUrl) {
-      return preDecodedUrl;
-    }
-    
-    // 3. 使用原始 URL
-    return url;
-  });
+  // 【后端主导架构】显示 URL 直接使用 prop 传入的 URL
+  // 不再查询 imagePool/stackImageLoader，图片资源由后端 protocol 提供
+  let displayUrl = $derived(url);
 
   // ==================== 【Phase 1 修复】移除主图渲染延迟 ====================
   // settledUrl 立即跟随 displayUrl，不再人为延迟 60ms

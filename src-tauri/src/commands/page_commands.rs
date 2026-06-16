@@ -4,7 +4,7 @@
 //! NOTE: PageFrame 命令已迁移到前端本地计算 (2024-01)
 //! 请使用前端的 pageFrameStore 进行布局计算
 
-use crate::core::page_frame::{PageFrame, PagePosition};
+use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, PageMode, PageFrame, PagePosition};
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageInfo, PageManagerStats, ThumbnailItem,
     ThumbnailReadyEvent,
@@ -646,6 +646,64 @@ impl From<&PageFrame> for PageFrameInfo {
 // - pf_is_page_split, pf_position_from_virtual, pf_frame_position_for_index
 // 请使用前端的 pageFrameStore 进行布局计算
 
+// ===== Frame Snapshot 命令（后端主导架构） =====
+
+/// 获取当前帧快照
+///
+/// 后端主导 frame 组合，前端拿到后直接渲染
+/// 这是新的阅读热路径入口，替代前端自己拼 frame 的旧模式
+#[tauri::command]
+pub async fn pm_get_frame_snapshot(
+    page_mode: String,       // "single" | "double"
+    read_order: String,      // "ltr" | "rtl"
+    split_horizontal: bool,  // 是否分割横向页
+    wide_page: bool,         // 横向页是否独占
+    single_first: bool,      // 首页单独显示
+    single_last: bool,       // 尾页单独显示
+    divide_rate: f64,        // 分割阈值
+    split_half: Option<String>, // "left" | "right" | null
+    state: State<'_, PageManagerState>,
+) -> Result<FrameSnapshot, String> {
+    log::debug!("🖼️ [PageCommand] get_frame_snapshot: page_mode={}", page_mode);
+
+    let mode = match page_mode.as_str() {
+        "double" => PageMode::Double,
+        _ => PageMode::Single,
+    };
+
+    let order = match read_order.as_str() {
+        "rtl" => ReadOrder::RightToLeft,
+        _ => ReadOrder::LeftToRight,
+    };
+
+    let half = match split_half.as_deref() {
+        Some("right") => Some(SplitHalf::Right),
+        Some("left") => Some(SplitHalf::Left),
+        _ => None,
+    };
+
+    let manager = state.manager.read().await;
+    manager.get_frame_snapshot(mode, order, split_horizontal, wide_page, single_first, single_last, divide_rate, half)
+        .ok_or_else(|| "无法获取帧快照：书籍未打开或帧构建器未初始化".to_string())
+}
+
+/// 上报视口尺寸
+///
+/// 前端上报视口信息，后端据此决定图片尺寸和缓存策略
+#[tauri::command]
+pub async fn pm_report_viewport(
+    width: u32,
+    height: u32,
+    dpr: f64,
+    view_mode: String,  // "single" | "double" | "panorama"
+    state: State<'_, PageManagerState>,
+) -> Result<(), String> {
+    log::debug!("📐 [PageCommand] report_viewport: {}x{} @ {}x ({})", width, height, dpr, view_mode);
+    // TODO: 后端根据 viewport 调整预加载策略和图片尺寸
+    // 目前先记录，后续实现
+    Ok(())
+}
+
 // ===== 辅助函数 =====
 
 /// 收集所有页面命令
@@ -666,5 +724,7 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_set_large_file_threshold",
         "pm_preload_thumbnails",
         "pm_get_cache_status", // 【性能优化】前端可查询缓存状态
+        "pm_get_frame_snapshot",
+        "pm_report_viewport",
     ]
 }

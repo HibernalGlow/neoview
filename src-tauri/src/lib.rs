@@ -565,6 +565,8 @@ pub fn run() {
             commands::page_commands::pm_get_large_file_threshold,
             commands::page_commands::pm_set_large_file_threshold,
             commands::page_commands::pm_preload_thumbnails,
+            commands::page_commands::pm_get_frame_snapshot,
+            commands::page_commands::pm_report_viewport,
             // Dimension scan commands
             commands::start_dimension_scan,
             commands::cancel_dimension_scan,

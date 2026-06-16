@@ -17,19 +17,13 @@
 	} from './layers';
 	import HoverScrollLayer from './layers/HoverScrollLayer.svelte';
 	import PanoramaFrameLayer from './layers/PanoramaFrameLayer.svelte';
-	import {
-		isLandscape,
-		buildFrameImages,
-		getPageStep,
-		shouldSplitPage,
-		type FrameBuildConfig,
-		type PageData
-	} from './utils/viewMode';
+
 	import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
 	import { calculateTargetScale } from './utils/imageTransitionManager';
 	import type { ZoomMode } from '$lib/settings/settingsManager';
 	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
-	import type { Frame, FrameLayout, FrameImage } from './types/frame';
+	import type { Frame } from './types/frame';
+	import type { GetFrameSnapshotParams } from '$lib/api/frameApi';
 	import { emptyFrame } from './types/frame';
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore } from './stores/panoramaStore.svelte';
@@ -109,21 +103,9 @@
 	// 【性能优化】viewPosition 通过 CSS 变量由 HoverLayer 直接操作 DOM
 	// 不再使用 Svelte 响应式状态，避免高频更新触发重渲染
 
-	// 【修复】图片尺寸：使用索引化缓存，避免切换时的空档期
-	// 通过 imageStore.getDimensionsForPage() 按索引读取，不再使用单一变量
+	// 【后端主导架构】图片尺寸从 imageStore.getMainImageSize() 获取
 	let hoverImageSize = $derived.by(() => {
-		const pageIndex = bookStore.currentPageIndex;
-		// 优先从缓存读取当前页尺寸
-		const dims = imageStore.getDimensionsForPage(pageIndex);
-		let w = dims?.width ?? bookStore.currentPage?.width ?? 0;
-		let h = dims?.height ?? bookStore.currentPage?.height ?? 0;
-
-		// 【关键】如果当前页分割，逻辑宽度减半
-		if (isCurrentPageSplit) {
-			w /= 2;
-		}
-
-		return { width: w, height: h };
+		return imageStore.getMainImageSize();
 	});
 
 	// ============================================================================
@@ -164,25 +146,14 @@
 	let rotation = $state(0);
 
 	// 根据 zoomMode 计算的基础缩放
-	// 【修复】使用索引化缓存和预计算缩放，避免切换时的视觉跳动
+	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
 	let modeScale = $derived.by(() => {
-		const pageIndex = bookStore.currentPageIndex;
-		
-		// 1. 优先使用预计算的缩放值（从缓存读取）
-		if (viewportSize.width > 0 && viewportSize.height > 0) {
-			const cachedScale = imageStore.getScaleForPage(pageIndex, currentZoomMode, viewportSize);
-			if (cachedScale > 0) {
-				return cachedScale;
-			}
-		}
-		
-		// 2. 降级：使用尺寸实时计算
 		const dims = hoverImageSize;
-		if (dims && viewportSize.width > 0 && viewportSize.height > 0) {
+		if (dims && dims.width > 0 && dims.height > 0 && viewportSize.width > 0 && viewportSize.height > 0) {
 			return calculateTargetScale(dims, viewportSize, currentZoomMode);
 		}
 		
-		// 3. 最终降级：使用 bookStore 元数据
+		// 降级：使用 bookStore 元数据
 		const page = bookStore.currentPage;
 		if (page?.width && page?.height && viewportSize.width > 0 && viewportSize.height > 0) {
 			return calculateTargetScale(
@@ -199,20 +170,15 @@
 	let effectiveScale = $derived(modeScale * manualScale);
 
 	// 缩放后的实际显示尺寸
-	// 【性能优化】使用索引化缓存获取尺寸
+	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
 	let displaySize = $derived.by(() => {
-		const pageIndex = bookStore.currentPageIndex;
-		const dims = imageStore.getDimensionsForPage(pageIndex);
-		const w = dims?.width ?? 0;
-		const h = dims?.height ?? 0;
-		
-		if (!w || !h) {
+		const dims = hoverImageSize;
+		if (!dims.width || !dims.height) {
 			return { width: 0, height: 0 };
 		}
-
 		return {
-			width: w * effectiveScale,
-			height: h * effectiveScale
+			width: dims.width * effectiveScale,
+			height: dims.height * effectiveScale
 		};
 	});
 
@@ -327,7 +293,6 @@
 	let treatHorizontalAsDoublePage = $derived(
 		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false
 	);
-	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
 
 	// 横向页面分割设置
 	let splitHorizontalPages = $derived(
@@ -439,9 +404,6 @@
 	// 帧配置（使用方案 B 的 pageMode）
 	// ============================================================================
 
-	// 计算帧布局：根据 pageMode 和 isPanorama
-	let frameLayout = $derived<FrameLayout>(isPanorama ? 'panorama' : pageMode);
-
 	// 首页/尾页单独显示设置
 	// 使用 BookSettingSelectMode 解析逻辑（简化版：default = true for first, false for last）
 	let singleFirstPage = $derived(
@@ -458,63 +420,17 @@
 		settings.view.pageLayout?.widePageStretch ?? 'uniformHeight'
 	);
 
-	let frameConfig = $derived.by(
-		(): FrameBuildConfig => ({
-			layout: pageMode,
-			orientation: orientation,
-			direction: direction,
-			divideLandscape: splitHorizontalPages && pageMode === 'single',
-			treatHorizontalAsDoublePage: treatHorizontalAsDoublePage,
-			autoRotate: autoRotateMode,
-			// 首页/尾页单独显示（参考 NeeView）
-			singleFirstPage: singleFirstPage,
-			singleLastPage: singleLastPage,
-			totalPages: bookStore.totalPages,
-			// 宽页拉伸模式
-			widePageStretch: widePageStretch
-		})
-	);
-
 	// ============================================================================
 	// 帧数据
 	// ============================================================================
 
-	// 获取页面数据的辅助函数
-	// 【修复】使用索引化缓存获取尺寸
-	function getPageData(index: number): PageData | null {
-		const book = bookStore.currentBook;
-		if (!book || !book.pages || index < 0 || index >= book.pages.length) {
-			return null;
-		}
-		
-		// 使用索引化缓存获取尺寸
-		const dims = imageStore.getDimensionsForPage(index);
-		const width = dims?.width ?? book.pages[index]?.width ?? 0;
-		const height = dims?.height ?? book.pages[index]?.height ?? 0;
-		
-		return {
-			url: '',
-			pageIndex: index,
-			width,
-			height
-		};
-	}
-
 	// 判断当前页是否为分割页
-	// 【修复】使用索引化缓存获取尺寸
+	// 【后端主导架构】从后端帧快照中读取分割状态
 	let isCurrentPageSplit = $derived.by(() => {
-		if (pageMode !== 'single' || !splitHorizontalPages) return false;
-		
-		// 使用索引化缓存获取尺寸
-		const pageIndex = bookStore.currentPageIndex;
-		const dims = imageStore.getDimensionsForPage(pageIndex);
-		if (dims?.width && dims?.height) {
-			return dims.width > dims.height;
-		}
-		
-		// 降级：使用页面元数据
-		const pageData = getPageData(pageIndex);
-		return pageData ? shouldSplitPage(pageData, true) : false;
+		const snapshot = imageStore.state.currentFrame;
+		if (!snapshot) return false;
+		const mainImage = snapshot.images[0];
+		return !!mainImage?.cropRect;
 	});
 
 	// ============================================================================
@@ -562,14 +478,15 @@
 	});
 
 	let currentFrameData = $derived.by((): Frame => {
-		const { currentUrl, secondUrl } = imageStore.state;
-
 		// 全景模式时不使用此组件，由 PanoramaFrameLayer 处理
 		if (isPanorama) {
 			return emptyFrame;
 		}
 
-		if (!currentUrl) {
+		// 【后端主导架构】直接从 imageStore 获取后端计算的帧
+		const frame = imageStore.getCurrentFrame();
+
+		if (frame.images.length === 0) {
 			// 【双缓冲防护】如果 viewer 仍有 book/page，返回上次非空帧
 			if (bookStore.currentBook && bookStore.currentPage && lastNonEmptyFrame) {
 				return lastNonEmptyFrame;
@@ -577,48 +494,8 @@
 			return emptyFrame;
 		}
 
-		// 【修复】使用索引化缓存获取尺寸
-		const pageIndex = bookStore.currentPageIndex;
-		const dims = imageStore.getDimensionsForPage(pageIndex);
-		const width = dims?.width ?? bookStore.currentPage?.width ?? 0;
-		const height = dims?.height ?? bookStore.currentPage?.height ?? 0;
-
-		// 构建当前页数据
-		const currentPage: PageData = {
-			url: currentUrl,
-			pageIndex: bookStore.currentPageIndex,
-			width,
-			height
-		};
-
-		// 构建下一页数据（双页模式需要）
-		// 需要包含尺寸信息，以便 buildFrameImages 判断横竖方向
-		const nextPageIndex = bookStore.currentPageIndex + 1;
-		const nextBookPage = bookStore.currentBook?.pages?.[nextPageIndex];
-		const { secondDimensions } = imageStore.state;
-		const nextPage: PageData | null = secondUrl
-			? {
-					url: secondUrl,
-					pageIndex: nextPageIndex,
-					width: secondDimensions?.width ?? nextBookPage?.width ?? 0,
-					height: secondDimensions?.height ?? nextBookPage?.height ?? 0
-				}
-			: null;
-
-		// 构建分割状态（单页分割模式）
-		const splitState = (pageMode === 'single' && splitHorizontalPages && currentSplitHalf)
-			? { pageIndex: bookStore.currentPageIndex, half: currentSplitHalf }
-			: null;
-
-		// 使用 buildFrameImages 构建图片列表
-		const images = buildFrameImages(currentPage, nextPage, frameConfig, splitState);
-
-		const frame: Frame = { id: `frame-${bookStore.currentPageIndex}-${currentSplitHalf ?? 'full'}`, images, layout: pageMode };
-
 		// 【双缓冲】更新非空帧缓存
-		if (images.length > 0) {
-			lastNonEmptyFrame = frame;
-		}
+		lastNonEmptyFrame = frame;
 
 		return frame;
 	});
@@ -673,8 +550,7 @@
 		resetScrollPosition();
 	};
 
-	// 图片加载完成回调 - 更新尺寸到缓存和元数据
-	// 【修复】不再使用单一变量，尺寸由 stackImageLoader 缓存管理
+	// 图片加载完成回调 - 更新尺寸到元数据
 	function handleImageLoad(e: Event, _index: number) {
 		const img = e.target as HTMLImageElement;
 		if (img && img.naturalWidth && img.naturalHeight) {
@@ -694,7 +570,7 @@
 		if (!book || !page) return;
 
 		// 【关键修复】同时更新 bookStore.pages 中的尺寸
-		// 这样 getPageStep 可以正确判断页面是否为横向
+		// 这样后端可以正确判断页面是否为横向
 		bookStore.updatePageDimensions(pageIndex, { width, height });
 
 		try {
@@ -709,46 +585,14 @@
 		}
 	}
 
-	// 计算翻页步进：根据当前/下一页的横竖状态动态计算
-	// 只有两张竖屏图片才能拼成双页，横向图必须单独显示
+	// 计算翻页步进：从后端帧快照中读取
 	let pageStep = $derived.by(() => {
-		if (pageMode !== 'double' || !treatHorizontalAsDoublePage) {
-			// 未开启"横向视为双页"时，使用固定步进
-			return pageMode === 'double' ? 2 : 1;
+		const snapshot = imageStore.state.currentFrame;
+		if (snapshot) {
+			return snapshot.step;
 		}
-
-		// 双页模式 + 开启"横向视为双页"：动态计算
-		const book = bookStore.currentBook;
-		if (!book || !book.pages) return 2;
-
-		const currentIndex = bookStore.currentPageIndex;
-		const currentPage = book.pages[currentIndex];
-		if (!currentPage) return 1;
-
-		// 构建页面数据
-		const currentPageData: PageData = {
-			url: '',
-			pageIndex: currentIndex,
-			width: currentPage.width ?? 0,
-			height: currentPage.height ?? 0
-		};
-
-		// 获取下一页
-		const nextIndex = currentIndex + 1;
-		let nextPageData: PageData | null = null;
-		if (nextIndex < book.pages.length) {
-			const nextPage = book.pages[nextIndex];
-			if (nextPage) {
-				nextPageData = {
-					url: '',
-					pageIndex: nextIndex,
-					width: nextPage.width ?? 0,
-					height: nextPage.height ?? 0
-				};
-			}
-		}
-
-		return getPageStep(currentPageData, nextPageData, frameConfig);
+		// 降级
+		return pageMode === 'double' ? 2 : 1;
 	});
 
 	// ============================================================================
@@ -848,7 +692,7 @@
 			// 获取或创建书本上下文
 			const ctx = bookContextManager.setCurrent(currentPath, book?.pages?.length ?? 0);
 
-			// 如果是新书本，重置状态（imagePool 会自动处理缓存）
+			// 如果是新书本，重置状态
 			if (bookContext?.path !== currentPath) {
 				console.log('📚 [StackView] 书籍切换:', { oldPath: bookContext?.path, newPath: currentPath });
 				imageStore.reset();
@@ -882,26 +726,33 @@
 		const currentPageMode = pageMode;
 		const currentPanorama = isPanorama;
 
-		// 日志已移除，避免频繁触发时的性能损耗
-
 		if (book && page) {
 			// 检测模式是否变化
 			const modeChanged = currentPageMode !== lastPageMode || currentPanorama !== lastPanorama;
 			lastPageMode = currentPageMode;
 			lastPanorama = currentPanorama;
 
-			// 通知 upscaleStore 页面切换，串行同步当前页和预超分请求
+			// 通知 upscaleStore 页面切换
 			void syncUpscaleForPage(pageIndex);
 
 			// 根据模式加载
 			if (currentPanorama) {
-				// 全景模式：使用全景 store
 				panoramaStore.setEnabled(true);
 				panoramaStore.loadPanorama(pageIndex, currentPageMode);
 			} else {
-				// 普通模式：使用图片 store
 				panoramaStore.setEnabled(false);
-				imageStore.loadCurrentPage(currentPageMode, modeChanged);
+				// 【后端主导架构】请求后端 frame snapshot
+				const params: GetFrameSnapshotParams = {
+					pageMode: currentPageMode,
+					readOrder: direction,
+					splitHorizontal: splitHorizontalPages,
+					widePage: treatHorizontalAsDoublePage,
+					singleFirst: singleFirstPage,
+					singleLast: singleLastPage,
+					divideRate: 1.0,
+					splitHalf: currentSplitHalf ?? undefined,
+				};
+				imageStore.loadCurrentPage(params, modeChanged);
 			}
 		}
 	});
@@ -913,8 +764,9 @@
 			containerRect = rect;
 			if (rect.width !== viewportSize.width || rect.height !== viewportSize.height) {
 				viewportSize = { width: rect.width, height: rect.height };
-				// 【新增】同步视口尺寸到 imageStore，用于预计算缩放
-				imageStore.setViewportSize(rect.width, rect.height);
+				// 【后端主导架构】上报视口尺寸到后端
+				const dpr = window.devicePixelRatio || 1;
+				imageStore.reportViewportSize(rect.width, rect.height, dpr, isPanorama ? 'panorama' : pageMode);
 			}
 		}
 	}
@@ -1041,8 +893,8 @@
 	<BackgroundLayer
 		color={settings.view.backgroundColor || backgroundColor}
 		mode={settings.view.backgroundMode ?? 'solid'}
-		imageSrc={imageStore.state.currentUrl ?? ''}
-		preloadedColor={imageStore.state.backgroundColor}
+		imageSrc={currentFrameData.images[0]?.url ?? ''}
+		preloadedColor=""
 		ambientSpeed={settings.view.ambient?.speed ?? 8}
 		ambientBlur={settings.view.ambient?.blur ?? 80}
 		ambientOpacity={settings.view.ambient?.opacity ?? 0.8}

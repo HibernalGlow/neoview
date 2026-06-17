@@ -7,8 +7,9 @@
 
 	import { onMount, onDestroy } from 'svelte';
 	import { radialMenuStore } from '$lib/stores/radialMenu';
-	import { keyBindingsStore } from '$lib/stores/keybindings';
+	import { keyBindingsStore, type KeyBinding } from '$lib/stores/keybindings';
 	import { bookStore } from '$lib/stores/book.svelte';
+	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 
 	let {
 		onselect = (_action: string) => {},
@@ -33,14 +34,48 @@
 		return false;
 	}
 
-	function getKeyboardHoldDuration(): number {
-		const action = keyBindingsStore.findActionByHeldKey('Enter');
-		if (!action) return 0;
-		const binding = keyBindingsStore.getBinding(action);
-		if (!binding) return 0;
-		const holdBinding = binding.bindings.find(
-			(b) => b.type === 'keyboard' && b.key === 'Enter' && b.trigger === 'hold'
-		);
+	function normalizeKey(value: string): string {
+		return value
+			.toLowerCase()
+			.replace(/←/g, 'arrowleft')
+			.replace(/→/g, 'arrowright')
+			.replace(/↑/g, 'arrowup')
+			.replace(/↓/g, 'arrowdown');
+	}
+
+	function formatKeyCombo(e: KeyboardEvent): string {
+		const parts: string[] = [];
+		if (e.ctrlKey) parts.push('Ctrl');
+		if (e.shiftKey) parts.push('Shift');
+		if (e.altKey) parts.push('Alt');
+
+		const keyMap: Record<string, string> = {
+			' ': 'Space',
+			'+': 'Plus',
+			'-': 'Minus',
+			ArrowUp: 'ArrowUp',
+			ArrowDown: 'ArrowDown',
+			ArrowLeft: 'ArrowLeft',
+			ArrowRight: 'ArrowRight'
+		};
+
+		parts.push(keyMap[e.key] || e.key);
+		return parts.join('+');
+	}
+
+	function getKeyboardHoldDuration(keyCombo: string): number {
+		const action = keyBindingsStore.findActionByHeldKey(keyCombo);
+		if (!action?.startsWith('openRadialMenu.')) return 0;
+
+		const holdBinding = keyBindingsStore.getAllBindingsForAction(action).find(({ binding }) => {
+			if (binding.type !== 'keyboard') return false;
+			const keyBinding = binding as KeyBinding;
+			return (
+				normalizeKey(keyBinding.key) === normalizeKey(keyCombo) &&
+				keyBinding.trigger === 'hold'
+			);
+		})?.binding as KeyBinding | undefined;
+
 		return holdBinding?.durationMs ?? 450;
 	}
 
@@ -48,6 +83,7 @@
 
 	function onContextMenu(e: MouseEvent) {
 		if (radialMenuStore.isOpen) return;
+		if ($settingsOverlayOpen) return;
 		if (!bookStore.viewerOpen) return;
 		if (!radialMenuStore.config.enabled) return;
 		if (isTypingInInput(e)) return;
@@ -62,30 +98,26 @@
 	function onKeyDown(e: KeyboardEvent) {
 		// 菜单已打开时不干预（ray-menu 自己处理键盘导航）
 		if (radialMenuStore.isOpen) return;
-		if (!bookStore.viewerOpen) return;
+		if ($settingsOverlayOpen) return;
 		if (!radialMenuStore.config.enabled) return;
 		if (isTypingInInput(e)) return;
 		if (isInteractiveTarget(e.target)) return;
+		if (holdTimer || e.repeat) return;
 
-		if (e.key === 'Enter') {
-			const duration = getKeyboardHoldDuration();
-			if (duration <= 0) return;
+		const keyCombo = formatKeyCombo(e);
+		const duration = getKeyboardHoldDuration(keyCombo);
+		if (duration <= 0) return;
 
-			holdTimer = setTimeout(() => {
-				holdTimer = null;
-				if (!radialMenuStore.isOpen) {
-					radialMenuStore.open(
-						window.innerWidth / 2,
-						window.innerHeight / 2,
-						'keyboard'
-					);
-				}
-			}, duration);
-		}
+		holdTimer = setTimeout(() => {
+			holdTimer = null;
+			if (!radialMenuStore.isOpen) {
+				radialMenuStore.open(window.innerWidth / 2, window.innerHeight / 2, 'keyboard');
+			}
+		}, duration);
 	}
 
 	function onKeyUp(e: KeyboardEvent) {
-		if (e.key === 'Enter' && holdTimer) {
+		if (holdTimer && getKeyboardHoldDuration(formatKeyCombo(e)) > 0) {
 			clearTimeout(holdTimer);
 			holdTimer = null;
 		}

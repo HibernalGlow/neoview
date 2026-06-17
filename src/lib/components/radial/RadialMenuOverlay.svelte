@@ -26,6 +26,16 @@
 	}
 
 	function toMenuItems(items: typeof radialMenuStore.config.items): MenuItem[] {
+		if (items.length === 0) {
+			return [
+				{
+					id: '__empty__',
+					label: '未配置',
+					disabled: true
+				}
+			];
+		}
+
 		return items.map((it) => ({
 			id: it.action ?? it.id,
 			label: it.label,

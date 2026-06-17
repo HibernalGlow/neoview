@@ -15,6 +15,7 @@
 		PanelLeft,
 		Bell,
 		LayoutGrid,
+		CircleDot,
 		Info
 	} from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -27,6 +28,7 @@
 		view: () => import('$lib/components/panels/ViewSettingsPanel.svelte'),
 		notify: () => import('$lib/components/panels/NotificationSettingsPanel.svelte'),
 		bindings: () => import('$lib/components/dialogs/UnifiedBindingPanel.svelte'),
+		radial: () => import('$lib/components/dialogs/RadialMenuSettingsPanel.svelte'),
 		panels: () => import('$lib/components/panels/SidebarManagementPanel.svelte'),
 		cards: () => import('$lib/components/settings/CardPanelManager.svelte'),
 		theme: () => import('$lib/components/panels/ThemePanel.svelte'),
@@ -73,6 +75,7 @@
 		{ value: 'panels', label: '边栏管理', icon: PanelLeft },
 		{ value: 'cards', label: '卡片管理', icon: LayoutGrid },
 		{ value: 'bindings', label: '操作绑定', icon: Keyboard },
+		{ value: 'radial', label: '轮盘', icon: CircleDot },
 		{ value: 'data', label: '数据', icon: Monitor },
 		{ value: 'about', label: '关于', icon: Info }
 	];
@@ -230,6 +233,15 @@
 					{/if}
 				{:catch}
 					<div class="p-6 text-sm text-destructive">操作绑定加载失败</div>
+				{/await}
+			{:else if activeTab === 'radial'}
+				{#await getPanelPromise('radial') then panelModule}
+					{@const PanelComponent = panelModule?.default as any}
+					{#if PanelComponent}
+						<PanelComponent />
+					{/if}
+				{:catch}
+					<div class="p-6 text-sm text-destructive">轮盘设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'panels'}
 				{#await getPanelPromise('panels') then panelModule}

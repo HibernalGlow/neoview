@@ -14,10 +14,7 @@
 	import {
 		keyBindingsStore,
 		type InputBinding,
-		type KeyBinding,
 		type MouseGesture,
-		type TouchGesture,
-		type AreaClick,
 		type BindingContext
 	} from '$lib/stores/keybindings';
 	import {
@@ -32,10 +29,7 @@
 		X,
 		CheckCircle,
 		AlertTriangle,
-		Plus,
-		MoreHorizontal,
 		Settings2 as SettingsIcon,
-		MapPin,
 		ChevronRight,
 		ChevronLeft,
 		ChevronsRight,
@@ -83,18 +77,29 @@
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
-	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | null>(null);
+	type EditableInputType = 'keyboard' | 'mouse' | 'touch' | 'area';
+	let editingType = $state<EditableInputType | null>(null);
 	// 存储每个操作当前选择的“添加到”上下文，key 为 action id
 	let actionEditingContexts = $state<Record<string, BindingContext>>({});
-	let capturedInput = $state<
-		string | { gesture?: string; button?: string; action?: string; area?: string; trigger?: string; durationMs?: number; moveTolerancePx?: number }
-	>('');
+	type CapturedInputObject = {
+		gesture?: string;
+		button?: string;
+		action?: string;
+		area?: string;
+	};
+	let capturedInput = $state<string | CapturedInputObject>('');
 	let showGestureVisualizer = $state(false);
 	let showMouseGestureRecorder = $state(false);
 	let showMouseKeyRecorder = $state(false);
 	let showAreaClickRecorder = $state(false);
 	let keyboardTriggerMode = $state<'down' | 'hold'>('down');
 	let keyboardHoldDurationMs = $state(450);
+	let mouseTriggerMode = $state<'instant' | 'hold'>('instant');
+	let mouseHoldDurationMs = $state(450);
+	let mouseMoveTolerancePx = $state(12);
+	let touchTriggerMode = $state<'instant' | 'hold'>('instant');
+	let touchHoldDurationMs = $state(450);
+	let touchMoveTolerancePx = $state(12);
 
 	// 当前选中的分类 Tab
 	let activeCategory = $state<string>('');
@@ -213,8 +218,9 @@
 	// 开始编辑（支持上下文）
 	function startEditing(
 		action: string,
-		type: 'keyboard' | 'mouse' | 'touch' | 'area',
-		context: BindingContext
+		type: EditableInputType,
+		context: BindingContext,
+		preferredTrigger: 'instant' | 'hold' | 'down' = 'instant'
 	) {
 		editingAction = action;
 		editingType = type;
@@ -223,12 +229,33 @@
 		capturedInput = '';
 
 		if (type === 'touch') {
+			touchTriggerMode = preferredTrigger === 'hold' ? 'hold' : 'instant';
+			touchHoldDurationMs = 450;
+			touchMoveTolerancePx = 12;
 			showGestureVisualizer = true;
 		} else if (type === 'area') {
 			showAreaClickRecorder = true;
 		} else if (type === 'keyboard') {
-			keyboardTriggerMode = 'down';
+			keyboardTriggerMode = preferredTrigger === 'hold' ? 'hold' : 'down';
 			keyboardHoldDurationMs = 450;
+		} else if (type === 'mouse') {
+			mouseTriggerMode = preferredTrigger === 'hold' ? 'hold' : 'instant';
+			mouseHoldDurationMs = 450;
+			mouseMoveTolerancePx = 12;
+		}
+	}
+
+	function startMouseEditing(
+		action: string,
+		context: BindingContext,
+		recorder: 'gesture' | 'button',
+		preferredTrigger: 'instant' | 'hold' = 'instant'
+	) {
+		startEditing(action, 'mouse', context, preferredTrigger);
+		if (recorder === 'gesture') {
+			showMouseGestureRecorder = true;
+		} else {
+			showMouseKeyRecorder = true;
 		}
 	}
 
@@ -271,7 +298,6 @@
 	}
 
 	// 辅助类型
-	type CapturedInputObject = { gesture?: string; button?: string; action?: string; area?: string };
 
 	// 创建绑定对象的辅助函数
 	function createBindingFromInput(): InputBinding | null {
@@ -293,9 +319,9 @@
 				gesture: obj.gesture || '',
 				button: (obj.button as 'left' | 'right' | 'middle') || 'left',
 				action: obj.action,
-				trigger: (obj.trigger as 'instant' | 'hold') || 'instant',
-				durationMs: obj.durationMs,
-				moveTolerancePx: obj.moveTolerancePx
+				trigger: mouseTriggerMode,
+				durationMs: mouseTriggerMode === 'hold' ? mouseHoldDurationMs : undefined,
+				moveTolerancePx: mouseTriggerMode === 'hold' ? mouseMoveTolerancePx : undefined
 			} as MouseGesture;
 		} else if (editingType === 'area') {
 			const obj = capturedInput as CapturedInputObject;
@@ -312,9 +338,9 @@
 			return {
 				type: 'touch',
 				gesture,
-				trigger: (obj.trigger as 'instant' | 'hold') || 'instant',
-				durationMs: obj.durationMs,
-				moveTolerancePx: obj.moveTolerancePx
+				trigger: touchTriggerMode,
+				durationMs: touchTriggerMode === 'hold' ? touchHoldDurationMs : undefined,
+				moveTolerancePx: touchTriggerMode === 'hold' ? touchMoveTolerancePx : undefined
 			};
 		}
 		return null;
@@ -389,31 +415,30 @@
 	function handleMouseGestureComplete(gesture: string, button: string, action: string) {
 		capturedInput = { gesture, button, action };
 		showMouseGestureRecorder = false;
-		saveBinding();
 	}
 
 	// 处理鼠标手势录制取消
 	function handleMouseGestureCancel() {
 		showMouseGestureRecorder = false;
+		cancelEditing();
 	}
 
 	// 处理鼠标按键录制完成
 	function handleMouseKeyComplete(gesture: string, button: string, action: string) {
 		capturedInput = { gesture, button, action };
 		showMouseKeyRecorder = false;
-		saveBinding();
 	}
 
 	// 处理鼠标按键录制取消
 	function handleMouseKeyCancel() {
 		showMouseKeyRecorder = false;
+		cancelEditing();
 	}
 
 	// 处理手势完成
 	function handleGestureComplete(gesture: string) {
 		capturedInput = gesture;
 		showGestureVisualizer = false;
-		saveBinding();
 	}
 
 	// 处理手势取消
@@ -512,6 +537,31 @@
 			default:
 				return 'text-muted-foreground';
 		}
+	}
+
+	function getEditingActionName(): string {
+		if (!editingAction) return '';
+		return keyBindingsStore.getBinding(editingAction)?.name ?? editingAction;
+	}
+
+	function getEditingTitle(): string {
+		switch (editingType) {
+			case 'keyboard':
+				return '添加键盘绑定';
+			case 'mouse':
+				return '添加鼠标绑定';
+			case 'touch':
+				return '添加触控绑定';
+			default:
+				return '添加绑定';
+		}
+	}
+
+	function getCapturedInputLabel(): string {
+		if (!capturedInput) return editingType === 'keyboard' ? '等待按键...' : '等待输入...';
+		const binding = createBindingFromInput();
+		if (binding) return keyBindingsStore.formatBinding(binding);
+		return typeof capturedInput === 'string' ? capturedInput : JSON.stringify(capturedInput);
 	}
 
 	function getActionIcon(action: string, category: string) {
@@ -824,26 +874,16 @@
 															class="w-40 rounded-xl p-1 shadow-lg"
 														>
 															<DropdownMenu.Item
-																onclick={() => {
-																	editingAction = binding.action;
-																	editingType = 'mouse';
-																	capturedInput = '';
-																	actionEditingContexts[binding.action] = currentEditingCtx;
-																	showMouseGestureRecorder = true;
-																}}
+																onclick={() =>
+																	startMouseEditing(binding.action, currentEditingCtx, 'gesture')}
 																class="gap-2 rounded-lg"
 															>
 																<Mouse class="h-4 w-4 text-green-500" />
 																<span>鼠标手势</span>
 															</DropdownMenu.Item>
 															<DropdownMenu.Item
-																onclick={() => {
-																	editingAction = binding.action;
-																	editingType = 'mouse';
-																	capturedInput = '';
-																	actionEditingContexts[binding.action] = currentEditingCtx;
-																	showMouseKeyRecorder = true;
-																}}
+																onclick={() =>
+																	startMouseEditing(binding.action, currentEditingCtx, 'button')}
 																class="gap-2 rounded-lg"
 															>
 																<Mouse class="h-4 w-4 text-green-500" />
@@ -874,8 +914,8 @@
 													</Tooltip.Root>
 
 													<!-- Area -->
-												<Tooltip.Root>
-													<Tooltip.Trigger asChild>
+													<Tooltip.Root>
+														<Tooltip.Trigger asChild>
 														{#snippet children({ props }: { props: any })}
 															<Button
 																{...props}
@@ -894,30 +934,57 @@
 													>
 												</Tooltip.Root>
 
-												<!-- Hold -->
-												<Tooltip.Root>
+													<!-- Hold -->
+													<DropdownMenu.Root>
+														<Tooltip.Root>
 													<Tooltip.Trigger asChild>
-														{#snippet children({ props }: { props: any })}
-															<Button
-																{...props}
-																variant="ghost"
-																size="icon"
-																class="h-6 w-6 rounded-lg text-amber-500 hover:bg-amber-500/10"
-																onclick={() => {
-																	editingAction = binding.action;
-																	editingType = 'hold';
-																	capturedInput = '';
-																	actionEditingContexts[binding.action] = currentEditingCtx;
-																}}
-															>
-																<Timer class="h-3 w-3" />
-															</Button>
-														{/snippet}
-													</Tooltip.Trigger>
+															{#snippet children({ props: tooltipProps }: { props: any })}
+																<DropdownMenu.Trigger asChild>
+																	{#snippet children({ props: menuProps }: { props: any })}
+																		<Button
+																			{...tooltipProps}
+																			{...menuProps}
+																			variant="ghost"
+																			size="icon"
+																			class="h-6 w-6 rounded-lg text-amber-500 hover:bg-amber-500/10"
+																		>
+																			<Timer class="h-3 w-3" />
+																		</Button>
+																	{/snippet}
+																</DropdownMenu.Trigger>
+															{/snippet}
+														</Tooltip.Trigger>
 													<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
-														>添加长按绑定</Tooltip.Content
+															>长按绑定</Tooltip.Content
 													>
-												</Tooltip.Root>
+														</Tooltip.Root>
+														<DropdownMenu.Content align="start" class="w-40 rounded-xl p-1 shadow-lg">
+															<DropdownMenu.Item
+																onclick={() =>
+																	startEditing(binding.action, 'keyboard', currentEditingCtx, 'hold')}
+																class="gap-2 rounded-lg"
+															>
+																<Keyboard class="h-4 w-4 text-blue-500" />
+																<span>键盘长按</span>
+															</DropdownMenu.Item>
+															<DropdownMenu.Item
+																onclick={() =>
+																	startMouseEditing(binding.action, currentEditingCtx, 'button', 'hold')}
+																class="gap-2 rounded-lg"
+															>
+																<Mouse class="h-4 w-4 text-green-500" />
+																<span>鼠标按住</span>
+															</DropdownMenu.Item>
+															<DropdownMenu.Item
+																onclick={() =>
+																	startEditing(binding.action, 'touch', currentEditingCtx, 'hold')}
+																class="gap-2 rounded-lg"
+															>
+																<Hand class="h-4 w-4 text-purple-500" />
+																<span>触控长按</span>
+															</DropdownMenu.Item>
+														</DropdownMenu.Content>
+													</DropdownMenu.Root>
 												</div>
 											</div>
 										</Table.Cell>
@@ -1105,21 +1172,151 @@
 	</Tabs.Root>
 
 	<!-- 编辑对话框 -->
-	{#if editingAction && editingType && editingType === 'keyboard'}
+	{#if editingAction && editingType && editingType !== 'area' && (editingType === 'keyboard' || capturedInput) && !showMouseGestureRecorder && !showMouseKeyRecorder && !showGestureVisualizer}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-			<div class="bg-background mx-4 w-full max-w-md space-y-4 rounded-lg border p-6">
+			<div class="bg-background mx-4 w-full max-w-md space-y-4 rounded-lg border p-6 shadow-xl">
 				<div class="space-y-2">
 					<h4 class="flex items-center gap-2 font-semibold">
-						<Keyboard class="h-4 w-4 text-blue-500" />
-						添加键盘按键
+						{#if editingType === 'keyboard'}
+							<Keyboard class="h-4 w-4 text-blue-500" />
+						{:else if editingType === 'mouse'}
+							<Mouse class="h-4 w-4 text-green-500" />
+						{:else}
+							<Hand class="h-4 w-4 text-purple-500" />
+						{/if}
+						{getEditingTitle()}
 					</h4>
-					<p class="text-muted-foreground text-sm">按下任意键或组合键</p>
+					<p class="text-muted-foreground text-sm">{getEditingActionName()}</p>
 				</div>
 
 				<div class="bg-muted/50 rounded-lg border p-4 text-center">
 					<div class="font-mono text-lg font-semibold">
-						{capturedInput || '等待按键...'}
+						{getCapturedInputLabel()}
 					</div>
+				</div>
+
+				<div class="space-y-4 rounded-lg border p-3">
+					{#if editingType === 'keyboard'}
+						<div class="space-y-2">
+							<div class="text-muted-foreground text-xs font-medium">触发方式</div>
+							<div class="grid grid-cols-2 gap-2">
+								<Button
+									variant={keyboardTriggerMode === 'down' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (keyboardTriggerMode = 'down')}
+								>
+									按下
+								</Button>
+								<Button
+									variant={keyboardTriggerMode === 'hold' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (keyboardTriggerMode = 'hold')}
+								>
+									长按
+								</Button>
+							</div>
+							{#if keyboardTriggerMode === 'hold'}
+								<label class="grid gap-1.5 text-xs">
+									<span class="text-muted-foreground">长按时长 (ms)</span>
+									<Input
+										type="number"
+										min="150"
+										max="3000"
+										step="50"
+										bind:value={keyboardHoldDurationMs}
+									/>
+								</label>
+							{/if}
+						</div>
+					{:else if editingType === 'mouse'}
+						<div class="space-y-2">
+							<div class="text-muted-foreground text-xs font-medium">触发方式</div>
+							<div class="grid grid-cols-2 gap-2">
+								<Button
+									variant={mouseTriggerMode === 'instant' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (mouseTriggerMode = 'instant')}
+								>
+									立即
+								</Button>
+								<Button
+									variant={mouseTriggerMode === 'hold' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (mouseTriggerMode = 'hold')}
+								>
+									按住
+								</Button>
+							</div>
+							{#if mouseTriggerMode === 'hold'}
+								<div class="grid grid-cols-2 gap-3">
+									<label class="grid gap-1.5 text-xs">
+										<span class="text-muted-foreground">长按时长 (ms)</span>
+										<Input
+											type="number"
+											min="150"
+											max="3000"
+											step="50"
+											bind:value={mouseHoldDurationMs}
+										/>
+									</label>
+									<label class="grid gap-1.5 text-xs">
+										<span class="text-muted-foreground">移动容差 (px)</span>
+										<Input
+											type="number"
+											min="0"
+											max="80"
+											step="1"
+											bind:value={mouseMoveTolerancePx}
+										/>
+									</label>
+								</div>
+							{/if}
+						</div>
+					{:else if editingType === 'touch'}
+						<div class="space-y-2">
+							<div class="text-muted-foreground text-xs font-medium">触发方式</div>
+							<div class="grid grid-cols-2 gap-2">
+								<Button
+									variant={touchTriggerMode === 'instant' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (touchTriggerMode = 'instant')}
+								>
+									立即
+								</Button>
+								<Button
+									variant={touchTriggerMode === 'hold' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => (touchTriggerMode = 'hold')}
+								>
+									长按
+								</Button>
+							</div>
+							{#if touchTriggerMode === 'hold'}
+								<div class="grid grid-cols-2 gap-3">
+									<label class="grid gap-1.5 text-xs">
+										<span class="text-muted-foreground">长按时长 (ms)</span>
+										<Input
+											type="number"
+											min="150"
+											max="3000"
+											step="50"
+											bind:value={touchHoldDurationMs}
+										/>
+									</label>
+									<label class="grid gap-1.5 text-xs">
+										<span class="text-muted-foreground">移动容差 (px)</span>
+										<Input
+											type="number"
+											min="0"
+											max="80"
+											step="1"
+											bind:value={touchMoveTolerancePx}
+										/>
+									</label>
+								</div>
+							{/if}
+						</div>
+					{/if}
 				</div>
 
 				<div class="flex justify-end gap-2">
@@ -1147,8 +1344,6 @@
 	{#if showMouseKeyRecorder && editingAction && editingType === 'mouse'}
 		<MouseKeyRecorder onComplete={handleMouseKeyComplete} onCancel={handleMouseKeyCancel} />
 	{/if}
-
-	<!-- 长按绑定录制器 -->
 
 	<!-- 手势可视化器 -->
 	{#if showGestureVisualizer && editingAction && editingType === 'touch'}

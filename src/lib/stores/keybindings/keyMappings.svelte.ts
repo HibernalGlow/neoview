@@ -172,6 +172,17 @@ const viewBindings: ActionBinding[] = [
 	}
 ];
 
+/** 轮盘菜单相关的默认绑定 */
+const radialBindings: ActionBinding[] = [
+	{
+		action: 'openRadialMenu.default',
+		name: '打开轮盘菜单',
+		category: '轮盘',
+		description: '唤出轮盘菜单',
+		bindings: [{ type: 'keyboard', key: 'Enter', trigger: 'hold', durationMs: 450 }]
+	}
+];
+
 
 /** 文件相关的默认绑定 */
 const fileBindings: ActionBinding[] = [
@@ -338,6 +349,7 @@ export const defaultBindings: ActionBinding[] = [
 	...navigationBindings,
 	...zoomBindings,
 	...viewBindings,
+	...radialBindings,
 	...fileBindings,
 	...videoBindings,
 	...upscaleBindings,

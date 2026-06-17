@@ -674,8 +674,8 @@
 	<SettingsOverlay />
 
 	<!-- 轮盘菜单系统 -->
-	<RadialInputLayer onselect={(action: string) => dispatchAction(action)} />
-	<RadialMenuOverlay />
+	<RadialInputLayer />
+	<RadialMenuOverlay onselect={(action: string) => dispatchAction(action)} />
 
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>

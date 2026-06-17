@@ -338,7 +338,7 @@ const radialMenuBindings: ActionBinding[] = [
 		category: '轮盘',
 		description: '阅读时右键短按唤出轮盘菜单；Enter 长按也可触发',
 		bindings: [
-			{ type: 'hold', device: 'keyboard', key: 'Enter', durationMs: 450 }
+			{ type: 'keyboard', key: 'Enter', trigger: 'hold', durationMs: 450 }
 		]
 	}
 ];

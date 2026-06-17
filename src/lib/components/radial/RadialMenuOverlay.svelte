@@ -25,17 +25,20 @@
 		toggle(x: number, y: number): void;
 	}
 
+	function toMenuItems(items: typeof radialMenuStore.config.items): MenuItem[] {
+		return items.map((it) => ({
+			id: it.action ?? it.id,
+			label: it.label,
+			icon: it.icon,
+			disabled: it.disabled || !it.action,
+			children: it.children?.length ? toMenuItems(it.children) : undefined
+		}));
+	}
+
 	// 同步 items 到 ray-menu
 	$effect(() => {
 		if (!menuEl) return;
-		const items: MenuItem[] = radialMenuStore.config.items
-			.filter((it) => !it.disabled)
-			.map((it) => ({
-				id: it.id,
-				label: it.label,
-				icon: it.icon,
-			}));
-		menuEl.items = items;
+		menuEl.items = toMenuItems(radialMenuStore.config.items);
 	});
 
 	// 同步视觉属性
@@ -75,6 +78,7 @@
 
 	function handleSelect(e: Event) {
 		const detail = (e as CustomEvent<MenuItem>).detail;
+		if (!detail?.id) return;
 		radialMenuStore.commit();
 		onselect(detail.id);
 		setTimeout(() => radialMenuStore.reset(), 0);

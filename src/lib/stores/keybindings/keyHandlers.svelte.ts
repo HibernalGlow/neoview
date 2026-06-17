@@ -1,6 +1,5 @@
 /**
- * 快捷键绑定系统 - 键盘事件处理模块
- * 处理键盘事件和快捷键执行逻辑
+ * Keybinding lookup helpers.
  */
 
 import type {
@@ -9,18 +8,15 @@ import type {
 	MouseGesture,
 	TouchGesture,
 	AreaClick,
-	HoldBinding,
 	BindingContext,
 	ActionBinding,
 	ViewArea,
-	MatchResult
+	MatchResult,
 } from './types';
 import { getContextPriority } from './constants';
 
-/** 输入匹配函数类型 */
 export type InputMatcher = (input: InputBinding) => boolean;
 
-/** 规范化按键字符串 */
 export function normalizeKey(value: string): string {
 	return value
 		.toLowerCase()
@@ -30,8 +26,6 @@ export function normalizeKey(value: string): string {
 		.replace(/↓/g, 'arrowdown');
 }
 
-
-/** 上下文感知的通用查找方法 */
 export function findActionByInputWithContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
@@ -42,12 +36,10 @@ export function findActionByInputWithContext(
 	for (const ab of bindings) {
 		if (ab.contextBindings) {
 			for (const cb of ab.contextBindings) {
-				if (activeContexts.includes(cb.context)) {
-					if (matcher(cb.input)) {
-						const priority = cb.priority ?? getContextPriority(cb.context);
-						matches.push({ action: ab.action, priority });
-					}
-				}
+				if (!activeContexts.includes(cb.context)) continue;
+				if (!matcher(cb.input)) continue;
+				const priority = cb.priority ?? getContextPriority(cb.context);
+				matches.push({ action: ab.action, priority });
 			}
 		}
 
@@ -64,42 +56,40 @@ export function findActionByInputWithContext(
 	return matches.length > 0 ? matches[0].action : null;
 }
 
-/** 上下文感知的按键查找 */
 export function findActionByKeyInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
-	key: string
+	key: string,
+	trigger: 'down' | 'hold' = 'down'
 ): string | null {
 	const normalizedKey = normalizeKey(key);
 	return findActionByInputWithContext(bindings, activeContexts, (input) => {
 		if (input.type !== 'keyboard') return false;
-		return normalizeKey((input as KeyBinding).key) === normalizedKey;
+		const kb = input as KeyBinding;
+		return normalizeKey(kb.key) === normalizedKey && (kb.trigger ?? 'down') === trigger;
 	});
 }
 
-/** 根据键盘按键查找操作（全局） */
-export function findActionByKey(
-	bindings: ActionBinding[],
-	key: string
-): string | null {
+export function findActionByKey(bindings: ActionBinding[], key: string): string | null {
 	for (const binding of bindings) {
 		if (!binding.bindings) continue;
-		const keyBinding = binding.bindings.find(
-			b => b.type === 'keyboard' && (b as KeyBinding).key === key
-		);
+		const keyBinding = binding.bindings.find((b) => {
+			if (b.type !== 'keyboard') return false;
+			const kb = b as KeyBinding;
+			return kb.key === key && (kb.trigger ?? 'down') === 'down';
+		});
 		if (keyBinding) return binding.action;
 	}
 	return null;
 }
 
-
-/** 上下文感知的鼠标手势查找 */
 export function findActionByMouseGestureInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
 	gesture: string,
 	button: 'left' | 'right' | 'middle' = 'left',
-	action?: string
+	action?: string,
+	trigger: 'instant' | 'hold' = 'instant'
 ): string | null {
 	return findActionByInputWithContext(bindings, activeContexts, (input) => {
 		if (input.type !== 'mouse') return false;
@@ -107,23 +97,27 @@ export function findActionByMouseGestureInContext(
 		return (
 			m.gesture === gesture &&
 			(m.button || 'left') === button &&
-			(!action || m.action === action)
+			(!action || m.action === action) &&
+			(m.trigger ?? 'instant') === trigger
 		);
 	});
 }
 
-/** 上下文感知的滚轮查找 */
 export function findActionByMouseWheelInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
 	direction: 'up' | 'down'
 ): string | null {
 	return findActionByMouseGestureInContext(
-		bindings, activeContexts, `wheel-${direction}`, 'middle', 'wheel'
+		bindings,
+		activeContexts,
+		`wheel-${direction}`,
+		'middle',
+		'wheel',
+		'instant'
 	);
 }
 
-/** 上下文感知的鼠标点击查找 */
 export function findActionByMouseClickInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
@@ -131,39 +125,44 @@ export function findActionByMouseClickInContext(
 	clickType: 'click' | 'double-click' = 'click'
 ): string | null {
 	return findActionByMouseGestureInContext(
-		bindings, activeContexts, clickType, button, clickType
+		bindings,
+		activeContexts,
+		clickType,
+		button,
+		clickType,
+		'instant'
 	);
 }
 
-/** 上下文感知的触摸手势查找 */
 export function findActionByTouchGestureInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
-	gesture: string
+	gesture: string,
+	trigger: 'instant' | 'hold' = 'instant'
 ): string | null {
 	return findActionByInputWithContext(bindings, activeContexts, (input) => {
 		if (input.type !== 'touch') return false;
-		return (input as TouchGesture).gesture === gesture;
+		const t = input as TouchGesture;
+		return t.gesture === gesture && (t.trigger ?? 'instant') === trigger;
 	});
 }
 
-/** 根据触摸手势查找操作（全局） */
 export function findActionByTouchGesture(
 	bindings: ActionBinding[],
 	gesture: string
 ): string | null {
 	for (const binding of bindings) {
 		if (!binding.bindings) continue;
-		const touchBinding = binding.bindings.find(
-			b => b.type === 'touch' && (b as TouchGesture).gesture === gesture
-		);
+		const touchBinding = binding.bindings.find((b) => {
+			if (b.type !== 'touch') return false;
+			const t = b as TouchGesture;
+			return t.gesture === gesture && (t.trigger ?? 'instant') === 'instant';
+		});
 		if (touchBinding) return binding.action;
 	}
 	return null;
 }
 
-
-/** 上下文感知的区域点击查找 */
 export function findActionByAreaClickInContext(
 	bindings: ActionBinding[],
 	activeContexts: BindingContext[],
@@ -182,30 +181,6 @@ export function findActionByAreaClickInContext(
 	});
 }
 
-/** 长按触发器 */
-export interface HoldTrigger {
-	device: 'mouse' | 'touch' | 'keyboard';
-	key?: string;
-	button?: 'left' | 'right' | 'middle';
-}
-
-/** 上下文感知的长按查找 */
-export function findActionByHoldInContext(
-	bindings: ActionBinding[],
-	activeContexts: BindingContext[],
-	trigger: HoldTrigger
-): string | null {
-	return findActionByInputWithContext(bindings, activeContexts, (input) => {
-		if (input.type !== 'hold') return false;
-		const hold = input as HoldBinding;
-		if (hold.device !== trigger.device) return false;
-		if (trigger.device === 'keyboard' && hold.key && hold.key !== trigger.key) return false;
-		if ((trigger.device === 'mouse' || trigger.device === 'touch') && hold.button && hold.button !== trigger.button) return false;
-		return true;
-	});
-}
-
-/** 根据坐标计算点击区域 */
 export function calculateClickArea(
 	x: number,
 	y: number,

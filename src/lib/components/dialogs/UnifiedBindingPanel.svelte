@@ -80,21 +80,21 @@
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
 	import MouseKeyRecorder from './MouseKeyRecorder.svelte';
 	import AreaClickRecorder from './AreaClickRecorder.svelte';
-	import HoldBindingRecorder from './HoldBindingRecorder.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
-	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | 'hold' | null>(null);
+	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | null>(null);
 	// 存储每个操作当前选择的“添加到”上下文，key 为 action id
 	let actionEditingContexts = $state<Record<string, BindingContext>>({});
 	let capturedInput = $state<
-		string | { gesture?: string; button?: string; action?: string; area?: string }
+		string | { gesture?: string; button?: string; action?: string; area?: string; trigger?: string; durationMs?: number; moveTolerancePx?: number }
 	>('');
 	let showGestureVisualizer = $state(false);
 	let showMouseGestureRecorder = $state(false);
 	let showMouseKeyRecorder = $state(false);
 	let showAreaClickRecorder = $state(false);
-	let showHoldBindingRecorder = $state(false);
+	let keyboardTriggerMode = $state<'down' | 'hold'>('down');
+	let keyboardHoldDurationMs = $state(450);
 
 	// 当前选中的分类 Tab
 	let activeCategory = $state<string>('');
@@ -226,6 +226,9 @@
 			showGestureVisualizer = true;
 		} else if (type === 'area') {
 			showAreaClickRecorder = true;
+		} else if (type === 'keyboard') {
+			keyboardTriggerMode = 'down';
+			keyboardHoldDurationMs = 450;
 		}
 	}
 
@@ -277,14 +280,22 @@
 		if (editingType === 'keyboard') {
 			const key = typeof capturedInput === 'string' ? capturedInput : '';
 			if (!key) return null;
-			return { type: 'keyboard', key };
+			return {
+				type: 'keyboard',
+				key,
+				trigger: keyboardTriggerMode,
+				durationMs: keyboardTriggerMode === 'hold' ? keyboardHoldDurationMs : undefined
+			};
 		} else if (editingType === 'mouse') {
 			const obj = capturedInput as CapturedInputObject;
 			return {
 				type: 'mouse',
 				gesture: obj.gesture || '',
 				button: (obj.button as 'left' | 'right' | 'middle') || 'left',
-				action: obj.action
+				action: obj.action,
+				trigger: (obj.trigger as 'instant' | 'hold') || 'instant',
+				durationMs: obj.durationMs,
+				moveTolerancePx: obj.moveTolerancePx
 			} as MouseGesture;
 		} else if (editingType === 'area') {
 			const obj = capturedInput as CapturedInputObject;
@@ -295,9 +306,16 @@
 				action: (obj.action as 'click' | 'double-click' | 'press') || 'click'
 			};
 		} else if (editingType === 'touch') {
-			const gesture = typeof capturedInput === 'string' ? capturedInput : '';
+			const gesture = typeof capturedInput === 'string' ? capturedInput : (capturedInput as CapturedInputObject).gesture || '';
 			if (!gesture) return null;
-			return { type: 'touch', gesture };
+			const obj = typeof capturedInput === 'string' ? {} : (capturedInput as CapturedInputObject);
+			return {
+				type: 'touch',
+				gesture,
+				trigger: (obj.trigger as 'instant' | 'hold') || 'instant',
+				durationMs: obj.durationMs,
+				moveTolerancePx: obj.moveTolerancePx
+			};
 		}
 		return null;
 	}

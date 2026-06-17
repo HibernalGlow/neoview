@@ -34,12 +34,14 @@
 	}
 
 	function getKeyboardHoldDuration(): number {
-		const action = keyBindingsStore.findActionByHold({ device: 'keyboard', key: 'Enter' });
+		const action = keyBindingsStore.findActionByHeldKey('Enter');
 		if (!action) return 0;
 		const binding = keyBindingsStore.getBinding(action);
 		if (!binding) return 0;
-		const holdBinding = binding.bindings.find((b) => b.type === 'hold');
-		return (holdBinding as any)?.durationMs ?? 450;
+		const holdBinding = binding.bindings.find(
+			(b) => b.type === 'keyboard' && b.key === 'Enter' && b.trigger === 'hold'
+		);
+		return holdBinding?.durationMs ?? 450;
 	}
 
 	// ========== 右键短按触发（contextmenu）==========

@@ -6,51 +6,14 @@ import type { RadialMenuConfig, RadialMenuItem } from './types';
 
 export const RADIAL_MENU_STORAGE_KEY = 'neoview-radial-menus';
 
-function createEmptyItem(id: string, label: string): RadialMenuItem {
-	return {
-		id,
-		action: null,
-		label,
-	};
-}
-
-function createLayerItems(layerCount: 1 | 2 | 3): RadialMenuItem[] {
-	const rootCount = 8;
-	const childCount = 8;
-
-	return Array.from({ length: rootCount }, (_, rootIndex) => {
-		const rootId = `l1-${rootIndex + 1}`;
-		const root: RadialMenuItem = createEmptyItem(rootId, `L1-${rootIndex + 1}`);
-
-		if (layerCount >= 2) {
-			root.children = Array.from({ length: childCount }, (_, childIndex) => {
-				const childId = `l2-${rootIndex + 1}-${childIndex + 1}`;
-				const child = createEmptyItem(childId, `L2-${rootIndex + 1}-${childIndex + 1}`);
-
-				if (layerCount >= 3) {
-					child.children = Array.from({ length: childCount }, (_, grandIndex) =>
-						createEmptyItem(
-							`l3-${rootIndex + 1}-${childIndex + 1}-${grandIndex + 1}`,
-							`L3-${rootIndex + 1}-${childIndex + 1}-${grandIndex + 1}`
-						)
-					);
-				}
-
-				return child;
-			});
-		}
-
-		return root;
-	});
-}
-
+/** 创建默认轮盘配置（默认无绑定，用户自行添加） */
 export function createDefaultRadialMenu(): RadialMenuConfig {
 	return {
 		id: 'default',
 		name: '默认轮盘',
 		enabled: true,
 		layerCount: 3,
-		items: createLayerItems(3),
+		items: [],
 		radius: 120,
 		innerRadius: 40,
 		variant: 'slice',
@@ -61,7 +24,7 @@ export function createDefaultRadialMenu(): RadialMenuConfig {
 
 function normalizeItem(raw: any): RadialMenuItem {
 	return {
-		id: String(raw?.id ?? `item-${Date.now()}-${Math.random()}`),
+		id: String(raw?.id ?? `item-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 		action: typeof raw?.action === 'string' ? raw.action : null,
 		label: typeof raw?.label === 'string' ? raw.label : '',
 		icon: typeof raw?.icon === 'string' && raw.icon ? raw.icon : undefined,
@@ -94,57 +57,17 @@ export function migrateRadialMenuConfig(raw: any): RadialMenuConfig {
 		? raw.layerCount
 		: 3;
 
+	// 旧 schema：layer:sector 槽位 → 转换为空 items（用户自行绑定）
 	if ('slots' in raw && !('items' in raw)) {
-		const migrated = createDefaultRadialMenu();
-		migrated.layerCount = layerCount;
-		migrated.items = createLayerItems(layerCount);
-
-		const slots = raw.slots as Record<string, any>;
-		for (const [key, slot] of Object.entries(slots)) {
-			const [layerStr, sectorStr] = key.split(':');
-			const layer = Number(layerStr);
-			const sector = Number(sectorStr);
-			if (!Number.isFinite(layer) || !Number.isFinite(sector) || !slot) continue;
-
-			if (layer === 1) {
-				const item = migrated.items[sector];
-				if (item) {
-					item.action = slot.action ?? null;
-					item.label = slot.label ?? item.label;
-				}
-				continue;
-			}
-
-			if (layer === 2) {
-				const rootIndex = Math.floor(sector / 8);
-				const childIndex = sector % 8;
-				const item = migrated.items[rootIndex]?.children?.[childIndex];
-				if (item) {
-					item.action = slot.action ?? null;
-					item.label = slot.label ?? item.label;
-				}
-				continue;
-			}
-
-			if (layer === 3) {
-				const rootIndex = Math.floor(sector / 64);
-				const remain = sector % 64;
-				const childIndex = Math.floor(remain / 8);
-				const grandIndex = remain % 8;
-				const item = migrated.items[rootIndex]?.children?.[childIndex]?.children?.[grandIndex];
-				if (item) {
-					item.action = slot.action ?? null;
-					item.label = slot.label ?? item.label;
-				}
-			}
-		}
-
-		return migrated;
+		return {
+			...defaults,
+			layerCount,
+		};
 	}
 
 	const items = Array.isArray(raw.items)
 		? pruneItemsToLayer(raw.items.map(normalizeItem), layerCount)
-		: createLayerItems(layerCount);
+		: [];
 
 	return {
 		...defaults,

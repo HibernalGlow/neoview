@@ -908,7 +908,6 @@
 																	editingType = 'hold';
 																	capturedInput = '';
 																	actionEditingContexts[binding.action] = currentEditingCtx;
-																	showHoldBindingRecorder = true;
 																}}
 															>
 																<Timer class="h-3 w-3" />
@@ -1150,9 +1149,6 @@
 	{/if}
 
 	<!-- 长按绑定录制器 -->
-	{#if showHoldBindingRecorder}
-		<HoldBindingRecorder oncapture={(data) => { capturedInput = data; showHoldBindingRecorder = false; }} oncancel={() => { showHoldBindingRecorder = false; }} />
-	{/if}
 
 	<!-- 手势可视化器 -->
 	{#if showGestureVisualizer && editingAction && editingType === 'touch'}

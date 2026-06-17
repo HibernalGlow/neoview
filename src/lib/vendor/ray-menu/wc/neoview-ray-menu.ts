@@ -247,10 +247,19 @@ export class NeoViewRayMenu extends BaseElement {
 		const style = document.createElement('style');
 		style.textContent = `${RAY_MENU_STYLES}
 			:host {
-				--ray-bg: rgba(12, 14, 20, 0.86);
-				--ray-arc-fill: rgba(20, 24, 34, 0.62);
-				--ray-arc-fill-hover: rgba(56, 189, 248, 0.42);
-				--ray-arc-stroke-hover: rgba(125, 211, 252, 0.85);
+				--ray-bg: color-mix(in oklch, var(--popover, rgb(24 24 27)) 88%, transparent);
+				--ray-text: var(--popover-foreground, rgb(244 244 245));
+				--ray-border: color-mix(in oklch, var(--border, rgb(63 63 70)) 80%, transparent);
+				--ray-accent: var(--primary, rgb(14 165 233));
+				--ray-accent-text: var(--primary-foreground, white);
+				--ray-accent-glow: color-mix(in oklch, var(--primary, rgb(14 165 233)) 36%, transparent);
+				--ray-muted: var(--muted-foreground, rgb(161 161 170));
+				--ray-arc-fill: color-mix(in oklch, var(--popover, rgb(24 24 27)) 72%, transparent);
+				--ray-arc-fill-hover: color-mix(in oklch, var(--primary, rgb(14 165 233)) 34%, transparent);
+				--ray-arc-stroke: color-mix(in oklch, var(--border, rgb(63 63 70)) 72%, transparent);
+				--ray-arc-stroke-hover: color-mix(in oklch, var(--primary, rgb(14 165 233)) 78%, transparent);
+				--ray-ring-stroke: color-mix(in oklch, var(--border, rgb(63 63 70)) 65%, transparent);
+				--ray-center-fill: color-mix(in oklch, var(--background, rgb(9 9 11)) 88%, transparent);
 			}
 			.ray-menu-container[data-neoview="true"] {
 				cursor: crosshair;
@@ -259,19 +268,19 @@ export class NeoViewRayMenu extends BaseElement {
 				overflow: visible;
 			}
 			.ray-menu-arc[data-selected="true"] {
-				fill: rgba(14, 165, 233, 0.26);
-				stroke: rgba(125, 211, 252, 0.72);
+				fill: color-mix(in oklch, var(--ray-accent) 28%, transparent);
+				stroke: color-mix(in oklch, var(--ray-accent) 78%, transparent);
 				opacity: 0.95;
 			}
 			.ray-menu-arc[data-empty="true"] {
-				fill: rgba(255, 255, 255, 0.07);
-				stroke: rgba(255, 255, 255, 0.18);
+				fill: color-mix(in oklch, var(--muted, var(--ray-bg)) 28%, transparent);
+				stroke: color-mix(in oklch, var(--ray-border) 70%, transparent);
 				stroke-dasharray: 4 5;
 				opacity: 0.72;
 			}
 			.ray-menu-arc[data-empty="true"][data-hovered="true"] {
-				fill: rgba(56, 189, 248, 0.2);
-				stroke: rgba(125, 211, 252, 0.7);
+				fill: color-mix(in oklch, var(--ray-accent) 20%, transparent);
+				stroke: color-mix(in oklch, var(--ray-accent) 74%, transparent);
 				stroke-dasharray: none;
 				opacity: 1;
 			}
@@ -390,19 +399,32 @@ export class NeoViewRayMenu extends BaseElement {
 		});
 	}
 
-	private _setKeyboardPath(path: string[]): void {
-		this._selectedLevel = Math.max(1, Math.min(3, path.length));
-		this._selectedPath = path;
-		const item = findItemById(this._layers.flat(), path[path.length - 1] ?? '');
+	private _withLevelSelection(level: number, itemId: string): string[] {
+		const path = this._selectedPath.slice(0, level);
+		while (path.length < level) path.push('');
+		path[level - 1] = itemId;
+		return path;
+	}
+
+	private _setKeyboardPath(level: number, path: string[]): void {
+		this._selectedLevel = Math.max(1, Math.min(3, level));
+		const levelItems = this._getOrderedItems(this._layers[this._selectedLevel - 1] ?? []);
+		const fallbackItem = levelItems.find((candidate) => !candidate.disabled) ?? null;
+		const itemId = path[this._selectedLevel - 1] || fallbackItem?.id || '';
+		const nextPath = path.slice(0, this._selectedLevel);
+		while (nextPath.length < this._selectedLevel) nextPath.push('');
+		nextPath[this._selectedLevel - 1] = itemId;
+		this._selectedPath = nextPath;
+
+		const item = findItemById(this._layers.flat(), itemId);
 		if (!item) {
 			this._hoveredKey = '';
 			this._render();
 			return;
 		}
-		const level = this._selectedLevel;
-		const items = this._getItemsAtPath(path.slice(0, -1));
-		const fallbackIndex = items.findIndex((candidate) => candidate.id === item.id);
-		this._hoveredKey = `${level}:${getSlotIndex(item, Math.max(0, fallbackIndex))}:${item.id}`;
+		const keyLevel = this._selectedLevel;
+		const fallbackIndex = levelItems.findIndex((candidate) => candidate.id === item.id);
+		this._hoveredKey = `${keyLevel}:${getSlotIndex(item, Math.max(0, fallbackIndex))}:${item.id}`;
 		this._render();
 	}
 
@@ -421,8 +443,7 @@ export class NeoViewRayMenu extends BaseElement {
 					? 0
 					: siblings.length - 1
 				: (currentIndex + delta + siblings.length) % siblings.length;
-		const nextPath = [...this._selectedPath.slice(0, level - 1), siblings[nextIndex].id];
-		this._setKeyboardPath(nextPath);
+		this._setKeyboardPath(level, this._withLevelSelection(level, siblings[nextIndex].id));
 	}
 
 	private _enterKeyboardChild(): void {
@@ -430,8 +451,11 @@ export class NeoViewRayMenu extends BaseElement {
 		const items = this._getOrderedItems(this._layers[nextLevel - 1] ?? []).filter(
 			(item) => !item.disabled
 		);
-		if (items.length === 0) return;
-		this._setKeyboardPath([...this._selectedPath.slice(0, nextLevel - 1), items[0].id]);
+		if (items.length === 0) {
+			this._setKeyboardPath(nextLevel, this._selectedPath);
+			return;
+		}
+		this._setKeyboardPath(nextLevel, this._withLevelSelection(nextLevel, items[0].id));
 	}
 
 	private _exitKeyboardChild(): void {
@@ -439,7 +463,7 @@ export class NeoViewRayMenu extends BaseElement {
 			this._moveKeyboardSibling(-1);
 			return;
 		}
-		this._setKeyboardPath(this._selectedPath.slice(0, this._selectedLevel - 1));
+		this._setKeyboardPath(this._selectedLevel - 1, this._selectedPath);
 	}
 
 	private _commitHovered(): void {

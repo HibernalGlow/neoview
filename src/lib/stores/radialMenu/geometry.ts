@@ -1,9 +1,25 @@
 /**
- * 轮盘菜单系统 - 几何计算纯函数
- * 所有函数无副作用，方便测试
+ * [Legacy] 轮盘菜单系统 - 几何计算纯函数
+ *
+ * 此文件为旧版 layer:sector 槽位模型的几何计算工具。
+ * 当前系统已迁移至 ray-menu Web Component（flat items 模型），
+ * 几何计算由 ray-menu 内部处理。此文件保留仅供参考，不再被任何模块引用。
  */
 
-import type { RadialMenuConfig, HitTestResult } from './types';
+/** 旧版轮盘配置（layer:sector 模型） */
+interface LegacyRadialMenuConfig {
+	sectorCount: number;
+	layers: number;
+	deadZonePx: number;
+	layerStepPx: number;
+}
+
+/** 旧版命中测试结果 */
+interface LegacyHitTestResult {
+	layer: number;
+	sector: number;
+	key: string;
+}
 
 /**
  * 命中测试：根据偏移量计算命中的层和扇区
@@ -16,8 +32,8 @@ import type { RadialMenuConfig, HitTestResult } from './types';
 export function hitTestRadial(
 	dx: number,
 	dy: number,
-	config: RadialMenuConfig
-): HitTestResult | null {
+	config: LegacyRadialMenuConfig
+): LegacyHitTestResult | null {
 	const r = Math.hypot(dx, dy);
 	if (r < config.deadZonePx) return null;
 
@@ -66,7 +82,7 @@ export function getSectorAngles(
 export function getSlotOffset(
 	layer: number,
 	sector: number,
-	config: RadialMenuConfig
+	config: LegacyRadialMenuConfig
 ): { x: number; y: number } {
 	const r = config.deadZonePx + (layer - 0.5) * config.layerStepPx;
 	const sectorAngle = (Math.PI * 2) / config.sectorCount;
@@ -80,6 +96,6 @@ export function getSlotOffset(
 /**
  * 获取轮盘的最大半径
  */
-export function getMaxRadius(config: RadialMenuConfig): number {
+export function getMaxRadius(config: LegacyRadialMenuConfig): number {
 	return config.deadZonePx + config.layers * config.layerStepPx;
 }

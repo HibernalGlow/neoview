@@ -501,8 +501,7 @@
 
 		// 轮盘菜单特殊处理：打开轮盘不走 executeAppAction
 		if (action.startsWith('openRadialMenu.')) {
-			radialMenuStore.startPendingHold('keyboard', window.innerWidth / 2, window.innerHeight / 2);
-			radialMenuStore.open();
+			radialMenuStore.open(window.innerWidth / 2, window.innerHeight / 2, 'keyboard');
 			return;
 		}
 

@@ -1,11 +1,11 @@
 /**
  * 轮盘菜单系统 - 核心 Store
- * 管理轮盘配置和运行时状态
+ * 管理 ray-menu 配置和运行时状态
+ * 几何计算/指针追踪/键盘导航由 ray-menu 内部处理
  */
 
-import type { RadialMenuConfig, RadialState, RadialMode, HitTestResult } from './types';
+import type { RadialMenuConfig, RadialState, RadialMode, RadialMenuItem } from './types';
 import { createDefaultRadialMenu, migrateRadialMenuConfig, RADIAL_MENU_STORAGE_KEY } from './defaults';
-import { hitTestRadial } from './geometry';
 
 class RadialMenuStore {
 	/** 轮盘配置 */
@@ -17,16 +17,9 @@ class RadialMenuStore {
 	/** 打开模式 */
 	mode = $state<RadialMode>('pointer');
 
-	/** 轮盘中心位置（屏幕坐标） */
+	/** 轮盘中心位置（视口坐标） */
 	centerX = $state(0);
 	centerY = $state(0);
-
-	/** 当前命中结果 */
-	currentHit = $state<HitTestResult | null>(null);
-
-	/** 键盘虚拟向量 */
-	private keyboardX = 0;
-	private keyboardY = 0;
 
 	constructor() {
 		this.loadFromStorage();
@@ -34,7 +27,6 @@ class RadialMenuStore {
 
 	// ========== 配置管理 ==========
 
-	/** 从 localStorage 加载 */
 	private loadFromStorage() {
 		if (typeof localStorage === 'undefined') return;
 		try {
@@ -48,7 +40,6 @@ class RadialMenuStore {
 		}
 	}
 
-	/** 保存到 localStorage */
 	saveToStorage() {
 		if (typeof localStorage === 'undefined') return;
 		try {
@@ -58,118 +49,74 @@ class RadialMenuStore {
 		}
 	}
 
-	/** 更新配置 */
 	updateConfig(updates: Partial<RadialMenuConfig>) {
 		this.config = { ...this.config, ...updates };
 		this.saveToStorage();
 	}
 
-	/** 设置 slot 绑定 */
-	setSlot(key: string, action: string | null, label?: string) {
-		const slot = this.config.slots[key];
-		if (slot) {
-			slot.action = action;
-			if (label !== undefined) slot.label = label;
-			this.saveToStorage();
-		}
+	/** 添加菜单项 */
+	addItem(item: RadialMenuItem) {
+		this.config.items = [...this.config.items, item];
+		this.saveToStorage();
 	}
 
-	/** 获取 slot 的 action */
-	getSlotAction(key: string): string | null {
-		const slot = this.config.slots[key];
-		if (!slot || slot.enabled === false || !slot.action) return null;
-		return slot.action;
+	/** 更新菜单项 */
+	updateItem(id: string, updates: Partial<RadialMenuItem>) {
+		this.config.items = this.config.items.map((it) =>
+			it.id === id ? { ...it, ...updates } : it
+		);
+		this.saveToStorage();
 	}
 
-	/** 获取当前选中的 action（含 fallbackToInner 逻辑） */
-	getSelectedAction(): string | null {
-		if (!this.currentHit) return null;
+	/** 删除菜单项 */
+	removeItem(id: string) {
+		this.config.items = this.config.items.filter((it) => it.id !== id);
+		this.saveToStorage();
+	}
 
-		// 先尝试当前命中
-		const action = this.getSlotAction(this.currentHit.key);
-		if (action) return action;
-
-		// fallbackToInner：向内层查找
-		if (this.config.fallbackToInner && this.currentHit.layer > 1) {
-			for (let l = this.currentHit.layer - 1; l >= 1; l--) {
-				const fallbackKey = `${l}:${this.currentHit.sector}`;
-				const fallbackAction = this.getSlotAction(fallbackKey);
-				if (fallbackAction) return fallbackAction;
-			}
-		}
-
-		return null;
+	/** 移动菜单项顺序 */
+	moveItem(id: string, direction: 'up' | 'down') {
+		const idx = this.config.items.findIndex((it) => it.id === id);
+		if (idx < 0) return;
+		const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+		if (newIdx < 0 || newIdx >= this.config.items.length) return;
+		const items = [...this.config.items];
+		[items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+		this.config.items = items;
+		this.saveToStorage();
 	}
 
 	// ========== 状态机 ==========
 
-	/** 进入 pendingHold 状态 */
-	startPendingHold(mode: RadialMode, x: number, y: number) {
-		this.mode = mode;
+	/** 打开轮盘 */
+	open(x: number, y: number, mode: RadialMode = 'pointer') {
 		this.centerX = x;
 		this.centerY = y;
-		this.state = 'pendingHold';
-		this.currentHit = null;
-		this.keyboardX = 0;
-		this.keyboardY = 0;
-	}
-
-	/** 打开轮盘 */
-	open(x?: number, y?: number) {
-		if (x !== undefined) this.centerX = x;
-		if (y !== undefined) this.centerY = y;
+		this.mode = mode;
 		this.state = 'open';
-		this.currentHit = null;
-		this.keyboardX = 0;
-		this.keyboardY = 0;
 	}
 
-	/** 更新指针位置（pointer 模式） */
-	updatePointer(dx: number, dy: number) {
-		if (this.state !== 'open' || this.mode !== 'pointer') return;
-		this.currentHit = hitTestRadial(dx, dy, this.config);
-	}
-
-	/** 更新键盘向量（keyboard 模式） */
-	updateKeyboard(direction: 'up' | 'down' | 'left' | 'right') {
-		if (this.state !== 'open' || this.mode !== 'keyboard') return;
-		const step = this.config.keyboardStepPx;
-		switch (direction) {
-			case 'right': this.keyboardX += step; break;
-			case 'left': this.keyboardX -= step; break;
-			case 'down': this.keyboardY += step; break;
-			case 'up': this.keyboardY -= step; break;
-		}
-		this.currentHit = hitTestRadial(this.keyboardX, this.keyboardY, this.config);
-	}
-
-	/** 提交选中 */
-	commit(): string | null {
-		const action = this.getSelectedAction();
+	/** 选中提交 */
+	commit() {
 		this.state = 'committed';
-		return action;
 	}
 
 	/** 取消 */
 	cancel() {
 		this.state = 'cancelled';
-		this.currentHit = null;
 	}
 
 	/** 回到 idle */
 	reset() {
 		this.state = 'idle';
-		this.currentHit = null;
-		this.keyboardX = 0;
-		this.keyboardY = 0;
 	}
 
-	/** 是否打开或即将打开 */
+	/** 是否打开 */
 	get isOpen(): boolean {
-		return this.state === 'open' || this.state === 'pendingHold';
+		return this.state === 'open';
 	}
 
-	/** 是否消费后续 click */
+	/** 是否消费后续 click（选中/取消后短暂为 true） */
 	get shouldSuppressClick(): boolean {
 		return this.state === 'committed' || this.state === 'cancelled';
 	}

@@ -1,23 +1,15 @@
 /**
  * 轮盘菜单系统 - 统一导出
+ * 基于 ray-menu Web Component
  */
 
 export type {
-	SectorCount,
-	LayerCount,
-	RadialSlot,
+	RadialMenuItem,
+	RadialVariant,
 	RadialMenuConfig,
-	HitTestResult,
 	RadialState,
 	RadialMode
 } from './types';
-
-export {
-	hitTestRadial,
-	getSectorAngles,
-	getSlotOffset,
-	getMaxRadius
-} from './geometry';
 
 export {
 	createDefaultRadialMenu,

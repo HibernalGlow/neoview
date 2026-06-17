@@ -336,11 +336,9 @@ const radialMenuBindings: ActionBinding[] = [
 		action: 'openRadialMenu.default',
 		name: '打开默认轮盘',
 		category: '轮盘',
-		description: '长按唤出默认轮盘菜单',
+		description: '阅读时右键短按唤出轮盘菜单；Enter 长按也可触发',
 		bindings: [
-			{ type: 'hold', device: 'keyboard', key: 'Enter', durationMs: 450 },
-			{ type: 'hold', device: 'mouse', button: 'left', durationMs: 450, moveTolerancePx: 8 },
-			{ type: 'hold', device: 'touch', durationMs: 500, moveTolerancePx: 12 }
+			{ type: 'hold', device: 'keyboard', key: 'Enter', durationMs: 450 }
 		]
 	}
 ];

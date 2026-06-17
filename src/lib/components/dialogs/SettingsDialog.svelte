@@ -6,20 +6,28 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import { Button } from '$lib/components/ui/button';
-	import { Settings, Keyboard, Palette, Zap, Mouse, Hand, Paintbrush, PanelLeft } from '@lucide/svelte';
-	import KeyBindingPanel from './KeyBindingPanel.svelte';
+	import {
+		CircleDot,
+		Hand,
+		Keyboard,
+		Mouse,
+		Paintbrush,
+		Palette,
+		PanelLeft,
+		Settings,
+		Zap
+	} from '@lucide/svelte';
 	import UnifiedBindingPanel from './UnifiedBindingPanel.svelte';
+	import RadialMenuSettingsPanel from './RadialMenuSettingsPanel.svelte';
 	import ViewerSettingsPanel from './ViewerSettingsPanel.svelte';
-	import MouseSettingsPanel from './MouseSettingsPanel.svelte';
-	import GestureSettingsPanel from './GestureSettingsPanel.svelte';
 	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
 
 	let { open = $bindable(false) } = $props();
-	
+
 	let sidebarOpacity = $state(settingsManager.getSettings().panels.sidebarOpacity);
 	let sidebarBlur = $state(settingsManager.getSettings().panels.sidebarBlur ?? 12);
-	
+
 	$effect(() => {
 		const unsubscribe = settingsManager.addListener((s) => {
 			sidebarOpacity = s.panels.sidebarOpacity;
@@ -36,6 +44,7 @@
 		{ value: 'keyboard', label: '快捷键', icon: Keyboard },
 		{ value: 'mouse', label: '鼠标', icon: Mouse },
 		{ value: 'gesture', label: '手势', icon: Hand },
+		{ value: 'radial', label: '轮盘', icon: CircleDot },
 		{ value: 'performance', label: '性能', icon: Zap }
 	];
 
@@ -43,8 +52,8 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content 
-		class="h-150 max-w-4xl" 
+	<Dialog.Content
+		class="h-[80vh] max-w-6xl"
 		style="background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
 	>
 		<Dialog.Header>
@@ -52,7 +61,7 @@
 			<Dialog.Description>配置 NeoView 的各项设置</Dialog.Description>
 		</Dialog.Header>
 
-		<Tabs.Root bind:value={activeTab} class="flex h-full">
+		<Tabs.Root bind:value={activeTab} class="flex min-h-0 flex-1">
 			<Tabs.List class="h-full w-48 flex-col border-r pr-4" style="background-color: transparent;">
 				{#each tabs as tab}
 					{@const IconComponent = tab.icon}
@@ -63,8 +72,7 @@
 				{/each}
 			</Tabs.List>
 
-			<!-- 右侧内容区 -->
-			<div class="flex-1 overflow-auto pl-6">
+			<div class="min-w-0 flex-1 overflow-auto pl-6">
 				<Tabs.Content value="general">
 					<div class="space-y-4">
 						<h3 class="text-lg font-semibold">通用设置</h3>
@@ -90,6 +98,10 @@
 
 				<Tabs.Content value="gesture">
 					<UnifiedBindingPanel />
+				</Tabs.Content>
+
+				<Tabs.Content value="radial">
+					<RadialMenuSettingsPanel />
 				</Tabs.Content>
 
 				<Tabs.Content value="performance">

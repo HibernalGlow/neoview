@@ -42,6 +42,22 @@ function genId(): string {
 	return `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeLayers(layers?: RadialMenuItem[][], items: RadialMenuItem[] = []): RadialMenuItem[][] {
+	return [0, 1, 2].map((index) => layers?.[index] ?? (index === 0 ? items : []));
+}
+
+function updateLayersRecursive(
+	layers: RadialMenuItem[][],
+	id: string,
+	updater: (item: RadialMenuItem) => RadialMenuItem
+): RadialMenuItem[][] {
+	return layers.map((items) => updateItemsRecursive(items, id, updater));
+}
+
+function removeFromLayers(layers: RadialMenuItem[][], id: string): RadialMenuItem[][] {
+	return layers.map((items) => removeItemsRecursive(items, id));
+}
+
 function getSlotIndex(item: RadialMenuItem, fallbackIndex: number): number {
 	return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
 		? item.slotIndex
@@ -130,13 +146,18 @@ class RadialMenuStore {
 
 	updateConfig(updates: Partial<RadialMenuConfig>) {
 		let nextConfig = { ...this.config, ...updates };
-		if (updates.items) {
+		if (updates.items || updates.layers) {
 			const activeMenuId = nextConfig.activeMenuId ?? nextConfig.id;
+			const nextLayers = normalizeLayers(updates.layers ?? nextConfig.layers, updates.items ?? nextConfig.items);
 			const menus = (nextConfig.menus?.length
 				? nextConfig.menus
-				: [{ id: nextConfig.id, name: nextConfig.name, items: this.config.items }]
-			).map((menu) => menu.id === activeMenuId ? { ...menu, items: updates.items ?? [] } : menu);
-			nextConfig = { ...nextConfig, menus };
+				: [{ id: nextConfig.id, name: nextConfig.name, layers: this.config.layers, items: this.config.items }]
+			).map((menu) =>
+				menu.id === activeMenuId
+					? { ...menu, layers: nextLayers, items: nextLayers[0] ?? [] }
+					: menu
+			);
+			nextConfig = { ...nextConfig, layers: nextLayers, items: nextLayers[0] ?? [], menus };
 		}
 		this.config = this.syncActiveItems(nextConfig);
 		this.saveToStorage();
@@ -145,7 +166,7 @@ class RadialMenuStore {
 	private syncActiveItems(config: RadialMenuConfig): RadialMenuConfig {
 		const menus = config.menus?.length
 			? config.menus
-			: [{ id: config.id, name: config.name, items: config.items }];
+			: [{ id: config.id, name: config.name, layers: config.layers, items: config.items }];
 		const activeMenuId = config.activeMenuId && menus.some((menu) => menu.id === config.activeMenuId)
 			? config.activeMenuId
 			: menus[0].id;
@@ -154,27 +175,32 @@ class RadialMenuStore {
 			...config,
 			activeMenuId,
 			menus,
-			items: activeMenu.items,
+			layers: normalizeLayers(activeMenu.layers, activeMenu.items),
+			items: normalizeLayers(activeMenu.layers, activeMenu.items)[0] ?? [],
 		};
 	}
 
-	private updateActiveMenuItems(items: RadialMenuItem[]) {
+	private updateActiveMenuLayers(layers: RadialMenuItem[][]) {
 		const activeMenuId = this.config.activeMenuId ?? this.config.id;
+		const normalized = normalizeLayers(layers, this.config.items);
 		const menus = this.config.menus?.length
-			? this.config.menus.map((menu) => menu.id === activeMenuId ? { ...menu, items } : menu)
-			: [{ id: this.config.id, name: this.config.name, items }];
-		this.config = {
+			? this.config.menus.map((menu) =>
+					menu.id === activeMenuId ? { ...menu, layers: normalized, items: normalized[0] ?? [] } : menu
+				)
+			: [{ id: this.config.id, name: this.config.name, layers: normalized, items: normalized[0] ?? [] }];
+		this.config = this.syncActiveItems({
 			...this.config,
 			activeMenuId,
 			menus,
-			items,
-		};
+			layers: normalized,
+			items: normalized[0] ?? []
+		});
 	}
 
 	get menus(): RadialMenuDefinition[] {
 		return this.config.menus?.length
 			? this.config.menus
-			: [{ id: this.config.id, name: this.config.name, items: this.config.items }];
+			: [{ id: this.config.id, name: this.config.name, layers: this.config.layers, items: this.config.items }];
 	}
 
 	get activeMenu(): RadialMenuDefinition {
@@ -189,7 +215,7 @@ class RadialMenuStore {
 
 	addMenu(name = `轮盘 ${this.menus.length + 1}`, activate = true): string {
 		const id = `menu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-		const menus = [...this.menus, { id, name, items: [] }];
+		const menus = [...this.menus, { id, name, layers: [[], [], []], items: [] }];
 		this.config = this.syncActiveItems({
 			...this.config,
 			menus,
@@ -230,10 +256,12 @@ class RadialMenuStore {
 		};
 
 		if (!parentId) {
-			this.updateActiveMenuItems([...this.config.items, newItem]);
+			const layers = normalizeLayers(this.config.layers, this.config.items);
+			layers[0] = [...layers[0], newItem];
+			this.updateActiveMenuLayers(layers);
 		} else {
-			this.updateActiveMenuItems(
-				updateItemsRecursive(this.config.items, parentId, (parent) => ({
+			this.updateActiveMenuLayers(
+				updateLayersRecursive(normalizeLayers(this.config.layers, this.config.items), parentId, (parent) => ({
 					...parent,
 					children: [
 						...(parent.children ?? []),
@@ -253,8 +281,8 @@ class RadialMenuStore {
 	}
 
 	updateItem(id: string, updates: Partial<RadialMenuItem>) {
-		this.updateActiveMenuItems(
-			updateItemsRecursive(this.config.items, id, (item) => ({
+		this.updateActiveMenuLayers(
+			updateLayersRecursive(normalizeLayers(this.config.layers, this.config.items), id, (item) => ({
 				...item,
 				...updates,
 			}))
@@ -263,15 +291,21 @@ class RadialMenuStore {
 	}
 
 	removeItem(id: string) {
-		this.updateActiveMenuItems(removeItemsRecursive(this.config.items, id));
+		this.updateActiveMenuLayers(removeFromLayers(normalizeLayers(this.config.layers, this.config.items), id));
 		this.saveToStorage();
 	}
 
 	/** 在同级内移动项 */
 	moveItem(id: string, direction: 'up' | 'down') {
-		const result = moveItemRecursive(this.config.items, id, direction);
-		if (!result.moved) return;
-		this.updateActiveMenuItems(result.items);
+		const layers = normalizeLayers(this.config.layers, this.config.items);
+		for (let index = 0; index < layers.length; index += 1) {
+			const result = moveItemRecursive(layers[index], id, direction);
+			if (!result.moved) continue;
+			layers[index] = result.items;
+			this.updateActiveMenuLayers(layers);
+			this.saveToStorage();
+			return;
+		}
 		this.saveToStorage();
 	}
 

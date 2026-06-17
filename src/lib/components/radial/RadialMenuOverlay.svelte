@@ -14,6 +14,11 @@
 	let openKey = '';
 
 	const rayItems = $derived(toRayItems(radialMenuStore.config.items));
+	const rayLayers = $derived(
+		[0, 1, 2].map((index) =>
+			toRayItems(radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : []))
+		)
+	);
 	const confirmKeys = $derived.by(() =>
 		keyBindingsStore
 			.getAllBindingsForAction('radialMenu.confirm')
@@ -61,6 +66,7 @@
 		if (!el) return;
 
 		el.items = rayItems;
+		el.layers = rayLayers;
 		el.setAttribute('radius', String(radialMenuStore.config.radius));
 		el.setAttribute('inner-radius', String(radialMenuStore.config.innerRadius));
 		el.setAttribute('start-angle', String(radialMenuStore.config.startAngle));

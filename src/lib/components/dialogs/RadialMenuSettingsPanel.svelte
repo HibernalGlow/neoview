@@ -48,6 +48,7 @@
 	};
 
 	let selectedPath = $state<string[]>([]);
+	let selectedLevel = $state<1 | 2 | 3>(1);
 	let editorOpen = $state(false);
 
 	const availableActions = $derived(
@@ -74,8 +75,7 @@
 		return [...groups.entries()].map(([category, actions]) => ({ category, actions }));
 	});
 
-	const selectedItem = $derived.by(() => findItemByPath(radialMenuStore.config.items, selectedPath));
-	const selectedLevel = $derived(Math.min(3, selectedPath.length || 1) as 1 | 2 | 3);
+	const selectedItem = $derived.by(() => findItemById(getAllLayerItems(), selectedPath[0] ?? ''));
 	const selectedAction = $derived(
 		selectedItem?.action
 			? keyBindingsStore.bindings.find((binding) => binding.action === selectedItem.action)
@@ -89,38 +89,39 @@
 	);
 
 	const editorSlots = $derived.by(() => {
-		const rootItems = radialMenuStore.config.items;
-		const level1Item = selectedPath[0] ? findItemById(rootItems, selectedPath[0]) : null;
-		const level2Item =
-			level1Item && selectedPath[1] ? findItemById(level1Item.children ?? [], selectedPath[1]) : null;
-
 		return [
-			...buildSlots(1, rootItems, undefined, []),
-			...buildSlots(2, level1Item?.children ?? [], level1Item?.id, level1Item ? [level1Item.id] : []),
-			...buildSlots(
-				3,
-				level2Item?.children ?? [],
-				level2Item?.id,
-				level1Item && level2Item ? [level1Item.id, level2Item.id] : []
-			)
+			...buildSlots(1, getLayerItems(1), undefined, []),
+			...buildSlots(2, getLayerItems(2), undefined, []),
+			...buildSlots(3, getLayerItems(3), undefined, [])
 		];
 	});
 
-	const actualLayerCount = $derived.by(() => getMaxDepth(radialMenuStore.config.items));
+	const actualLayerCount = $derived(radialMenuStore.config.layerCount);
 
 	$effect(() => {
-		const nextLayerCount = Math.max(1, actualLayerCount) as 1 | 2 | 3;
-		if (radialMenuStore.config.layerCount !== nextLayerCount) {
-			radialMenuStore.updateConfig({ layerCount: nextLayerCount });
-		}
-	});
-
-	$effect(() => {
-		if (selectedPath.length > 0 && !findItemByPath(radialMenuStore.config.items, selectedPath)) {
-			selectedPath = selectedPath.slice(0, -1);
+		if (selectedPath.length > 0 && !findItemById(getAllLayerItems(), selectedPath[0])) {
+			selectedPath = [];
 			editorOpen = false;
 		}
 	});
+
+	function getLayers(): RadialMenuItem[][] {
+		return [0, 1, 2].map((index) => radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : []));
+	}
+
+	function getLayerItems(level: 1 | 2 | 3): RadialMenuItem[] {
+		return getLayers()[level - 1] ?? [];
+	}
+
+	function getAllLayerItems(): RadialMenuItem[] {
+		return getLayers().flat();
+	}
+
+	function updateLayer(level: 1 | 2 | 3, items: RadialMenuItem[]) {
+		const layers = getLayers();
+		layers[level - 1] = items;
+		radialMenuStore.updateConfig({ layers, items: layers[0] ?? [] });
+	}
 
 	function getSlotIndex(item: RadialMenuItem, fallbackIndex: number): number {
 		return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
@@ -142,7 +143,7 @@
 		parentId: string | undefined,
 		parentPath: string[]
 	): EditorSlot[] {
-		const hasParent = level === 1 || Boolean(parentId);
+		const hasParent = true;
 		const slotCount = getSlotCount(items);
 		const sweep = radialMenuStore.config.sweepAngle / slotCount;
 		const band = BANDS[level];
@@ -157,7 +158,7 @@
 			const start = radialMenuStore.config.startAngle + index * sweep;
 			const end = start + sweep;
 			const labelPoint = polar((band.inner + band.outer) / 2, start + sweep / 2);
-			const path = item ? [...parentPath, item.id] : parentPath;
+			const path = item ? [item.id] : parentPath;
 			return {
 				id: `${level}-${index}-${item?.id ?? 'empty'}`,
 				item,
@@ -289,12 +290,12 @@
 			slotIndex: slot.index
 		};
 
-		const nextItems = insertIntoItems(radialMenuStore.config.items, slot.parentId, slot.index, item);
+		updateLayer(slot.level, [...getLayerItems(slot.level), item]);
 		radialMenuStore.updateConfig({
-			items: nextItems,
 			layerCount: Math.max(radialMenuStore.config.layerCount, slot.level) as 1 | 2 | 3
 		});
-		selectedPath = [...slot.path, item.id];
+		selectedLevel = slot.level;
+		selectedPath = [item.id];
 		editorOpen = true;
 	}
 
@@ -311,6 +312,7 @@
 
 	function handleSlotClick(slot: EditorSlot) {
 		if (slot.item) {
+			selectedLevel = slot.level;
 			selectedPath = slot.path;
 			editorOpen = true;
 			return;
@@ -360,32 +362,29 @@
 
 	function removeSelectedItem() {
 		if (!selectedItem) return;
-		const nextItems = removeFromItems(radialMenuStore.config.items, selectedItem.id);
-		radialMenuStore.updateConfig({ items: nextItems, layerCount: getMaxDepth(nextItems) });
-		selectedPath = selectedPath.slice(0, -1);
+		updateLayer(
+			selectedLevel,
+			getLayerItems(selectedLevel).filter((item) => item.id !== selectedItem.id)
+		);
+		selectedPath = [];
 		editorOpen = false;
 	}
 
 	function addChildToSelected() {
-		if (!selectedItem || selectedPath.length >= 3) return;
-		const level = (selectedPath.length + 1) as 2 | 3;
+		if (!selectedItem || selectedLevel >= 3) return;
+		const level = (selectedLevel + 1) as 2 | 3;
 		const newItem: RadialMenuItem = {
 			id: genId(),
 			action: null,
 			label: `新${getLevelName(level)}菜单`,
-			slotIndex: getSlotCount(selectedItem.children ?? []) - 1
+			slotIndex: getSlotCount(getLayerItems(level)) - 1
 		};
-		const nextItems = insertIntoItems(
-			radialMenuStore.config.items,
-			selectedItem.id,
-			selectedItem.children?.length ?? 0,
-			newItem
-		);
+		updateLayer(level, [...getLayerItems(level), newItem]);
 		radialMenuStore.updateConfig({
-			items: nextItems,
 			layerCount: Math.max(radialMenuStore.config.layerCount, level) as 1 | 2 | 3
 		});
-		selectedPath = [...selectedPath, newItem.id];
+		selectedLevel = level;
+		selectedPath = [newItem.id];
 	}
 </script>
 
@@ -456,8 +455,6 @@
 						<g
 							class:cursor-pointer={!slot.disabled}
 							class:opacity-35={slot.disabled}
-							onpointerenter={() => handleSlotHover(slot)}
-							onpointermove={() => handleSlotHover(slot)}
 							onclick={() => handleSlotClick(slot)}
 							onkeydown={(event) => {
 								if (event.key === 'Enter' || event.key === ' ') {
@@ -477,7 +474,7 @@
 										: isInSelectedPath
 											? 'fill-primary/15 stroke-primary/70'
 											: 'fill-muted/35 stroke-border hover:fill-primary/10'
-									: 'fill-background stroke-border hover:fill-muted/50'}
+									: 'fill-muted/25 stroke-muted-foreground/35 stroke-dashed hover:fill-primary/15 hover:stroke-primary/70'}
 							/>
 							{#if slot.item}
 								<foreignObject
@@ -626,10 +623,10 @@
 					</Button>
 				</div>
 
-				{#if selectedPath.length < 3}
+				{#if selectedLevel < 3}
 					<Button variant="outline" size="sm" onclick={addChildToSelected}>
 						<Plus class="mr-2 h-4 w-4" />
-						添加下一级菜单
+						添加外一圈槽位
 					</Button>
 				{/if}
 
@@ -817,10 +814,10 @@
 			</label>
 
 			<div class="flex flex-wrap gap-2">
-				{#if selectedPath.length < 3}
+				{#if selectedLevel < 3}
 					<Button variant="outline" size="sm" onclick={addChildToSelected}>
 						<Plus class="mr-2 h-4 w-4" />
-						添加下一级
+						添加外一圈槽位
 					</Button>
 				{/if}
 				<Button

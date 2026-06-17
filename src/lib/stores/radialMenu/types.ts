@@ -18,6 +18,7 @@ export type RadialVariant = 'slice' | 'bubble';
 export interface RadialMenuDefinition {
 	id: string;
 	name: string;
+	layers?: RadialMenuItem[][];
 	items: RadialMenuItem[];
 }
 
@@ -28,6 +29,7 @@ export interface RadialMenuConfig {
 	layerCount: 1 | 2 | 3;
 	activeMenuId?: string;
 	menus?: RadialMenuDefinition[];
+	layers?: RadialMenuItem[][];
 	items: RadialMenuItem[];
 	radius: number;
 	innerRadius: number;

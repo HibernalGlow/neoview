@@ -9,7 +9,12 @@ import {
 	normalizeAngle
 } from '../core';
 import { RAY_MENU_STYLES } from './ray-menu-styles';
-import { createArcPath, createInnerRing, createMenuSvg, createOuterRing } from './ray-menu-rendering';
+import {
+	createArcPath,
+	createInnerRing,
+	createMenuSvg,
+	createOuterRing
+} from './ray-menu-rendering';
 
 export interface NeoViewRayMenuItem extends MenuItem {
 	action?: string | null;
@@ -56,11 +61,7 @@ function getSlotIndex(item: NeoViewRayMenuItem, fallbackIndex: number): number {
 }
 
 function getSlotCount(items: NeoViewRayMenuItem[]): number {
-	if (items.length === 0) return 0;
-	const maxSlot = items.reduce(
-		(max, item, index) => Math.max(max, getSlotIndex(item, index)),
-		0
-	);
+	const maxSlot = items.reduce((max, item, index) => Math.max(max, getSlotIndex(item, index)), -1);
 	return Math.max(MIN_SLOT_COUNT, maxSlot + 1);
 }
 
@@ -106,6 +107,7 @@ function getShortLabel(label: string): string {
 
 export class NeoViewRayMenu extends BaseElement {
 	private _items: NeoViewRayMenuItem[] = [];
+	private _layers: NeoViewRayMenuItem[][] = [[], [], []];
 	private _isOpen = false;
 	private _position: Point = { x: 0, y: 0 };
 	private _openedAt = 0;
@@ -113,6 +115,7 @@ export class NeoViewRayMenu extends BaseElement {
 	private _layerCount = 3;
 	private _confirmKeys = new Set(['space', 'enter', ' ']);
 	private _selectedPath: string[] = [];
+	private _selectedLevel = 1;
 	private _hoveredKey = '';
 	private _renderedSlots: RuntimeSlot[] = [];
 	private _hasRenderedOnce = false;
@@ -136,9 +139,20 @@ export class NeoViewRayMenu extends BaseElement {
 
 	set items(value: NeoViewRayMenuItem[]) {
 		this._items = Array.isArray(value) ? value : [];
+		this._layers[0] = this._items;
 		this._selectedPath = this._selectedPath.filter((_, index, path) =>
-			Boolean(findItemByPath(this._items, path.slice(0, index + 1)))
+			Boolean(findItemById(this._layers.flat(), path[index]))
 		);
+		if (this._isOpen) this._render();
+	}
+
+	get layers(): NeoViewRayMenuItem[][] {
+		return this._layers;
+	}
+
+	set layers(value: NeoViewRayMenuItem[][]) {
+		this._layers = [0, 1, 2].map((index) => value?.[index] ?? []);
+		this._items = this._layers[0] ?? [];
 		if (this._isOpen) this._render();
 	}
 
@@ -154,6 +168,7 @@ export class NeoViewRayMenu extends BaseElement {
 		this._isOpen = true;
 		this._openedAt = Date.now();
 		this._selectedPath = [];
+		this._selectedLevel = 1;
 		this._hoveredKey = '';
 		this._hasRenderedOnce = false;
 		this._render();
@@ -181,6 +196,7 @@ export class NeoViewRayMenu extends BaseElement {
 		this._hoveredKey = nextKey;
 		if (slot?.item) {
 			this._selectedPath = slot.path;
+			this._selectedLevel = slot.level;
 		}
 		this._render();
 	}
@@ -248,8 +264,16 @@ export class NeoViewRayMenu extends BaseElement {
 				opacity: 0.95;
 			}
 			.ray-menu-arc[data-empty="true"] {
-				fill: rgba(255, 255, 255, 0.025);
-				opacity: 0.38;
+				fill: rgba(255, 255, 255, 0.07);
+				stroke: rgba(255, 255, 255, 0.18);
+				stroke-dasharray: 4 5;
+				opacity: 0.72;
+			}
+			.ray-menu-arc[data-empty="true"][data-hovered="true"] {
+				fill: rgba(56, 189, 248, 0.2);
+				stroke: rgba(125, 211, 252, 0.7);
+				stroke-dasharray: none;
+				opacity: 1;
 			}
 			.ray-menu-label {
 				min-width: 68px;
@@ -292,9 +316,15 @@ export class NeoViewRayMenu extends BaseElement {
 	}
 
 	private _removeGlobalListeners(): void {
-		window.removeEventListener('pointermove', this._handlePointerMove, { capture: true } as AddEventListenerOptions);
-		window.removeEventListener('pointerup', this._handlePointerUp, { capture: true } as AddEventListenerOptions);
-		window.removeEventListener('keydown', this._handleKeyDown, { capture: true } as AddEventListenerOptions);
+		window.removeEventListener('pointermove', this._handlePointerMove, {
+			capture: true
+		} as AddEventListenerOptions);
+		window.removeEventListener('pointerup', this._handlePointerUp, {
+			capture: true
+		} as AddEventListenerOptions);
+		window.removeEventListener('keydown', this._handleKeyDown, {
+			capture: true
+		} as AddEventListenerOptions);
 	}
 
 	private _onPointerMove(event: PointerEvent): void {
@@ -348,8 +378,8 @@ export class NeoViewRayMenu extends BaseElement {
 
 	private _getItemsAtPath(path: string[]): NeoViewRayMenuItem[] {
 		if (path.length === 0) return this._items;
-		const parent = findItemByPath(this._items, path);
-		return parent?.children ?? [];
+		const level = Math.max(0, Math.min(2, path.length));
+		return this._layers[level] ?? [];
 	}
 
 	private _getOrderedItems(items: NeoViewRayMenuItem[]): NeoViewRayMenuItem[] {
@@ -361,14 +391,15 @@ export class NeoViewRayMenu extends BaseElement {
 	}
 
 	private _setKeyboardPath(path: string[]): void {
+		this._selectedLevel = Math.max(1, Math.min(3, path.length));
 		this._selectedPath = path;
-		const item = findItemByPath(this._items, path);
+		const item = findItemById(this._layers.flat(), path[path.length - 1] ?? '');
 		if (!item) {
 			this._hoveredKey = '';
 			this._render();
 			return;
 		}
-		const level = Math.max(1, path.length);
+		const level = this._selectedLevel;
 		const items = this._getItemsAtPath(path.slice(0, -1));
 		const fallbackIndex = items.findIndex((candidate) => candidate.id === item.id);
 		this._hoveredKey = `${level}:${getSlotIndex(item, Math.max(0, fallbackIndex))}:${item.id}`;
@@ -376,9 +407,8 @@ export class NeoViewRayMenu extends BaseElement {
 	}
 
 	private _moveKeyboardSibling(delta: 1 | -1): void {
-		const level = Math.max(1, this._selectedPath.length || 1);
-		const parentPath = this._selectedPath.slice(0, level - 1);
-		const siblings = this._getOrderedItems(this._getItemsAtPath(parentPath)).filter(
+		const level = this._selectedLevel;
+		const siblings = this._getOrderedItems(this._layers[level - 1] ?? []).filter(
 			(item) => !item.disabled
 		);
 		if (siblings.length === 0) return;
@@ -391,25 +421,25 @@ export class NeoViewRayMenu extends BaseElement {
 					? 0
 					: siblings.length - 1
 				: (currentIndex + delta + siblings.length) % siblings.length;
-		this._setKeyboardPath([...parentPath, siblings[nextIndex].id]);
+		const nextPath = [...this._selectedPath.slice(0, level - 1), siblings[nextIndex].id];
+		this._setKeyboardPath(nextPath);
 	}
 
 	private _enterKeyboardChild(): void {
-		const current = findItemByPath(this._items, this._selectedPath);
-		const children = this._getOrderedItems(current?.children ?? []).filter((item) => !item.disabled);
-		if (!current || children.length === 0 || this._selectedPath.length >= this._getVisibleLayerLimit()) {
-			this._moveKeyboardSibling(1);
-			return;
-		}
-		this._setKeyboardPath([...this._selectedPath, children[0].id]);
+		const nextLevel = Math.min(this._getVisibleLayerLimit(), this._selectedLevel + 1);
+		const items = this._getOrderedItems(this._layers[nextLevel - 1] ?? []).filter(
+			(item) => !item.disabled
+		);
+		if (items.length === 0) return;
+		this._setKeyboardPath([...this._selectedPath.slice(0, nextLevel - 1), items[0].id]);
 	}
 
 	private _exitKeyboardChild(): void {
-		if (this._selectedPath.length <= 1) {
+		if (this._selectedLevel <= 1) {
 			this._moveKeyboardSibling(-1);
 			return;
 		}
-		this._setKeyboardPath(this._selectedPath.slice(0, -1));
+		this._setKeyboardPath(this._selectedPath.slice(0, this._selectedLevel - 1));
 	}
 
 	private _commitHovered(): void {
@@ -490,36 +520,37 @@ export class NeoViewRayMenu extends BaseElement {
 
 	private _buildVisibleSlots(): RuntimeSlot[] {
 		const slots: RuntimeSlot[] = [];
-		const rootItems = this._items;
-		const level1 = this._selectedPath[0] ? findItemById(rootItems, this._selectedPath[0]) : null;
-		const level2 =
-			level1 && this._selectedPath[1] ? findItemById(level1.children ?? [], this._selectedPath[1]) : null;
 		const layerLimit = this._getVisibleLayerLimit();
 
-		slots.push(...this._buildLevelSlots(1, rootItems, []));
-		if (layerLimit >= 2 && level1) {
-			slots.push(...this._buildLevelSlots(2, level1.children ?? [], [level1.id]));
-		}
-		if (layerLimit >= 3 && level1 && level2) {
-			slots.push(...this._buildLevelSlots(3, level2.children ?? [], [level1.id, level2.id]));
+		for (let level = 1; level <= layerLimit; level += 1) {
+			slots.push(
+				...this._buildLevelSlots(
+					level,
+					this._layers[level - 1] ?? [],
+					this._selectedPath.slice(0, level - 1)
+				)
+			);
 		}
 		return slots;
 	}
 
 	private _getSlotAtPoint(point: Point): RuntimeSlot | null {
 		const pointerDistance = distance(this._position, point);
-		const slotLevel = Array.from({ length: this._getVisibleLayerLimit() }, (_, index) => index + 1).find(
-			(level) => {
-				const band = this._getBand(level);
-				return pointerDistance >= band.inner && pointerDistance <= band.outer;
-			}
-		);
+		const slotLevel = Array.from(
+			{ length: this._getVisibleLayerLimit() },
+			(_, index) => index + 1
+		).find((level) => {
+			const band = this._getBand(level);
+			return pointerDistance >= band.inner && pointerDistance <= band.outer;
+		});
 		if (!slotLevel) return null;
 
 		const levelSlots = this._renderedSlots.filter((slot) => slot.level === slotLevel);
 		if (levelSlots.length === 0) return null;
 
-		const angle = normalizeAngle(Math.atan2(point.y - this._position.y, point.x - this._position.x));
+		const angle = normalizeAngle(
+			Math.atan2(point.y - this._position.y, point.x - this._position.x)
+		);
 		const offset = normalizeAngle(angle - normalizeAngle(this._config.startAngle));
 		if (offset > Math.abs(this._config.sweepAngle)) return null;
 
@@ -532,7 +563,9 @@ export class NeoViewRayMenu extends BaseElement {
 
 	private _clearContainer(): void {
 		if (!this.shadowRoot) return;
-		this.shadowRoot.querySelectorAll('.ray-menu-container').forEach((container) => container.remove());
+		this.shadowRoot
+			.querySelectorAll('.ray-menu-container')
+			.forEach((container) => container.remove());
 	}
 
 	private _render(): void {
@@ -540,7 +573,7 @@ export class NeoViewRayMenu extends BaseElement {
 		this._clearContainer();
 		this._renderedSlots = this._buildVisibleSlots();
 
-		if (!this._isOpen || this._items.length === 0) return;
+		if (!this._isOpen) return;
 
 		const radius = this._getOuterRadius();
 		const svgCenter = radius + SVG_PADDING;
@@ -559,7 +592,15 @@ export class NeoViewRayMenu extends BaseElement {
 
 		const svg = createMenuSvg(radius, false);
 		svg.appendChild(createOuterRing(radius, this._config.startAngle, this._config.sweepAngle));
-		svg.appendChild(createInnerRing(radius, this._config.innerRadius, false, this._config.startAngle, this._config.sweepAngle));
+		svg.appendChild(
+			createInnerRing(
+				radius,
+				this._config.innerRadius,
+				false,
+				this._config.startAngle,
+				this._config.sweepAngle
+			)
+		);
 
 		for (const slot of this._renderedSlots) {
 			const isHovered = slot.key === this._hoveredKey;
@@ -628,10 +669,12 @@ export class NeoViewRayMenu extends BaseElement {
 	}
 
 	private _getCenterHint(): string {
-		const item = findItemByPath(this._items, this._selectedPath);
+		const item = findItemById(
+			this._layers.flat(),
+			this._selectedPath[this._selectedPath.length - 1] ?? ''
+		);
 		if (!item) return 'Move to choose';
 		if (item.moveToMenuId) return 'Release to switch wheel';
-		if (item.children?.length && !item.action) return 'Move outward';
 		return 'Release to run';
 	}
 }

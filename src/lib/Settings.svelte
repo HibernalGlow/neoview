@@ -8,14 +8,22 @@
 	import { Settings, X, Minimize } from '@lucide/svelte';
 	import SettingsContent from '$lib/components/SettingsContent.svelte';
 
-	const appWindow = getCurrentWebviewWindow();
+	function isTauriRuntime(): boolean {
+		return typeof window !== 'undefined' && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+	}
+
+	const appWindow = isTauriRuntime() ? getCurrentWebviewWindow() : null;
 
 	async function minimizeWindow() {
-		await appWindow.minimize();
+		await appWindow?.minimize();
 	}
 
 	async function closeWindow() {
-		await appWindow.close();
+		if (appWindow) {
+			await appWindow.close();
+			return;
+		}
+		window.close();
 	}
 </script>
 

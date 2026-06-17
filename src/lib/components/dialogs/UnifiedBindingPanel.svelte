@@ -21,54 +21,16 @@
 		Keyboard,
 		Mouse,
 		Hand,
-		Trash2,
 		Search,
 		RotateCcw,
 		Target as TargetIcon,
-		Layers,
 		X,
 		CheckCircle,
 		AlertTriangle,
-		Settings2 as SettingsIcon,
-		ChevronRight,
-		ChevronLeft,
-		ChevronsRight,
-		ChevronsLeft,
-		ArrowRight,
-		ArrowLeft,
-		SkipForward,
-		SkipBack,
-		ZoomIn,
-		ZoomOut,
-		Maximize2,
-		Scaling,
-		Scan,
-		Fullscreen,
-		PanelLeft as PanelLeftIcon,
-		PanelRight as PanelRightIcon,
-		Pin,
-		Layout,
-		ArrowLeftRight,
-		BookOpen,
-		RotateCw,
-		FolderOpen,
-		FileX,
-		FileMinus,
-		Play,
-		Pause,
-		FastForward,
-		Rewind,
-		Volume2,
-		Volume1,
-		VolumeX,
-		Repeat,
-		Gauge,
-		Timer,
-		Zap,
-		Square,
-		StepForward
+		Timer
 	} from '@lucide/svelte';
 	import { cn } from '$lib/utils';
+	import { getActionIcon } from '$lib/utils/actionIcons';
 	import GestureVisualizer from './GestureVisualizer.svelte';
 	import { confirm } from '$lib/stores/confirmDialog.svelte';
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
@@ -564,65 +526,6 @@
 		return typeof capturedInput === 'string' ? capturedInput : JSON.stringify(capturedInput);
 	}
 
-	function getActionIcon(action: string, category: string) {
-		// Navigation
-		if (action === 'nextPage') return ChevronRight;
-		if (action === 'prevPage') return ChevronLeft;
-		if (action === 'firstPage') return ChevronsLeft;
-		if (action === 'lastPage') return ChevronsRight;
-		if (action === 'pageLeft') return ArrowLeft;
-		if (action === 'pageRight') return ArrowRight;
-		if (action === 'nextBook') return SkipForward;
-		if (action === 'prevBook') return SkipBack;
-
-		// Zoom
-		if (action === 'zoomIn') return ZoomIn;
-		if (action === 'zoomOut') return ZoomOut;
-		if (action === 'fitWindow') return Maximize2;
-		if (action === 'actualSize') return Scaling;
-		if (action === 'toggleTemporaryFitZoom') return Scan;
-
-		// Video
-		if (action === 'videoPlayPause') return Play;
-		if (action === 'videoSeekForward') return FastForward;
-		if (action === 'videoSeekBackward') return Rewind;
-		if (action === 'videoToggleMute') return VolumeX;
-		if (action === 'videoToggleLoopMode') return Repeat;
-		if (action === 'videoVolumeUp') return Volume2;
-		if (action === 'videoVolumeDown') return Volume1;
-		if (action === 'videoSpeedUp') return Gauge;
-		if (action === 'videoSpeedDown') return Timer;
-		if (action === 'videoSpeedToggle') return TargetIcon;
-		if (action === 'videoSeekModeToggle') return Zap;
-
-		// View
-		if (action === 'fullscreen') return Fullscreen;
-		if (action === 'toggleLeftSidebar') return PanelLeftIcon;
-		if (action === 'toggleRightSidebar') return PanelRightIcon;
-		if (action === 'toggleTopToolbarPin') return Pin;
-		if (action === 'toggleBottomThumbnailBarPin') return Layout;
-		if (action === 'toggleReadingDirection') return ArrowLeftRight;
-		if (action === 'toggleBookMode') return BookOpen;
-		if (action === 'rotate') return RotateCw;
-		if (action === 'toggleSinglePanoramaView') return Layers;
-
-		// File
-		if (action === 'openFile') return FolderOpen;
-		if (action === 'closeFile') return FileX;
-		if (action === 'deleteFile') return Trash2;
-		if (action === 'deleteCurrentPage') return FileMinus;
-
-		// Upscale
-		if (action === 'toggleAutoUpscale') return Zap;
-
-		// Slideshow
-		if (action === 'slideshowToggle') return Play;
-		if (action === 'slideshowPlayPause') return Pause;
-		if (action === 'slideshowStop') return Square;
-		if (action === 'slideshowSkip') return StepForward;
-
-		return SettingsIcon;
-	}
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />

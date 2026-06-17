@@ -22,14 +22,18 @@ export function createDefaultRadialMenu(): RadialMenuConfig {
 	};
 }
 
-function normalizeItem(raw: any): RadialMenuItem {
+function normalizeItem(raw: any, index = 0): RadialMenuItem {
+	const rawSlotIndex = Number(raw?.slotIndex);
 	return {
 		id: String(raw?.id ?? `item-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 		action: typeof raw?.action === 'string' ? raw.action : null,
 		label: typeof raw?.label === 'string' ? raw.label : '',
+		slotIndex: Number.isFinite(rawSlotIndex) && rawSlotIndex >= 0 ? Math.floor(rawSlotIndex) : index,
 		icon: typeof raw?.icon === 'string' && raw.icon ? raw.icon : undefined,
 		disabled: raw?.disabled === true ? true : undefined,
-		children: Array.isArray(raw?.children) ? raw.children.map(normalizeItem) : undefined,
+		children: Array.isArray(raw?.children)
+			? raw.children.map((child: unknown, childIndex: number) => normalizeItem(child, childIndex))
+			: undefined,
 	};
 }
 
@@ -66,7 +70,7 @@ export function migrateRadialMenuConfig(raw: any): RadialMenuConfig {
 	}
 
 	const items = Array.isArray(raw.items)
-		? pruneItemsToLayer(raw.items.map(normalizeItem), layerCount)
+		? pruneItemsToLayer(raw.items.map((item: unknown, index: number) => normalizeItem(item, index)), layerCount)
 		: [];
 
 	return {

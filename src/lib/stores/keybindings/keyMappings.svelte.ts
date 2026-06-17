@@ -65,7 +65,6 @@ const navigationBindings: ActionBinding[] = [
 	}
 ];
 
-
 /** 缩放相关的默认绑定 */
 const zoomBindings: ActionBinding[] = [
 	{
@@ -179,10 +178,19 @@ const radialBindings: ActionBinding[] = [
 		name: '打开轮盘菜单',
 		category: '轮盘',
 		description: '唤出轮盘菜单',
-		bindings: [{ type: 'keyboard', key: 'Enter', trigger: 'hold', durationMs: 450 }]
+		bindings: [
+			{ type: 'keyboard', key: 'Enter', trigger: 'hold', durationMs: 450 },
+			{
+				type: 'mouse',
+				gesture: 'press',
+				button: 'right',
+				action: 'press',
+				trigger: 'instant'
+			},
+			{ type: 'touch', gesture: 'long-press', trigger: 'hold', durationMs: 450, moveTolerancePx: 12 }
+		]
 	}
 ];
-
 
 /** 文件相关的默认绑定 */
 const fileBindings: ActionBinding[] = [
@@ -297,7 +305,6 @@ const videoBindings: ActionBinding[] = [
 	}
 ];
 
-
 /** 超分相关的默认绑定 */
 const upscaleBindings: ActionBinding[] = [
 	{
@@ -361,7 +368,7 @@ export const defaultBindings: ActionBinding[] = [
  * 用于重置或初始化
  */
 export function createDefaultBindings(): ActionBinding[] {
-	return defaultBindings.map(binding => ({
+	return defaultBindings.map((binding) => ({
 		...binding,
 		bindings: [...binding.bindings],
 		contextBindings: binding.contextBindings ? [...binding.contextBindings] : undefined
@@ -372,12 +379,12 @@ export function createDefaultBindings(): ActionBinding[] {
  * 获取所有可用的操作ID列表
  */
 export function getAvailableActions(): string[] {
-	return defaultBindings.map(b => b.action);
+	return defaultBindings.map((b) => b.action);
 }
 
 /**
  * 根据操作ID获取默认绑定
  */
 export function getDefaultBinding(action: string): ActionBinding | undefined {
-	return defaultBindings.find(b => b.action === action);
+	return defaultBindings.find((b) => b.action === action);
 }

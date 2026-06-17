@@ -92,6 +92,13 @@ export async function basename(p: string): Promise<string> {
 }
 
 // Mock getCurrentWindow - @tauri-apps/api/window
+export class PhysicalSize {
+  constructor(
+    public width: number,
+    public height: number
+  ) {}
+}
+
 export function getCurrentWindow() {
   return {
     async setFullscreen(fullscreen: boolean): Promise<void> {
@@ -107,6 +114,8 @@ export function getCurrentWindow() {
     async maximize(): Promise<void> {},
     async close(): Promise<void> {},
     async setTitle(_title: string): Promise<void> {},
+    async setMinSize(_size: PhysicalSize): Promise<void> {},
+    async setMaxSize(_size: PhysicalSize): Promise<void> {},
     label: 'main',
   };
 }

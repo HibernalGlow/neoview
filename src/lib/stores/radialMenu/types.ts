@@ -6,6 +6,7 @@ export interface RadialMenuItem {
 	id: string;
 	action: string | null;
 	label: string;
+	slotIndex?: number;
 	icon?: string;
 	disabled?: boolean;
 	children?: RadialMenuItem[];

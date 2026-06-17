@@ -6,7 +6,6 @@
 	 */
 
 	import 'ray-menu';
-	import type { MenuItem } from 'ray-menu';
 	import { radialMenuStore } from '$lib/stores/radialMenu';
 
 	let {
@@ -16,6 +15,15 @@
 	/** ray-menu 元素引用 */
 	let menuEl: RayMenuElement | null = $state(null);
 
+	interface MenuItem {
+		id: string;
+		label: string;
+		icon?: string;
+		disabled?: boolean;
+		selectable?: boolean;
+		children?: MenuItem[];
+	}
+
 	/** ray-menu 元素接口（局部声明，避免 svelte-check 对自定义元素类型不识别） */
 	interface RayMenuElement extends HTMLElement {
 		items: MenuItem[];
@@ -23,6 +31,50 @@
 		open(x: number, y: number): void;
 		close(): void;
 		toggle(x: number, y: number): void;
+	}
+
+	const MIN_SLOT_COUNT = 8;
+
+	function getSlotIndex(item: typeof radialMenuStore.config.items[number], fallbackIndex: number): number {
+		return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
+			? item.slotIndex
+			: fallbackIndex;
+	}
+
+	function getSlotCount(items: typeof radialMenuStore.config.items): number {
+		if (items.length === 0) return 0;
+		const maxSlot = items.reduce((max, item, index) => Math.max(max, getSlotIndex(item, index)), 0);
+		return Math.max(MIN_SLOT_COUNT, maxSlot + 1);
+	}
+
+	function toSlottedItems(items: typeof radialMenuStore.config.items): MenuItem[] {
+		const slotCount = getSlotCount(items);
+		const bySlot = new Map<number, typeof radialMenuStore.config.items[number]>();
+
+		items.forEach((item, index) => {
+			bySlot.set(getSlotIndex(item, index), item);
+		});
+
+		return Array.from({ length: slotCount }, (_, index) => {
+			const item = bySlot.get(index);
+			if (!item) {
+				return {
+					id: `__empty_${index}__`,
+					label: '',
+					disabled: true
+				};
+			}
+
+			const children = item.children?.length ? toSlottedItems(item.children) : undefined;
+			return {
+				id: item.action ?? item.id,
+				label: item.label,
+				icon: item.icon,
+				disabled: item.disabled || (!item.action && !children?.length),
+				selectable: Boolean(item.action),
+				children
+			};
+		});
 	}
 
 	function toMenuItems(items: typeof radialMenuStore.config.items): MenuItem[] {
@@ -36,13 +88,7 @@
 			];
 		}
 
-		return items.map((it) => ({
-			id: it.action ?? it.id,
-			label: it.label,
-			icon: it.icon,
-			disabled: it.disabled || !it.action,
-			children: it.children?.length ? toMenuItems(it.children) : undefined
-		}));
+		return toSlottedItems(items);
 	}
 
 	// 同步 items 到 ray-menu
@@ -78,11 +124,12 @@
 	// 事件监听
 	$effect(() => {
 		if (!menuEl) return;
-		menuEl.addEventListener('ray-select', handleSelect);
-		menuEl.addEventListener('ray-close', handleClose);
+		const el = menuEl;
+		el.addEventListener('ray-select', handleSelect);
+		el.addEventListener('ray-close', handleClose);
 		return () => {
-			menuEl.removeEventListener('ray-select', handleSelect);
-			menuEl.removeEventListener('ray-close', handleClose);
+			el.removeEventListener('ray-select', handleSelect);
+			el.removeEventListener('ray-close', handleClose);
 		};
 	});
 

@@ -37,26 +37,62 @@ function removeItemsRecursive(items: RadialMenuItem[], id: string): RadialMenuIt
 		});
 }
 
-/** 递归查找指定 id 的项及其所在数组 */
-function findItemAndParent(
-	items: RadialMenuItem[],
-	id: string
-): { item: RadialMenuItem; siblings: RadialMenuItem[]; index: number } | null {
-	for (let i = 0; i < items.length; i++) {
-		if (items[i].id === id) {
-			return { item: items[i], siblings: items, index: i };
-		}
-		if (items[i].children?.length) {
-			const found = findItemAndParent(items[i].children!, id);
-			if (found) return found;
-		}
-	}
-	return null;
-}
-
 /** 生成唯一 ID */
 function genId(): string {
 	return `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getSlotIndex(item: RadialMenuItem, fallbackIndex: number): number {
+	return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
+		? item.slotIndex
+		: fallbackIndex;
+}
+
+function sortBySlot(items: RadialMenuItem[]): RadialMenuItem[] {
+	return [...items].sort((a, b) => {
+		const diff = getSlotIndex(a, items.indexOf(a)) - getSlotIndex(b, items.indexOf(b));
+		return diff || items.indexOf(a) - items.indexOf(b);
+	});
+}
+
+function moveItemRecursive(
+	items: RadialMenuItem[],
+	id: string,
+	direction: 'up' | 'down'
+): { items: RadialMenuItem[]; moved: boolean } {
+	const ordered = sortBySlot(items);
+	const index = ordered.findIndex((item) => item.id === id);
+	if (index >= 0) {
+		const nextIndex = direction === 'up' ? index - 1 : index + 1;
+		if (nextIndex < 0 || nextIndex >= ordered.length) {
+			return { items, moved: false };
+		}
+
+		const current = ordered[index];
+		const target = ordered[nextIndex];
+		const currentSlot = getSlotIndex(current, index);
+		const targetSlot = getSlotIndex(target, nextIndex);
+
+		return {
+			items: items.map((item) => {
+				if (item.id === current.id) return { ...item, slotIndex: targetSlot };
+				if (item.id === target.id) return { ...item, slotIndex: currentSlot };
+				return item;
+			}),
+			moved: true,
+		};
+	}
+
+	let moved = false;
+	const nextItems = items.map((item) => {
+		if (!item.children?.length || moved) return item;
+		const result = moveItemRecursive(item.children, id, direction);
+		if (!result.moved) return item;
+		moved = true;
+		return { ...item, children: result.items };
+	});
+
+	return { items: nextItems, moved };
 }
 
 class RadialMenuStore {
@@ -113,6 +149,10 @@ class RadialMenuStore {
 			id: genId(),
 			action: null,
 			label: '新项目',
+			slotIndex: Math.max(
+				0,
+				...this.config.items.map((item, index) => getSlotIndex(item, index) + 1)
+			),
 		};
 
 		if (!parentId) {
@@ -125,7 +165,16 @@ class RadialMenuStore {
 				...this.config,
 				items: updateItemsRecursive(this.config.items, parentId, (parent) => ({
 					...parent,
-					children: [...(parent.children ?? []), newItem],
+					children: [
+						...(parent.children ?? []),
+						{
+							...newItem,
+							slotIndex: Math.max(
+								0,
+								...(parent.children ?? []).map((child, index) => getSlotIndex(child, index) + 1)
+							),
+						},
+					],
 				})),
 			};
 		}
@@ -154,31 +203,9 @@ class RadialMenuStore {
 
 	/** 在同级内移动项 */
 	moveItem(id: string, direction: 'up' | 'down') {
-		const found = findItemAndParent(this.config.items, id);
-		if (!found) return;
-		const { siblings, index } = found;
-		const newIdx = direction === 'up' ? index - 1 : index + 1;
-		if (newIdx < 0 || newIdx >= siblings.length) return;
-
-		const newSiblings = [...siblings];
-		[newSiblings[index], newSiblings[newIdx]] = [newSiblings[newIdx], newSiblings[index]];
-
-		// 如果 siblings 是根数组
-		if (siblings === this.config.items) {
-			this.config = { ...this.config, items: newSiblings };
-		} else {
-			// siblings 是某个父项的 children，需要递归替换
-			this.config = {
-				...this.config,
-				items: updateItemsRecursive(this.config.items, id, () => newSiblings[direction === 'up' ? newIdx + 1 : newIdx - 1]),
-			};
-			// 上面的方式不对，需要找到父项并替换其 children
-			// 使用更可靠的方式：深拷贝并替换
-			this.config = {
-				...this.config,
-				items: replaceChildrenById(this.config.items, id, newSiblings),
-			};
-		}
+		const result = moveItemRecursive(this.config.items, id, direction);
+		if (!result.moved) return;
+		this.config = { ...this.config, items: result.items };
 		this.saveToStorage();
 	}
 
@@ -213,23 +240,6 @@ class RadialMenuStore {
 	get shouldSuppressClick(): boolean {
 		return this.state === 'committed' || this.state === 'cancelled';
 	}
-}
-
-/** 递归查找包含指定 id 的父项，替换其 children 数组 */
-function replaceChildrenById(
-	items: RadialMenuItem[],
-	childId: string,
-	newChildren: RadialMenuItem[]
-): RadialMenuItem[] {
-	return items.map((item) => {
-		if (item.children?.some((c) => c.id === childId)) {
-			return { ...item, children: newChildren };
-		}
-		if (item.children?.length) {
-			return { ...item, children: replaceChildrenById(item.children, childId, newChildren) };
-		}
-		return item;
-	});
 }
 
 export const radialMenuStore = new RadialMenuStore();

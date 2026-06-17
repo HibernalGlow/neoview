@@ -1,13 +1,22 @@
 <script lang="ts">
 	/**
 	 * 轮盘菜单设置面板
-	 * 配置 ray-menu 视觉参数、层数和菜单项列表。
+	 * 用可点击轮盘槽位管理一级、二级、三级菜单。
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { radialMenuStore, type RadialMenuItem } from '$lib/stores/radialMenu';
 	import { keyBindingsStore } from '$lib/stores/keybindings';
-	import { ArrowDown, ArrowUp, CircleDot, Plus, RotateCcw, Trash2 } from '@lucide/svelte';
+	import { getActionIcon } from '$lib/utils/actionIcons';
+	import {
+		ArrowDown,
+		ArrowUp,
+		CircleDot,
+		MousePointer2,
+		Plus,
+		RotateCcw,
+		Trash2
+	} from '@lucide/svelte';
 
 	interface ActionOption {
 		action: string;
@@ -15,11 +24,30 @@
 		category: string;
 	}
 
-	interface FlatItem {
-		item: RadialMenuItem;
-		depth: number;
-		canAddChild: boolean;
+	interface EditorSlot {
+		id: string;
+		item: RadialMenuItem | null;
+		level: 1 | 2 | 3;
+		index: number;
+		parentId?: string;
+		path: string[];
+		disabled: boolean;
+		d: string;
+		labelX: number;
+		labelY: number;
+		label: string;
+		hint: string;
 	}
+
+	const CENTER = 260;
+	const MIN_SLOT_COUNT = 8;
+	const BANDS: Record<1 | 2 | 3, { inner: number; outer: number }> = {
+		1: { inner: 180, outer: 252 },
+		2: { inner: 100, outer: 180 },
+		3: { inner: 34, outer: 100 }
+	};
+
+	let selectedPath = $state<string[]>([]);
 
 	const availableActions = $derived(
 		keyBindingsStore.bindings
@@ -41,59 +69,273 @@
 		return [...groups.entries()].map(([category, actions]) => ({ category, actions }));
 	});
 
-	const flatItems = $derived.by(() => {
-		const result: FlatItem[] = [];
-		const maxDepth = radialMenuStore.config.layerCount - 1;
+	const selectedItem = $derived.by(() => findItemByPath(radialMenuStore.config.items, selectedPath));
+	const selectedLevel = $derived(Math.min(3, selectedPath.length || 1) as 1 | 2 | 3);
+	const selectedAction = $derived(
+		selectedItem?.action
+			? keyBindingsStore.bindings.find((binding) => binding.action === selectedItem.action)
+			: null
+	);
+	const SelectedActionIcon = $derived(
+		selectedItem?.action ? getActionIcon(selectedItem.action) : CircleDot
+	);
 
-		function walk(items: RadialMenuItem[], depth: number) {
-			for (const item of items) {
-				result.push({
-					item,
-					depth,
-					canAddChild: depth < maxDepth
-				});
-				if (item.children?.length) {
-					walk(item.children, depth + 1);
-				}
-			}
-		}
+	const editorSlots = $derived.by(() => {
+		const rootItems = radialMenuStore.config.items;
+		const level1Item = selectedPath[0] ? findItemById(rootItems, selectedPath[0]) : null;
+		const level2Item =
+			level1Item && selectedPath[1] ? findItemById(level1Item.children ?? [], selectedPath[1]) : null;
 
-		walk(radialMenuStore.config.items, 0);
-		return result;
+		return [
+			...buildSlots(1, rootItems, undefined, []),
+			...buildSlots(2, level1Item?.children ?? [], level1Item?.id, level1Item ? [level1Item.id] : []),
+			...buildSlots(
+				3,
+				level2Item?.children ?? [],
+				level2Item?.id,
+				level1Item && level2Item ? [level1Item.id, level2Item.id] : []
+			)
+		];
 	});
 
-	const layerLabel = $derived(
-		radialMenuStore.config.layerCount === 1
-			? '1层'
-			: radialMenuStore.config.layerCount === 2
-				? '2层'
-				: '3层'
-	);
+	const actualLayerCount = $derived.by(() => getMaxDepth(radialMenuStore.config.items));
+
+	$effect(() => {
+		const nextLayerCount = Math.max(1, actualLayerCount) as 1 | 2 | 3;
+		if (radialMenuStore.config.layerCount !== nextLayerCount) {
+			radialMenuStore.updateConfig({ layerCount: nextLayerCount });
+		}
+	});
+
+	$effect(() => {
+		if (selectedPath.length > 0 && !findItemByPath(radialMenuStore.config.items, selectedPath)) {
+			selectedPath = selectedPath.slice(0, -1);
+		}
+	});
+
+	function getSlotIndex(item: RadialMenuItem, fallbackIndex: number): number {
+		return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
+			? item.slotIndex
+			: fallbackIndex;
+	}
+
+	function getSlotCount(items: RadialMenuItem[]): number {
+		const maxSlot = items.reduce(
+			(max, item, index) => Math.max(max, getSlotIndex(item, index)),
+			-1
+		);
+		return Math.max(MIN_SLOT_COUNT, maxSlot + 2, items.length + 1);
+	}
+
+	function buildSlots(
+		level: 1 | 2 | 3,
+		items: RadialMenuItem[],
+		parentId: string | undefined,
+		parentPath: string[]
+	): EditorSlot[] {
+		const hasParent = level === 1 || Boolean(parentId);
+		const slotCount = getSlotCount(items);
+		const sweep = radialMenuStore.config.sweepAngle / slotCount;
+		const band = BANDS[level];
+		const itemsBySlot = new Map<number, RadialMenuItem>();
+
+		items.forEach((item, index) => {
+			itemsBySlot.set(getSlotIndex(item, index), item);
+		});
+
+		return Array.from({ length: slotCount }, (_, index) => {
+			const item = itemsBySlot.get(index) ?? null;
+			const start = radialMenuStore.config.startAngle + index * sweep;
+			const end = start + sweep;
+			const labelPoint = polar((band.inner + band.outer) / 2, start + sweep / 2);
+			const path = item ? [...parentPath, item.id] : parentPath;
+			return {
+				id: `${level}-${index}-${item?.id ?? 'empty'}`,
+				item,
+				level,
+				index,
+				parentId,
+				path,
+				disabled: !hasParent,
+				d: sectorPath(band.inner, band.outer, start, end),
+				labelX: labelPoint.x,
+				labelY: labelPoint.y,
+				label: item?.label || (hasParent ? '+' : getLevelName(level - 1)),
+				hint: item ? getLevelName(level) : hasParent ? `添加${getLevelName(level)}菜单` : `先选择${getLevelName(level - 1)}菜单`
+			};
+		});
+	}
+
+	function polar(radius: number, angleDeg: number): { x: number; y: number } {
+		const radians = ((angleDeg - 90) * Math.PI) / 180;
+		return {
+			x: CENTER + radius * Math.cos(radians),
+			y: CENTER + radius * Math.sin(radians)
+		};
+	}
+
+	function sectorPath(innerRadius: number, outerRadius: number, startAngle: number, endAngle: number): string {
+		const outerStart = polar(outerRadius, startAngle);
+		const outerEnd = polar(outerRadius, endAngle);
+		const innerEnd = polar(innerRadius, endAngle);
+		const innerStart = polar(innerRadius, startAngle);
+		const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+
+		return [
+			`M ${outerStart.x} ${outerStart.y}`,
+			`A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+			`L ${innerEnd.x} ${innerEnd.y}`,
+			`A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
+			'Z'
+		].join(' ');
+	}
 
 	function getActionName(action: string): string {
 		const binding = keyBindingsStore.bindings.find((item) => item.action === action);
 		return binding?.name ?? action;
 	}
 
-	function toNumber(value: string, fallback: number, min: number, max: number): number {
-		const parsed = Number(value);
-		if (!Number.isFinite(parsed)) return fallback;
-		return Math.min(max, Math.max(min, parsed));
+	function getShortLabel(label: string): string {
+		return label.length > 5 ? `${label.slice(0, 5)}…` : label;
 	}
 
-	function updateItemAction(id: string, action: string) {
-		radialMenuStore.updateItem(id, {
-			action: action || null,
-			label: action ? getActionName(action) : '新项目'
+	function getLevelName(level: number): string {
+		if (level <= 1) return '一级';
+		if (level === 2) return '二级';
+		return '三级';
+	}
+
+	function findItemById(items: RadialMenuItem[], id: string): RadialMenuItem | null {
+		for (const item of items) {
+			if (item.id === id) return item;
+			const child = findItemById(item.children ?? [], id);
+			if (child) return child;
+		}
+		return null;
+	}
+
+	function findItemByPath(items: RadialMenuItem[], path: string[]): RadialMenuItem | null {
+		let currentItems = items;
+		let current: RadialMenuItem | null = null;
+		for (const id of path) {
+			current = currentItems.find((item) => item.id === id) ?? null;
+			if (!current) return null;
+			currentItems = current.children ?? [];
+		}
+		return current;
+	}
+
+	function getMaxDepth(items: RadialMenuItem[], depth = 1): 1 | 2 | 3 {
+		let maxDepth = items.length > 0 ? depth : 1;
+		for (const item of items) {
+			if (item.children?.length) {
+				maxDepth = Math.max(maxDepth, getMaxDepth(item.children, Math.min(3, depth + 1)));
+			}
+		}
+		return Math.min(3, maxDepth) as 1 | 2 | 3;
+	}
+
+	function genId(): string {
+		return `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	}
+
+	function insertIntoItems(
+		items: RadialMenuItem[],
+		parentId: string | undefined,
+		index: number,
+		newItem: RadialMenuItem
+	): RadialMenuItem[] {
+		if (!parentId) {
+			return [...items, { ...newItem, slotIndex: index }];
+		}
+
+		return items.map((item) => {
+			if (item.id === parentId) {
+				return {
+					...item,
+					children: [...(item.children ?? []), { ...newItem, slotIndex: index }]
+				};
+			}
+			if (item.children?.length) {
+				return { ...item, children: insertIntoItems(item.children, parentId, index, newItem) };
+			}
+			return item;
 		});
 	}
 
-	function updateItemLabel(id: string, label: string) {
-		radialMenuStore.updateItem(id, { label: label.trim() || '未命名' });
+	function removeFromItems(items: RadialMenuItem[], id: string): RadialMenuItem[] {
+		return items
+			.filter((item) => item.id !== id)
+			.map((item) =>
+				item.children?.length ? { ...item, children: removeFromItems(item.children, id) } : item
+			);
 	}
 
-	function updateItemIcon(id: string, icon: string) {
-		radialMenuStore.updateItem(id, { icon: icon.trim() || undefined });
+	function addItemAt(slot: EditorSlot) {
+		if (slot.disabled) return;
+		const item: RadialMenuItem = {
+			id: genId(),
+			action: null,
+			label: `新${getLevelName(slot.level)}菜单`,
+			slotIndex: slot.index
+		};
+
+		const nextItems = insertIntoItems(radialMenuStore.config.items, slot.parentId, slot.index, item);
+		radialMenuStore.updateConfig({
+			items: nextItems,
+			layerCount: Math.max(radialMenuStore.config.layerCount, slot.level) as 1 | 2 | 3
+		});
+		selectedPath = [...slot.path, item.id];
+	}
+
+	function handleSlotClick(slot: EditorSlot) {
+		if (slot.item) {
+			selectedPath = slot.path;
+			return;
+		}
+		addItemAt(slot);
+	}
+
+	function updateSelectedAction(action: string) {
+		if (!selectedItem) return;
+		radialMenuStore.updateItem(selectedItem.id, {
+			action: action || null,
+			label: action ? getActionName(action) : selectedItem.label
+		});
+	}
+
+	function updateSelectedLabel(label: string) {
+		if (!selectedItem) return;
+		radialMenuStore.updateItem(selectedItem.id, { label: label.trim() || '未命名' });
+	}
+
+	function removeSelectedItem() {
+		if (!selectedItem) return;
+		const nextItems = removeFromItems(radialMenuStore.config.items, selectedItem.id);
+		radialMenuStore.updateConfig({ items: nextItems, layerCount: getMaxDepth(nextItems) });
+		selectedPath = selectedPath.slice(0, -1);
+	}
+
+	function addChildToSelected() {
+		if (!selectedItem || selectedPath.length >= 3) return;
+		const level = (selectedPath.length + 1) as 2 | 3;
+		const newItem: RadialMenuItem = {
+			id: genId(),
+			action: null,
+			label: `新${getLevelName(level)}菜单`,
+			slotIndex: getSlotCount(selectedItem.children ?? []) - 1
+		};
+		const nextItems = insertIntoItems(
+			radialMenuStore.config.items,
+			selectedItem.id,
+			selectedItem.children?.length ?? 0,
+			newItem
+		);
+		radialMenuStore.updateConfig({
+			items: nextItems,
+			layerCount: Math.max(radialMenuStore.config.layerCount, level) as 1 | 2 | 3
+		});
+		selectedPath = [...selectedPath, newItem.id];
 	}
 </script>
 
@@ -105,38 +347,206 @@
 				轮盘菜单
 			</h3>
 			<p class="text-muted-foreground text-sm">
-				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · {layerLabel} · {flatItems.length} 项
+				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · 当前 {getLevelName(actualLayerCount)}菜单 · 点轮盘槽位添加或编辑
 			</p>
 		</div>
 		<div class="flex gap-2">
 			<Button variant="outline" size="sm" onclick={() => radialMenuStore.resetConfig()}>
 				<RotateCcw class="mr-2 h-4 w-4" />
-				恢复默认
-			</Button>
-			<Button size="sm" onclick={() => radialMenuStore.addItem()}>
-				<Plus class="mr-2 h-4 w-4" />
-				添加根项
+				清空
 			</Button>
 		</div>
 	</div>
 
-	<section class="grid gap-3 rounded-lg border bg-card/60 p-4 md:grid-cols-2 xl:grid-cols-3">
-		<label class="grid gap-1.5 text-sm">
-			<span class="text-muted-foreground text-xs font-medium">层数</span>
-			<select
-				class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-				value={radialMenuStore.config.layerCount}
-				onchange={(event) =>
-					radialMenuStore.setLayerCount(
-						Number((event.currentTarget as HTMLSelectElement).value) as 1 | 2 | 3
-					)}
-			>
-				<option value={1}>1层</option>
-				<option value={2}>2层</option>
-				<option value={3}>3层</option>
-			</select>
-		</label>
+	<div class="grid gap-4 xl:grid-cols-[minmax(28rem,1fr)_22rem]">
+		<section class="rounded-lg border bg-card/60 p-4">
+			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<h4 class="text-sm font-medium">轮盘编辑预览</h4>
+					<p class="text-muted-foreground text-xs">外圈是一级菜单，往里是二级、三级。点空白扇区新增，点文字扇区编辑。</p>
+				</div>
+				<label class="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
+					<span class="text-muted-foreground">启用</span>
+					<input
+						type="checkbox"
+						class="h-4 w-4 accent-primary"
+						checked={radialMenuStore.config.enabled}
+						onchange={(event) =>
+							radialMenuStore.updateConfig({
+								enabled: (event.currentTarget as HTMLInputElement).checked
+							})}
+					/>
+				</label>
+			</div>
 
+			<div class="flex justify-center overflow-auto">
+				<svg viewBox="0 0 520 520" class="h-[min(68vh,36rem)] min-h-[28rem] w-full max-w-[36rem]">
+					<circle cx={CENTER} cy={CENTER} r="252" class="fill-background stroke-border" />
+					<circle cx={CENTER} cy={CENTER} r="180" class="fill-background stroke-border" />
+					<circle cx={CENTER} cy={CENTER} r="100" class="fill-background stroke-border" />
+					<circle cx={CENTER} cy={CENTER} r="34" class="fill-background stroke-border" />
+
+					{#each editorSlots as slot (slot.id)}
+						{@const isSelected = slot.item && selectedPath[selectedPath.length - 1] === slot.item.id}
+						{@const isInSelectedPath = slot.item && selectedPath.includes(slot.item.id)}
+						{@const SlotIcon = slot.item?.action ? getActionIcon(slot.item.action) : CircleDot}
+						<g
+							class:cursor-pointer={!slot.disabled}
+							class:opacity-35={slot.disabled}
+							onclick={() => handleSlotClick(slot)}
+							onkeydown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									event.preventDefault();
+									handleSlotClick(slot);
+								}
+							}}
+							tabindex={slot.disabled ? -1 : 0}
+							role="button"
+							aria-label={slot.hint}
+						>
+							<path
+								d={slot.d}
+								class={slot.item
+									? isSelected
+										? 'fill-primary/25 stroke-primary stroke-2'
+										: isInSelectedPath
+											? 'fill-primary/15 stroke-primary/70'
+											: 'fill-muted/35 stroke-border hover:fill-primary/10'
+									: 'fill-background stroke-border hover:fill-muted/50'}
+							/>
+							{#if slot.item}
+								<foreignObject
+									x={slot.labelX - 38}
+									y={slot.labelY - 20}
+									width="76"
+									height="40"
+									class="pointer-events-none"
+								>
+									<div
+										class="flex h-full w-full flex-col items-center justify-center gap-0.5 overflow-hidden text-center"
+									>
+										<SlotIcon class="h-4 w-4 shrink-0 text-foreground" />
+										<div class="max-w-full truncate px-1 text-[11px] font-medium leading-tight text-foreground">
+											{getShortLabel(slot.label)}
+										</div>
+									</div>
+								</foreignObject>
+							{:else if !slot.disabled}
+								<text
+									x={slot.labelX}
+									y={slot.labelY}
+									text-anchor="middle"
+									dominant-baseline="middle"
+									class="pointer-events-none fill-muted-foreground text-[18px]"
+								>
+									+
+								</text>
+							{/if}
+						</g>
+					{/each}
+
+					<circle cx={CENTER} cy={CENTER} r="24" class="fill-card stroke-border" />
+				</svg>
+			</div>
+		</section>
+
+		<aside class="flex flex-col gap-3 rounded-lg border bg-card/60 p-4">
+			<div class="space-y-1">
+				<h4 class="text-sm font-medium">槽位管理</h4>
+				<p class="text-muted-foreground text-xs">
+					{#if selectedItem}
+						正在编辑 {getLevelName(selectedLevel)}菜单
+					{:else}
+						点左侧轮盘槽位开始添加或编辑
+					{/if}
+				</p>
+			</div>
+
+			{#if selectedItem}
+				<div class="flex items-center gap-2 rounded-lg border bg-background/70 p-3">
+					<div class="bg-muted flex h-9 w-9 items-center justify-center rounded-md">
+						<SelectedActionIcon class="h-4 w-4" />
+					</div>
+					<div class="min-w-0">
+						<div class="truncate text-sm font-medium">{selectedItem.label}</div>
+						<div class="text-muted-foreground truncate text-xs">
+							{selectedAction?.name ?? '未绑定动作'}
+						</div>
+					</div>
+				</div>
+
+				<label class="grid gap-1.5 text-sm">
+					<span class="text-muted-foreground text-xs font-medium">动作</span>
+					<select
+						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+						value={selectedItem.action ?? ''}
+						onchange={(event) => updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
+					>
+						<option value="">未绑定</option>
+						{#each actionsByCategory as group (group.category)}
+							<optgroup label={group.category}>
+								{#each group.actions as action (action.action)}
+									<option value={action.action}>{action.name}</option>
+								{/each}
+							</optgroup>
+						{/each}
+					</select>
+				</label>
+
+				<label class="grid gap-1.5 text-sm">
+					<span class="text-muted-foreground text-xs font-medium">显示文字</span>
+					<Input
+						value={selectedItem.label}
+						onchange={(event) =>
+							updateSelectedLabel((event.currentTarget as HTMLInputElement).value)}
+					/>
+				</label>
+
+				<div class="grid grid-cols-2 gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => radialMenuStore.moveItem(selectedItem.id, 'up')}
+					>
+						<ArrowUp class="mr-2 h-4 w-4" />
+						前移
+					</Button>
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={() => radialMenuStore.moveItem(selectedItem.id, 'down')}
+					>
+						<ArrowDown class="mr-2 h-4 w-4" />
+						后移
+					</Button>
+				</div>
+
+				{#if selectedPath.length < 3}
+					<Button variant="outline" size="sm" onclick={addChildToSelected}>
+						<Plus class="mr-2 h-4 w-4" />
+						添加下一级菜单
+					</Button>
+				{/if}
+
+				<Button
+					variant="ghost"
+					size="sm"
+					class="justify-start text-destructive hover:text-destructive"
+					onclick={removeSelectedItem}
+				>
+					<Trash2 class="mr-2 h-4 w-4" />
+					删除这个槽位
+				</Button>
+			{:else}
+				<div class="text-muted-foreground flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center text-sm">
+					<MousePointer2 class="mb-3 h-7 w-7 opacity-50" />
+					点击轮盘上的任意空白扇区添加菜单项。
+				</div>
+			{/if}
+		</aside>
+	</div>
+
+	<section class="grid gap-3 rounded-lg border bg-card/60 p-4 md:grid-cols-2 xl:grid-cols-5">
 		<label class="grid gap-1.5 text-sm">
 			<span class="text-muted-foreground text-xs font-medium">样式</span>
 			<select
@@ -152,19 +562,6 @@
 			</select>
 		</label>
 
-		<label class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
-			<span class="text-muted-foreground text-xs font-medium">启用轮盘</span>
-			<input
-				type="checkbox"
-				class="h-4 w-4 accent-primary"
-				checked={radialMenuStore.config.enabled}
-				onchange={(event) =>
-					radialMenuStore.updateConfig({
-						enabled: (event.currentTarget as HTMLInputElement).checked
-					})}
-			/>
-		</label>
-
 		<label class="grid gap-1.5 text-sm">
 			<span class="text-muted-foreground text-xs font-medium">半径 (px)</span>
 			<Input
@@ -174,7 +571,7 @@
 				value={radialMenuStore.config.radius}
 				onchange={(event) =>
 					radialMenuStore.updateConfig({
-						radius: toNumber((event.currentTarget as HTMLInputElement).value, 150, 60, 300)
+						radius: Number((event.currentTarget as HTMLInputElement).value)
 					})}
 			/>
 		</label>
@@ -188,12 +585,7 @@
 				value={radialMenuStore.config.innerRadius}
 				onchange={(event) =>
 					radialMenuStore.updateConfig({
-						innerRadius: toNumber(
-							(event.currentTarget as HTMLInputElement).value,
-							40,
-							0,
-							100
-						)
+						innerRadius: Number((event.currentTarget as HTMLInputElement).value)
 					})}
 			/>
 		</label>
@@ -207,12 +599,7 @@
 				value={radialMenuStore.config.startAngle}
 				onchange={(event) =>
 					radialMenuStore.updateConfig({
-						startAngle: toNumber(
-							(event.currentTarget as HTMLInputElement).value,
-							-90,
-							-180,
-							180
-						)
+						startAngle: Number((event.currentTarget as HTMLInputElement).value)
 					})}
 			/>
 		</label>
@@ -226,125 +613,9 @@
 				value={radialMenuStore.config.sweepAngle}
 				onchange={(event) =>
 					radialMenuStore.updateConfig({
-						sweepAngle: toNumber(
-							(event.currentTarget as HTMLInputElement).value,
-							360,
-							90,
-							360
-						)
+						sweepAngle: Number((event.currentTarget as HTMLInputElement).value)
 					})}
 			/>
 		</label>
-	</section>
-
-	<section class="flex flex-col gap-3 rounded-lg border bg-card/60 p-4">
-		<div class="flex flex-wrap items-center justify-between gap-2">
-			<div>
-				<h4 class="text-sm font-medium">菜单项</h4>
-				<p class="text-muted-foreground text-xs">根项、子项和孙项会按当前层数保存。</p>
-			</div>
-			<Button variant="outline" size="sm" onclick={() => radialMenuStore.addItem()}>
-				<Plus class="mr-2 h-4 w-4" />
-				添加根项
-			</Button>
-		</div>
-
-		{#if flatItems.length === 0}
-			<div class="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-				暂无菜单项。
-			</div>
-		{:else}
-			<div class="flex flex-col gap-2">
-				{#each flatItems as flatItem (flatItem.item.id)}
-					<div
-						class="grid gap-2 rounded-lg border bg-background/70 p-3 md:grid-cols-[auto_auto_minmax(0,1fr)_auto]"
-						style={`margin-left: ${flatItem.depth * 18}px`}
-					>
-						<div class="bg-muted text-muted-foreground flex h-8 w-8 items-center justify-center rounded-md text-xs font-medium">
-							{flatItem.depth + 1}
-						</div>
-
-						<div class="flex md:flex-col gap-1">
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-7 w-7"
-								onclick={() => radialMenuStore.moveItem(flatItem.item.id, 'up')}
-								title="上移"
-							>
-								<ArrowUp class="h-4 w-4" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-7 w-7"
-								onclick={() => radialMenuStore.moveItem(flatItem.item.id, 'down')}
-								title="下移"
-							>
-								<ArrowDown class="h-4 w-4" />
-							</Button>
-						</div>
-
-						<div class="grid min-w-0 gap-2">
-							<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_5rem]">
-								<select
-									class="border-input bg-background h-9 min-w-0 rounded-md border px-3 text-sm"
-									value={flatItem.item.action ?? ''}
-									onchange={(event) =>
-										updateItemAction(
-											flatItem.item.id,
-											(event.currentTarget as HTMLSelectElement).value
-										)}
-								>
-									<option value="">未绑定</option>
-									{#each actionsByCategory as group (group.category)}
-										<optgroup label={group.category}>
-											{#each group.actions as action (action.action)}
-												<option value={action.action}>{action.name}</option>
-											{/each}
-										</optgroup>
-									{/each}
-								</select>
-								<Input
-									placeholder="图标"
-									value={flatItem.item.icon ?? ''}
-									onchange={(event) =>
-										updateItemIcon(flatItem.item.id, (event.currentTarget as HTMLInputElement).value)}
-								/>
-							</div>
-							<Input
-								placeholder="显示标签"
-								value={flatItem.item.label}
-								onchange={(event) =>
-									updateItemLabel(flatItem.item.id, (event.currentTarget as HTMLInputElement).value)}
-							/>
-						</div>
-
-						<div class="flex gap-1 md:flex-col">
-							{#if flatItem.canAddChild}
-								<Button
-									variant="ghost"
-									size="icon"
-									class="h-8 w-8"
-									onclick={() => radialMenuStore.addItem(flatItem.item.id)}
-									title="添加子项"
-								>
-									<Plus class="h-4 w-4" />
-								</Button>
-							{/if}
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-8 w-8 text-destructive hover:text-destructive"
-								onclick={() => radialMenuStore.removeItem(flatItem.item.id)}
-								title="删除"
-							>
-								<Trash2 class="h-4 w-4" />
-							</Button>
-						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
 	</section>
 </div>

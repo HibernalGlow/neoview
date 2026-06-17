@@ -14,11 +14,11 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { LayerZIndex } from '../types/layer';
-	import type { Frame } from '../types/frame';
+	import type { Frame, FrameImage as FrameImageData } from '../types/frame';
 	import { getImageTransform, getClipPath } from '../utils/transform';
-	import FrameImage from '../components/FrameImage.svelte';
 	import FrameImageWithOverlay from '../components/FrameImageWithOverlay.svelte';
 	import '../styles/frameLayer.css';
+	import { normalizeAngle } from '$lib/utils/pageLayout';
 	import {
 		pageTransitionStore,
 		easingCssMap,
@@ -166,16 +166,40 @@
 
 	// 计算 transform（仅包含旋转；手动缩放 scale 已乘入 getImageDisplayStyle 的像素尺寸，
 	// 不再用 CSS transform scale，否则 overflow:auto 容器的可滚动区域不会随之扩大）
-	let transformStyle = $derived.by(() => {
-		if (rotation !== 0) return `rotate(${rotation}deg)`;
-		return 'none';
-	});
-
 	// 计算单张图片的显示样式
 	// 双页模式下，每张图片有独立的 scale（用于高度对齐）
 	// scale prop（= manualScale，工具栏百分比缩放）直接乘入最终像素尺寸，
 	// 使 DOM 尺寸与视觉尺寸一致，scroll 容器可正确滚动。
-	function getImageDisplayStyle(img: typeof frame.images[0], _index: number): string {
+	interface ImageLayoutMetrics {
+		imgWidth: number;
+		imgHeight: number;
+		finalWidth: number;
+		finalHeight: number;
+		objectFit: 'cover' | 'contain';
+	}
+
+	function isQuarterTurn(angle: number): boolean {
+		const normalized = normalizeAngle(angle);
+		return normalized === 90 || normalized === 270;
+	}
+
+	function getImageRotation(img: FrameImageData): number {
+		return normalizeAngle((img.rotation ?? 0) + rotation);
+	}
+
+	function getImageTransformWithManualRotation(img: FrameImageData): string {
+		const baseTransform = getImageTransform(img);
+		const manualRotation = normalizeAngle(rotation);
+		if (manualRotation === 0) {
+			return baseTransform;
+		}
+		if (!baseTransform || baseTransform === 'none') {
+			return `rotate(${manualRotation}deg)`;
+		}
+		return `${baseTransform} rotate(${manualRotation}deg)`;
+	}
+
+	function getImageLayoutMetrics(img: FrameImageData): ImageLayoutMetrics | null {
 		const loadedImageSize = img.url ? loadedImageSizes[img.url] : undefined;
 		const imgWidth = img.width || imageSize.width || loadedImageSize?.width || 0;
 		const imgHeight = img.height || imageSize.height || loadedImageSize?.height || 0;
@@ -184,15 +208,41 @@
 		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';
 
 		if (!imgWidth || !imgHeight) {
+			return null;
+		}
+
+		return {
+			imgWidth,
+			imgHeight,
+			finalWidth: imgWidth * frameScale * scale * splitFactor,
+			finalHeight: imgHeight * frameScale * scale,
+			objectFit
+		};
+	}
+
+	function getImageDisplayStyle(img: FrameImageData, _index: number): string {
+		const metrics = getImageLayoutMetrics(img);
+		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';
+
+		if (!metrics) {
 			const fallbackMaxWidth = Math.max(1, Math.round(viewportSize.width || 0));
 			const fallbackMaxHeight = Math.max(1, Math.round(viewportSize.height || 0));
 			return `max-width: ${fallbackMaxWidth}px; max-height: ${fallbackMaxHeight}px; width: auto; height: auto; object-fit: ${objectFit};`;
 		}
 
-		const finalWidth = imgWidth * frameScale * scale * splitFactor;
-		const finalHeight = imgHeight * frameScale * scale;
+		return `width: ${metrics.finalWidth}px; height: ${metrics.finalHeight}px; max-width: none; max-height: none; object-fit: ${metrics.objectFit};`;
+	}
 
-		return `width: ${finalWidth}px; height: ${finalHeight}px; max-width: none; max-height: none; object-fit: ${objectFit};`;
+	function getImageShellStyle(img: FrameImageData, _index: number): string {
+		const metrics = getImageLayoutMetrics(img);
+		if (!metrics) {
+			return '';
+		}
+
+		const rotated = isQuarterTurn(getImageRotation(img));
+		const shellWidth = rotated ? metrics.finalHeight : metrics.finalWidth;
+		const shellHeight = rotated ? metrics.finalWidth : metrics.finalHeight;
+		return `width: ${shellWidth}px; height: ${shellHeight}px;`;
 	}
 
 	// 图片加载完成时更新本地尺寸
@@ -246,22 +296,21 @@
 		style:z-index={LayerZIndex.CURRENT_FRAME}
 		style={animationStyle}
 	>
-		<div
-			class="scroll-frame-content"
-			style:transform={transformStyle}
-		>
+		<div class="scroll-frame-content">
 			{#each frame.images as img, i (i)}
-				<FrameImageWithOverlay
-					pageIndex={img.physicalIndex}
-					url={img.url}
-					alt="Current {i}"
-					transform={getImageTransform(img)}
-					clipPath={getClipPath(img.splitHalf)}
-					style={getImageDisplayStyle(img, i)}
-					imageWidth={img.width ?? 0}
-					imageHeight={img.height ?? 0}
-					onload={(e) => handleImageLoad(e, i)}
-				/>
+				<div class="frame-image-shell" style={getImageShellStyle(img, i)}>
+					<FrameImageWithOverlay
+						pageIndex={img.physicalIndex}
+						url={img.url}
+						alt="Current {i}"
+						transform={getImageTransformWithManualRotation(img)}
+						clipPath={getClipPath(img.splitHalf)}
+						style={getImageDisplayStyle(img, i)}
+						imageWidth={img.width ?? 0}
+						imageHeight={img.height ?? 0}
+						onload={(e) => handleImageLoad(e, i)}
+					/>
+				</div>
 			{/each}
 		</div>
 	</div>
@@ -305,6 +354,18 @@
 		min-height: 100%;
 		/* 【修复内存泄露】移除 will-change，保留 translateZ(0) 用于基本 GPU 加速 */
 		transform: translateZ(0);
+	}
+
+	.frame-image-shell {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		overflow: visible;
+	}
+
+	.frame-image-shell :global(.image-container) {
+		overflow: visible;
 	}
 
 	/* 悬停滚动模式：使用 inline-flex 支持滚动到边缘 */

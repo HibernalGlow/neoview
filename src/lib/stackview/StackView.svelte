@@ -20,11 +20,12 @@
 
 	import { createZoomModeManager, type ViewportSize } from './utils/zoomModeHandler';
 	import { calculateTargetScale } from './utils/imageTransitionManager';
-	import type { ZoomMode } from '$lib/settings/settingsManager';
+	import type { AutoRotateMode, ZoomMode } from '$lib/settings/settingsManager';
 	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
 	import type { Frame } from './types/frame';
 	import type { GetFrameSnapshotParams } from '$lib/api/frameApi';
 	import { emptyFrame } from './types/frame';
+	import { computeAutoRotateAngle, normalizeAngle } from '$lib/utils/pageLayout';
 	import { getImageStore } from './stores/imageStore.svelte';
 	import { getPanoramaStore, type PanoramaLoadOptions } from './stores/panoramaStore.svelte';
 	import { createCursorAutoHide, type CursorAutoHideController } from '$lib/utils/cursorAutoHide';
@@ -93,6 +94,11 @@
 	const panoramaStore = getPanoramaStore();
 	const zoomModeManager = createZoomModeManager();
 
+	let settings = $state(settingsManager.getSettings());
+	settingsManager.addListener((s) => {
+		settings = s;
+	});
+
 	let containerRef: HTMLDivElement | null = $state(null);
 	let viewportSize = $state<ViewportSize>({ width: 0, height: 0 });
 	let containerRect = $state<DOMRect | null>(null);
@@ -143,10 +149,29 @@
 	// 旋转角度
 	let rotation = $state(0);
 
+	let autoRotateMode = $derived<AutoRotateMode>(settings.view.autoRotate?.mode ?? 'none');
+
+	function isQuarterTurn(angle: number): boolean {
+		const normalized = normalizeAngle(angle);
+		return normalized === 90 || normalized === 270;
+	}
+
+	function rotateSizeForAngle(size: { width: number; height: number }, angle: number) {
+		if (!size.width || !size.height || !isQuarterTurn(angle)) {
+			return size;
+		}
+		return { width: size.height, height: size.width };
+	}
+
+	function getZoomCalculationSize(size: { width: number; height: number }) {
+		const autoRotation = computeAutoRotateAngle(autoRotateMode, size) ?? 0;
+		return rotateSizeForAngle(size, normalizeAngle(rotation + autoRotation));
+	}
+
 	// 根据 zoomMode 计算的基础缩放
 	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
 	let modeScale = $derived.by(() => {
-		const dims = hoverImageSize;
+		const dims = getZoomCalculationSize(hoverImageSize);
 		if (dims && dims.width > 0 && dims.height > 0 && viewportSize.width > 0 && viewportSize.height > 0) {
 			return calculateTargetScale(dims, viewportSize, currentZoomMode);
 		}
@@ -154,11 +179,8 @@
 		// 降级：使用 bookStore 元数据
 		const page = bookStore.currentPage;
 		if (page?.width && page?.height && viewportSize.width > 0 && viewportSize.height > 0) {
-			return calculateTargetScale(
-				{ width: page.width, height: page.height },
-				viewportSize,
-				currentZoomMode
-			);
+			const pageSize = getZoomCalculationSize({ width: page.width, height: page.height });
+			return calculateTargetScale(pageSize, viewportSize, currentZoomMode);
 		}
 		
 		return 1;
@@ -170,7 +192,7 @@
 	// 缩放后的实际显示尺寸
 	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
 	let displaySize = $derived.by(() => {
-		const dims = hoverImageSize;
+		const dims = getZoomCalculationSize(hoverImageSize);
 		if (!dims.width || !dims.height) {
 			return { width: 0, height: 0 };
 		}
@@ -269,11 +291,6 @@
 	let orientation = $derived(bookContext?.orientation ?? 'horizontal');
 
 	// 设置
-	let settings = $state(settingsManager.getSettings());
-	settingsManager.addListener((s) => {
-		settings = s;
-	});
-
 	// 切换页面模式（单页/双页）
 	function togglePageMode() {
 		bookContext?.togglePageMode();
@@ -512,10 +529,48 @@
 		return emptyFrame;
 	});
 
+	let rotatedFrameData = $derived.by((): Frame => {
+		const frame = currentFrameData;
+		if (autoRotateMode === 'none' || frame.images.length === 0) {
+			return frame;
+		}
+
+		let hasRotationChange = false;
+		const images = frame.images.map((img) => {
+			const width = img.width || hoverImageSize.width || 0;
+			const height = img.height || hoverImageSize.height || 0;
+			const autoRotation = computeAutoRotateAngle(autoRotateMode, { width, height });
+			if (autoRotation === null) {
+				return img;
+			}
+
+			const nextRotation = normalizeAngle((img.rotation ?? 0) + autoRotation);
+			if (nextRotation === normalizeAngle(img.rotation ?? 0)) {
+				return img;
+			}
+
+			hasRotationChange = true;
+			return {
+				...img,
+				rotation: nextRotation
+			};
+		});
+
+		if (!hasRotationChange) {
+			return frame;
+		}
+
+		return {
+			...frame,
+			id: `${frame.id}:auto-rotate:${autoRotateMode}`,
+			images
+		};
+	});
+
 	let displayFrameData = $derived.by((): Frame => {
 		void upscaleStore.version;
 
-		const frame = currentFrameData;
+		const frame = rotatedFrameData;
 		if (!upscaleStore.enabled || frame.images.length === 0) {
 			return frame;
 		}

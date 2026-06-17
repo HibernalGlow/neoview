@@ -189,6 +189,16 @@ const radialBindings: ActionBinding[] = [
 			},
 			{ type: 'touch', gesture: 'long-press', trigger: 'hold', durationMs: 450, moveTolerancePx: 12 }
 		]
+	},
+	{
+		action: 'radialMenu.confirm',
+		name: '确认轮盘选择',
+		category: '轮盘',
+		description: '轮盘打开时，执行当前选中的槽位',
+		bindings: [
+			{ type: 'keyboard', key: 'Space' },
+			{ type: 'keyboard', key: 'Enter' }
+		]
 	}
 ];
 

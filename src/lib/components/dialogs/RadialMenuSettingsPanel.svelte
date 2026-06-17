@@ -42,16 +42,21 @@
 	const CENTER = 260;
 	const MIN_SLOT_COUNT = 8;
 	const BANDS: Record<1 | 2 | 3, { inner: number; outer: number }> = {
-		1: { inner: 180, outer: 252 },
+		1: { inner: 34, outer: 100 },
 		2: { inner: 100, outer: 180 },
-		3: { inner: 34, outer: 100 }
+		3: { inner: 180, outer: 252 }
 	};
 
 	let selectedPath = $state<string[]>([]);
+	let editorOpen = $state(false);
 
 	const availableActions = $derived(
 		keyBindingsStore.bindings
-			.filter((binding) => !binding.action.startsWith('openRadialMenu.'))
+			.filter(
+				(binding) =>
+					!binding.action.startsWith('openRadialMenu.') &&
+					!binding.action.startsWith('radialMenu.')
+			)
 			.map((binding) => ({
 				action: binding.action,
 				name: binding.name,
@@ -78,6 +83,9 @@
 	);
 	const SelectedActionIcon = $derived(
 		selectedItem?.action ? getActionIcon(selectedItem.action) : CircleDot
+	);
+	const otherMenus = $derived(
+		radialMenuStore.menus.filter((menu) => menu.id !== radialMenuStore.config.activeMenuId)
 	);
 
 	const editorSlots = $derived.by(() => {
@@ -110,6 +118,7 @@
 	$effect(() => {
 		if (selectedPath.length > 0 && !findItemByPath(radialMenuStore.config.items, selectedPath)) {
 			selectedPath = selectedPath.slice(0, -1);
+			editorOpen = false;
 		}
 	});
 
@@ -286,21 +295,61 @@
 			layerCount: Math.max(radialMenuStore.config.layerCount, slot.level) as 1 | 2 | 3
 		});
 		selectedPath = [...slot.path, item.id];
+		editorOpen = true;
+	}
+
+	function switchMenu(menuId: string) {
+		radialMenuStore.setActiveMenu(menuId);
+		selectedPath = [];
+	}
+
+	function addMenu() {
+		const id = radialMenuStore.addMenu();
+		selectedPath = [];
+		switchMenu(id);
 	}
 
 	function handleSlotClick(slot: EditorSlot) {
 		if (slot.item) {
 			selectedPath = slot.path;
+			editorOpen = true;
 			return;
 		}
 		addItemAt(slot);
+	}
+
+	function handleSlotHover(slot: EditorSlot) {
+		if (slot.disabled || !slot.item) return;
 	}
 
 	function updateSelectedAction(action: string) {
 		if (!selectedItem) return;
 		radialMenuStore.updateItem(selectedItem.id, {
 			action: action || null,
+			moveToMenuId: undefined,
 			label: action ? getActionName(action) : selectedItem.label
+		});
+	}
+
+	function updateSelectedMode(mode: 'action' | 'moveTo') {
+		if (!selectedItem) return;
+		if (mode === 'action') {
+			radialMenuStore.updateItem(selectedItem.id, { moveToMenuId: undefined });
+			return;
+		}
+		const targetMenuId = otherMenus[0]?.id ?? radialMenuStore.addMenu(undefined, false);
+		radialMenuStore.updateItem(selectedItem.id, {
+			action: null,
+			moveToMenuId: targetMenuId,
+			label: selectedItem.label.startsWith('新') ? '切换轮盘' : selectedItem.label
+		});
+	}
+
+	function updateSelectedMoveTo(menuId: string) {
+		if (!selectedItem || !menuId) return;
+		radialMenuStore.updateItem(selectedItem.id, {
+			action: null,
+			moveToMenuId: menuId
 		});
 	}
 
@@ -314,6 +363,7 @@
 		const nextItems = removeFromItems(radialMenuStore.config.items, selectedItem.id);
 		radialMenuStore.updateConfig({ items: nextItems, layerCount: getMaxDepth(nextItems) });
 		selectedPath = selectedPath.slice(0, -1);
+		editorOpen = false;
 	}
 
 	function addChildToSelected() {
@@ -347,10 +397,23 @@
 				轮盘菜单
 			</h3>
 			<p class="text-muted-foreground text-sm">
-				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · 当前 {getLevelName(actualLayerCount)}菜单 · 点轮盘槽位添加或编辑
+				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · 当前 {getLevelName(actualLayerCount)}菜单 · 移动鼠标确认路径，点击槽位管理
 			</p>
 		</div>
 		<div class="flex gap-2">
+			<select
+				class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+				value={radialMenuStore.config.activeMenuId}
+				onchange={(event) => switchMenu((event.currentTarget as HTMLSelectElement).value)}
+			>
+				{#each radialMenuStore.menus as menu (menu.id)}
+					<option value={menu.id}>{menu.name}</option>
+				{/each}
+			</select>
+			<Button variant="outline" size="sm" onclick={addMenu}>
+				<Plus class="mr-2 h-4 w-4" />
+				新轮盘
+			</Button>
 			<Button variant="outline" size="sm" onclick={() => radialMenuStore.resetConfig()}>
 				<RotateCcw class="mr-2 h-4 w-4" />
 				清空
@@ -363,7 +426,7 @@
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<h4 class="text-sm font-medium">轮盘编辑预览</h4>
-					<p class="text-muted-foreground text-xs">外圈是一级菜单，往里是二级、三级。点空白扇区新增，点文字扇区编辑。</p>
+					<p class="text-muted-foreground text-xs">多层同屏显示；鼠标经过扇区确认当前路径，点击空槽新增，点击已有槽编辑。</p>
 				</div>
 				<label class="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
 					<span class="text-muted-foreground">启用</span>
@@ -393,6 +456,8 @@
 						<g
 							class:cursor-pointer={!slot.disabled}
 							class:opacity-35={slot.disabled}
+							onpointerenter={() => handleSlotHover(slot)}
+							onpointermove={() => handleSlotHover(slot)}
 							onclick={() => handleSlotClick(slot)}
 							onkeydown={(event) => {
 								if (event.key === 'Enter' || event.key === ' ') {
@@ -463,6 +528,18 @@
 			</div>
 
 			{#if selectedItem}
+				<label class="grid gap-1.5 text-sm">
+					<span class="text-muted-foreground text-xs font-medium">当前轮盘名</span>
+					<Input
+						value={radialMenuStore.activeMenu.name}
+						onchange={(event) =>
+							radialMenuStore.updateMenuName(
+								radialMenuStore.activeMenu.id,
+								(event.currentTarget as HTMLInputElement).value
+							)}
+					/>
+				</label>
+
 				<div class="flex items-center gap-2 rounded-lg border bg-background/70 p-3">
 					<div class="bg-muted flex h-9 w-9 items-center justify-center rounded-md">
 						<SelectedActionIcon class="h-4 w-4" />
@@ -476,7 +553,34 @@
 				</div>
 
 				<label class="grid gap-1.5 text-sm">
-					<span class="text-muted-foreground text-xs font-medium">动作</span>
+					<span class="text-muted-foreground text-xs font-medium">槽位类型</span>
+					<select
+						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+						value={selectedItem.moveToMenuId ? 'moveTo' : 'action'}
+						onchange={(event) =>
+							updateSelectedMode((event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo')}
+					>
+						<option value="action">执行动作</option>
+						<option value="moveTo">跳转轮盘</option>
+					</select>
+				</label>
+
+				{#if selectedItem.moveToMenuId}
+					<label class="grid gap-1.5 text-sm">
+						<span class="text-muted-foreground text-xs font-medium">目标轮盘</span>
+						<select
+							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+							value={selectedItem.moveToMenuId}
+							onchange={(event) => updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
+						>
+							{#each otherMenus as menu (menu.id)}
+								<option value={menu.id}>{menu.name}</option>
+							{/each}
+						</select>
+					</label>
+				{:else}
+					<label class="grid gap-1.5 text-sm">
+						<span class="text-muted-foreground text-xs font-medium">动作</span>
 					<select
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						value={selectedItem.action ?? ''}
@@ -491,7 +595,8 @@
 							</optgroup>
 						{/each}
 					</select>
-				</label>
+					</label>
+				{/if}
 
 				<label class="grid gap-1.5 text-sm">
 					<span class="text-muted-foreground text-xs font-medium">显示文字</span>
@@ -619,3 +724,115 @@
 		</label>
 	</section>
 </div>
+
+{#if editorOpen && selectedItem}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+		role="presentation"
+		onclick={() => (editorOpen = false)}
+	>
+		<div
+			class="bg-background w-full max-w-md space-y-4 rounded-lg border p-5 shadow-xl"
+			role="dialog"
+			aria-modal="true"
+			aria-label="编辑轮盘槽位"
+			tabindex="-1"
+			onclick={(event) => event.stopPropagation()}
+			onkeydown={(event) => event.stopPropagation()}
+		>
+			<div class="flex items-start justify-between gap-3">
+				<div class="space-y-1">
+					<h4 class="text-base font-semibold">编辑槽位</h4>
+					<p class="text-muted-foreground text-xs">
+						{getLevelName(selectedLevel)}菜单 · 第 {selectedItem.slotIndex ?? 0} 槽
+					</p>
+				</div>
+				<Button variant="ghost" size="sm" onclick={() => (editorOpen = false)}>关闭</Button>
+			</div>
+
+			<div class="flex items-center gap-2 rounded-lg border bg-card/70 p-3">
+				<div class="bg-muted flex h-9 w-9 items-center justify-center rounded-md">
+					<SelectedActionIcon class="h-4 w-4" />
+				</div>
+				<div class="min-w-0">
+					<div class="truncate text-sm font-medium">{selectedItem.label}</div>
+					<div class="text-muted-foreground truncate text-xs">
+						{selectedAction?.name ?? (selectedItem.moveToMenuId ? '跳转轮盘' : '未绑定动作')}
+					</div>
+				</div>
+			</div>
+
+			<label class="grid gap-1.5 text-sm">
+				<span class="text-muted-foreground text-xs font-medium">槽位类型</span>
+				<select
+					class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+					value={selectedItem.moveToMenuId ? 'moveTo' : 'action'}
+					onchange={(event) =>
+						updateSelectedMode((event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo')}
+				>
+					<option value="action">执行动作</option>
+					<option value="moveTo">跳转轮盘</option>
+				</select>
+			</label>
+
+			{#if selectedItem.moveToMenuId}
+				<label class="grid gap-1.5 text-sm">
+					<span class="text-muted-foreground text-xs font-medium">目标轮盘</span>
+					<select
+						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+						value={selectedItem.moveToMenuId}
+						onchange={(event) => updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
+					>
+						{#each otherMenus as menu (menu.id)}
+							<option value={menu.id}>{menu.name}</option>
+						{/each}
+					</select>
+				</label>
+			{:else}
+				<label class="grid gap-1.5 text-sm">
+					<span class="text-muted-foreground text-xs font-medium">动作</span>
+					<select
+						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+						value={selectedItem.action ?? ''}
+						onchange={(event) => updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
+					>
+						<option value="">未绑定</option>
+						{#each actionsByCategory as group (group.category)}
+							<optgroup label={group.category}>
+								{#each group.actions as action (action.action)}
+									<option value={action.action}>{action.name}</option>
+								{/each}
+							</optgroup>
+						{/each}
+					</select>
+				</label>
+			{/if}
+
+			<label class="grid gap-1.5 text-sm">
+				<span class="text-muted-foreground text-xs font-medium">显示文字</span>
+				<Input
+					value={selectedItem.label}
+					onchange={(event) => updateSelectedLabel((event.currentTarget as HTMLInputElement).value)}
+				/>
+			</label>
+
+			<div class="flex flex-wrap gap-2">
+				{#if selectedPath.length < 3}
+					<Button variant="outline" size="sm" onclick={addChildToSelected}>
+						<Plus class="mr-2 h-4 w-4" />
+						添加下一级
+					</Button>
+				{/if}
+				<Button
+					variant="ghost"
+					size="sm"
+					class="text-destructive hover:text-destructive"
+					onclick={removeSelectedItem}
+				>
+					<Trash2 class="mr-2 h-4 w-4" />
+					删除槽位
+				</Button>
+			</div>
+		</div>
+	</div>
+{/if}

@@ -2,7 +2,7 @@
  * Radial menu store.
  */
 
-import type { RadialMenuConfig, RadialState, RadialMode, RadialMenuItem } from './types';
+import type { RadialMenuConfig, RadialState, RadialMode, RadialMenuItem, RadialMenuDefinition } from './types';
 import { createDefaultRadialMenu, migrateRadialMenuConfig, RADIAL_MENU_STORAGE_KEY } from './defaults';
 
 /** 递归更新 items 树中指定 id 的项 */
@@ -129,7 +129,81 @@ class RadialMenuStore {
 	}
 
 	updateConfig(updates: Partial<RadialMenuConfig>) {
-		this.config = { ...this.config, ...updates };
+		let nextConfig = { ...this.config, ...updates };
+		if (updates.items) {
+			const activeMenuId = nextConfig.activeMenuId ?? nextConfig.id;
+			const menus = (nextConfig.menus?.length
+				? nextConfig.menus
+				: [{ id: nextConfig.id, name: nextConfig.name, items: this.config.items }]
+			).map((menu) => menu.id === activeMenuId ? { ...menu, items: updates.items ?? [] } : menu);
+			nextConfig = { ...nextConfig, menus };
+		}
+		this.config = this.syncActiveItems(nextConfig);
+		this.saveToStorage();
+	}
+
+	private syncActiveItems(config: RadialMenuConfig): RadialMenuConfig {
+		const menus = config.menus?.length
+			? config.menus
+			: [{ id: config.id, name: config.name, items: config.items }];
+		const activeMenuId = config.activeMenuId && menus.some((menu) => menu.id === config.activeMenuId)
+			? config.activeMenuId
+			: menus[0].id;
+		const activeMenu = menus.find((menu) => menu.id === activeMenuId) ?? menus[0];
+		return {
+			...config,
+			activeMenuId,
+			menus,
+			items: activeMenu.items,
+		};
+	}
+
+	private updateActiveMenuItems(items: RadialMenuItem[]) {
+		const activeMenuId = this.config.activeMenuId ?? this.config.id;
+		const menus = this.config.menus?.length
+			? this.config.menus.map((menu) => menu.id === activeMenuId ? { ...menu, items } : menu)
+			: [{ id: this.config.id, name: this.config.name, items }];
+		this.config = {
+			...this.config,
+			activeMenuId,
+			menus,
+			items,
+		};
+	}
+
+	get menus(): RadialMenuDefinition[] {
+		return this.config.menus?.length
+			? this.config.menus
+			: [{ id: this.config.id, name: this.config.name, items: this.config.items }];
+	}
+
+	get activeMenu(): RadialMenuDefinition {
+		return this.menus.find((menu) => menu.id === this.config.activeMenuId) ?? this.menus[0];
+	}
+
+	setActiveMenu(menuId: string) {
+		if (!this.menus.some((menu) => menu.id === menuId)) return;
+		this.config = this.syncActiveItems({ ...this.config, activeMenuId: menuId });
+		this.saveToStorage();
+	}
+
+	addMenu(name = `轮盘 ${this.menus.length + 1}`, activate = true): string {
+		const id = `menu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+		const menus = [...this.menus, { id, name, items: [] }];
+		this.config = this.syncActiveItems({
+			...this.config,
+			menus,
+			activeMenuId: activate ? id : this.config.activeMenuId
+		});
+		this.saveToStorage();
+		return id;
+	}
+
+	updateMenuName(menuId: string, name: string) {
+		const menus = this.menus.map((menu) =>
+			menu.id === menuId ? { ...menu, name: name.trim() || '未命名轮盘' } : menu
+		);
+		this.config = this.syncActiveItems({ ...this.config, menus });
 		this.saveToStorage();
 	}
 
@@ -156,14 +230,10 @@ class RadialMenuStore {
 		};
 
 		if (!parentId) {
-			this.config = {
-				...this.config,
-				items: [...this.config.items, newItem],
-			};
+			this.updateActiveMenuItems([...this.config.items, newItem]);
 		} else {
-			this.config = {
-				...this.config,
-				items: updateItemsRecursive(this.config.items, parentId, (parent) => ({
+			this.updateActiveMenuItems(
+				updateItemsRecursive(this.config.items, parentId, (parent) => ({
 					...parent,
 					children: [
 						...(parent.children ?? []),
@@ -175,29 +245,25 @@ class RadialMenuStore {
 							),
 						},
 					],
-				})),
-			};
+				}))
+			);
 		}
 		this.saveToStorage();
 		return newItem.id;
 	}
 
 	updateItem(id: string, updates: Partial<RadialMenuItem>) {
-		this.config = {
-			...this.config,
-			items: updateItemsRecursive(this.config.items, id, (item) => ({
+		this.updateActiveMenuItems(
+			updateItemsRecursive(this.config.items, id, (item) => ({
 				...item,
 				...updates,
-			})),
-		};
+			}))
+		);
 		this.saveToStorage();
 	}
 
 	removeItem(id: string) {
-		this.config = {
-			...this.config,
-			items: removeItemsRecursive(this.config.items, id),
-		};
+		this.updateActiveMenuItems(removeItemsRecursive(this.config.items, id));
 		this.saveToStorage();
 	}
 
@@ -205,7 +271,7 @@ class RadialMenuStore {
 	moveItem(id: string, direction: 'up' | 'down') {
 		const result = moveItemRecursive(this.config.items, id, direction);
 		if (!result.moved) return;
-		this.config = { ...this.config, items: result.items };
+		this.updateActiveMenuItems(result.items);
 		this.saveToStorage();
 	}
 

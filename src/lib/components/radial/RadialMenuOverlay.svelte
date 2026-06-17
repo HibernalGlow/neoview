@@ -1,167 +1,107 @@
 <script lang="ts">
-	/**
-	 * 轮盘菜单覆盖层
-	 * 使用 ray-menu Web Component 渲染轮盘
-	 * 监听 ray-select 事件并回调 onselect
-	 */
+	import '$lib/vendor/ray-menu/wc/neoview-ray-menu';
+	import {
+		NeoViewRayMenu,
+		type NeoViewRayMenuItem
+	} from '$lib/vendor/ray-menu/wc/neoview-ray-menu';
+	import { radialMenuStore, type RadialMenuItem } from '$lib/stores/radialMenu';
+	import { keyBindingsStore, type KeyBinding } from '$lib/stores/keybindings';
+	import { getActionIconSvg } from '$lib/utils/actionIcons';
 
-	import 'ray-menu';
-	import { radialMenuStore } from '$lib/stores/radialMenu';
+	let { onselect = (_action: string) => {} } = $props();
 
-	let {
-		onselect = (_action: string) => {},
-	} = $props();
+	let menuEl = $state<NeoViewRayMenu | null>(null);
+	let openKey = '';
 
-	/** ray-menu 元素引用 */
-	let menuEl: RayMenuElement | null = $state(null);
+	const rayItems = $derived(toRayItems(radialMenuStore.config.items));
+	const confirmKeys = $derived.by(() =>
+		keyBindingsStore
+			.getAllBindingsForAction('radialMenu.confirm')
+			.map(({ binding }) => binding)
+			.filter((binding): binding is KeyBinding => binding.type === 'keyboard')
+			.map((binding) => binding.key)
+	);
 
-	interface MenuItem {
-		id: string;
-		label: string;
-		icon?: string;
-		disabled?: boolean;
-		selectable?: boolean;
-		children?: MenuItem[];
-	}
-
-	/** ray-menu 元素接口（局部声明，避免 svelte-check 对自定义元素类型不识别） */
-	interface RayMenuElement extends HTMLElement {
-		items: MenuItem[];
-		readonly isOpen: boolean;
-		open(x: number, y: number): void;
-		close(): void;
-		toggle(x: number, y: number): void;
-	}
-
-	const MIN_SLOT_COUNT = 8;
-
-	function getSlotIndex(item: typeof radialMenuStore.config.items[number], fallbackIndex: number): number {
-		return typeof item.slotIndex === 'number' && Number.isFinite(item.slotIndex)
-			? item.slotIndex
-			: fallbackIndex;
-	}
-
-	function getSlotCount(items: typeof radialMenuStore.config.items): number {
-		if (items.length === 0) return 0;
-		const maxSlot = items.reduce((max, item, index) => Math.max(max, getSlotIndex(item, index)), 0);
-		return Math.max(MIN_SLOT_COUNT, maxSlot + 1);
-	}
-
-	function toSlottedItems(items: typeof radialMenuStore.config.items): MenuItem[] {
-		const slotCount = getSlotCount(items);
-		const bySlot = new Map<number, typeof radialMenuStore.config.items[number]>();
-
-		items.forEach((item, index) => {
-			bySlot.set(getSlotIndex(item, index), item);
-		});
-
-		return Array.from({ length: slotCount }, (_, index) => {
-			const item = bySlot.get(index);
-			if (!item) {
-				return {
-					id: `__empty_${index}__`,
-					label: '',
-					disabled: true
-				};
-			}
-
-			const children = item.children?.length ? toSlottedItems(item.children) : undefined;
-			return {
-				id: item.action ?? item.id,
-				label: item.label,
-				icon: item.icon,
-				disabled: item.disabled || (!item.action && !children?.length),
-				selectable: Boolean(item.action),
-				children
-			};
-		});
-	}
-
-	function toMenuItems(items: typeof radialMenuStore.config.items): MenuItem[] {
-		if (items.length === 0) {
-			return [
-				{
-					id: '__empty__',
-					label: '未配置',
-					disabled: true
-				}
-			];
-		}
-
-		return toSlottedItems(items);
-	}
-
-	// 同步 items 到 ray-menu
 	$effect(() => {
-		if (!menuEl) return;
-		menuEl.items = toMenuItems(radialMenuStore.config.items);
-	});
-
-	// 同步视觉属性
-	$effect(() => {
-		if (!menuEl) return;
-		const cfg = radialMenuStore.config;
-		menuEl.setAttribute('radius', String(cfg.radius));
-		menuEl.setAttribute('inner-radius', String(cfg.innerRadius));
-		menuEl.setAttribute('variant', cfg.variant);
-		menuEl.setAttribute('start-angle', String(cfg.startAngle));
-		menuEl.setAttribute('sweep-angle', String(cfg.sweepAngle));
-	});
-
-	// 监听状态变化 → open/close
-	$effect(() => {
-		if (!menuEl) return;
-		const st = radialMenuStore.state;
-		const x = radialMenuStore.centerX;
-		const y = radialMenuStore.centerY;
-		if (st === 'open') {
-			menuEl.open(x, y);
-		} else if (st === 'committed' || st === 'cancelled') {
-			menuEl.close();
-		}
-	});
-
-	// 事件监听
-	$effect(() => {
-		if (!menuEl) return;
 		const el = menuEl;
+		if (!el) return;
+
+		const handleSelect = (event: Event) => {
+			const item = (event as CustomEvent<NeoViewRayMenuItem>).detail;
+			if (!item.action) return;
+			radialMenuStore.commit();
+			onselect(item.action);
+			setTimeout(() => radialMenuStore.reset(), 0);
+		};
+
+		const handleMoveTo = (event: Event) => {
+			const { menuId } = (event as CustomEvent<{ menuId: string }>).detail;
+			radialMenuStore.setActiveMenu(menuId);
+		};
+
+		const handleClose = () => {
+			if (!radialMenuStore.isOpen) return;
+			radialMenuStore.cancel();
+			setTimeout(() => radialMenuStore.reset(), 0);
+		};
+
 		el.addEventListener('ray-select', handleSelect);
+		el.addEventListener('ray-moveto', handleMoveTo);
 		el.addEventListener('ray-close', handleClose);
+
 		return () => {
 			el.removeEventListener('ray-select', handleSelect);
+			el.removeEventListener('ray-moveto', handleMoveTo);
 			el.removeEventListener('ray-close', handleClose);
 		};
 	});
 
-	function handleSelect(e: Event) {
-		const detail = (e as CustomEvent<MenuItem>).detail;
-		if (!detail?.id) return;
-		radialMenuStore.commit();
-		onselect(detail.id);
-		setTimeout(() => radialMenuStore.reset(), 0);
-	}
+	$effect(() => {
+		const el = menuEl;
+		if (!el) return;
 
-	function handleClose() {
-		if (radialMenuStore.state === 'open') {
-			radialMenuStore.cancel();
-			setTimeout(() => radialMenuStore.reset(), 0);
+		el.items = rayItems;
+		el.setAttribute('radius', String(radialMenuStore.config.radius));
+		el.setAttribute('inner-radius', String(radialMenuStore.config.innerRadius));
+		el.setAttribute('start-angle', String(radialMenuStore.config.startAngle));
+		el.setAttribute('sweep-angle', String(radialMenuStore.config.sweepAngle));
+		el.setAttribute('layer-count', String(radialMenuStore.config.layerCount));
+		el.setAttribute('confirm-keys', confirmKeys.join(','));
+
+		if (!radialMenuStore.isOpen) {
+			openKey = '';
+			el.close();
+			return;
 		}
+
+		const nextOpenKey = `${radialMenuStore.centerX}:${radialMenuStore.centerY}:${radialMenuStore.config.activeMenuId}`;
+		if (openKey !== nextOpenKey || !el.isOpen) {
+			openKey = nextOpenKey;
+			requestAnimationFrame(() => {
+				if (radialMenuStore.isOpen) {
+					el.open(radialMenuStore.centerX, radialMenuStore.centerY);
+				}
+			});
+		}
+	});
+
+	function toRayItems(items: RadialMenuItem[]): NeoViewRayMenuItem[] {
+		return items.map((item) => ({
+			id: item.id,
+			label: item.label,
+			action: item.action,
+			moveToMenuId: item.moveToMenuId,
+			slotIndex: item.slotIndex,
+			disabled: item.disabled,
+			selectable: item.disabled ? false : undefined,
+			iconSvg: item.moveToMenuId
+				? getActionIconSvg('openRadialMenu.default')
+				: item.action
+					? getActionIconSvg(item.action)
+					: undefined,
+			children: item.children?.length ? toRayItems(item.children) : undefined
+		}));
 	}
 </script>
 
-<ray-menu bind:this={menuEl}></ray-menu>
-
-<style>
-	ray-menu {
-		--ray-bg: rgba(26, 26, 46, 0.92);
-		--ray-text: rgba(255, 255, 255, 0.9);
-		--ray-accent: rgba(100, 160, 255, 0.9);
-		--ray-accent-text: #ffffff;
-		--ray-border: rgba(255, 255, 255, 0.15);
-		--ray-arc-fill: rgba(30, 30, 40, 0.7);
-		--ray-arc-fill-hover: rgba(100, 160, 255, 0.6);
-		--ray-arc-stroke: rgba(255, 255, 255, 0.15);
-		--ray-arc-stroke-hover: rgba(100, 160, 255, 1);
-		z-index: 9999;
-	}
-</style>
+<neoview-ray-menu bind:this={menuEl}></neoview-ray-menu>

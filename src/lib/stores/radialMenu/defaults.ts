@@ -2,7 +2,7 @@
  * Radial menu defaults and migration.
  */
 
-import type { RadialMenuConfig, RadialMenuItem } from './types';
+import type { RadialMenuConfig, RadialMenuDefinition, RadialMenuItem } from './types';
 
 export const RADIAL_MENU_STORAGE_KEY = 'neoview-radial-menus';
 
@@ -29,6 +29,7 @@ function normalizeItem(raw: any, index = 0): RadialMenuItem {
 		action: typeof raw?.action === 'string' ? raw.action : null,
 		label: typeof raw?.label === 'string' ? raw.label : '',
 		slotIndex: Number.isFinite(rawSlotIndex) && rawSlotIndex >= 0 ? Math.floor(rawSlotIndex) : index,
+		moveToMenuId: typeof raw?.moveToMenuId === 'string' && raw.moveToMenuId ? raw.moveToMenuId : undefined,
 		icon: typeof raw?.icon === 'string' && raw.icon ? raw.icon : undefined,
 		disabled: raw?.disabled === true ? true : undefined,
 		children: Array.isArray(raw?.children)
@@ -72,12 +73,37 @@ export function migrateRadialMenuConfig(raw: any): RadialMenuConfig {
 	const items = Array.isArray(raw.items)
 		? pruneItemsToLayer(raw.items.map((item: unknown, index: number) => normalizeItem(item, index)), layerCount)
 		: [];
+	const menus: RadialMenuDefinition[] = Array.isArray(raw.menus) && raw.menus.length > 0
+		? raw.menus.map((menu: any, index: number) => ({
+				id: String(menu?.id ?? (index === 0 ? defaults.id : `menu-${Date.now()}-${index}`)),
+				name: typeof menu?.name === 'string' && menu.name ? menu.name : `轮盘 ${index + 1}`,
+				items: Array.isArray(menu?.items)
+					? pruneItemsToLayer(
+							menu.items.map((item: unknown, itemIndex: number) => normalizeItem(item, itemIndex)),
+							layerCount
+						)
+					: []
+			}))
+		: [
+				{
+					id: String(raw.id ?? defaults.id),
+					name: typeof raw.name === 'string' && raw.name ? raw.name : defaults.name,
+					items
+				}
+			];
+	const activeMenuId =
+		typeof raw.activeMenuId === 'string' && menus.some((menu) => menu.id === raw.activeMenuId)
+			? raw.activeMenuId
+			: menus[0]?.id ?? defaults.id;
+	const activeItems = menus.find((menu) => menu.id === activeMenuId)?.items ?? items;
 
 	return {
 		...defaults,
 		...raw,
+		activeMenuId,
 		layerCount,
-		items,
+		menus,
+		items: activeItems,
 		variant: raw.variant === 'bubble' ? 'bubble' : 'slice',
 	};
 }

@@ -7,6 +7,7 @@ export interface RadialMenuItem {
 	action: string | null;
 	label: string;
 	slotIndex?: number;
+	moveToMenuId?: string;
 	icon?: string;
 	disabled?: boolean;
 	children?: RadialMenuItem[];
@@ -14,11 +15,19 @@ export interface RadialMenuItem {
 
 export type RadialVariant = 'slice' | 'bubble';
 
+export interface RadialMenuDefinition {
+	id: string;
+	name: string;
+	items: RadialMenuItem[];
+}
+
 export interface RadialMenuConfig {
 	id: string;
 	name: string;
 	enabled: boolean;
 	layerCount: 1 | 2 | 3;
+	activeMenuId?: string;
+	menus?: RadialMenuDefinition[];
 	items: RadialMenuItem[];
 	radius: number;
 	innerRadius: number;

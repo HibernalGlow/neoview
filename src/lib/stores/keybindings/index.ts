@@ -12,6 +12,7 @@ export type {
 	MouseGesture,
 	TouchGesture,
 	AreaClick,
+	HoldBinding,
 	InputBinding,
 	ContextualBinding,
 	BindingConflict,

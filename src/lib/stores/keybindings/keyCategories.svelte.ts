@@ -3,7 +3,7 @@
  */
 
 import type {
-	InputBinding, KeyBinding, MouseGesture, TouchGesture, AreaClick,
+	InputBinding, KeyBinding, MouseGesture, TouchGesture, AreaClick, HoldBinding,
 	BindingContext, ActionBinding, BindingWithContext, ActionWithBinding
 } from './types';
 import { CONTEXT_NAMES, AREA_NAMES, BUTTON_NAMES, ACTION_NAMES } from './constants';

@@ -12,8 +12,10 @@ import {
 	findActionByKeyInContext, findActionByKey,
 	findActionByMouseGestureInContext, findActionByMouseWheelInContext,
 	findActionByMouseClickInContext, findActionByTouchGestureInContext,
-	findActionByTouchGesture, findActionByAreaClickInContext, calculateClickArea
+	findActionByTouchGesture, findActionByAreaClickInContext,
+	findActionByHoldInContext, calculateClickArea
 } from './keyHandlers.svelte';
+import type { HoldTrigger } from './keyHandlers.svelte';
 import {
 	getCategories, getBindingsByCategory, formatBinding, formatContext,
 	getAvailableContexts, getAllBindingsForAction, getBindingsForContext
@@ -282,6 +284,11 @@ class KeyBindingsStore {
 		action: 'click' | 'double-click' | 'press' = 'click'
 	): string | null {
 		return findActionByAreaClickInContext(this.bindings, this._activeContexts, area, button, action);
+	}
+
+	/** 长按查找 */
+	findActionByHold(trigger: HoldTrigger): string | null {
+		return findActionByHoldInContext(this.bindings, this._activeContexts, trigger);
 	}
 
 	findActionByMouseWheelInContext(direction: 'up' | 'down'): string | null {

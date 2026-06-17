@@ -80,10 +80,11 @@
 	import MouseGestureRecorder from './MouseGestureRecorder.svelte';
 	import MouseKeyRecorder from './MouseKeyRecorder.svelte';
 	import AreaClickRecorder from './AreaClickRecorder.svelte';
+	import HoldBindingRecorder from './HoldBindingRecorder.svelte';
 
 	let searchQuery = $state('');
 	let editingAction = $state<string | null>(null);
-	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | null>(null);
+	let editingType = $state<'keyboard' | 'mouse' | 'touch' | 'area' | 'hold' | null>(null);
 	// 存储每个操作当前选择的“添加到”上下文，key 为 action id
 	let actionEditingContexts = $state<Record<string, BindingContext>>({});
 	let capturedInput = $state<
@@ -93,6 +94,7 @@
 	let showMouseGestureRecorder = $state(false);
 	let showMouseKeyRecorder = $state(false);
 	let showAreaClickRecorder = $state(false);
+	let showHoldBindingRecorder = $state(false);
 
 	// 当前选中的分类 Tab
 	let activeCategory = $state<string>('');
@@ -854,25 +856,51 @@
 													</Tooltip.Root>
 
 													<!-- Area -->
-													<Tooltip.Root>
-														<Tooltip.Trigger asChild>
-															{#snippet children({ props }: { props: any })}
-																<Button
-																	{...props}
-																	variant="ghost"
-																	size="icon"
-																	class="h-6 w-6 rounded-lg text-orange-500 hover:bg-orange-500/10"
-																	onclick={() =>
-																		startEditing(binding.action, 'area', currentEditingCtx)}
-																>
-																	<TargetIcon class="h-3 w-3" />
-																</Button>
-															{/snippet}
-														</Tooltip.Trigger>
-														<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
-															>屏幕区域</Tooltip.Content
-														>
-													</Tooltip.Root>
+												<Tooltip.Root>
+													<Tooltip.Trigger asChild>
+														{#snippet children({ props }: { props: any })}
+															<Button
+																{...props}
+																variant="ghost"
+																size="icon"
+																class="h-6 w-6 rounded-lg text-orange-500 hover:bg-orange-500/10"
+																onclick={() =>
+																	startEditing(binding.action, 'area', currentEditingCtx)}
+															>
+																<TargetIcon class="h-3 w-3" />
+															</Button>
+														{/snippet}
+													</Tooltip.Trigger>
+													<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
+														>屏幕区域</Tooltip.Content
+													>
+												</Tooltip.Root>
+
+												<!-- Hold -->
+												<Tooltip.Root>
+													<Tooltip.Trigger asChild>
+														{#snippet children({ props }: { props: any })}
+															<Button
+																{...props}
+																variant="ghost"
+																size="icon"
+																class="h-6 w-6 rounded-lg text-amber-500 hover:bg-amber-500/10"
+																onclick={() => {
+																	editingAction = binding.action;
+																	editingType = 'hold';
+																	capturedInput = '';
+																	actionEditingContexts[binding.action] = currentEditingCtx;
+																	showHoldBindingRecorder = true;
+																}}
+															>
+																<Timer class="h-3 w-3" />
+															</Button>
+														{/snippet}
+													</Tooltip.Trigger>
+													<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
+														>添加长按绑定</Tooltip.Content
+													>
+												</Tooltip.Root>
 												</div>
 											</div>
 										</Table.Cell>
@@ -1101,6 +1129,11 @@
 	<!-- 鼠标按键录制器 -->
 	{#if showMouseKeyRecorder && editingAction && editingType === 'mouse'}
 		<MouseKeyRecorder onComplete={handleMouseKeyComplete} onCancel={handleMouseKeyCancel} />
+	{/if}
+
+	<!-- 长按绑定录制器 -->
+	{#if showHoldBindingRecorder}
+		<HoldBindingRecorder oncapture={(data) => { capturedInput = data; showHoldBindingRecorder = false; }} oncancel={() => { showHoldBindingRecorder = false; }} />
 	{/if}
 
 	<!-- 手势可视化器 -->

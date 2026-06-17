@@ -81,6 +81,9 @@
 		remapPageActionForVideoSeekMode
 	} from '$lib/utils/viewerActionDispatcher';
 	import { executeAppAction, type ActionHandlerContext } from '$lib/utils/appActionHandlers';
+	import RadialInputLayer from '$lib/components/radial/RadialInputLayer.svelte';
+	import RadialMenuOverlay from '$lib/components/radial/RadialMenuOverlay.svelte';
+	import { radialMenuStore } from '$lib/stores/radialMenu';
 
 	const WINDOW_STATE_SAFE_FLAGS = StateFlags.SIZE | StateFlags.POSITION | StateFlags.MAXIMIZED;
 
@@ -496,6 +499,13 @@
 	async function dispatchAction(action: string) {
 		console.log('执行操作:', action);
 
+		// 轮盘菜单特殊处理：打开轮盘不走 executeAppAction
+		if (action.startsWith('openRadialMenu.')) {
+			radialMenuStore.startPendingHold('keyboard', window.innerWidth / 2, window.innerHeight / 2);
+			radialMenuStore.open();
+			return;
+		}
+
 		// 添加调试信息
 		// keyBindingsStore.debugBindings();
 
@@ -535,6 +545,8 @@
 	}
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
+		// 轮盘打开时优先消费事件
+		if (radialMenuStore.isOpen) return;
 		// 设置覆盖层打开时不响应全局快捷键
 		if ($settingsOverlayOpen) return;
 		// 不在输入框时响应
@@ -553,6 +565,8 @@
 
 	// 处理鼠标点击事件
 	function handleGlobalMouseClick(e: MouseEvent) {
+		// 轮盘刚关闭时抑制 click
+		if (radialMenuStore.shouldSuppressClick) return;
 		// 设置覆盖层打开时不响应
 		if ($settingsOverlayOpen) return;
 		// 不在输入框时响应
@@ -602,6 +616,8 @@
 
 	// 处理鼠标按下事件
 	function handleGlobalMouseDown(e: MouseEvent) {
+		// 轮盘打开时不响应
+		if (radialMenuStore.isOpen) return;
 		// 设置覆盖层打开时不响应
 		if ($settingsOverlayOpen) return;
 		// 不在输入框时响应
@@ -657,6 +673,10 @@
 	<Toast />
 	<GlobalConfirmDialog />
 	<SettingsOverlay />
+
+	<!-- 轮盘菜单系统 -->
+	<RadialInputLayer onselect={(action: string) => dispatchAction(action)} />
+	<RadialMenuOverlay />
 
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>

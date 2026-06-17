@@ -4,6 +4,7 @@
  */
 
 import { keyBindingsStore } from '../keybindings';
+import { radialMenuStore } from '../radialMenu';
 import { fileBrowserStore } from '../fileBrowser.svelte';
 import { bookmarkStore } from '../bookmark.svelte';
 import { unifiedHistoryStore } from '../unifiedHistory.svelte';
@@ -52,6 +53,7 @@ export function exportAppSettings(): AppSettings {
         version: '1.0.0',
         timestamp: Date.now(),
         keybindings: keyBindingsStore.bindings,
+        radialMenus: radialMenuStore.config,
         emmMetadata: emmConfig,
         fileBrowser: {
             sortField: fileBrowserStore.getState().sortField,

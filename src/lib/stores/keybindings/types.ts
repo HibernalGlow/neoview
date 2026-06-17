@@ -61,8 +61,18 @@ export interface AreaClick {
 	action?: 'click' | 'double-click' | 'press'; // 动作类型
 }
 
+/** 长按绑定 */
+export interface HoldBinding {
+	type: 'hold';
+	device: 'mouse' | 'touch' | 'keyboard';
+	key?: string;              // Enter
+	button?: 'left' | 'right' | 'middle';
+	durationMs: number;        // 可自定义长按时间
+	moveTolerancePx?: number;  // 长按前允许抖动
+}
+
 /** 输入绑定联合类型 */
-export type InputBinding = KeyBinding | MouseGesture | TouchGesture | AreaClick;
+export type InputBinding = KeyBinding | MouseGesture | TouchGesture | AreaClick | HoldBinding;
 
 // ========== 上下文绑定接口 ==========
 

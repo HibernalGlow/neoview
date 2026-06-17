@@ -4,6 +4,8 @@
  */
 
 import { keyBindingsStore } from '../keybindings';
+import { radialMenuStore } from '../radialMenu';
+import { migrateRadialMenuConfig } from '../radialMenu/defaults';
 import { emmMetadataStore } from '../emmMetadata.svelte';
 import { fileBrowserStore } from '../fileBrowser.svelte';
 import { bookmarkStore } from '../bookmark.svelte';
@@ -22,6 +24,10 @@ export function importAppSettings(settings: AppSettings): void {
     try {
         if (settings.keybindings) {
             importKeybindings(settings.keybindings);
+        }
+
+        if (settings.radialMenus) {
+            importRadialMenus(settings.radialMenus);
         }
 
         if (settings.emmMetadata) {
@@ -86,6 +92,19 @@ function importKeybindings(keybindings: any): void {
         }
     } catch (error) {
         console.error('导入快捷键失败:', error);
+    }
+}
+
+/**
+ * 导入轮盘菜单配置
+ */
+function importRadialMenus(radialMenus: any): void {
+    try {
+        const migrated = migrateRadialMenuConfig(radialMenus);
+        radialMenuStore.config = migrated;
+        radialMenuStore.saveToStorage();
+    } catch (error) {
+        console.error('导入轮盘菜单配置失败:', error);
     }
 }
 
@@ -284,6 +303,11 @@ export async function applyFullPayload(
     // 快捷键
     if (modules.keybindings && payload.appSettings?.keybindings) {
         importKeybindings(payload.appSettings.keybindings);
+    }
+
+    // 轮盘菜单
+    if (payload.appSettings?.radialMenus) {
+        importRadialMenus(payload.appSettings.radialMenus);
     }
 
     // EMM 配置

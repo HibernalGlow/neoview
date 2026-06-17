@@ -15,6 +15,7 @@ export interface AppSettings {
     version: string;
     timestamp: number;
     keybindings: any;
+    radialMenus?: any;
     emmMetadata: {
         enableEMM: boolean;
         fileListTagDisplayMode: 'all' | 'collect' | 'none';

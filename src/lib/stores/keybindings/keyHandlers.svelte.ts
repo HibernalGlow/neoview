@@ -9,6 +9,7 @@ import type {
 	MouseGesture,
 	TouchGesture,
 	AreaClick,
+	HoldBinding,
 	BindingContext,
 	ActionBinding,
 	ViewArea,
@@ -178,6 +179,29 @@ export function findActionByAreaClickInContext(
 			(a.button || 'left') === button &&
 			(a.action || 'click') === action
 		);
+	});
+}
+
+/** 长按触发器 */
+export interface HoldTrigger {
+	device: 'mouse' | 'touch' | 'keyboard';
+	key?: string;
+	button?: 'left' | 'right' | 'middle';
+}
+
+/** 上下文感知的长按查找 */
+export function findActionByHoldInContext(
+	bindings: ActionBinding[],
+	activeContexts: BindingContext[],
+	trigger: HoldTrigger
+): string | null {
+	return findActionByInputWithContext(bindings, activeContexts, (input) => {
+		if (input.type !== 'hold') return false;
+		const hold = input as HoldBinding;
+		if (hold.device !== trigger.device) return false;
+		if (trigger.device === 'keyboard' && hold.key && hold.key !== trigger.key) return false;
+		if ((trigger.device === 'mouse' || trigger.device === 'touch') && hold.button && hold.button !== trigger.button) return false;
+		return true;
 	});
 }
 

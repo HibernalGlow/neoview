@@ -10,7 +10,7 @@ import type {
 	ViewArea,
 } from './types';
 import { STORAGE_KEY, getContextPriority, CONTEXT_PRIORITY } from './constants';
-import { defaultBindings } from './keyMappings.svelte';
+import { createDefaultBindings } from './keyMappings.svelte';
 import {
 	findActionByKeyInContext,
 	findActionByKey,
@@ -33,7 +33,7 @@ import {
 } from './keyCategories.svelte';
 
 class KeyBindingsStore {
-	bindings = $state<ActionBinding[]>([...defaultBindings]);
+	bindings = $state<ActionBinding[]>(createDefaultBindings());
 	private _activeContexts = $state<BindingContext[]>(['global']);
 
 	constructor() {
@@ -77,7 +77,7 @@ class KeyBindingsStore {
 				const parsed: ActionBinding[] = JSON.parse(event.newValue);
 				this.bindings = this.mergeWithDefaults(parsed);
 			} else {
-				this.bindings = [...defaultBindings];
+				this.bindings = createDefaultBindings();
 			}
 		} catch (error) {
 			console.error('Failed to sync keybindings from storage event:', error);
@@ -87,7 +87,7 @@ class KeyBindingsStore {
 	private mergeWithDefaults(stored: ActionBinding[]): ActionBinding[] {
 		const merged: ActionBinding[] = [];
 		const storedMap = new Map(stored.map((binding) => [binding.action, binding] as const));
-		for (const def of defaultBindings) {
+		for (const def of createDefaultBindings()) {
 			const storedBinding = storedMap.get(def.action);
 			if (storedBinding) {
 				merged.push({
@@ -278,7 +278,7 @@ class KeyBindingsStore {
 	}
 
 	resetToDefault() {
-		this.bindings = [...defaultBindings];
+		this.bindings = createDefaultBindings();
 		this.resetContexts();
 		this.saveToStorage();
 	}
@@ -396,11 +396,11 @@ class KeyBindingsStore {
 				const parsed: ActionBinding[] = JSON.parse(stored);
 				this.bindings = this.mergeWithDefaults(parsed);
 			} else {
-				this.bindings = [...defaultBindings];
+				this.bindings = createDefaultBindings();
 			}
 		} catch (error) {
 			console.error('Failed to load keybindings:', error);
-			this.bindings = [...defaultBindings];
+			this.bindings = createDefaultBindings();
 		}
 	}
 

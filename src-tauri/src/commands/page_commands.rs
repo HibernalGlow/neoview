@@ -776,6 +776,7 @@ pub fn get_page_commands() -> Vec<&'static str> {
         "pm_get_stats",
         "pm_get_memory_stats",
         "pm_clear_cache",
+        "pm_trigger_preload",
         "pm_get_video_path",
         "pm_get_temp_stats",
         "pm_get_large_file_threshold",

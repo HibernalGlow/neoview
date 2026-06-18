@@ -80,6 +80,7 @@ export function getActionIcon(action: string, _category = ''): Component {
 	if (action === 'toggleReadingDirection') return ArrowLeftRight;
 	if (action === 'toggleBookMode') return BookOpen;
 	if (action === 'rotate') return RotateCw;
+	if (action === 'rotate180') return RotateCw;
 	if (action === 'toggleSinglePanoramaView') return Layers;
 
 	if (action === 'openFile') return FolderOpen;
@@ -137,6 +138,7 @@ export function getActionIconSvg(action: string): string {
 	if (action === 'toggleReadingDirection') return svg('<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>');
 	if (action === 'toggleBookMode') return svg('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z"/>');
 	if (action === 'rotate') return svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>');
+	if (action === 'rotate180') return svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/><path d="M8 12h8"/><path d="M16 8v8"/>');
 	if (action === 'toggleSinglePanoramaView') return svg('<path d="M12 2v20"/><path d="M2 12h20"/><rect width="18" height="18" x="3" y="3" rx="2"/>');
 
 	if (action === 'openFile') return svg('<path d="M20 20a2 2 0 0 0 2-2V8h-9l-2-3H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2Z"/>');

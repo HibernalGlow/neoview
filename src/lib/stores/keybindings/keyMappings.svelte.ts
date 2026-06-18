@@ -163,6 +163,13 @@ const viewBindings: ActionBinding[] = [
 		bindings: []
 	},
 	{
+		action: 'rotate180',
+		name: '旋转180度',
+		category: '瑙嗗浘',
+		description: '将图片旋转180度',
+		bindings: []
+	},
+	{
 		action: 'toggleSinglePanoramaView',
 		name: '单页切换',
 		category: '视图',

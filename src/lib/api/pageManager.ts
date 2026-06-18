@@ -360,18 +360,28 @@ export async function getCacheStatus(startPage: number, count: number): Promise<
 	const statuses: boolean[] = [];
 	let offset = 0;
 
-	while (offset < count) {
-		const chunkCount = Math.min(CACHE_STATUS_CHUNK_SIZE, count - offset);
-		const chunkStart = startPage + offset;
-		const chunk = await invoke<boolean[]>('pm_get_cache_status', {
-			startPage: chunkStart,
-			count: chunkCount
-		});
-		statuses.push(...chunk);
-		offset += chunkCount;
-	}
+	try {
+		while (offset < count) {
+			const chunkCount = Math.min(CACHE_STATUS_CHUNK_SIZE, count - offset);
+			const chunkStart = startPage + offset;
+			const chunk = await invoke<boolean[]>('pm_get_cache_status', {
+				startPage: chunkStart,
+				count: chunkCount
+			});
+			statuses.push(...chunk);
+			offset += chunkCount;
+		}
 
-	return statuses;
+		return statuses;
+	} catch (error) {
+		if (!String(error).includes('pm_get_cache_status')) {
+			throw error;
+		}
+
+		const stats = await getStats();
+		const cachedPages = new Set(stats.cachedPages);
+		return Array.from({ length: count }, (_, index) => cachedPages.has(startPage + index));
+	}
 }
 
 /**

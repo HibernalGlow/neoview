@@ -20,7 +20,8 @@
  */
 
 import { bookStore } from '$lib/stores/book.svelte';
-import { getFrameSnapshot, reportViewport, type FrameSnapshot, type FrameImageInfo, type GetFrameSnapshotParams } from '$lib/api/frameApi';
+import { getFrameSnapshot, getReaderWindow, reportViewport, triggerPreload, type FrameSnapshot, type FrameImageInfo, type GetFrameSnapshotParams, type ReaderWindow } from '$lib/api/frameApi';
+import { settingsManager } from '$lib/settings/settingsManager';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
 
@@ -42,6 +43,76 @@ function fixUrl(url: string): string {
     return PROTOCOL_BASE + url.slice('neoview://localhost'.length);
   }
   return url;
+}
+
+const PRELOAD_URL_CACHE_LIMIT = 512;
+const PRELOAD_WINDOW_CACHE_LIMIT = 96;
+const preloadedUrlSet = new Set<string>();
+const preloadedUrlQueue: string[] = [];
+const preloadedWindowSet = new Set<string>();
+const preloadedWindowQueue: string[] = [];
+const activePreloadImages = new Set<HTMLImageElement>();
+
+function rememberLimited(set: Set<string>, queue: string[], value: string, limit: number): boolean {
+  if (set.has(value)) return false;
+  set.add(value);
+  queue.push(value);
+
+  while (queue.length > limit) {
+    const oldValue = queue.shift();
+    if (oldValue) set.delete(oldValue);
+  }
+
+  return true;
+}
+
+function makeWindowPreloadKey(bookPath: string, centerPage: number, radius: number, params: GetFrameSnapshotParams): string {
+  return JSON.stringify({
+    bookPath,
+    centerPage,
+    radius,
+    pageMode: params.pageMode,
+    readOrder: params.readOrder,
+    splitHorizontal: params.splitHorizontal,
+    widePage: params.widePage,
+    singleFirst: params.singleFirst,
+    singleLast: params.singleLast,
+    divideRate: params.divideRate,
+    splitHalf: params.splitHalf ?? null,
+  });
+}
+
+function getPreloadRadius(): number {
+  const configured = settingsManager.getSettings().performance?.preLoadSize ?? 3;
+  return Math.min(8, Math.max(1, Math.round(configured)));
+}
+
+function collectPreloadUrls(window: ReaderWindow, currentFrameId: string): string[] {
+  const urls: string[] = [];
+
+  for (const frame of window.frames) {
+    if (frame.frameId === currentFrameId) continue;
+
+    for (const img of frame.images) {
+      if (img.isDummy || !img.url) continue;
+      urls.push(fixUrl(img.url));
+    }
+  }
+
+  return urls;
+}
+
+function preloadImageUrl(url: string): void {
+  if (typeof Image === 'undefined') return;
+  if (!rememberLimited(preloadedUrlSet, preloadedUrlQueue, url, PRELOAD_URL_CACHE_LIMIT)) return;
+
+  const image = new Image();
+  image.decoding = 'async';
+  image.onload = image.onerror = () => {
+    activePreloadImages.delete(image);
+  };
+  activePreloadImages.add(image);
+  image.src = url;
 }
 
 
@@ -129,6 +200,45 @@ export function createImageStore() {
     return snapshot.images.some((img) => !img.isDummy && !resolveImageDimensions(img));
   }
 
+  async function preloadReaderWindow(params: GetFrameSnapshotParams, snapshot: FrameSnapshot, token: number): Promise<void> {
+    const book = bookStore.currentBook;
+    if (!book) return;
+
+    const radius = getPreloadRadius();
+    const preloadKey = makeWindowPreloadKey(book.path, snapshot.pageIndex, radius, params);
+    if (!rememberLimited(preloadedWindowSet, preloadedWindowQueue, preloadKey, PRELOAD_WINDOW_CACHE_LIMIT)) {
+      return;
+    }
+
+    try {
+      const window = await getReaderWindow(snapshot.pageIndex, radius, params);
+      if (token !== pendingRequestToken || bookStore.currentBook?.path !== book.path) {
+        return;
+      }
+
+      for (const url of collectPreloadUrls(window, snapshot.frameId)) {
+        preloadImageUrl(url);
+      }
+    } catch (err) {
+      console.warn('[imageStore] preload reader window failed:', err);
+    }
+  }
+
+  function schedulePreload(params: GetFrameSnapshotParams, snapshot: FrameSnapshot, token: number): void {
+    const run = () => {
+      void triggerPreload().catch((err) => {
+        console.warn('[imageStore] backend preload failed:', err);
+      });
+      void preloadReaderWindow(params, snapshot, token);
+    };
+
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(run);
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
   /**
    * 请求当前帧快照
    * 【双缓冲】旧帧保留直到新帧 ready
@@ -202,6 +312,7 @@ export function createImageStore() {
       }
       state.currentFrame = snapshot;
       state.loading = false;
+      schedulePreload(params, snapshot, myToken);
 
     } catch (err) {
       if (myToken === pendingRequestToken) {

@@ -409,6 +409,10 @@ export function rotateClockwise() {
 	rotationAngle.update((angle) => (angle + 90) % 360);
 }
 
+export function rotate180() {
+	rotationAngle.update((angle) => (angle + 180) % 360);
+}
+
 export function resetRotation() {
 	rotationAngle.set(0);
 }

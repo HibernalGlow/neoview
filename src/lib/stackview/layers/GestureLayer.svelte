@@ -10,7 +10,7 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
+	import { rotate180, rotateClockwise, zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { showToast } from '$lib/utils/toast';
 
@@ -223,6 +223,14 @@
 				showActionToast(`${source}: 重置缩放`);
 				if (onResetZoom) onResetZoom();
 				else resetZoom();
+				break;
+			case 'rotate':
+				showActionToast(`${source}: 旋转90度`);
+				rotateClockwise();
+				break;
+			case 'rotate180':
+				showActionToast(`${source}: 旋转180度`);
+				rotate180();
 				break;
 			case 'toggleFullscreen':
 				showActionToast(`${source}: 切换全屏`);

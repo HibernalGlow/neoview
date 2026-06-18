@@ -86,6 +86,13 @@ export interface GetFrameSnapshotParams {
   splitHalf?: SplitHalf;
 }
 
+export interface ReaderWindow {
+  centerPage: number;
+  frames: FrameSnapshot[];
+  preloadAhead: number[];
+  preloadBehind: number[];
+}
+
 // ============================================================================
 // API 函数
 // ============================================================================
@@ -106,6 +113,29 @@ export async function getFrameSnapshot(params: GetFrameSnapshotParams): Promise<
     divideRate: params.divideRate,
     splitHalf: params.splitHalf ?? null,
   });
+}
+
+export async function getReaderWindow(
+  centerPage: number,
+  radius: number,
+  params: GetFrameSnapshotParams
+): Promise<ReaderWindow> {
+  return invoke<ReaderWindow>('pm_get_reader_window', {
+    centerPage,
+    radius,
+    pageMode: params.pageMode,
+    readOrder: params.readOrder,
+    splitHorizontal: params.splitHorizontal,
+    widePage: params.widePage,
+    singleFirst: params.singleFirst,
+    singleLast: params.singleLast,
+    divideRate: params.divideRate,
+    splitHalf: params.splitHalf ?? null,
+  });
+}
+
+export async function triggerPreload(): Promise<void> {
+  return invoke('pm_trigger_preload');
 }
 
 /**

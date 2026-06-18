@@ -26,7 +26,7 @@ import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
 import { clearBitmapCache, enqueueBitmapPreload } from '../utils/bitmapPreloader';
-import { clearImageDecodeCache, enqueueImagePredecode } from '../utils/imageDecodePreloader';
+import { clearImageDecodeCache, enqueueImagePredecode, type ImageFetchPriority } from '../utils/imageDecodePreloader';
 
 
 // ============================================================================
@@ -48,21 +48,26 @@ function fixUrl(url: string): string {
   return url;
 }
 
-const PRELOAD_URL_CACHE_LIMIT = 512;
 const PRELOAD_WINDOW_CACHE_LIMIT = 96;
-const preloadedUrlSet = new Set<string>();
-const preloadedUrlQueue: string[] = [];
-const preloadedWindowSet = new Set<string>();
+const PRELOAD_WINDOW_REFRESH_MS = 5_000;
+const preloadedWindowTimestamps = new Map<string, number>();
 const preloadedWindowQueue: string[] = [];
 
-function rememberLimited(set: Set<string>, queue: string[], value: string, limit: number): boolean {
-  if (set.has(value)) return false;
-  set.add(value);
-  queue.push(value);
+function rememberWindowPreload(value: string): boolean {
+  const timestamp = Date.now();
+  const lastTimestamp = preloadedWindowTimestamps.get(value);
+  if (typeof lastTimestamp === 'number' && timestamp - lastTimestamp < PRELOAD_WINDOW_REFRESH_MS) {
+    return false;
+  }
 
-  while (queue.length > limit) {
-    const oldValue = queue.shift();
-    if (oldValue) set.delete(oldValue);
+  if (!preloadedWindowTimestamps.has(value)) {
+    preloadedWindowQueue.push(value);
+  }
+  preloadedWindowTimestamps.set(value, timestamp);
+
+  while (preloadedWindowQueue.length > PRELOAD_WINDOW_CACHE_LIMIT) {
+    const oldValue = preloadedWindowQueue.shift();
+    if (oldValue) preloadedWindowTimestamps.delete(oldValue);
   }
 
   return true;
@@ -89,27 +94,38 @@ function getPreloadRadius(): number {
   return Math.min(8, Math.max(1, Math.round(configured)));
 }
 
-function collectPreloadUrls(window: ReaderWindow, currentFrameId: string): string[] {
-  const urls: string[] = [];
+interface PreloadUrlEntry {
+  url: string;
+  priority: ImageFetchPriority;
+  distance: number;
+}
+
+function collectPreloadUrls(window: ReaderWindow, currentFrameId: string): PreloadUrlEntry[] {
+  const byUrl = new Map<string, PreloadUrlEntry>();
 
   for (const frame of window.frames) {
     if (frame.frameId === currentFrameId) continue;
+    const distance = Math.abs(frame.pageIndex - window.centerPage);
+    const priority: ImageFetchPriority = distance <= 2 ? 'high' : 'low';
 
     for (const img of frame.images) {
       if (img.isDummy || !img.url) continue;
-      urls.push(fixUrl(img.url));
+      const url = fixUrl(img.url);
+      const existing = byUrl.get(url);
+      if (!existing || distance < existing.distance || existing.priority === 'low') {
+        byUrl.set(url, { url, priority, distance });
+      }
     }
   }
 
-  return urls;
+  return [...byUrl.values()].sort((a, b) => a.distance - b.distance);
 }
 
-function preloadImageUrl(url: string): void {
-  if (!rememberLimited(preloadedUrlSet, preloadedUrlQueue, url, PRELOAD_URL_CACHE_LIMIT)) return;
+function preloadImageUrl(url: string, priority: ImageFetchPriority): void {
   if (loadModeStore.isCanvasMode) {
     enqueueBitmapPreload(url);
   } else {
-    enqueueImagePredecode(url, 'low');
+    enqueueImagePredecode(url, priority);
   }
 }
 
@@ -204,7 +220,7 @@ export function createImageStore() {
 
     const radius = getPreloadRadius();
     const preloadKey = makeWindowPreloadKey(book.path, snapshot.pageIndex, radius, params);
-    if (!rememberLimited(preloadedWindowSet, preloadedWindowQueue, preloadKey, PRELOAD_WINDOW_CACHE_LIMIT)) {
+    if (!rememberWindowPreload(preloadKey)) {
       return;
     }
 
@@ -214,8 +230,8 @@ export function createImageStore() {
         return;
       }
 
-      for (const url of collectPreloadUrls(window, snapshot.frameId)) {
-        preloadImageUrl(url);
+      for (const entry of collectPreloadUrls(window, snapshot.frameId)) {
+        preloadImageUrl(entry.url, entry.priority);
       }
     } catch (err) {
       console.warn('[imageStore] preload reader window failed:', err);
@@ -422,9 +438,7 @@ export function createImageStore() {
     state.error = null;
     lastBookPath = null;
     pendingRequestToken++;
-    preloadedUrlSet.clear();
-    preloadedUrlQueue.length = 0;
-    preloadedWindowSet.clear();
+    preloadedWindowTimestamps.clear();
     preloadedWindowQueue.length = 0;
     clearImageDecodeCache();
     clearBitmapCache();

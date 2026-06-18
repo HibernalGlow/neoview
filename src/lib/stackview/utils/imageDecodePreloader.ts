@@ -1,4 +1,4 @@
-type ImageFetchPriority = 'high' | 'low' | 'auto';
+export type ImageFetchPriority = 'high' | 'low' | 'auto';
 type DecodeStatus = 'pending' | 'decoded' | 'error';
 
 export interface DecodedImageEntry {
@@ -17,8 +17,8 @@ interface PredecodeOptions {
 	priority?: ImageFetchPriority;
 }
 
-const MAX_DECODED_ITEMS = 8;
-const MAX_DECODED_PIXELS = 90_000_000;
+const MAX_DECODED_ITEMS = 12;
+const MAX_DECODED_PIXELS = 160_000_000;
 const BACKGROUND_DECODE_CONCURRENCY = 2;
 
 const decodedImageCache = new Map<string, DecodedImageEntry>();
@@ -112,6 +112,7 @@ export function predecodeImage(
 
 	const image = new Image();
 	image.decoding = 'async';
+	image.loading = 'eager';
 	setFetchPriority(image, options.priority ?? 'auto');
 
 	const entry: DecodedImageEntry = {
@@ -174,11 +175,24 @@ function pumpBackgroundQueue(): void {
 }
 
 export function enqueueImagePredecode(url: string, priority: ImageFetchPriority = 'low'): void {
-	if (!url || decodedImageCache.has(url) || backgroundQueueSet.has(url)) {
+	if (!url || decodedImageCache.has(url)) {
 		return;
 	}
 
-	backgroundQueue.push({ url, priority });
+	const queuedIndex = backgroundQueue.findIndex((entry) => entry.url === url);
+	if (queuedIndex >= 0) {
+		if (priority === 'high') {
+			const [entry] = backgroundQueue.splice(queuedIndex, 1);
+			backgroundQueue.unshift({ ...entry, priority });
+		}
+		return;
+	}
+
+	if (priority === 'high') {
+		backgroundQueue.unshift({ url, priority });
+	} else {
+		backgroundQueue.push({ url, priority });
+	}
 	backgroundQueueSet.add(url);
 	pumpBackgroundQueue();
 }

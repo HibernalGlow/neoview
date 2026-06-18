@@ -192,6 +192,8 @@
         if (swapToken !== pendingSwapToken) return;
         const fallback = new Image();
         fallback.decoding = 'async';
+        fallback.loading = 'eager';
+        (fallback as HTMLImageElement & { fetchPriority?: 'high' }).fetchPriority = 'high';
         fallback.onload = fallback.onerror = () => {
           commitIfCurrent(fallback.naturalWidth, fallback.naturalHeight);
         };
@@ -280,6 +282,9 @@
         style:filter={filterCss || undefined}
         style={settledStyle || undefined}
         onload={handleMainImageLoad}
+        decoding="async"
+        loading="eager"
+        fetchpriority="high"
         draggable="false"
       />
     {/if}

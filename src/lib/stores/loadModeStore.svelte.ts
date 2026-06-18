@@ -29,8 +29,17 @@ export const LOAD_MODE_PRESETS: Record<string, LoadModeConfig> = {
 export type LoadModePreset = keyof typeof LOAD_MODE_PRESETS;
 
 const STORAGE_KEY = 'neoview-load-mode-v2';
+const DEFAULT_LOAD_MODE: LoadModeConfig = { dataSource: 'blob', renderMode: 'img' };
 
 function createLoadModeStore() {
+	function migrateStoredConfig(next: LoadModeConfig): LoadModeConfig {
+		if (next.renderMode !== 'canvas') {
+			return next;
+		}
+
+		return { ...next, renderMode: 'img' };
+	}
+
 	// 从 localStorage 加载
 	function loadConfig(): LoadModeConfig {
 		try {
@@ -41,13 +50,17 @@ function createLoadModeStore() {
 					(parsed.dataSource === 'blob' || parsed.dataSource === 'tempfile') &&
 					(parsed.renderMode === 'img' || parsed.renderMode === 'canvas')
 				) {
-					return parsed;
+					const migrated = migrateStoredConfig(parsed);
+					if (migrated.renderMode !== parsed.renderMode) {
+						localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+					}
+					return migrated;
 				}
 			}
 		} catch {
 			// 忽略
 		}
-		return { dataSource: 'blob', renderMode: 'img' }; // 默认
+		return DEFAULT_LOAD_MODE; // 默认
 	}
 
 	let config = $state<LoadModeConfig>(loadConfig());

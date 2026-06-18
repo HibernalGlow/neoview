@@ -39,6 +39,7 @@
 		rotationAngle,
 		setZoomLevel,
 		viewerPageInfoVisible,
+		viewerProgressVisible,
 		currentPageShouldSplit,
 		subPageIndex
 	} from '$lib/stores';
@@ -1294,7 +1295,7 @@
 	<ImageInfoLayer />
 
 	<!-- 进度条 -->
-	<ProgressBarLayer showProgressBar={showProgress} />
+	<ProgressBarLayer showProgressBar={showProgress && $viewerProgressVisible} />
 
 	<!-- 边栏控制浮窗 -->
 	<SidebarControlLayer />

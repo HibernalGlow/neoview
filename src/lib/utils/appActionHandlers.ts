@@ -26,6 +26,7 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
 import { slideshowStore } from '$lib/stores/slideshow.svelte';
 import { dispatchViewerAction } from '$lib/utils/viewerActionDispatcher';
+import { executeProvidedAction } from '$lib/actions/actionRegistry';
 import { showInfoToast } from '$lib/utils/toast';
 
 export interface ActionHandlerContext {
@@ -219,6 +220,10 @@ export async function executeAppAction(
 	action: string,
 	ctx: ActionHandlerContext
 ): Promise<boolean> {
+	if (await executeProvidedAction(action)) {
+		return true;
+	}
+
 	if (action in SIMPLE_ACTION_HANDLERS) {
 		SIMPLE_ACTION_HANDLERS[action]();
 		return true;

@@ -87,6 +87,7 @@ export interface NeoViewSettings {
     showBookSwitchToast: boolean;
     backgroundColor: string;
     backgroundMode: 'solid' | 'auto' | 'ambient' | 'aurora' | 'spotlight';
+    lastDynamicBackgroundMode?: 'auto' | 'ambient' | 'aurora' | 'spotlight';
     /** 动态背景设置 */
     ambient?: {
       /** 动画速度（秒） */

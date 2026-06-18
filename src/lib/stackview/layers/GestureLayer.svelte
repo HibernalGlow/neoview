@@ -13,6 +13,7 @@
 	import { rotate180, rotateClockwise, zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { showToast } from '$lib/utils/toast';
+	import { executeProvidedActionSync } from '$lib/actions/actionRegistry';
 
 	// 读取设置
 	let settings = $state(settingsManager.getSettings());
@@ -183,6 +184,11 @@
 	function executeAction(action: string, source: string) {
 		const settings = settingsManager.getSettings();
 		const readingDirection = settings.book.readingDirection;
+
+		if (executeProvidedActionSync(action)) {
+			showActionToast(`${source}: ${action}`);
+			return;
+		}
 
 		switch (action) {
 			case 'nextPage':

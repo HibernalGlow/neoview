@@ -151,6 +151,7 @@ export const layoutSwitchMode = createPersistedState<LayoutSwitchMode>({ key: 'l
 
 // Viewer 页码信息显示
 export const viewerPageInfoVisible = createPersistedState({ key: 'viewerPageInfoVisible', defaultValue: true });
+export const viewerProgressVisible = createPersistedState({ key: 'viewerProgressVisible', defaultValue: true });
 
 // ============================================================================
 // 非持久化状态（使用 createState）

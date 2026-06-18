@@ -4,6 +4,7 @@
  */
 
 import type { ActionBinding } from './types';
+import { buildDefaultActionBindings } from '$lib/actions/actionRegistry';
 
 /** 导航相关的默认绑定 */
 const navigationBindings: ActionBinding[] = [
@@ -369,7 +370,7 @@ const slideshowBindings: ActionBinding[] = [
  * 所有默认绑定配置
  * 合并所有分类的绑定
  */
-export const defaultBindings: ActionBinding[] = [
+const coreDefaultBindings: ActionBinding[] = [
 	...navigationBindings,
 	...zoomBindings,
 	...viewBindings,
@@ -380,15 +381,22 @@ export const defaultBindings: ActionBinding[] = [
 	...slideshowBindings
 ];
 
+export const defaultBindings: ActionBinding[] = buildDefaultActionBindings(coreDefaultBindings);
+
 /**
  * 创建默认绑定的深拷贝
  * 用于重置或初始化
  */
 export function createDefaultBindings(): ActionBinding[] {
-	return defaultBindings.map((binding) => ({
+	return buildDefaultActionBindings(coreDefaultBindings).map((binding) => ({
 		...binding,
-		bindings: [...binding.bindings],
-		contextBindings: binding.contextBindings ? [...binding.contextBindings] : undefined
+		bindings: binding.bindings.map((input) => ({ ...input })),
+		contextBindings: binding.contextBindings
+			? binding.contextBindings.map((contextBinding) => ({
+					...contextBinding,
+					input: { ...contextBinding.input }
+				}))
+			: undefined
 	}));
 }
 
@@ -396,12 +404,12 @@ export function createDefaultBindings(): ActionBinding[] {
  * 获取所有可用的操作ID列表
  */
 export function getAvailableActions(): string[] {
-	return defaultBindings.map((b) => b.action);
+	return createDefaultBindings().map((b) => b.action);
 }
 
 /**
  * 根据操作ID获取默认绑定
  */
 export function getDefaultBinding(action: string): ActionBinding | undefined {
-	return defaultBindings.find((b) => b.action === action);
+	return createDefaultBindings().find((b) => b.action === action);
 }

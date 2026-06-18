@@ -201,8 +201,8 @@
 
 	function getImageLayoutMetrics(img: FrameImageData): ImageLayoutMetrics | null {
 		const loadedImageSize = img.url ? loadedImageSizes[img.url] : undefined;
-		const imgWidth = img.width || loadedImageSize?.width || imageSize.width || 0;
-		const imgHeight = img.height || loadedImageSize?.height || imageSize.height || 0;
+		const imgWidth = img.width || imageSize.width || loadedImageSize?.width || 0;
+		const imgHeight = img.height || imageSize.height || loadedImageSize?.height || 0;
 		const frameScale = img.scale ?? 1.0;
 		const splitFactor = img.splitHalf ? 2 : 1;
 		const objectFit = zoomMode === 'fill' ? 'cover' : 'contain';

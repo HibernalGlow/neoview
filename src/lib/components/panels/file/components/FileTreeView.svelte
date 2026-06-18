@@ -1,52 +1,59 @@
-	<script lang="ts">
-		import { createEventDispatcher } from 'svelte';
-		import type { FsItem } from '$lib/types';
-		import { Folder, File, Image as ImageIcon, FileArchive, ChevronDown, ChevronRight } from '@lucide/svelte';
+<script lang="ts">
+	import { createEventDispatcher } from 'svelte';
+	import type { FsItem } from '$lib/types';
+	import {
+		Folder,
+		File,
+		Image as ImageIcon,
+		FileArchive,
+		ChevronDown,
+		ChevronRight
+	} from '@lucide/svelte';
 
-		interface TreeNode {
-			name: string;
-			path: string;
-			isDir: boolean;
-			item?: FsItem;
-			children: Map<string, TreeNode>;
-			fileCount: number; // 此节点下的文件总数
-			expanded: boolean;
-		}
+	interface TreeNode {
+		name: string;
+		path: string;
+		isDir: boolean;
+		item?: FsItem;
+		children: Map<string, TreeNode>;
+		fileCount: number; // 此节点下的文件总数
+		expanded: boolean;
+	}
 
-		const {
-			items = [],
-			currentPath = '',
-			thumbnails = new Map(),
-			selectedIndex = -1,
-			isCheckMode = false,
-			isDeleteMode = false,
-			selectedItems = new Set()
-		}: {
-			items?: FsItem[];
-			currentPath?: string;
-			thumbnails?: Map<string, string>;
-			selectedIndex?: number;
-			isCheckMode?: boolean;
-			isDeleteMode?: boolean;
-			selectedItems?: Set<string>;
-		} = $props();
+	const {
+		items = [],
+		currentPath = '',
+		thumbnails = new Map(),
+		selectedIndex = -1,
+		isCheckMode = false,
+		isDeleteMode = false,
+		selectedItems = new Set()
+	}: {
+		items?: FsItem[];
+		currentPath?: string;
+		thumbnails?: Map<string, string>;
+		selectedIndex?: number;
+		isCheckMode?: boolean;
+		isDeleteMode?: boolean;
+		selectedItems?: Set<string>;
+	} = $props();
 
-		const dispatch = createEventDispatcher();
+	const dispatch = createEventDispatcher();
 
-		// 构建树状结构
-		function buildTree(items: FsItem[]): TreeNode {
-			const root: TreeNode = {
-				name: '',
-				path: '',
-				isDir: true,
-				children: new Map(),
-				fileCount: 0,
-				expanded: true
-			};
+	// 构建树状结构
+	function buildTree(items: FsItem[]): TreeNode {
+		const root: TreeNode = {
+			name: '',
+			path: '',
+			isDir: true,
+			children: new Map(),
+			fileCount: 0,
+			expanded: true
+		};
 
-			items.forEach((item) => {
-				const parts = item.path.split(/[\\/]/).filter((p) => p);
-				let currentNode = root;
+		items.forEach((item) => {
+			const parts = item.path.split(/[\\/]/).filter((p) => p);
+			let currentNode = root;
 
 			// 遍历路径的每一部分
 			parts.forEach((part, index) => {
@@ -101,10 +108,10 @@
 	}
 
 	let treeRoot = $derived(buildTree(items));
-	
+
 	// 自动展开所有节点（用于搜索/书签/历史的局部树视图）
 	let expandedNodes = $state(new Set<string>());
-	
+
 	// 当树数据变化时，自动展开所有目录节点
 	$effect(() => {
 		const newExpanded = new Set<string>();
@@ -112,7 +119,7 @@
 			if (node.isDir && node.path) {
 				newExpanded.add(node.path);
 			}
-			node.children.forEach(child => collectAllDirPaths(child));
+			node.children.forEach((child) => collectAllDirPaths(child));
 		}
 		collectAllDirPaths(treeRoot);
 		expandedNodes = newExpanded;
@@ -254,10 +261,10 @@
 		if (item.name.match(/\.(zip|cbz|rar|cbr|7z)$/i)) return FileArchive;
 		return File;
 	}
-	</script>
+</script>
 
 <div class="file-tree-view flex-1 overflow-y-auto p-2">
-	<div class="mb-2 px-2 text-xs text-muted-foreground">
+	<div class="text-muted-foreground mb-2 px-2 text-xs">
 		找到 {items.length} 个结果
 	</div>
 
@@ -269,7 +276,9 @@
 		{@const isActive = activeTreePath && nodePath === activeTreePath}
 
 		<div
-			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/70'}"
+			class="tree-node flex cursor-pointer items-center gap-1 rounded px-2 py-1 {isActive
+				? 'bg-accent text-accent-foreground'
+				: 'hover:bg-muted/70'}"
 			style="padding-left: {level * 16 + 8}px"
 			data-path={nodePath}
 			role="button"
@@ -306,7 +315,7 @@
 			<!-- 展开/折叠图标：所有目录节点始终显示箭头 -->
 			{#if node.isDir}
 				<button
-					class="shrink-0 rounded p-0.5 hover:bg-muted/60"
+					class="hover:bg-muted/60 shrink-0 rounded p-0.5"
 					onclick={(e) => {
 						e.stopPropagation();
 						dispatch('toggleNode', {
@@ -319,9 +328,9 @@
 					}}
 				>
 					{#if isExpanded}
-						<ChevronDown class="h-3.5 w-3.5 text-muted-foreground" />
+						<ChevronDown class="text-muted-foreground h-3.5 w-3.5" />
 					{:else}
-						<ChevronRight class="h-3.5 w-3.5 text-muted-foreground" />
+						<ChevronRight class="text-muted-foreground h-3.5 w-3.5" />
 					{/if}
 				</button>
 			{:else}
@@ -338,7 +347,7 @@
 					}}
 				>
 					<div
-						class="flex h-4 w-4 items-center justify-center rounded-sm border border-border bg-background text-foreground transition-colors {selectedItems.has(
+						class="border-border bg-background text-foreground flex h-4 w-4 items-center justify-center rounded-sm border transition-colors {selectedItems.has(
 							item.path
 						)
 							? 'bg-primary text-primary-foreground border-primary shadow-sm'
@@ -371,14 +380,14 @@
 			<span
 				class="flex-1 truncate text-sm {item && !item.isDir
 					? 'text-foreground'
-					: 'font-medium text-foreground'} {isActive ? 'font-semibold' : ''}"
+					: 'text-foreground font-medium'} {isActive ? 'font-semibold' : ''}"
 			>
 				{node.name}
 			</span>
 
 			<!-- 文件数量标记 -->
 			{#if hasChildren && node.fileCount > 0}
-				<span class="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+				<span class="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px]">
 					{node.fileCount}
 				</span>
 			{/if}
@@ -387,19 +396,19 @@
 			{#if item?.source}
 				{#if item.source === 'bookmark'}
 					<span
-						class="shrink-0 rounded border border-primary/20 bg-primary/10 px-1 py-0.5 text-[9px] text-primary"
+						class="border-primary/20 bg-primary/10 text-primary shrink-0 rounded border px-1 py-0.5 text-[9px]"
 					>
 						书签
 					</span>
 				{:else if item.source === 'history'}
 					<span
-						class="shrink-0 rounded border border-accent/40 bg-accent/10 px-1 py-0.5 text-[9px] text-accent-foreground"
+						class="border-accent/40 bg-accent/10 text-accent-foreground shrink-0 rounded border px-1 py-0.5 text-[9px]"
 					>
 						历史
 					</span>
 				{:else if item.source === 'local'}
 					<span
-						class="shrink-0 rounded border border-border bg-muted px-1 py-0.5 text-[9px] text-muted-foreground"
+						class="border-border bg-muted text-muted-foreground shrink-0 rounded border px-1 py-0.5 text-[9px]"
 					>
 						本地
 					</span>

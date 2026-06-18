@@ -7,13 +7,13 @@ import { writable } from 'svelte/store';
 export const settingsOverlayOpen = writable(false);
 
 export function openSettingsOverlay() {
-  settingsOverlayOpen.set(true);
+	settingsOverlayOpen.set(true);
 }
 
 export function closeSettingsOverlay() {
-  settingsOverlayOpen.set(false);
+	settingsOverlayOpen.set(false);
 }
 
 export function toggleSettingsOverlay() {
-  settingsOverlayOpen.update(v => !v);
+	settingsOverlayOpen.update((v) => !v);
 }

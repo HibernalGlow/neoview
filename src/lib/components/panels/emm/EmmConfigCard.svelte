@@ -1,252 +1,252 @@
 <script lang="ts">
-/**
- * EMM 配置卡片
- * 提供 EMM 数据库路径、翻译字典等配置
- */
-import { Settings, FolderOpen, Save } from '@lucide/svelte';
-import * as Separator from '$lib/components/ui/separator';
-import * as Input from '$lib/components/ui/input';
-import * as Button from '$lib/components/ui/button';
-import * as Switch from '$lib/components/ui/switch';
-import { onMount } from 'svelte';
-import { open } from '@tauri-apps/plugin-dialog';
-import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
+	/**
+	 * EMM 配置卡片
+	 * 提供 EMM 数据库路径、翻译字典等配置
+	 */
+	import { Settings, FolderOpen, Save } from '@lucide/svelte';
+	import * as Separator from '$lib/components/ui/separator';
+	import * as Input from '$lib/components/ui/input';
+	import * as Button from '$lib/components/ui/button';
+	import * as Switch from '$lib/components/ui/switch';
+	import { onMount } from 'svelte';
+	import { open } from '@tauri-apps/plugin-dialog';
+	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+	import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
 
-let bookInfo = $state<ViewerBookInfo | null>(null);
-let emmDatabasePaths = $state<string[]>([]);
-let emmTranslationDbPath = $state<string>('');
-let emmSettingPath = $state<string>('');
-let emmTranslationDictPath = $state<string>('');
-let emmDatabasePathInput = $state<string>('');
-let enableEMM = $state(true);
+	let bookInfo = $state<ViewerBookInfo | null>(null);
+	let emmDatabasePaths = $state<string[]>([]);
+	let emmTranslationDbPath = $state<string>('');
+	let emmSettingPath = $state<string>('');
+	let emmTranslationDictPath = $state<string>('');
+	let emmDatabasePathInput = $state<string>('');
+	let enableEMM = $state(true);
 
-function loadEMMConfig() {
-	emmDatabasePaths = emmMetadataStore.getManualDatabasePaths();
-	emmTranslationDbPath = emmMetadataStore.getManualTranslationDbPath() || '';
-	emmSettingPath = emmMetadataStore.getManualSettingPath() || '';
-	emmTranslationDictPath = emmMetadataStore.getManualTranslationDictPath() || '';
+	function loadEMMConfig() {
+		emmDatabasePaths = emmMetadataStore.getManualDatabasePaths();
+		emmTranslationDbPath = emmMetadataStore.getManualTranslationDbPath() || '';
+		emmSettingPath = emmMetadataStore.getManualSettingPath() || '';
+		emmTranslationDictPath = emmMetadataStore.getManualTranslationDictPath() || '';
 
-	const unsubscribe = emmMetadataStore.subscribe((state) => {
-		enableEMM = state.enableEMM;
-	});
-	unsubscribe();
-}
-
-async function selectDatabaseFile() {
-	try {
-		const selected = await open({
-			multiple: true,
-			filters: [
-				{
-					name: 'SQLite Database',
-					extensions: ['sqlite', 'db']
-				}
-			]
+		const unsubscribe = emmMetadataStore.subscribe((state) => {
+			enableEMM = state.enableEMM;
 		});
+		unsubscribe();
+	}
 
-		if (selected) {
-			if (Array.isArray(selected)) {
-				const paths = selected
-					.map((f) => {
-						if (typeof f === 'string') return f;
-						if (f && typeof f === 'object' && 'path' in f) return (f as { path: string }).path;
-						return '';
-					})
-					.filter((p) => p);
-				emmDatabasePaths = [...emmDatabasePaths, ...paths];
-			} else {
-				const path =
-					typeof selected === 'string'
-						? selected
-						: selected && typeof selected === 'object' && 'path' in selected
+	async function selectDatabaseFile() {
+		try {
+			const selected = await open({
+				multiple: true,
+				filters: [
+					{
+						name: 'SQLite Database',
+						extensions: ['sqlite', 'db']
+					}
+				]
+			});
+
+			if (selected) {
+				if (Array.isArray(selected)) {
+					const paths = selected
+						.map((f) => {
+							if (typeof f === 'string') return f;
+							if (f && typeof f === 'object' && 'path' in f) return (f as { path: string }).path;
+							return '';
+						})
+						.filter((p) => p);
+					emmDatabasePaths = [...emmDatabasePaths, ...paths];
+				} else {
+					const path =
+						typeof selected === 'string'
+							? selected
+							: selected && typeof selected === 'object' && 'path' in selected
 								? (selected as { path: string }).path
 								: '';
-				if (path) {
-					emmDatabasePaths = [...emmDatabasePaths, path];
+					if (path) {
+						emmDatabasePaths = [...emmDatabasePaths, path];
+					}
 				}
 			}
+		} catch (err) {
+			console.error('选择数据库文件失败:', err);
 		}
-	} catch (err) {
-		console.error('选择数据库文件失败:', err);
-	}
-}
-
-async function selectTranslationDbFile() {
-	try {
-		const selected = await open({
-			filters: [
-				{
-					name: 'SQLite Database',
-					extensions: ['sqlite', 'db']
-				}
-			]
-		});
-
-		if (selected) {
-			let path = '';
-			if (typeof selected === 'string') {
-				path = selected;
-			} else if (Array.isArray(selected)) {
-				const arr = selected as unknown[];
-				if (arr.length > 0) {
-					const first = arr[0];
-					path =
-						typeof first === 'string'
-							? first
-							: first && typeof first === 'object' && 'path' in first
-									? (first as { path: string }).path
-									: '';
-				}
-			} else if (selected && typeof selected === 'object' && 'path' in selected) {
-				path = (selected as { path: string }).path;
-			}
-
-			if (path) {
-				emmTranslationDbPath = path;
-			}
-		}
-	} catch (err) {
-		console.error('选择翻译数据库文件失败:', err);
-	}
-}
-
-async function selectSettingFile() {
-	try {
-		const selected = await open({
-			filters: [
-				{
-					name: 'JSON File',
-					extensions: ['json']
-				}
-			]
-		});
-
-		if (selected) {
-			let path = '';
-			if (typeof selected === 'string') {
-				path = selected;
-			} else if (Array.isArray(selected)) {
-				const arr = selected as unknown[];
-				if (arr.length > 0) {
-					const first = arr[0];
-					path =
-						typeof first === 'string'
-							? first
-							: first && typeof first === 'object' && 'path' in first
-									? (first as { path: string }).path
-									: '';
-				}
-			} else if (selected && typeof selected === 'object' && 'path' in selected) {
-				path = (selected as { path: string }).path;
-			}
-
-			if (path) {
-				emmSettingPath = path;
-			}
-		}
-	} catch (err) {
-		console.error('选择设置文件失败:', err);
-	}
-}
-
-async function selectTranslationDictFile() {
-	try {
-		const selected = await open({
-			filters: [
-				{
-					name: 'JSON File',
-					extensions: ['json']
-				}
-			]
-		});
-
-		if (selected) {
-			let path = '';
-			if (typeof selected === 'string') {
-				path = selected;
-			} else if (Array.isArray(selected)) {
-				const arr = selected as unknown[];
-				if (arr.length > 0) {
-					const first = arr[0];
-					path =
-						typeof first === 'string'
-							? first
-							: first && typeof first === 'object' && 'path' in first
-									? (first as { path: string }).path
-									: '';
-				}
-			} else if (selected && typeof selected === 'object' && 'path' in selected) {
-				path = (selected as { path: string }).path;
-			}
-
-			if (path) {
-				emmTranslationDictPath = path;
-			}
-		}
-	} catch (err) {
-		console.error('选择翻译字典文件失败:', err);
-	}
-}
-
-function addDatabasePath() {
-	if (emmDatabasePathInput.trim()) {
-		emmDatabasePaths = [...emmDatabasePaths, emmDatabasePathInput.trim()];
-		emmDatabasePathInput = '';
-	}
-}
-
-function removeDatabasePath(index: number) {
-	emmDatabasePaths = emmDatabasePaths.filter((_, i) => i !== index);
-}
-
-async function saveEMMConfig() {
-	emmMetadataStore.setManualDatabasePaths(emmDatabasePaths);
-	if (emmTranslationDbPath) {
-		emmMetadataStore.setManualTranslationDbPath(emmTranslationDbPath);
-	}
-	if (emmSettingPath) {
-		await emmMetadataStore.setManualSettingPath(emmSettingPath);
-	}
-	if (emmTranslationDictPath) {
-		await emmMetadataStore.setManualTranslationDictPath(emmTranslationDictPath);
 	}
 
-	emmMetadataStore.setEnableEMM(enableEMM);
-
-	if (bookInfo?.path && enableEMM) {
-		const metadata = await emmMetadataStore.loadMetadataByPath(bookInfo.path);
-		if (metadata) {
-			infoPanelStore.setBookInfo({
-				...bookInfo,
-				emmMetadata: {
-					translatedTitle: metadata.translated_title,
-					tags: metadata.tags
-				}
+	async function selectTranslationDbFile() {
+		try {
+			const selected = await open({
+				filters: [
+					{
+						name: 'SQLite Database',
+						extensions: ['sqlite', 'db']
+					}
+				]
 			});
+
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path =
+							typeof first === 'string'
+								? first
+								: first && typeof first === 'object' && 'path' in first
+									? (first as { path: string }).path
+									: '';
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+
+				if (path) {
+					emmTranslationDbPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择翻译数据库文件失败:', err);
 		}
 	}
-}
 
-onMount(() => {
-	loadEMMConfig();
+	async function selectSettingFile() {
+		try {
+			const selected = await open({
+				filters: [
+					{
+						name: 'JSON File',
+						extensions: ['json']
+					}
+				]
+			});
 
-	const unsubscribe = infoPanelStore.subscribe((state) => {
-		bookInfo = state.bookInfo;
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path =
+							typeof first === 'string'
+								? first
+								: first && typeof first === 'object' && 'path' in first
+									? (first as { path: string }).path
+									: '';
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+
+				if (path) {
+					emmSettingPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择设置文件失败:', err);
+		}
+	}
+
+	async function selectTranslationDictFile() {
+		try {
+			const selected = await open({
+				filters: [
+					{
+						name: 'JSON File',
+						extensions: ['json']
+					}
+				]
+			});
+
+			if (selected) {
+				let path = '';
+				if (typeof selected === 'string') {
+					path = selected;
+				} else if (Array.isArray(selected)) {
+					const arr = selected as unknown[];
+					if (arr.length > 0) {
+						const first = arr[0];
+						path =
+							typeof first === 'string'
+								? first
+								: first && typeof first === 'object' && 'path' in first
+									? (first as { path: string }).path
+									: '';
+					}
+				} else if (selected && typeof selected === 'object' && 'path' in selected) {
+					path = (selected as { path: string }).path;
+				}
+
+				if (path) {
+					emmTranslationDictPath = path;
+				}
+			}
+		} catch (err) {
+			console.error('选择翻译字典文件失败:', err);
+		}
+	}
+
+	function addDatabasePath() {
+		if (emmDatabasePathInput.trim()) {
+			emmDatabasePaths = [...emmDatabasePaths, emmDatabasePathInput.trim()];
+			emmDatabasePathInput = '';
+		}
+	}
+
+	function removeDatabasePath(index: number) {
+		emmDatabasePaths = emmDatabasePaths.filter((_, i) => i !== index);
+	}
+
+	async function saveEMMConfig() {
+		emmMetadataStore.setManualDatabasePaths(emmDatabasePaths);
+		if (emmTranslationDbPath) {
+			emmMetadataStore.setManualTranslationDbPath(emmTranslationDbPath);
+		}
+		if (emmSettingPath) {
+			await emmMetadataStore.setManualSettingPath(emmSettingPath);
+		}
+		if (emmTranslationDictPath) {
+			await emmMetadataStore.setManualTranslationDictPath(emmTranslationDictPath);
+		}
+
+		emmMetadataStore.setEnableEMM(enableEMM);
+
+		if (bookInfo?.path && enableEMM) {
+			const metadata = await emmMetadataStore.loadMetadataByPath(bookInfo.path);
+			if (metadata) {
+				infoPanelStore.setBookInfo({
+					...bookInfo,
+					emmMetadata: {
+						translatedTitle: metadata.translated_title,
+						tags: metadata.tags
+					}
+				});
+			}
+		}
+	}
+
+	onMount(() => {
+		loadEMMConfig();
+
+		const unsubscribe = infoPanelStore.subscribe((state) => {
+			bookInfo = state.bookInfo;
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 </script>
 
 <div class="space-y-3 text-sm">
 	<!-- 主数据库路径 -->
 	<div class="space-y-2">
 		<div class="flex items-center justify-between">
-			<span class="text-xs text-muted-foreground">主数据库路径</span>
+			<span class="text-muted-foreground text-xs">主数据库路径</span>
 			<Button.Root
 				variant="outline"
 				size="sm"
-				class="h-7 px-2 text-[11px] flex items-center gap-1"
+				class="flex h-7 items-center gap-1 px-2 text-[11px]"
 				onclick={selectDatabaseFile}
 			>
 				<FolderOpen class="h-3 w-3" />
@@ -273,7 +273,7 @@ onMount(() => {
 			</Button.Root>
 		</div>
 		{#if emmDatabasePaths.length > 0}
-			<ul class="space-y-1 max-h-32 overflow-auto text-xs mt-1">
+			<ul class="mt-1 max-h-32 space-y-1 overflow-auto text-xs">
 				{#each emmDatabasePaths as path, index}
 					<li class="flex items-center justify-between gap-2">
 						<span class="truncate" title={path}>{path}</span>
@@ -289,9 +289,7 @@ onMount(() => {
 				{/each}
 			</ul>
 		{:else}
-			<p class="text-xs text-muted-foreground mt-1">
-				未手动配置数据库路径时，将尝试自动检测。
-			</p>
+			<p class="text-muted-foreground mt-1 text-xs">未手动配置数据库路径时，将尝试自动检测。</p>
 		{/if}
 	</div>
 
@@ -300,11 +298,11 @@ onMount(() => {
 	<!-- 翻译数据库路径 -->
 	<div class="space-y-1">
 		<div class="flex items-center justify-between">
-			<span class="text-xs text-muted-foreground">翻译数据库路径</span>
+			<span class="text-muted-foreground text-xs">翻译数据库路径</span>
 			<Button.Root
 				variant="outline"
 				size="sm"
-				class="h-7 px-2 text-[11px] flex items-center gap-1"
+				class="flex h-7 items-center gap-1 px-2 text-[11px]"
 				onclick={selectTranslationDbFile}
 			>
 				<FolderOpen class="h-3 w-3" />
@@ -325,11 +323,11 @@ onMount(() => {
 	<!-- 设置文件路径 -->
 	<div class="space-y-1">
 		<div class="flex items-center justify-between">
-			<span class="text-xs text-muted-foreground">设置文件路径 (setting.json)</span>
+			<span class="text-muted-foreground text-xs">设置文件路径 (setting.json)</span>
 			<Button.Root
 				variant="outline"
 				size="sm"
-				class="h-7 px-2 text-[11px] flex items-center gap-1"
+				class="flex h-7 items-center gap-1 px-2 text-[11px]"
 				onclick={selectSettingFile}
 			>
 				<FolderOpen class="h-3 w-3" />
@@ -350,11 +348,11 @@ onMount(() => {
 	<!-- 翻译字典路径 -->
 	<div class="space-y-1">
 		<div class="flex items-center justify-between">
-			<span class="text-xs text-muted-foreground">翻译字典路径 (db.text.json)</span>
+			<span class="text-muted-foreground text-xs">翻译字典路径 (db.text.json)</span>
 			<Button.Root
 				variant="outline"
 				size="sm"
-				class="h-7 px-2 text-[11px] flex items-center gap-1"
+				class="flex h-7 items-center gap-1 px-2 text-[11px]"
 				onclick={selectTranslationDictFile}
 			>
 				<FolderOpen class="h-3 w-3" />
@@ -378,19 +376,15 @@ onMount(() => {
 	<div class="space-y-2 text-xs">
 		<div class="flex items-center justify-between">
 			<span>启用 EMM</span>
-			<Switch.Root
-				checked={enableEMM}
-				onCheckedChange={(v) => (enableEMM = v)}
-				class="scale-75"
-			/>
+			<Switch.Root checked={enableEMM} onCheckedChange={(v) => (enableEMM = v)} class="scale-75" />
 		</div>
-		</div>
+	</div>
 
 	<div class="flex justify-end pt-1">
 		<Button.Root
 			variant="default"
 			size="sm"
-			class="h-7 px-3 text-xs flex items-center gap-1"
+			class="flex h-7 items-center gap-1 px-3 text-xs"
 			onclick={saveEMMConfig}
 		>
 			<Save class="h-3 w-3" />

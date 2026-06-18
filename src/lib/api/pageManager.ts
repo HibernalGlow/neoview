@@ -1,9 +1,9 @@
 /**
  * NeoView Page Manager API
- * 
+ *
  * 基于 NeeView 架构的新加载系统
  * 后端主导，前端只发请求
- * 
+ *
  * 特点：
  * - 后端自动管理预加载
  * - 后端自动管理缓存（距离驱逐）
@@ -58,7 +58,10 @@ async function invokeWithToast<T>(cmd: string, args: Record<string, unknown>): P
 	}
 }
 
-async function invokePageBinary(cmd: 'pm_goto_page' | 'pm_get_page', index: number): Promise<Uint8Array> {
+async function invokePageBinary(
+	cmd: 'pm_goto_page' | 'pm_get_page',
+	index: number
+): Promise<Uint8Array> {
 	const payload = await invokeWithToast<Uint8Array | number[] | ArrayBuffer>(cmd, { index });
 	return normalizeBinaryPayload(payload);
 }
@@ -85,13 +88,13 @@ async function fetchPageData(op: PageCmd, index: number): Promise<ArrayBuffer> {
 // ===== 类型定义 =====
 
 /** 书籍类型（参考 NeeView 设计） */
-export type BookType = 
-	| 'archive'      // 压缩包（ZIP/RAR/7z）
-	| 'directory'    // 文件夹
-	| 'singleimage'  // 单个图片文件
-	| 'singlevideo'  // 单个视频文件
-	| 'playlist'     // 播放列表
-	| 'epub';        // EPUB 电子书
+export type BookType =
+	| 'archive' // 压缩包（ZIP/RAR/7z）
+	| 'directory' // 文件夹
+	| 'singleimage' // 单个图片文件
+	| 'singlevideo' // 单个视频文件
+	| 'playlist' // 播放列表
+	| 'epub'; // EPUB 电子书
 
 /** 书籍信息 */
 export interface BookInfo {
@@ -102,13 +105,13 @@ export interface BookInfo {
 }
 
 /** 页面内容类型 */
-export type PageContentType = 
-	| 'image'     // 普通图片
-	| 'video'     // 视频
-	| 'animated'  // 动图 (GIF/APNG/WebP动画)
-	| 'archive'   // 嵌套压缩包
-	| 'ebook'     // 电子书 (PDF/EPUB/XPS，用 MuPDF 渲染)
-	| 'unknown';  // 未知类型
+export type PageContentType =
+	| 'image' // 普通图片
+	| 'video' // 视频
+	| 'animated' // 动图 (GIF/APNG/WebP动画)
+	| 'archive' // 嵌套压缩包
+	| 'ebook' // 电子书 (PDF/EPUB/XPS，用 MuPDF 渲染)
+	| 'unknown'; // 未知类型
 
 /** 页面信息 */
 export interface PageInfo {
@@ -153,7 +156,7 @@ export interface PageLoadResult {
 
 /**
  * 打开书籍
- * 
+ *
  * 后端自动：
  * - 扫描书籍内容
  * - 初始化缓存
@@ -181,16 +184,16 @@ export async function getBookInfo(): Promise<BookInfo | null> {
 
 /**
  * 跳转到指定页面
- * 
+ *
  * 后端自动：
  * - 检查缓存
  * - 加载页面
  * - 提交预加载任务
- * 
+ *
  * 根据 pageTransferModeStore 选择传输模式：
  * - binary: 直接二进制传输（更快）
  * - base64: Base64 编码传输（兼容性好）
- * 
+ *
  * @returns Blob 数据
  */
 export async function gotoPage(index: number): Promise<Blob> {
@@ -200,7 +203,7 @@ export async function gotoPage(index: number): Promise<Blob> {
 
 /**
  * 获取页面数据（不改变当前页）
- * 
+ *
  * @returns Blob 数据
  */
 export async function getPage(index: number): Promise<Blob> {
@@ -269,7 +272,7 @@ export interface TempFileStats {
 
 /**
  * 获取视频文件路径
- * 
+ *
  * 对于压缩包内的视频，后端会自动提取到临时文件
  * 返回的路径可以用 convertFileSrc() 转换为可用的 URL
  */
@@ -294,7 +297,7 @@ export async function getLargeFileThreshold(): Promise<number> {
 
 /**
  * 设置大文件阈值（MB）
- * 
+ *
  * 超过此阈值的文件会自动使用临时文件而非内存缓存
  * 默认值: 800 MB
  */
@@ -326,11 +329,11 @@ const CACHE_STATUS_CHUNK_SIZE = 2048;
 
 /**
  * 预加载缩略图（异步，结果通过事件推送）
- * 
+ *
  * 接受需要生成的页面索引列表，生成后通过 "thumbnail-ready" 事件推送
  * 后端会按照与 centerIndex 的距离排序，距离近的优先生成（中央优先策略）
  * 前端负责过滤已缓存的页面，避免重复生成
- * 
+ *
  * @param indices 需要生成缩略图的页面索引列表
  * @param centerIndex 当前页面索引（用于优先级排序）
  * @param maxSize 缩略图最大尺寸（默认 256）
@@ -346,10 +349,10 @@ export async function preloadThumbnails(
 
 /**
  * 【性能优化】查询页面缓存状态
- * 
+ *
  * 返回指定范围内每个页面是否在后端缓存中
  * 前端可用于智能预加载决策，避免重复请求已缓存的页面
- * 
+ *
  * @param startPage 起始页面索引
  * @param count 查询页数
  * @returns 布尔数组，表示每个页面是否已缓存
@@ -386,13 +389,13 @@ export async function getCacheStatus(startPage: number, count: number): Promise<
 
 /**
  * 【性能优化】获取指定范围内未缓存的页面索引
- * 
+ *
  * 便捷方法，直接返回需要预加载的页面
  */
 export async function getUncachedPages(startPage: number, count: number): Promise<number[]> {
 	const statuses = await getCacheStatus(startPage, count);
 	return statuses
-		.map((cached, i) => cached ? null : startPage + i)
+		.map((cached, i) => (cached ? null : startPage + i))
 		.filter((p): p is number => p !== null);
 }
 
@@ -487,7 +490,6 @@ export interface PageFrameContext {
 // - positionFromVirtual -> pageFrameStore.positionFromVirtual()
 // - framePositionForIndex -> pageFrameStore.framePositionForIndex()
 
-
 // ===== 事件监听 =====
 
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -528,7 +530,7 @@ let unlistenFns: UnlistenFns = {};
 
 /**
  * 订阅 PageManager 事件
- * 
+ *
  * @param listeners 事件监听器
  * @returns 取消订阅函数
  */
@@ -596,7 +598,7 @@ export interface MemoryPressureHandler {
 
 /**
  * 创建内存压力处理器
- * 
+ *
  * @param onPressure 压力回调（可选，用于 UI 提示）
  * @param cleanupThreshold 触发清理的阈值百分比（默认 80%）
  */

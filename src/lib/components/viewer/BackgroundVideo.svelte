@@ -57,7 +57,7 @@
 	// 确保视频播放（某些浏览器可能阻止自动播放）
 	async function ensurePlay() {
 		if (!videoElement) return;
-		
+
 		try {
 			await videoElement.play();
 		} catch (err) {
@@ -83,7 +83,7 @@
 
 <!-- 背景视频容器 -->
 <div
-	class="absolute inset-0 overflow-hidden pointer-events-none"
+	class="pointer-events-none absolute inset-0 overflow-hidden"
 	style="opacity: {opacity}; filter: blur({blur}px);"
 >
 	{#if videoUrl}

@@ -294,7 +294,10 @@
 				action: (obj.action as 'click' | 'double-click' | 'press') || 'click'
 			};
 		} else if (editingType === 'touch') {
-			const gesture = typeof capturedInput === 'string' ? capturedInput : (capturedInput as CapturedInputObject).gesture || '';
+			const gesture =
+				typeof capturedInput === 'string'
+					? capturedInput
+					: (capturedInput as CapturedInputObject).gesture || '';
 			if (!gesture) return null;
 			const obj = typeof capturedInput === 'string' ? {} : (capturedInput as CapturedInputObject);
 			return {
@@ -525,7 +528,6 @@
 		if (binding) return keyBindingsStore.formatBinding(binding);
 		return typeof capturedInput === 'string' ? capturedInput : JSON.stringify(capturedInput);
 	}
-
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
@@ -615,9 +617,11 @@
 			<Tabs.List class="h-auto w-full flex-wrap gap-1">
 				{#each categories as category}
 					{@const count = keyBindingsStore.getBindingsByCategory(category).length}
-					<Tabs.Trigger value={category} class="text-xs gap-1.5">
+					<Tabs.Trigger value={category} class="gap-1.5 text-xs">
 						{category}
-						<Badge variant="secondary" class="h-4 min-w-4 px-1 text-[9px] font-normal">{count}</Badge>
+						<Badge variant="secondary" class="h-4 min-w-4 px-1 text-[9px] font-normal"
+							>{count}</Badge
+						>
 					</Tabs.Trigger>
 				{/each}
 			</Tabs.List>
@@ -675,7 +679,6 @@
 												>
 											</div>
 										</Table.Cell>
-
 
 										<!-- 添加操作列 -->
 										<Table.Cell class="px-2 py-4">
@@ -819,52 +822,60 @@
 													<!-- Area -->
 													<Tooltip.Root>
 														<Tooltip.Trigger asChild>
-														{#snippet children({ props }: { props: any })}
-															<Button
-																{...props}
-																variant="ghost"
-																size="icon"
-																class="h-6 w-6 rounded-lg text-orange-500 hover:bg-orange-500/10"
-																onclick={() =>
-																	startEditing(binding.action, 'area', currentEditingCtx)}
-															>
-																<TargetIcon class="h-3 w-3" />
-															</Button>
-														{/snippet}
-													</Tooltip.Trigger>
-													<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
-														>屏幕区域</Tooltip.Content
-													>
-												</Tooltip.Root>
+															{#snippet children({ props }: { props: any })}
+																<Button
+																	{...props}
+																	variant="ghost"
+																	size="icon"
+																	class="h-6 w-6 rounded-lg text-orange-500 hover:bg-orange-500/10"
+																	onclick={() =>
+																		startEditing(binding.action, 'area', currentEditingCtx)}
+																>
+																	<TargetIcon class="h-3 w-3" />
+																</Button>
+															{/snippet}
+														</Tooltip.Trigger>
+														<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
+															>屏幕区域</Tooltip.Content
+														>
+													</Tooltip.Root>
 
 													<!-- Hold -->
 													<DropdownMenu.Root>
 														<Tooltip.Root>
-													<Tooltip.Trigger asChild>
-															{#snippet children({ props: tooltipProps }: { props: any })}
-																<DropdownMenu.Trigger asChild>
-																	{#snippet children({ props: menuProps }: { props: any })}
-																		<Button
-																			{...tooltipProps}
-																			{...menuProps}
-																			variant="ghost"
-																			size="icon"
-																			class="h-6 w-6 rounded-lg text-amber-500 hover:bg-amber-500/10"
-																		>
-																			<Timer class="h-3 w-3" />
-																		</Button>
-																	{/snippet}
-																</DropdownMenu.Trigger>
-															{/snippet}
-														</Tooltip.Trigger>
-													<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
-															>长按绑定</Tooltip.Content
-													>
+															<Tooltip.Trigger asChild>
+																{#snippet children({ props: tooltipProps }: { props: any })}
+																	<DropdownMenu.Trigger asChild>
+																		{#snippet children({ props: menuProps }: { props: any })}
+																			<Button
+																				{...tooltipProps}
+																				{...menuProps}
+																				variant="ghost"
+																				size="icon"
+																				class="h-6 w-6 rounded-lg text-amber-500 hover:bg-amber-500/10"
+																			>
+																				<Timer class="h-3 w-3" />
+																			</Button>
+																		{/snippet}
+																	</DropdownMenu.Trigger>
+																{/snippet}
+															</Tooltip.Trigger>
+															<Tooltip.Content side="top" class="px-2 py-1 text-[10px]"
+																>长按绑定</Tooltip.Content
+															>
 														</Tooltip.Root>
-														<DropdownMenu.Content align="start" class="w-40 rounded-xl p-1 shadow-lg">
+														<DropdownMenu.Content
+															align="start"
+															class="w-40 rounded-xl p-1 shadow-lg"
+														>
 															<DropdownMenu.Item
 																onclick={() =>
-																	startEditing(binding.action, 'keyboard', currentEditingCtx, 'hold')}
+																	startEditing(
+																		binding.action,
+																		'keyboard',
+																		currentEditingCtx,
+																		'hold'
+																	)}
 																class="gap-2 rounded-lg"
 															>
 																<Keyboard class="h-4 w-4 text-blue-500" />
@@ -872,7 +883,12 @@
 															</DropdownMenu.Item>
 															<DropdownMenu.Item
 																onclick={() =>
-																	startMouseEditing(binding.action, currentEditingCtx, 'button', 'hold')}
+																	startMouseEditing(
+																		binding.action,
+																		currentEditingCtx,
+																		'button',
+																		'hold'
+																	)}
 																class="gap-2 rounded-lg"
 															>
 																<Mouse class="h-4 w-4 text-green-500" />
@@ -1036,7 +1052,9 @@
 
 										<!-- 分类 Badge -->
 										<Table.Cell class="px-2 py-4">
-											<Badge variant="outline" class="text-[9px] font-normal">{binding.category}</Badge>
+											<Badge variant="outline" class="text-[9px] font-normal"
+												>{binding.category}</Badge
+											>
 										</Table.Cell>
 
 										<!-- 重置操作 -->

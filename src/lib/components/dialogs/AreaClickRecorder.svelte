@@ -66,14 +66,14 @@
 	}
 </script>
 
-<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-	<div class="bg-background border rounded-lg p-6 max-w-2xl w-full mx-4 space-y-6">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+	<div class="bg-background mx-4 w-full max-w-2xl space-y-6 rounded-lg border p-6">
 		<div class="space-y-2">
-			<h4 class="font-semibold flex items-center gap-2">
+			<h4 class="flex items-center gap-2 font-semibold">
 				<Target class="h-4 w-4 text-orange-500" />
 				录制区域点击
 			</h4>
-			<p class="text-sm text-muted-foreground">
+			<p class="text-muted-foreground text-sm">
 				点击下方的视图区域来选择要绑定的区域，然后选择鼠标按键和动作类型。
 			</p>
 		</div>
@@ -81,14 +81,23 @@
 		<!-- 视图区域选择 -->
 		<div class="space-y-3">
 			<Label class="text-sm font-medium">1. 选择点击区域</Label>
-			<div class="relative w-full h-64 bg-muted/20 border-2 border-dashed border-muted-foreground/30 rounded-lg overflow-hidden">
+			<div
+				class="bg-muted/20 border-muted-foreground/30 relative h-64 w-full overflow-hidden rounded-lg border-2 border-dashed"
+			>
 				<div class="absolute inset-4 grid grid-cols-3 grid-rows-3 gap-2">
 					{#each areas as area}
 						<button
-							class="border border-muted-foreground/20 hover:bg-primary/10 transition-colors flex items-center justify-center {selectedArea === area.value ? 'bg-primary/20 border-primary' : ''} {area.gridClass}"
+							class="border-muted-foreground/20 hover:bg-primary/10 flex items-center justify-center border transition-colors {selectedArea ===
+							area.value
+								? 'bg-primary/20 border-primary'
+								: ''} {area.gridClass}"
 							onclick={() => handleAreaClick(area.value)}
 						>
-							<span class="text-sm font-medium {selectedArea === area.value ? 'text-primary' : 'text-muted-foreground'}">
+							<span
+								class="text-sm font-medium {selectedArea === area.value
+									? 'text-primary'
+									: 'text-muted-foreground'}"
+							>
 								{area.label}
 							</span>
 						</button>
@@ -131,10 +140,12 @@
 
 		<!-- 当前选择预览 -->
 		{#if selectedArea}
-			<div class="p-3 bg-muted/30 rounded-lg">
-				<div class="text-sm text-muted-foreground">当前选择：</div>
+			<div class="bg-muted/30 rounded-lg p-3">
+				<div class="text-muted-foreground text-sm">当前选择：</div>
 				<div class="font-mono text-sm">
-					{selectedButton} {areas.find(a => a.value === selectedArea)?.label} {selectedAction}
+					{selectedButton}
+					{areas.find((a) => a.value === selectedArea)?.label}
+					{selectedAction}
 				</div>
 			</div>
 		{/if}
@@ -142,18 +153,14 @@
 		<!-- 操作按钮 -->
 		<div class="flex justify-between">
 			<Button variant="outline" onclick={handleCancel}>
-				<X class="h-3 w-3 mr-1" />
+				<X class="mr-1 h-3 w-3" />
 				取消
 			</Button>
 			<div class="flex gap-2">
 				{#if selectedArea}
-					<Button variant="outline" onclick={resetSelection}>
-						重新选择
-					</Button>
+					<Button variant="outline" onclick={resetSelection}>重新选择</Button>
 				{/if}
-				<Button onclick={handleComplete} disabled={!selectedArea}>
-					完成
-				</Button>
+				<Button onclick={handleComplete} disabled={!selectedArea}>完成</Button>
 			</div>
 		</div>
 	</div>

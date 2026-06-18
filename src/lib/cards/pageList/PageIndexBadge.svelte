@@ -4,127 +4,124 @@
   三个视图模式共用
 -->
 <script lang="ts">
-  import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
+	import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 
-  interface Props {
-    pageIndex: number;
-    /** 是否显示页面名称 */
-    showName?: boolean;
-    name?: string;
-    /** 是否为当前页 */
-    isCurrent?: boolean;
-    /** 尺寸：sm 用于 thumb 视图，md 用于 list/grid */
-    size?: 'sm' | 'md';
-  }
+	interface Props {
+		pageIndex: number;
+		/** 是否显示页面名称 */
+		showName?: boolean;
+		name?: string;
+		/** 是否为当前页 */
+		isCurrent?: boolean;
+		/** 尺寸：sm 用于 thumb 视图，md 用于 list/grid */
+		size?: 'sm' | 'md';
+	}
 
-  let {
-    pageIndex,
-    showName = false,
-    name = '',
-    isCurrent = false,
-    size = 'md',
-  }: Props = $props();
+	let { pageIndex, showName = false, name = '', isCurrent = false, size = 'md' }: Props = $props();
 
-  // 响应式依赖
-  const upscaleStoreVersion = $derived(upscaleStore.version);
-  const upscaleEnabled = $derived(upscaleStore.enabled);
+	// 响应式依赖
+	const upscaleStoreVersion = $derived(upscaleStore.version);
+	const upscaleEnabled = $derived(upscaleStore.enabled);
 
-  // 超分状态
-  type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
+	// 超分状态
+	type UpscaleStatusType = 'none' | 'pending' | 'processing' | 'completed' | 'skipped' | 'failed';
 
-  let upscaleStatus = $derived.by((): UpscaleStatusType => {
-    void upscaleStoreVersion;
-    if (!upscaleEnabled) return 'none';
-    if (upscaleStore.isPageUpscaled(pageIndex)) return 'completed';
-    const status = upscaleStore.getPageStatus(pageIndex);
-    if (status === 'pending' || status === 'checking') return 'pending';
-    if (status === 'processing') return 'processing';
-    if (status === 'skipped') return 'skipped';
-    if (status === 'failed') return 'failed';
-    return 'none';
-  });
+	let upscaleStatus = $derived.by((): UpscaleStatusType => {
+		void upscaleStoreVersion;
+		if (!upscaleEnabled) return 'none';
+		if (upscaleStore.isPageUpscaled(pageIndex)) return 'completed';
+		const status = upscaleStore.getPageStatus(pageIndex);
+		if (status === 'pending' || status === 'checking') return 'pending';
+		if (status === 'processing') return 'processing';
+		if (status === 'skipped') return 'skipped';
+		if (status === 'failed') return 'failed';
+		return 'none';
+	});
 
-  let conditionName = $derived.by(() => {
-    void upscaleStoreVersion;
-    if (!upscaleEnabled) return null;
-    return upscaleStore.getPageConditionName(pageIndex);
-  });
+	let conditionName = $derived.by(() => {
+		void upscaleStoreVersion;
+		if (!upscaleEnabled) return null;
+		return upscaleStore.getPageConditionName(pageIndex);
+	});
 
-  const upscaleConfig = {
-    none: null,
-    pending: { label: '队列中', class: 'bg-amber-500/80 text-white' },
-    processing: { label: '超分中', class: 'upscale-processing-badge' },
-    completed: { label: '已超分', class: 'bg-green-500/80 text-white' },
-    skipped: { label: '已跳过', class: 'bg-gray-500/80 text-white' },
-    failed: { label: '失败', class: 'bg-red-500/80 text-white' },
-  } as const;
+	const upscaleConfig = {
+		none: null,
+		pending: { label: '队列中', class: 'bg-amber-500/80 text-white' },
+		processing: { label: '超分中', class: 'upscale-processing-badge' },
+		completed: { label: '已超分', class: 'bg-green-500/80 text-white' },
+		skipped: { label: '已跳过', class: 'bg-gray-500/80 text-white' },
+		failed: { label: '失败', class: 'bg-red-500/80 text-white' }
+	} as const;
 
-  let upscaleCfg = $derived(upscaleConfig[upscaleStatus]);
+	let upscaleCfg = $derived(upscaleConfig[upscaleStatus]);
 
-  // 尺寸样式
-  let sizeClasses = $derived({
-    pageNum: size === 'sm' ? 'text-[10px]' : 'text-xs',
-    icon: size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3',
-    badge: size === 'sm' ? 'px-1 text-[8px]' : 'px-1 py-0.5 text-[10px]',
-    current: size === 'sm' ? 'px-1 text-[8px]' : 'px-1 py-0.5 text-[10px]',
-  });
+	// 尺寸样式
+	let sizeClasses = $derived({
+		pageNum: size === 'sm' ? 'text-[10px]' : 'text-xs',
+		icon: size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3',
+		badge: size === 'sm' ? 'px-1 text-[8px]' : 'px-1 py-0.5 text-[10px]',
+		current: size === 'sm' ? 'px-1 text-[8px]' : 'px-1 py-0.5 text-[10px]'
+	});
 </script>
 
-<div class="flex items-center gap-1 flex-wrap">
-  <span class="{sizeClasses.pageNum} font-mono font-semibold text-primary">#{pageIndex + 1}</span>
+<div class="flex flex-wrap items-center gap-1">
+	<span class="{sizeClasses.pageNum} text-primary font-mono font-semibold">#{pageIndex + 1}</span>
 
-  <!-- 页面名称 -->
-  {#if showName && name}
-    <span class="truncate flex-1 {sizeClasses.pageNum}">{name}</span>
-  {/if}
+	<!-- 页面名称 -->
+	{#if showName && name}
+		<span class="flex-1 truncate {sizeClasses.pageNum}">{name}</span>
+	{/if}
 
-  <!-- 条件名称 -->
-  {#if conditionName}
-    <span class="{sizeClasses.badge} font-medium rounded shrink-0 bg-purple-500/80 text-white" title="条件: {conditionName}">{conditionName}</span>
-  {/if}
+	<!-- 条件名称 -->
+	{#if conditionName}
+		<span
+			class="{sizeClasses.badge} shrink-0 rounded bg-purple-500/80 font-medium text-white"
+			title="条件: {conditionName}">{conditionName}</span
+		>
+	{/if}
 
-  <!-- 超分状态 -->
-  {#if upscaleCfg}
-    <span class="{sizeClasses.badge} font-medium rounded shrink-0 {upscaleCfg.class}">{upscaleCfg.label}</span>
-  {/if}
+	<!-- 超分状态 -->
+	{#if upscaleCfg}
+		<span class="{sizeClasses.badge} shrink-0 rounded font-medium {upscaleCfg.class}"
+			>{upscaleCfg.label}</span
+		>
+	{/if}
 
-  <!-- 当前页标记 -->
-  {#if isCurrent}
-    <span class="{sizeClasses.current} font-semibold bg-primary text-primary-foreground rounded shrink-0">当前</span>
-  {/if}
+	<!-- 当前页标记 -->
+	{#if isCurrent}
+		<span
+			class="{sizeClasses.current} bg-primary text-primary-foreground shrink-0 rounded font-semibold"
+			>当前</span
+		>
+	{/if}
 </div>
 
 <style>
-  /* 超分处理中的动态进度条效果 */
-  :global(.upscale-processing-badge) {
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(90deg, hsl(217 91% 50% / 0.9), hsl(217 91% 60% / 0.9));
-    color: white;
-  }
+	/* 超分处理中的动态进度条效果 */
+	:global(.upscale-processing-badge) {
+		position: relative;
+		overflow: hidden;
+		background: linear-gradient(90deg, hsl(217 91% 50% / 0.9), hsl(217 91% 60% / 0.9));
+		color: white;
+	}
 
-  :global(.upscale-processing-badge)::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.4),
-      transparent
-    );
-    animation: shimmer 1.5s infinite;
-  }
+	:global(.upscale-processing-badge)::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -100%;
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+		animation: shimmer 1.5s infinite;
+	}
 
-  @keyframes shimmer {
-    0% {
-      left: -100%;
-    }
-    100% {
-      left: 100%;
-    }
-  }
+	@keyframes shimmer {
+		0% {
+			left: -100%;
+		}
+		100% {
+			left: 100%;
+		}
+	}
 </style>

@@ -43,9 +43,8 @@ export function hitTestRadial(
 	// 扇区计算：将角度映射到 [0, sectorCount)
 	const sectorAngle = (Math.PI * 2) / config.sectorCount;
 	// +sectorAngle/2 使扇区0以正右方为中心
-	const sector = Math.floor(
-		(angle + sectorAngle / 2 + Math.PI * 2) / sectorAngle
-	) % config.sectorCount;
+	const sector =
+		Math.floor((angle + sectorAngle / 2 + Math.PI * 2) / sectorAngle) % config.sectorCount;
 
 	// 层计算：从死区边缘开始，每 layerStepPx 一层
 	const layer = Math.min(
@@ -56,7 +55,7 @@ export function hitTestRadial(
 	return {
 		layer,
 		sector,
-		key: `${layer}:${sector}`,
+		key: `${layer}:${sector}`
 	};
 }
 
@@ -72,7 +71,7 @@ export function getSectorAngles(
 	return {
 		start: center - sectorAngle / 2,
 		end: center + sectorAngle / 2,
-		center,
+		center
 	};
 }
 
@@ -89,7 +88,7 @@ export function getSlotOffset(
 	const angle = sector * sectorAngle;
 	return {
 		x: Math.cos(angle) * r,
-		y: Math.sin(angle) * r,
+		y: Math.sin(angle) * r
 	};
 }
 

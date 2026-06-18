@@ -173,17 +173,23 @@
 	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
 	let modeScale = $derived.by(() => {
 		const dims = getZoomCalculationSize(hoverImageSize);
-		if (dims && dims.width > 0 && dims.height > 0 && viewportSize.width > 0 && viewportSize.height > 0) {
+		if (
+			dims &&
+			dims.width > 0 &&
+			dims.height > 0 &&
+			viewportSize.width > 0 &&
+			viewportSize.height > 0
+		) {
 			return calculateTargetScale(dims, viewportSize, currentZoomMode);
 		}
-		
+
 		// 降级：使用 bookStore 元数据
 		const page = bookStore.currentPage;
 		if (page?.width && page?.height && viewportSize.width > 0 && viewportSize.height > 0) {
 			const pageSize = getZoomCalculationSize({ width: page.width, height: page.height });
 			return calculateTargetScale(pageSize, viewportSize, currentZoomMode);
 		}
-		
+
 		return 1;
 	});
 
@@ -311,14 +317,11 @@
 	);
 
 	// 横向页面分割设置
-	let splitHorizontalPages = $derived(
-		settings.view.pageLayout?.splitHorizontalPages ?? false
-	);
+	let splitHorizontalPages = $derived(settings.view.pageLayout?.splitHorizontalPages ?? false);
 
 	// 分割状态：当前显示的半边（仅在单页模式下启用分割时有效）
 	let currentSplitHalf = $state<'left' | 'right' | null>(null);
 	let viewportRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-
 
 	const animatedWebpProbeCache = new Map<string, boolean>();
 	let webpAnimatedForCurrentPage = $state(false);
@@ -416,7 +419,6 @@
 	// 幻灯片模式
 	let slideshowVisible = $state(false);
 
-
 	// ============================================================================
 	// 帧配置（使用方案 B 的 pageMode）
 	// ============================================================================
@@ -424,18 +426,22 @@
 	// 首页/尾页单独显示设置
 	// 使用 BookSettingSelectMode 解析逻辑（简化版：default = true for first, false for last）
 	let singleFirstPage = $derived(
-		settings.view.pageLayout?.singleFirstPageMode === 'default' ? true :
-		settings.view.pageLayout?.singleFirstPageMode === 'continue' ? false : true
+		settings.view.pageLayout?.singleFirstPageMode === 'default'
+			? true
+			: settings.view.pageLayout?.singleFirstPageMode === 'continue'
+				? false
+				: true
 	);
 	let singleLastPage = $derived(
-		settings.view.pageLayout?.singleLastPageMode === 'default' ? false :
-		settings.view.pageLayout?.singleLastPageMode === 'continue' ? true : false
+		settings.view.pageLayout?.singleLastPageMode === 'default'
+			? false
+			: settings.view.pageLayout?.singleLastPageMode === 'continue'
+				? true
+				: false
 	);
 
 	// 宽页拉伸模式（双页模式下的对齐方式）
-	let widePageStretch = $derived(
-		settings.view.pageLayout?.widePageStretch ?? 'uniformHeight'
-	);
+	let widePageStretch = $derived(settings.view.pageLayout?.widePageStretch ?? 'uniformHeight');
 
 	// ============================================================================
 	// 帧数据
@@ -453,14 +459,14 @@
 	// ============================================================================
 	// 分割状态同步 - 统一翻页模型
 	// ============================================================================
-	// 
+	//
 	// 数据流：
 	// 1. isCurrentPageSplit (StackView) → currentPageShouldSplit (ui.svelte.ts)
 	//    让 ui.svelte.ts 知道当前页是否应该分割
-	// 
+	//
 	// 2. subPageIndex (ui.svelte.ts) → currentSplitHalf (StackView)
 	//    让 StackView 知道应该渲染哪一半
-	// 
+	//
 	// 3. 当页面变化且是分割页时，ui.svelte.ts 的 pageRight/pageLeft 会正确设置 subPageIndex
 
 	// 【同步1】isCurrentPageSplit → currentPageShouldSplit
@@ -474,7 +480,7 @@
 	$effect(() => {
 		const sub = $subPageIndex;
 		const isSplit = isCurrentPageSplit;
-		
+
 		if (isSplit) {
 			// subPageIndex: 0 = 第一半, 1 = 第二半
 			// LTR: 第一半 = left, 第二半 = right
@@ -482,7 +488,7 @@
 			const firstHalf: 'left' | 'right' = direction === 'ltr' ? 'left' : 'right';
 			const secondHalf: 'left' | 'right' = direction === 'ltr' ? 'right' : 'left';
 			const newHalf = sub === 0 ? firstHalf : secondHalf;
-			
+
 			// 日志已移除，避免频繁触发时的性能损耗
 			currentSplitHalf = newHalf;
 		} else {
@@ -750,9 +756,7 @@
 		const step = Math.max(snapshot?.step ?? pageStep, 1);
 		const maxIndex = Math.max(bookStore.totalPages - 1, 0);
 		const targetIndex =
-			dir === 'next'
-				? Math.min(currentIndex + step, maxIndex)
-				: Math.max(currentIndex - step, 0);
+			dir === 'next' ? Math.min(currentIndex + step, maxIndex) : Math.max(currentIndex - step, 0);
 
 		const canMove = dir === 'next' ? (snapshot?.canNext ?? true) : (snapshot?.canPrev ?? true);
 		if (!canMove || targetIndex === currentIndex) {
@@ -799,12 +803,12 @@
 	// ============================================================================
 	// 翻页函数 - 统一使用 ui.svelte.ts 的 pageLeft/pageRight
 	// ============================================================================
-	// 
+	//
 	// 翻页模型统一说明：
 	// - 单一数据源：ui.svelte.ts 的 subPageIndex (0=第一半, 1=第二半)
 	// - 分割判断：ui.svelte.ts 的 currentPageShouldSplit（由 StackView 同步）
 	// - 渲染：StackView 监听 subPageIndex，转换为 currentSplitHalf 用于渲染
-	// 
+	//
 	// 所有翻页入口最终都调用 pageLeft/pageRight，确保逻辑一致
 
 	function handlePrevPage() {
@@ -839,10 +843,7 @@
 			}
 			// 日志已移除，避免滚动时的性能损耗
 			// 触发预加载：以目标页为中心预加载
-			panoramaStore.loadPanorama(
-				preloadPageIndex ?? visiblePageIndex,
-				buildPanoramaLoadOptions()
-			);
+			panoramaStore.loadPanorama(preloadPageIndex ?? visiblePageIndex, buildPanoramaLoadOptions());
 		}
 	}
 
@@ -854,9 +855,8 @@
 		const maxIndex = Math.max(bookStore.totalPages - 1, 0);
 
 		if (units.length === 0) {
-			const fallbackIndex = dir === 'next'
-				? Math.min(currentIndex + 1, maxIndex)
-				: Math.max(currentIndex - 1, 0);
+			const fallbackIndex =
+				dir === 'next' ? Math.min(currentIndex + 1, maxIndex) : Math.max(currentIndex - 1, 0);
 			if (fallbackIndex === currentIndex) {
 				showBoundaryToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
 				return;
@@ -887,7 +887,10 @@
 		panoramaStore.loadPanorama(targetUnit.startIndex, buildPanoramaLoadOptions());
 	}
 
-	function getPanoramaEdgeFallbackIndex(dir: 'prev' | 'next', currentUnitIndex: number): number | null {
+	function getPanoramaEdgeFallbackIndex(
+		dir: 'prev' | 'next',
+		currentUnitIndex: number
+	): number | null {
 		const units = panoramaStore.state.units;
 		if (units.length === 0) return null;
 
@@ -911,13 +914,14 @@
 
 	function findCurrentPanoramaUnitIndex(pageIndex: number, part: number): number {
 		const units = panoramaStore.state.units;
-		const exactPosition = units.findIndex((unit) =>
-			unit.position.index === pageIndex && unit.position.part === part
+		const exactPosition = units.findIndex(
+			(unit) => unit.position.index === pageIndex && unit.position.part === part
 		);
 		if (exactPosition >= 0) return exactPosition;
 
-		const exactPage = units.findIndex((unit) =>
-			unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
+		const exactPage = units.findIndex(
+			(unit) =>
+				unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
 		);
 		if (exactPage >= 0) return exactPage;
 
@@ -997,7 +1001,10 @@
 
 			// 如果是新书本，重置状态
 			if (bookContext?.path !== currentPath) {
-				console.log('📚 [StackView] 书籍切换:', { oldPath: bookContext?.path, newPath: currentPath });
+				console.log('📚 [StackView] 书籍切换:', {
+					oldPath: bookContext?.path,
+					newPath: currentPath
+				});
 				imageStore.reset();
 				panoramaStore.reset();
 				zoomModeManager.reset();
@@ -1061,7 +1068,12 @@
 				viewportSize = { width: rect.width, height: rect.height };
 				// 【后端主导架构】上报视口尺寸到后端
 				const dpr = window.devicePixelRatio || 1;
-				imageStore.reportViewportSize(rect.width, rect.height, dpr, isPanorama ? 'panorama' : pageMode);
+				imageStore.reportViewportSize(
+					rect.width,
+					rect.height,
+					dpr,
+					isPanorama ? 'panorama' : pageMode
+				);
 				scheduleViewportFrameRefresh();
 			}
 		}
@@ -1119,10 +1131,12 @@
 		});
 
 		// 监听设置变化
-		const handleSettingsChange = (s: typeof settingsManager extends { getSettings: () => infer T } ? T : never) => {
+		const handleSettingsChange = (
+			s: typeof settingsManager extends { getSettings: () => infer T } ? T : never
+		) => {
 			const newAutoHide = s.view.mouseCursor?.autoHide ?? true;
 			const newHideDelay = (s.view.mouseCursor?.hideDelay ?? 1.0) * 1000;
-			
+
 			if (cursorAutoHide) {
 				if (newAutoHide) {
 					cursorAutoHide.enable();
@@ -1193,7 +1207,16 @@
 
 	let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
 
-	export { resetView, togglePageMode, togglePanorama, toggleSlideshow, pageMode, isPanorama, bookContext, slideshowVisible };
+	export {
+		resetView,
+		togglePageMode,
+		togglePanorama,
+		toggleSlideshow,
+		pageMode,
+		isPanorama,
+		bookContext,
+		slideshowVisible
+	};
 </script>
 
 <div class="stack-view" bind:this={containerRef}>
@@ -1314,18 +1337,18 @@
 	/>
 </div>
 
-	<!-- 放大镜层 (Simple Implementation) -->
-	{#if displayFrameData && displayFrameData.images.length > 0}
-		<Magnifier
-			imageUrl={displayFrameData.images[0].url}
-			{containerRect}
-			imageWidth={hoverImageSize.width}
-			imageHeight={hoverImageSize.height}
-			zoom={settings.view.magnifier?.zoom ?? 2.0}
-			size={settings.view.magnifier?.size ?? 200}
-			enabled={$viewerState.magnifier.enabled}
-		/>
-	{/if}
+<!-- 放大镜层 (Simple Implementation) -->
+{#if displayFrameData && displayFrameData.images.length > 0}
+	<Magnifier
+		imageUrl={displayFrameData.images[0].url}
+		{containerRect}
+		imageWidth={hoverImageSize.width}
+		imageHeight={hoverImageSize.height}
+		zoom={settings.view.magnifier?.zoom ?? 2.0}
+		size={settings.view.magnifier?.size ?? 200}
+		enabled={$viewerState.magnifier.enabled}
+	/>
+{/if}
 
 <style>
 	.stack-view {

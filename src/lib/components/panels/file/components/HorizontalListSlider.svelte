@@ -57,7 +57,7 @@
 		const x = e.clientX - rect.left;
 		const clickPosition = Math.max(0, Math.min(1, x / rect.width));
 		// 右开模式：点击位置需要反转为进度（点击右边=进度0，点击左边=进度1）
-		const newProgress = isRtl ? (1 - clickPosition) : clickPosition;
+		const newProgress = isRtl ? 1 - clickPosition : clickPosition;
 		onScrollToProgress?.(newProgress);
 		// 同时跳转到对应索引
 		const newIndex = Math.round(newProgress * (totalItems - 1));
@@ -96,7 +96,7 @@
 			const x = moveEvent.clientX - rect.left;
 			const dragPosition = Math.max(0, Math.min(1, x / rect.width));
 			// 右开模式：拖动位置需要反转为进度
-			const newProgress = isRtl ? (1 - dragPosition) : dragPosition;
+			const newProgress = isRtl ? 1 - dragPosition : dragPosition;
 			dragProgress = newProgress;
 			// 实时滚动列表
 			onScrollToProgress?.(newProgress);
@@ -137,30 +137,39 @@
 	function handleWheel(e: WheelEvent) {
 		e.preventDefault();
 		// 右开模式：反转滚轮方向
-		const delta = isRtl ? (e.deltaY > 0 ? -1 : 1) : (e.deltaY > 0 ? 1 : -1);
+		const delta = isRtl ? (e.deltaY > 0 ? -1 : 1) : e.deltaY > 0 ? 1 : -1;
 		const newIndex = Math.max(0, Math.min(totalItems - 1, currentIndex + delta));
 		onJumpToIndex?.(newIndex);
 	}
 </script>
 
-<div class="horizontal-slider-container group/slider flex items-center w-full h-4 gap-2 px-2 transition-all duration-200 {isRtl ? 'flex-row-reverse' : ''}">
+<div
+	class="horizontal-slider-container group/slider flex h-4 w-full items-center gap-2 px-2 transition-all duration-200 {isRtl
+		? 'flex-row-reverse'
+		: ''}"
+>
 	<!-- 回首按钮 -->
 	<button
-		class="w-0 overflow-hidden group-hover/slider:w-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all shrink-0"
-		onclick={() => { onScrollToProgress?.(0); onJumpToIndex?.(0); }}
+		class="hover:bg-accent text-muted-foreground hover:text-foreground w-0 shrink-0 overflow-hidden rounded p-0 transition-all group-hover/slider:w-auto group-hover/slider:p-0.5"
+		onclick={() => {
+			onScrollToProgress?.(0);
+			onJumpToIndex?.(0);
+		}}
 		title="回到开始"
 	>
 		<ChevronsLeft class="h-3 w-3" />
 	</button>
 
 	<!-- 当前索引显示 -->
-	<div class="w-0 overflow-hidden group-hover/slider:w-auto text-[9px] text-muted-foreground font-mono transition-all shrink-0">
+	<div
+		class="text-muted-foreground w-0 shrink-0 overflow-hidden font-mono text-[9px] transition-all group-hover/slider:w-auto"
+	>
 		{#if showInput && showIndexInput}
 			<input
 				type="number"
 				min="1"
 				max={totalItems}
-				class="w-8 h-4 text-center text-[8px] rounded border bg-background"
+				class="bg-background h-4 w-8 rounded border text-center text-[8px]"
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
@@ -179,8 +188,8 @@
 	<!-- 滑块轨道 -->
 	<div
 		bind:this={sliderRef}
-		class="slider-track relative flex-1 rounded-full bg-muted/40 cursor-pointer transition-all duration-200
-			h-[3px] group-hover/slider:h-2.5"
+		class="slider-track bg-muted/40 relative h-[3px] flex-1 cursor-pointer rounded-full transition-all
+			duration-200 group-hover/slider:h-2.5"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
 		onkeydown={handleTrackKeydown}
@@ -192,7 +201,9 @@
 	>
 		<!-- 已滚动区域 -->
 		<div
-			class="absolute top-0 bottom-0 bg-primary/30 {isRtl ? 'right-0 rounded-r-full' : 'left-0 rounded-l-full'}"
+			class="bg-primary/30 absolute top-0 bottom-0 {isRtl
+				? 'right-0 rounded-r-full'
+				: 'left-0 rounded-l-full'}"
 			style="width: {thumbPosition}%"
 		></div>
 
@@ -200,21 +211,28 @@
 		<div
 			class="slider-thumb absolute top-0 bottom-0 w-3 rounded-full transition-colors
 				{isDragging ? 'bg-primary' : 'bg-primary/60 hover:bg-primary'}"
-			style="{isRtl ? 'right' : 'left'}: {thumbPosition}%; transform: translateX({isRtl ? '50%' : '-50%'});"
+			style="{isRtl ? 'right' : 'left'}: {thumbPosition}%; transform: translateX({isRtl
+				? '50%'
+				: '-50%'});"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
 		></div>
 	</div>
 
 	<!-- 总数显示 -->
-	<div class="w-0 overflow-hidden group-hover/slider:w-auto text-[9px] text-muted-foreground font-mono transition-all shrink-0">
+	<div
+		class="text-muted-foreground w-0 shrink-0 overflow-hidden font-mono text-[9px] transition-all group-hover/slider:w-auto"
+	>
 		{totalItems}
 	</div>
 
 	<!-- 回尾按钮 -->
 	<button
-		class="w-0 overflow-hidden group-hover/slider:w-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all shrink-0"
-		onclick={() => { onScrollToProgress?.(1); onJumpToIndex?.(totalItems - 1); }}
+		class="hover:bg-accent text-muted-foreground hover:text-foreground w-0 shrink-0 overflow-hidden rounded p-0 transition-all group-hover/slider:w-auto group-hover/slider:p-0.5"
+		onclick={() => {
+			onScrollToProgress?.(1);
+			onJumpToIndex?.(totalItems - 1);
+		}}
 		title="回到结束"
 	>
 		<ChevronsRight class="h-3 w-3" />

@@ -19,17 +19,19 @@ export default defineConfig({
 		alias: {
 			$lib: path.resolve('./src/lib'),
 			// 纯前端模式下，用 mock 替换 Tauri API
-			...(isWebOnly ? {
-				'@tauri-apps/api/core': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/api/event': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/api/path': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/api/window': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/api/webviewWindow': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/plugin-dialog': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/plugin-fs': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/plugin-cli': path.resolve('./src/lib/mocks/tauriMock.ts'),
-				'@tauri-apps/plugin-shell': path.resolve('./src/lib/mocks/tauriMock.ts'),
-			} : {})
+			...(isWebOnly
+				? {
+						'@tauri-apps/api/core': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/api/event': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/api/path': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/api/window': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/api/webviewWindow': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/plugin-dialog': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/plugin-fs': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/plugin-cli': path.resolve('./src/lib/mocks/tauriMock.ts'),
+						'@tauri-apps/plugin-shell': path.resolve('./src/lib/mocks/tauriMock.ts')
+					}
+				: {})
 		},
 		// 【优化】确保依赖去重，避免多个版本
 		dedupe: [
@@ -41,7 +43,7 @@ export default defineConfig({
 			'@floating-ui/dom',
 			'@internationalized/date',
 			'@tanstack/table-core',
-			'@tauri-apps/api',
+			'@tauri-apps/api'
 		]
 	},
 	// 【优化】预构建依赖，减少重复打包
@@ -68,7 +70,7 @@ export default defineConfig({
 			'node-vibrant'
 		],
 		// 强制预构建，避免运行时重复
-		force: false,
+		force: false
 	},
 	server: {
 		port: 1420,
@@ -108,7 +110,7 @@ export default defineConfig({
 					// 日期处理
 					'vendor-date': ['@internationalized/date'],
 					// 表格
-					'vendor-table': ['@tanstack/table-core'],
+					'vendor-table': ['@tanstack/table-core']
 				}
 			}
 		}

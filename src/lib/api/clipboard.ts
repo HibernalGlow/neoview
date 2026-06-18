@@ -55,25 +55,30 @@ export async function readFilesFromClipboard(): Promise<ClipboardState | null> {
 	try {
 		const hasFilesInClipboard = await hasFiles();
 		console.log('[Clipboard] Has files in clipboard:', hasFilesInClipboard);
-		
+
 		if (!hasFilesInClipboard) {
 			return null;
 		}
-		
+
 		// readFiles 返回 { paths: string[], size: number }
 		const result: ReadFile = await readFiles();
 		console.log('[Clipboard] Read files result:', result);
-		
+
 		if (!result || !result.paths || result.paths.length === 0) {
 			return null;
 		}
-		
+
 		const files = result.paths;
-		
+
 		// 检查是否是我们之前剪切的文件
 		const isCut = files.length > 0 && files.every((f: string) => localCutState.has(f));
-		console.log('[Clipboard] Is cut operation:', isCut, 'localCutState:', Array.from(localCutState));
-		
+		console.log(
+			'[Clipboard] Is cut operation:',
+			isCut,
+			'localCutState:',
+			Array.from(localCutState)
+		);
+
 		return {
 			files,
 			isCut

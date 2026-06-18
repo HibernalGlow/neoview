@@ -1,9 +1,9 @@
 <script lang="ts">
-/**
- * 通用设置卡片
- * 包装 GeneralSettingsPanel 作为可嵌入侧边栏的卡片
- */
-import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.svelte';
+	/**
+	 * 通用设置卡片
+	 * 包装 GeneralSettingsPanel 作为可嵌入侧边栏的卡片
+	 */
+	import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -32,7 +32,7 @@ import GeneralSettingsPanel from '$lib/components/panels/GeneralSettingsPanel.sv
 		max-width: 100%;
 	}
 	/* Tab 列表自适应 */
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	/* 按钮组自适应 */

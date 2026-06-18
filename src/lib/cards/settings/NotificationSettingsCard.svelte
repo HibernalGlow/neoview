@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 通知设置卡片
- */
-import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
+	/**
+	 * 通知设置卡片
+	 */
+	import NotificationSettingsPanel from '$lib/components/panels/NotificationSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import NotificationSettingsPanel from '$lib/components/panels/NotificationSettin
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

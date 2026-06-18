@@ -26,13 +26,22 @@
 	let autoRotateMode = $derived(settings.view.autoRotate?.mode ?? 'none');
 
 	// 设置自动旋转模式
-	function setAutoRotateMode(mode: 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight') {
+	function setAutoRotateMode(
+		mode:
+			| 'none'
+			| 'left'
+			| 'right'
+			| 'horizontalLeft'
+			| 'horizontalRight'
+			| 'forcedLeft'
+			| 'forcedRight'
+	) {
 		settingsManager.updateNestedSettings('view', { autoRotate: { mode } });
 	}
 </script>
 
 {#if expanded}
-	<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-1 border-t pt-1">
 		<span class="text-muted-foreground mr-2 text-xs">手动旋转</span>
 		<Tooltip.Root>
 			<Tooltip.Trigger>

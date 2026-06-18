@@ -99,9 +99,7 @@
 	<Dialog.Content class="sm:max-w-[425px]">
 		<Dialog.Header>
 			<Dialog.Title>高级清理选项 ({virtualMode === 'history' ? '历史' : '书签'})</Dialog.Title>
-			<Dialog.Description>
-				您可以选择不同的方式来清理您的记录。
-			</Dialog.Description>
+			<Dialog.Description>您可以选择不同的方式来清理您的记录。</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="grid gap-6 py-4">
@@ -140,7 +138,9 @@
 					<Button variant="outline" size="icon" onclick={selectFolder}>
 						<FolderOpen class="h-4 w-4" />
 					</Button>
-					<Button variant="secondary" onclick={handleClearByFolder} disabled={!clearFolderPath}>执行</Button>
+					<Button variant="secondary" onclick={handleClearByFolder} disabled={!clearFolderPath}
+						>执行</Button
+					>
 				</div>
 			</div>
 

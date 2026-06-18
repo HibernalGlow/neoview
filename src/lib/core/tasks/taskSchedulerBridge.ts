@@ -13,7 +13,10 @@ taskScheduler.subscribeMetrics((metrics) => {
 		...snapshot.viewer.taskCursor,
 		centerIndex: currentIndex,
 		oldestPendingIdx: Math.max(0, currentIndex - backwardDepth),
-		furthestReadyIdx: Math.max(snapshot.viewer.taskCursor.furthestReadyIdx, currentIndex + forwardDepth),
+		furthestReadyIdx: Math.max(
+			snapshot.viewer.taskCursor.furthestReadyIdx,
+			currentIndex + forwardDepth
+		),
 		activeBuckets: { ...metrics.queueDepth },
 		running: metrics.running,
 		concurrency: metrics.concurrency,
@@ -27,9 +30,3 @@ taskScheduler.subscribeMetrics((metrics) => {
 		}
 	});
 });
-
-
-
-
-
-

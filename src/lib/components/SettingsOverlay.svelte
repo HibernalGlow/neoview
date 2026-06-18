@@ -13,7 +13,7 @@
 	let settings = $state(settingsManager.getSettings());
 	let settingsOpacity = $derived(settings.panels?.settingsOpacity ?? 85);
 	let settingsBlur = $derived(settings.panels?.settingsBlur ?? 12);
-	
+
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
 	});
@@ -44,21 +44,16 @@
 		tabindex="-1"
 	>
 		<!-- 设置窗口（居中 80%，半透明背景以显示模糊效果） -->
-		<div 
-			class="relative flex h-[80vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border text-foreground shadow-2xl"
+		<div
+			class="text-foreground relative flex h-[80vh] w-[80vw] max-w-5xl flex-col overflow-hidden rounded-xl border shadow-2xl"
 		>
 			<!-- 标题栏（与顶栏风格一致） -->
-			<div 
+			<div
 				class="flex h-10 shrink-0 items-center justify-between border-b px-4"
 				style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px); color: var(--sidebar-foreground);"
 			>
 				<span class="text-sm font-medium">设置</span>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-6 w-6"
-					onclick={closeSettingsOverlay}
-				>
+				<Button variant="ghost" size="icon" class="h-6 w-6" onclick={closeSettingsOverlay}>
 					<X class="h-4 w-4" />
 				</Button>
 			</div>

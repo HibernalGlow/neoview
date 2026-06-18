@@ -46,7 +46,7 @@
 	// 获取所有可用卡片（按分类分组）
 	const cardGroups = $derived.by(() => {
 		const groups: Record<string, { id: string; title: string; icon?: string | object }[]> = {};
-		
+
 		for (const [id, def] of Object.entries(cardRegistry)) {
 			const panel = def.defaultPanel;
 			if (!groups[panel]) {
@@ -58,7 +58,7 @@
 				icon: def.icon
 			});
 		}
-		
+
 		return groups;
 	});
 
@@ -79,11 +79,11 @@
 	// 拖拽处理
 	function handleDragStart(e: DragEvent, tabId: string) {
 		if (!e.dataTransfer) return;
-		
+
 		draggedTabId = tabId;
 		e.dataTransfer.effectAllowed = 'move';
 		e.dataTransfer.setData('text/plain', tabId);
-		
+
 		// 设置拖拽预览
 		const target = e.target as HTMLElement;
 		if (target) {
@@ -94,10 +94,10 @@
 	function handleDragOver(e: DragEvent, tabId: string) {
 		e.preventDefault();
 		if (!e.dataTransfer || !draggedTabId || draggedTabId === tabId) return;
-		
+
 		e.dataTransfer.dropEffect = 'move';
 		dragOverTabId = tabId;
-		
+
 		// 计算放置位置（左侧或右侧）
 		const target = e.currentTarget as HTMLElement;
 		const rect = target.getBoundingClientRect();
@@ -118,9 +118,9 @@
 		}
 
 		// 计算新位置
-		const targetTab = tabs.find(t => t.id === targetTabId);
-		const draggedTab = tabs.find(t => t.id === draggedTabId);
-		
+		const targetTab = tabs.find((t) => t.id === targetTabId);
+		const draggedTab = tabs.find((t) => t.id === draggedTabId);
+
 		if (!targetTab || !draggedTab) {
 			resetDragState();
 			return;
@@ -164,20 +164,20 @@
 	}
 </script>
 
-<div class="h-9 bg-muted/50 flex items-center border-b px-1 gap-0.5 overflow-x-auto">
+<div class="bg-muted/50 flex h-9 items-center gap-0.5 overflow-x-auto border-b px-1">
 	<!-- 标签页列表 -->
 	{#each tabs as tab (tab.id)}
 		{@const isActive = tab.id === activeTabId}
 		{@const isDragging = tab.id === draggedTabId}
 		{@const isDragOver = tab.id === dragOverTabId}
 		{@const iconFallback = tab.icon}
-		
+
 		<div
-			class="group relative flex items-center gap-1 px-2 py-1 rounded-t text-xs cursor-pointer transition-all
-				{isActive ? 'bg-background border-t border-x border-border -mb-px' : 'hover:bg-muted'}
+			class="group relative flex cursor-pointer items-center gap-1 rounded-t px-2 py-1 text-xs transition-all
+				{isActive ? 'bg-background border-border -mb-px border-x border-t' : 'hover:bg-muted'}
 				{isDragging ? 'opacity-50' : ''}
-				{isDragOver && dragOverPosition === 'left' ? 'border-l-2 border-l-primary' : ''}
-				{isDragOver && dragOverPosition === 'right' ? 'border-r-2 border-r-primary' : ''}"
+				{isDragOver && dragOverPosition === 'left' ? 'border-l-primary border-l-2' : ''}
+				{isDragOver && dragOverPosition === 'right' ? 'border-r-primary border-r-2' : ''}"
 			draggable="true"
 			role="tab"
 			tabindex="0"
@@ -192,18 +192,20 @@
 			onkeydown={(e) => e.key === 'Enter' && onTabClick(tab.id)}
 		>
 			<!-- 拖拽手柄 -->
-			<GripVertical class="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab" />
-			
+			<GripVertical
+				class="text-muted-foreground h-3 w-3 cursor-grab opacity-0 group-hover:opacity-100"
+			/>
+
 			<!-- 图标 -->
 			<Icon name={tab.cardId} fallback={iconFallback as any} class="h-3.5 w-3.5 shrink-0" />
-			
+
 			<!-- 标题 -->
-			<span class="truncate max-w-24">{tab.title}</span>
-			
+			<span class="max-w-24 truncate">{tab.title}</span>
+
 			<!-- 关闭按钮 -->
 			<button
 				type="button"
-				class="ml-1 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+				class="hover:bg-destructive/20 hover:text-destructive ml-1 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
 				onclick={(e) => {
 					e.stopPropagation();
 					onTabClose(tab.id);
@@ -217,16 +219,19 @@
 
 	<!-- 添加卡片按钮 -->
 	<DropdownMenu.Root bind:open={showAddCardDropdown}>
-		<DropdownMenu.Trigger class="h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium hover:bg-accent hover:text-accent-foreground" title="添加卡片 (Ctrl+T)">
+		<DropdownMenu.Trigger
+			class="hover:bg-accent hover:text-accent-foreground inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-medium"
+			title="添加卡片 (Ctrl+T)"
+		>
 			<Plus class="h-4 w-4" />
 		</DropdownMenu.Trigger>
-		<DropdownMenu.Content class="w-56 max-h-80 overflow-y-auto">
+		<DropdownMenu.Content class="max-h-80 w-56 overflow-y-auto">
 			{#each Object.entries(cardGroups) as [panelId, cards]}
 				<DropdownMenu.Group>
 					<DropdownMenu.Label>{panelNames[panelId] || panelId}</DropdownMenu.Label>
 					{#each cards as card}
 						<DropdownMenu.Item onclick={() => onAddCard(card.id)}>
-							<Icon name={card.id} fallback={card.icon as any} class="h-4 w-4 mr-2" />
+							<Icon name={card.id} fallback={card.icon as any} class="mr-2 h-4 w-4" />
 							{card.title}
 						</DropdownMenu.Item>
 					{/each}

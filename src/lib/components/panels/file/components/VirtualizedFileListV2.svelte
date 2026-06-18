@@ -113,11 +113,13 @@
 
 	// --- TanStack Virtual ---
 	const itemHeight = $derived(viewMode === 'list' ? 96 : 240);
-	
+
 	// 根据视图模式选择使用的宽度百分比
 	// banner 视图使用 bannerWidthPercent，其他网格视图使用 thumbnailWidthPercent
-	const effectiveWidthPercent = $derived(viewMode === 'banner' ? bannerWidthPercent : thumbnailWidthPercent);
-	
+	const effectiveWidthPercent = $derived(
+		viewMode === 'banner' ? bannerWidthPercent : thumbnailWidthPercent
+	);
+
 	// 列数根据宽度百分比动态计算
 	// 例如 20% = 5 列，50% = 2 列，100% = 1 列
 	const columns = $derived.by(() => {
@@ -184,25 +186,27 @@
 	});
 
 	// 追踪上一次的视图模式，用于检测变化
-	let lastViewMode = $state<'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail'>('list');
+	let lastViewMode = $state<'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail'>(
+		'list'
+	);
 
 	$effect(() => {
 		if (!mounted) {
 			lastViewMode = viewMode;
 		}
 	});
-	
+
 	// 当 items 或 viewMode 变化时强制刷新 virtualizer
 	$effect(() => {
 		// 显式依赖 items.length, rowCount 和 viewMode
 		const _ = items.length;
 		const __ = rowCount;
 		const currentViewMode = viewMode;
-		
+
 		if (mounted && container) {
 			// 检测视图模式是否变化
 			const viewModeChanged = currentViewMode !== lastViewMode;
-			
+
 			if (viewModeChanged) {
 				// 视图模式变化时，重置测量缓存并滚动到顶部
 				lastViewMode = currentViewMode;
@@ -211,7 +215,7 @@
 				// 滚动到顶部
 				container.scrollTop = 0;
 			}
-			
+
 			// 强制触发重新测量
 			$virtualizer._willUpdate();
 		}
@@ -287,7 +291,11 @@
 		return result;
 	}
 
-	function collectPrefetchPaths(startIndex: number, endIndex: number, visiblePaths: string[]): string[] {
+	function collectPrefetchPaths(
+		startIndex: number,
+		endIndex: number,
+		visiblePaths: string[]
+	): string[] {
 		const visibleSet = new Set(visiblePaths);
 		const visibleCount = Math.max(1, endIndex - startIndex + 1);
 		const prefetchSpan = visibleCount * PREFETCH_VIEWPORTS;
@@ -297,13 +305,22 @@
 		const result: string[] = [];
 		const seen = new Set<string>();
 
-		for (let offset = 0; offset <= Math.max(center - prefetchStart, prefetchEnd - center); offset += 1) {
+		for (
+			let offset = 0;
+			offset <= Math.max(center - prefetchStart, prefetchEnd - center);
+			offset += 1
+		) {
 			const left = center - offset;
 			const right = center + offset;
 
 			if (left >= prefetchStart) {
 				const item = items[left];
-				if (item && thumbnailCandidateSet.has(item.path) && !visibleSet.has(item.path) && !seen.has(item.path)) {
+				if (
+					item &&
+					thumbnailCandidateSet.has(item.path) &&
+					!visibleSet.has(item.path) &&
+					!seen.has(item.path)
+				) {
 					seen.add(item.path);
 					result.push(item.path);
 				}
@@ -311,7 +328,12 @@
 
 			if (right <= prefetchEnd && right !== left) {
 				const item = items[right];
-				if (item && thumbnailCandidateSet.has(item.path) && !visibleSet.has(item.path) && !seen.has(item.path)) {
+				if (
+					item &&
+					thumbnailCandidateSet.has(item.path) &&
+					!visibleSet.has(item.path) &&
+					!seen.has(item.path)
+				) {
 					seen.add(item.path);
 					result.push(item.path);
 				}
@@ -435,7 +457,7 @@
 		const state = get(fileBrowserStore);
 		const useSelectBehavior = isCheckMode && state.checkModeClickBehavior === 'select';
 		const multiSelect = useSelectBehavior;
-		
+
 		onItemSelect({ item, index, multiSelect });
 		dispatch('itemClick', { item, index });
 		dispatch('itemSelect', { item, index, multiSelect });
@@ -567,7 +589,6 @@
 		role="listbox"
 		aria-label="文件列表"
 		onscroll={handleScroll}
-
 		onclick={handleContainerClick}
 		ondblclick={handleContainerDoubleClick}
 		onkeydown={(e) => {
@@ -617,7 +638,11 @@
 									totalPages={historyEntry?.totalItems}
 									videoPosition={historyEntry?.videoProgress?.position}
 									videoDuration={historyEntry?.videoProgress?.duration}
-									timestamp={item.modified ? (item.modified > 1e12 ? item.modified : item.modified * 1000) : undefined}
+									timestamp={item.modified
+										? item.modified > 1e12
+											? item.modified
+											: item.modified * 1000
+										: undefined}
 									{thumbnailSize}
 									onClick={() => handleItemClick(item, itemIndex)}
 									onDoubleClick={() => handleItemDoubleClick(item, itemIndex)}
@@ -628,7 +653,7 @@
 									onOpenInNewTab={() => dispatch('openInNewTab', { item })}
 								/>
 								{#if showFullPath}
-									<p class="text-[10px] text-muted-foreground/70 truncate px-1" title={item.path}>
+									<p class="text-muted-foreground/70 truncate px-1 text-[10px]" title={item.path}>
 										{item.path}
 									</p>
 								{/if}
@@ -642,8 +667,11 @@
 		<!-- 空白区域返回按钮 -->
 		{#if showBackButton}
 			<button
-				class="empty-area-back-button flex items-center justify-center gap-2 w-full py-4 mt-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors rounded-lg border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-				onclick={(e) => { e.stopPropagation(); onBackButtonClick(); }}
+				class="empty-area-back-button text-muted-foreground hover:text-foreground hover:bg-muted/50 border-muted-foreground/30 hover:border-muted-foreground/50 mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-4 transition-colors"
+				onclick={(e) => {
+					e.stopPropagation();
+					onBackButtonClick();
+				}}
 				type="button"
 			>
 				<ChevronUp class="h-5 w-5" />

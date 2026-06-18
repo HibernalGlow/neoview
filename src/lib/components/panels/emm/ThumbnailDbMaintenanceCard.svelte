@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { Database, Trash2, FolderX, Clock, Archive, RefreshCcw, Loader2, ShieldX } from '@lucide/svelte';
+	import {
+		Database,
+		Trash2,
+		FolderX,
+		Clock,
+		Archive,
+		RefreshCcw,
+		Loader2,
+		ShieldX
+	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -20,11 +29,11 @@
 	let stats = $state<MaintenanceStats | null>(null);
 	let isLoading = $state(false);
 	let message = $state<string | null>(null);
-	
+
 	// 过期清理参数
 	let expireDays = $state(30);
 	let excludeFolders = $state(true);
-	
+
 	// 路径清理参数
 	let pathPrefix = $state('');
 
@@ -47,7 +56,7 @@
 				dbSizeBytes: result.db_size_bytes,
 				dbSizeMb: result.db_size_mb,
 				failedMemory: result.failed_memory,
-				failedDb: result.failed_db,
+				failedDb: result.failed_db
 			};
 		} catch {
 			stats = null;
@@ -91,7 +100,10 @@
 		isLoading = true;
 		message = null;
 		try {
-			const count = await invoke<number>('cleanup_expired_entries_v3', { days: expireDays, excludeFolders });
+			const count = await invoke<number>('cleanup_expired_entries_v3', {
+				days: expireDays,
+				excludeFolders
+			});
 			message = `✅ 已清理 ${count} 条过期记录（>${expireDays}天）`;
 			await loadStats();
 		} catch (e) {
@@ -134,7 +146,7 @@
 			isLoading = false;
 		}
 	}
-	
+
 	async function handleNormalize() {
 		isLoading = true;
 		message = null;
@@ -179,17 +191,11 @@
 
 <div class="space-y-4">
 	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2 font-semibold text-sm">
+		<div class="flex items-center gap-2 text-sm font-semibold">
 			<Database class="h-4 w-4" />
 			<span>缩略图数据库维护</span>
 		</div>
-		<Button
-			variant="ghost"
-			size="icon"
-			class="h-6 w-6"
-			disabled={isLoading}
-			onclick={loadStats}
-		>
+		<Button variant="ghost" size="icon" class="h-6 w-6" disabled={isLoading} onclick={loadStats}>
 			{#if isLoading}
 				<Loader2 class="h-3 w-3 animate-spin" />
 			{:else}
@@ -215,15 +221,25 @@
 			</div>
 			<div class="bg-muted/50 rounded p-2 text-center">
 				<div class="text-muted-foreground">黑名单</div>
-				<div class="font-semibold text-red-500">{(stats.failedMemory + stats.failedDb).toLocaleString()}</div>
-				<div class="text-[10px] text-muted-foreground">内存{stats.failedMemory} / DB{stats.failedDb}</div>
+				<div class="font-semibold text-red-500">
+					{(stats.failedMemory + stats.failedDb).toLocaleString()}
+				</div>
+				<div class="text-muted-foreground text-[10px]">
+					内存{stats.failedMemory} / DB{stats.failedDb}
+				</div>
 			</div>
 		</div>
 	{/if}
 
 	<!-- 消息 -->
 	{#if message}
-		<div class="text-xs {message.startsWith('✅') ? 'text-green-600' : message.startsWith('⚠️') ? 'text-yellow-600' : 'text-red-600'} bg-muted/50 rounded p-2">
+		<div
+			class="text-xs {message.startsWith('✅')
+				? 'text-green-600'
+				: message.startsWith('⚠️')
+					? 'text-yellow-600'
+					: 'text-red-600'} bg-muted/50 rounded p-2"
+		>
 			{message}
 		</div>
 	{/if}
@@ -235,7 +251,7 @@
 			<Button
 				variant="outline"
 				size="sm"
-				class="gap-1 text-xs flex-1"
+				class="flex-1 gap-1 text-xs"
 				disabled={isLoading}
 				onclick={handleCleanupInvalidPaths}
 			>
@@ -245,7 +261,7 @@
 			<Button
 				variant="outline"
 				size="sm"
-				class="gap-1 text-xs flex-1"
+				class="flex-1 gap-1 text-xs"
 				disabled={isLoading}
 				onclick={handleCleanupInvalidBlob}
 			>
@@ -257,7 +273,7 @@
 			variant="outline"
 			size="sm"
 			class="w-full gap-1 text-xs text-red-600 hover:text-red-700"
-			disabled={isLoading || !stats || (stats.failedMemory + stats.failedDb) === 0}
+			disabled={isLoading || !stats || stats.failedMemory + stats.failedDb === 0}
 			onclick={handleClearFailed}
 		>
 			<ShieldX class="h-3 w-3" />
@@ -268,15 +284,9 @@
 	<!-- 清理过期条目 -->
 	<div class="space-y-2">
 		<Label class="text-xs font-medium">清理过期条目</Label>
-		<div class="flex gap-2 items-center">
-			<Input
-				type="number"
-				bind:value={expireDays}
-				min={1}
-				max={365}
-				class="h-7 text-xs w-20"
-			/>
-			<span class="text-xs text-muted-foreground">天前</span>
+		<div class="flex items-center gap-2">
+			<Input type="number" bind:value={expireDays} min={1} max={365} class="h-7 w-20 text-xs" />
+			<span class="text-muted-foreground text-xs">天前</span>
 		</div>
 		<div class="flex items-center gap-2">
 			<Checkbox bind:checked={excludeFolders} id="excludeFolders" />
@@ -342,13 +352,13 @@
 		</div>
 	</div>
 
-	<p class="text-[10px] text-muted-foreground">
-		<strong>无效路径</strong>：删除文件已不存在的缩略图记录<br/>
-		<strong>空Blob</strong>：删除没有缩略图数据的空条目<br/>
-		<strong>清除黑名单</strong>：清除生成失败的记录，允许重新尝试生成<br/>
-		<strong>清理过期</strong>：删除超过指定天数的旧记录<br/>
-		<strong>按路径清理</strong>：删除指定目录下的所有缩略图<br/>
-		<strong>压缩</strong>：执行 VACUUM 回收已删除记录占用的空间<br/>
+	<p class="text-muted-foreground text-[10px]">
+		<strong>无效路径</strong>：删除文件已不存在的缩略图记录<br />
+		<strong>空Blob</strong>：删除没有缩略图数据的空条目<br />
+		<strong>清除黑名单</strong>：清除生成失败的记录，允许重新尝试生成<br />
+		<strong>清理过期</strong>：删除超过指定天数的旧记录<br />
+		<strong>按路径清理</strong>：删除指定目录下的所有缩略图<br />
+		<strong>压缩</strong>：执行 VACUUM 回收已删除记录占用的空间<br />
 		<strong>规范路径</strong>：统一数据库中的路径格式
 	</p>
 </div>

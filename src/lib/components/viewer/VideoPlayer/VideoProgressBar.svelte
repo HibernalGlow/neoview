@@ -44,17 +44,17 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
 	bind:this={progressBarRef}
-	class="progress-bar relative mb-4 h-1 w-full cursor-pointer rounded-full bg-primary/40 transition-all hover:h-1.5"
+	class="progress-bar bg-primary/40 relative mb-4 h-1 w-full cursor-pointer rounded-full transition-all hover:h-1.5"
 	onclick={onSeek}
 	onmousemove={onProgressHover}
 	onmouseleave={onProgressLeave}
 	role="presentation"
 >
 	<div
-		class="progress-fill h-full rounded-full bg-primary"
+		class="progress-fill bg-primary h-full rounded-full"
 		style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
 	></div>
-	
+
 	<!-- 进度条预览提示 -->
 	{#if previewVisible && duration > 0}
 		<div
@@ -62,13 +62,10 @@
 			style="left: {Math.max(80, Math.min(previewX, (progressBarRef?.offsetWidth ?? 0) - 80))}px;"
 		>
 			<!-- 预览缩略图 -->
-			<div class="preview-frame mb-1 overflow-hidden rounded border border-white/20 bg-black shadow-lg">
-				<canvas
-					bind:this={previewCanvas}
-					class="preview-canvas"
-					width="160"
-					height="90"
-				></canvas>
+			<div
+				class="preview-frame mb-1 overflow-hidden rounded border border-white/20 bg-black shadow-lg"
+			>
+				<canvas bind:this={previewCanvas} class="preview-canvas" width="160" height="90"></canvas>
 			</div>
 			<!-- 时间显示 -->
 			<div class="preview-time rounded bg-black/80 px-2 py-0.5 text-center text-xs text-white">

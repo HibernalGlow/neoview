@@ -1,6 +1,6 @@
 /**
  * 流式打开书籍 API
- * 
+ *
  * 支持增量返回页面列表，让 UI 可以先响应
  */
 
@@ -38,10 +38,10 @@ export interface StreamingScanProgress {
 
 /**
  * 快速打开书籍
- * 
+ *
  * 只返回首批页面，让 UI 可以立即显示
  * 后台继续扫描剩余页面，通过事件通知
- * 
+ *
  * @param path 书籍路径
  * @param initialCount 首批返回的页面数量（默认 10）
  */
@@ -64,7 +64,7 @@ export async function cancelStreamingScan(): Promise<void> {
 
 /**
  * 获取压缩包条目数量
- * 
+ *
  * 快速估算，不读取完整列表
  */
 export async function getArchiveEntryCount(path: string): Promise<number> {
@@ -73,7 +73,7 @@ export async function getArchiveEntryCount(path: string): Promise<number> {
 
 /**
  * 监听流式扫描进度
- * 
+ *
  * @param callback 进度回调
  * @returns 取消监听函数
  */
@@ -87,11 +87,11 @@ export async function onStreamingScanProgress(
 
 /**
  * 流式打开书籍的完整流程
- * 
+ *
  * 1. 快速打开，获取首批页面
  * 2. 监听后台扫描进度
  * 3. 增量更新页面列表
- * 
+ *
  * @param path 书籍路径
  * @param onInitial 首批页面回调
  * @param onProgress 进度回调

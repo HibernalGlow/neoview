@@ -4,7 +4,14 @@
  */
 
 /** EMM 字段类型 */
-export type EMMFieldType = 'string' | 'path' | 'url' | 'datetime' | 'timestamp' | 'number' | 'boolean';
+export type EMMFieldType =
+	| 'string'
+	| 'path'
+	| 'url'
+	| 'datetime'
+	| 'timestamp'
+	| 'number'
+	| 'boolean';
 
 /** EMM 字段元数据配置 */
 export const EMM_FIELD_META: Record<string, { label: string; type: EMMFieldType }> = {

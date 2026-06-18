@@ -37,8 +37,3 @@ export function teardownCoreServices(): void {
 	teardownCacheSystem();
 	initialized = false;
 }
-
-
-
-
-

@@ -10,9 +10,9 @@ import pMemoize from 'p-memoize';
  * 去重统计
  */
 export interface DeduplicatorStats {
-  totalRequests: number;
-  deduplicated: number;
-  activeRequests: number;
+	totalRequests: number;
+	deduplicated: number;
+	activeRequests: number;
 }
 
 /**
@@ -20,74 +20,74 @@ export interface DeduplicatorStats {
  * 使用 Map 实现高性能去重
  */
 export class RequestDeduplicator {
-  private pending: LRUCache<string, {}>;
-  private executeMemoized: <T>(key: string, executor: () => Promise<T>) => Promise<T>;
-  private stats = { totalRequests: 0, deduplicated: 0 };
+	private pending: LRUCache<string, {}>;
+	private executeMemoized: <T>(key: string, executor: () => Promise<T>) => Promise<T>;
+	private stats = { totalRequests: 0, deduplicated: 0 };
 
-  /**
-   * @param timeout 请求超时时间（毫秒），超过此时间的请求会被清理
-   */
-  constructor(timeout: number = 30000) {
-    this.pending = new LRUCache<string, {}>({
-      max: 10000,
-      ttl: timeout,
-      ttlAutopurge: true,
-    });
+	/**
+	 * @param timeout 请求超时时间（毫秒），超过此时间的请求会被清理
+	 */
+	constructor(timeout: number = 30000) {
+		this.pending = new LRUCache<string, {}>({
+			max: 10000,
+			ttl: timeout,
+			ttlAutopurge: true
+		});
 
-    this.executeMemoized = pMemoize(
-      async <T>(key: string, executor: () => Promise<T>): Promise<T> => executor(),
-      {
-        cacheKey: (args) => String(args[0]),
-        cache: this.pending as unknown as {
-          has: (key: string) => boolean;
-          get: (key: string) => unknown;
-          set: (key: string, value: unknown) => unknown;
-          delete: (key: string) => boolean;
-          clear?: () => void;
-        },
-      }
-    ) as <T>(key: string, executor: () => Promise<T>) => Promise<T>;
-  }
+		this.executeMemoized = pMemoize(
+			async <T>(key: string, executor: () => Promise<T>): Promise<T> => executor(),
+			{
+				cacheKey: (args) => String(args[0]),
+				cache: this.pending as unknown as {
+					has: (key: string) => boolean;
+					get: (key: string) => unknown;
+					set: (key: string, value: unknown) => unknown;
+					delete: (key: string) => boolean;
+					clear?: () => void;
+				}
+			}
+		) as <T>(key: string, executor: () => Promise<T>) => Promise<T>;
+	}
 
-  /**
-   * 按 key 去重执行（相同 key 的并发请求共享同一个 Promise）
-   */
-  run<T>(key: string, executor: () => Promise<T>): Promise<T> {
-    this.stats.totalRequests++;
+	/**
+	 * 按 key 去重执行（相同 key 的并发请求共享同一个 Promise）
+	 */
+	run<T>(key: string, executor: () => Promise<T>): Promise<T> {
+		this.stats.totalRequests++;
 
-    if (this.pending.has(key)) {
-      this.stats.deduplicated++;
-      console.debug(`🔄 请求去重: key=${key}`);
-    }
+		if (this.pending.has(key)) {
+			this.stats.deduplicated++;
+			console.debug(`🔄 请求去重: key=${key}`);
+		}
 
-    return this.executeMemoized<T>(key, executor).finally(() => {
-      this.pending.delete(key);
-    });
-  }
+		return this.executeMemoized<T>(key, executor).finally(() => {
+			this.pending.delete(key);
+		});
+	}
 
-  /**
-   * 检查请求是否活跃
-   */
-  isActive(key: string): boolean {
-    return this.pending.has(key);
-  }
+	/**
+	 * 检查请求是否活跃
+	 */
+	isActive(key: string): boolean {
+		return this.pending.has(key);
+	}
 
-  /**
-   * 获取统计
-   */
-  getStats(): DeduplicatorStats {
-    return {
-      ...this.stats,
-      activeRequests: this.pending.size,
-    };
-  }
+	/**
+	 * 获取统计
+	 */
+	getStats(): DeduplicatorStats {
+		return {
+			...this.stats,
+			activeRequests: this.pending.size
+		};
+	}
 
-  /**
-   * 清除所有
-   */
-  clear(): void {
-    this.pending.clear();
-  }
+	/**
+	 * 清除所有
+	 */
+	clear(): void {
+		this.pending.clear();
+	}
 }
 
 /**

@@ -6,10 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Mouse, RotateCcw } from '@lucide/svelte';
 
-	let { 
-		onComplete, 
-		onCancel 
-	} = $props();
+	let { onComplete, onCancel } = $props();
 
 	let isActive = $state(false);
 	let isHovering = $state(false);
@@ -82,16 +79,16 @@
 	function handleWheel(e: WheelEvent) {
 		if (!isHovering || !isActive) return;
 		e.preventDefault();
-		
+
 		wheelDirection = e.deltaY < 0 ? 'up' : 'down';
 		recordedGesture = {
 			gesture: `wheel-${wheelDirection}`,
 			button: 'middle',
 			action: 'wheel'
 		};
-		
+
 		console.log('检测到滚轮操作:', wheelDirection);
-		
+
 		// 延迟完成录制
 		setTimeout(() => {
 			if (recordedGesture) {
@@ -104,19 +101,19 @@
 	function handleMouseDown(e: MouseEvent) {
 		if (!isHovering || !isActive) return;
 		e.preventDefault();
-		
+
 		const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
 		pressedButton = button;
-		
+
 		// 立即记录按下操作
 		recordedGesture = {
 			gesture: 'press',
 			button: button,
 			action: 'press'
 		};
-		
+
 		console.log('检测到鼠标按下:', button);
-		
+
 		// 延迟完成录制
 		setTimeout(() => {
 			if (recordedGesture && recordedGesture.action === 'press') {
@@ -129,10 +126,10 @@
 	function handleClick(e: MouseEvent) {
 		if (!isHovering || !isActive) return;
 		e.preventDefault();
-		
+
 		const button = e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right';
 		const currentTime = Date.now();
-		
+
 		// 检测双击
 		if (currentTime - lastClickTime < 500) {
 			clickCount++;
@@ -144,7 +141,7 @@
 					action: 'double-click'
 				};
 				console.log('检测到双击:', button);
-				
+
 				setTimeout(() => {
 					if (recordedGesture) {
 						onComplete(recordedGesture.gesture, recordedGesture.button, recordedGesture.action);
@@ -161,7 +158,7 @@
 					action: 'click'
 				};
 				console.log('检测到单击:', button);
-				
+
 				setTimeout(() => {
 					if (recordedGesture && recordedGesture.action === 'click') {
 						onComplete(recordedGesture.gesture, recordedGesture.button, recordedGesture.action);
@@ -169,7 +166,7 @@
 				}, 300);
 			}
 		}
-		
+
 		lastClickTime = currentTime;
 	}
 
@@ -192,33 +189,39 @@
 	// 获取操作描述
 	function getOperationDescription() {
 		if (!recordedGesture) return '';
-		
+
 		const { gesture, button, action } = recordedGesture;
 		let buttonText = '';
 		switch (button) {
-			case 'left': buttonText = '左键'; break;
-			case 'right': buttonText = '右键'; break;
-			case 'middle': buttonText = '中键'; break;
+			case 'left':
+				buttonText = '左键';
+				break;
+			case 'right':
+				buttonText = '右键';
+				break;
+			case 'middle':
+				buttonText = '中键';
+				break;
 		}
-		
+
 		if (gesture === 'wheel-up') return `${buttonText} 滚轮向上`;
 		if (gesture === 'wheel-down') return `${buttonText} 滚轮向下`;
 		if (gesture === 'click') return `${buttonText} 单击`;
 		if (gesture === 'double-click') return `${buttonText} 双击`;
 		if (gesture === 'press') return `${buttonText} 按下`;
-		
+
 		return `${buttonText} ${gesture}`;
 	}
 </script>
 
-<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-	<div class="bg-background border rounded-lg p-6 max-w-2xl w-full mx-4 space-y-6">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+	<div class="bg-background mx-4 w-full max-w-2xl space-y-6 rounded-lg border p-6">
 		<div class="space-y-2">
-			<h4 class="font-semibold flex items-center gap-2">
+			<h4 class="flex items-center gap-2 font-semibold">
 				<Mouse class="h-4 w-4 text-green-500" />
 				鼠标操作录制
 			</h4>
-			<p class="text-sm text-muted-foreground">
+			<p class="text-muted-foreground text-sm">
 				将鼠标悬停在录制区域上，然后执行鼠标操作（滚轮、点击、按下等）
 			</p>
 		</div>
@@ -226,13 +229,11 @@
 		<!-- 录制区域 -->
 		<div class="relative">
 			<div
-				class="relative h-64 border-2 border-dashed rounded-lg transition-all duration-300 {
-					isActive 
-						? isHovering 
-							? 'border-green-500 bg-green-50' 
-							: 'border-blue-500 bg-blue-50'
-						: 'border-muted-foreground/30 bg-muted/30'
-				}"
+				class="relative h-64 rounded-lg border-2 border-dashed transition-all duration-300 {isActive
+					? isHovering
+						? 'border-green-500 bg-green-50'
+						: 'border-blue-500 bg-blue-50'
+					: 'border-muted-foreground/30 bg-muted/30'}"
 				onmouseenter={handleMouseEnter}
 				onmouseleave={handleMouseLeave}
 				onmousemove={handleMouseMove}
@@ -251,14 +252,14 @@
 				aria-label="鼠标操作录制区域"
 			>
 				<!-- 状态指示器 -->
-				<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+				<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
 					{#if countdown > 0}
-						<div class="text-center space-y-2">
-							<div class="text-6xl font-bold text-primary">{countdown}</div>
-							<p class="text-sm text-muted-foreground">准备开始录制...</p>
+						<div class="space-y-2 text-center">
+							<div class="text-primary text-6xl font-bold">{countdown}</div>
+							<p class="text-muted-foreground text-sm">准备开始录制...</p>
 						</div>
 					{:else if isActive && !recordedGesture}
-						<div class="text-center space-y-2">
+						<div class="space-y-2 text-center">
 							<div class="text-2xl">
 								{#if isHovering}
 									🎯
@@ -266,7 +267,7 @@
 									👆
 								{/if}
 							</div>
-							<p class="text-sm text-muted-foreground">
+							<p class="text-muted-foreground text-sm">
 								{#if isHovering}
 									正在感应鼠标操作...
 								{:else}
@@ -275,28 +276,34 @@
 							</p>
 						</div>
 					{:else if recordedGesture}
-						<div class="text-center space-y-2">
+						<div class="space-y-2 text-center">
 							<div class="text-2xl">✅</div>
 							<p class="text-sm font-medium">{getOperationDescription()}</p>
-							<p class="text-xs text-muted-foreground">操作已录制</p>
+							<p class="text-muted-foreground text-xs">操作已录制</p>
 						</div>
 					{:else}
-						<div class="text-center space-y-2">
+						<div class="space-y-2 text-center">
 							<div class="text-2xl">🖱️</div>
-							<p class="text-sm text-muted-foreground">点击下方按钮开始录制</p>
+							<p class="text-muted-foreground text-sm">点击下方按钮开始录制</p>
 						</div>
 					{/if}
 				</div>
 
 				<!-- 实时信息显示 -->
 				{#if isActive && isHovering}
-					<div class="absolute top-2 left-2 text-xs text-muted-foreground">
+					<div class="text-muted-foreground absolute top-2 left-2 text-xs">
 						<div>位置: ({mousePosition.x}, {mousePosition.y})</div>
 						{#if wheelDirection}
 							<div>滚轮: {wheelDirection === 'up' ? '向上' : '向下'}</div>
 						{/if}
 						{#if pressedButton}
-							<div>按下: {pressedButton === 'left' ? '左键' : pressedButton === 'right' ? '右键' : '中键'}</div>
+							<div>
+								按下: {pressedButton === 'left'
+									? '左键'
+									: pressedButton === 'right'
+										? '右键'
+										: '中键'}
+							</div>
 						{/if}
 					</div>
 				{/if}
@@ -304,7 +311,7 @@
 		</div>
 
 		<!-- 操作说明 -->
-		<div class="text-xs text-muted-foreground space-y-1">
+		<div class="text-muted-foreground space-y-1 text-xs">
 			<p>支持的操作：</p>
 			<div class="grid grid-cols-2 gap-2">
 				<div>• 🖱️ 滚轮向上/向下</div>
@@ -319,12 +326,12 @@
 			<div class="flex gap-2">
 				{#if !isActive}
 					<Button onclick={startCountdown}>
-						<Mouse class="h-4 w-4 mr-2" />
+						<Mouse class="mr-2 h-4 w-4" />
 						开始录制
 					</Button>
 				{:else}
 					<Button variant="outline" onclick={resetRecording}>
-						<RotateCcw class="h-4 w-4 mr-2" />
+						<RotateCcw class="mr-2 h-4 w-4" />
 						重新录制
 					</Button>
 				{/if}

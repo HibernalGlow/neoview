@@ -1,79 +1,81 @@
 <script lang="ts">
-/**
- * 文件选择卡片
- * 从 BenchmarkPanel 提取
- */
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
-import { Button } from '$lib/components/ui/button';
-import { FolderOpen, Play, Trash2 } from '@lucide/svelte';
+	/**
+	 * 文件选择卡片
+	 * 从 BenchmarkPanel 提取
+	 */
+	import { invoke } from '@tauri-apps/api/core';
+	import { open } from '@tauri-apps/plugin-dialog';
+	import { Button } from '$lib/components/ui/button';
+	import { FolderOpen, Play, Trash2 } from '@lucide/svelte';
 
-interface BenchmarkReport {
-	file_path: string;
-	file_size: number;
-	results: Array<{
-		method: string;
-		format: string;
-		duration_ms: number;
-		success: boolean;
-		error: string | null;
-		image_size: [number, number] | null;
-		output_size: number | null;
-	}>;
-}
-
-let selectedFiles = $state<string[]>([]);
-let reports = $state<BenchmarkReport[]>([]);
-let isRunning = $state(false);
-
-async function selectFiles() {
-	const files = await open({
-		multiple: true,
-		filters: [{
-			name: '图像文件',
-			extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif', 'jxl', 'heic', 'heif']
-		}]
-	});
-
-	if (files) {
-		selectedFiles = Array.isArray(files) ? files : [files];
+	interface BenchmarkReport {
+		file_path: string;
+		file_size: number;
+		results: Array<{
+			method: string;
+			format: string;
+			duration_ms: number;
+			success: boolean;
+			error: string | null;
+			image_size: [number, number] | null;
+			output_size: number | null;
+		}>;
 	}
-}
 
-async function runBenchmark() {
-	if (selectedFiles.length === 0) return;
+	let selectedFiles = $state<string[]>([]);
+	let reports = $state<BenchmarkReport[]>([]);
+	let isRunning = $state(false);
 
-	isRunning = true;
-	reports = [];
-
-	try {
-		const results = await invoke<BenchmarkReport[]>('run_batch_benchmark', {
-			filePaths: selectedFiles
+	async function selectFiles() {
+		const files = await open({
+			multiple: true,
+			filters: [
+				{
+					name: '图像文件',
+					extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'avif', 'jxl', 'heic', 'heif']
+				}
+			]
 		});
-		reports = results;
-	} catch (err) {
-		console.error('基准测试失败:', err);
-	} finally {
-		isRunning = false;
+
+		if (files) {
+			selectedFiles = Array.isArray(files) ? files : [files];
+		}
 	}
-}
 
-function clearFiles() {
-	selectedFiles = [];
-	reports = [];
-}
+	async function runBenchmark() {
+		if (selectedFiles.length === 0) return;
 
-function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
+		isRunning = true;
+		reports = [];
+
+		try {
+			const results = await invoke<BenchmarkReport[]>('run_batch_benchmark', {
+				filePaths: selectedFiles
+			});
+			reports = results;
+		} catch (err) {
+			console.error('基准测试失败:', err);
+		} finally {
+			isRunning = false;
+		}
+	}
+
+	function clearFiles() {
+		selectedFiles = [];
+		reports = [];
+	}
+
+	function formatFileSize(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	}
 </script>
 
 <div class="space-y-2">
 	<div class="flex gap-2">
 		<Button onclick={selectFiles} variant="outline" size="sm" class="flex-1 text-xs">
-			<FolderOpen class="h-3 w-3 mr-1" />
+			<FolderOpen class="mr-1 h-3 w-3" />
 			选择图像 ({selectedFiles.length})
 		</Button>
 		<Button
@@ -82,7 +84,7 @@ function formatFileSize(bytes: number): string {
 			size="sm"
 			class="flex-1 text-xs"
 		>
-			<Play class="h-3 w-3 mr-1" />
+			<Play class="mr-1 h-3 w-3" />
 			{isRunning ? '测试中...' : '开始测试'}
 		</Button>
 		{#if selectedFiles.length > 0}
@@ -93,7 +95,7 @@ function formatFileSize(bytes: number): string {
 	</div>
 
 	{#if selectedFiles.length > 0}
-		<div class="text-[10px] text-muted-foreground max-h-16 overflow-auto space-y-0.5">
+		<div class="text-muted-foreground max-h-16 space-y-0.5 overflow-auto text-[10px]">
 			{#each selectedFiles as file}
 				<div class="truncate">{file.split(/[/\\]/).pop()}</div>
 			{/each}
@@ -102,10 +104,10 @@ function formatFileSize(bytes: number): string {
 
 	<!-- 测试结果 -->
 	{#if reports.length > 0}
-		<div class="border-t pt-2 mt-2 space-y-2 text-[10px]">
+		<div class="mt-2 space-y-2 border-t pt-2 text-[10px]">
 			<div class="font-medium">测试结果</div>
 			{#each reports as report}
-				<div class="border rounded p-2 space-y-1">
+				<div class="space-y-1 rounded border p-2">
 					<div class="flex justify-between font-medium">
 						<span class="truncate" title={report.file_path}>
 							{report.file_path.split(/[/\\]/).pop()}
@@ -113,9 +115,11 @@ function formatFileSize(bytes: number): string {
 						<span class="text-muted-foreground">{formatFileSize(report.file_size)}</span>
 					</div>
 					{#each report.results as result}
-						<div class="flex justify-between items-center text-muted-foreground">
-							<span class:text-blue-500={result.method.includes('WIC')}
-								  class:text-green-500={result.method.includes('image')}>
+						<div class="text-muted-foreground flex items-center justify-between">
+							<span
+								class:text-blue-500={result.method.includes('WIC')}
+								class:text-green-500={result.method.includes('image')}
+							>
 								{result.method}
 							</span>
 							<span class="flex gap-2">
@@ -123,7 +127,7 @@ function formatFileSize(bytes: number): string {
 									<span>{formatFileSize(result.output_size)}</span>
 								{/if}
 								{#if result.success}
-									<span class="text-green-600 font-mono">{result.duration_ms.toFixed(1)}ms</span>
+									<span class="font-mono text-green-600">{result.duration_ms.toFixed(1)}ms</span>
 								{:else}
 									<span class="text-red-500">失败</span>
 								{/if}

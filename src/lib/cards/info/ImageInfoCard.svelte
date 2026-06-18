@@ -1,48 +1,48 @@
 <script lang="ts">
-/**
- * 媒体信息卡片（图片/视频）
- * 从 InfoPanel 提取
- */
-import { infoPanelStore, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
+	/**
+	 * 媒体信息卡片（图片/视频）
+	 * 从 InfoPanel 提取
+	 */
+	import { infoPanelStore, type ViewerImageInfo } from '$lib/stores/infoPanel.svelte';
 
-let imageInfo = $state<ViewerImageInfo | null>(null);
+	let imageInfo = $state<ViewerImageInfo | null>(null);
 
-$effect(() => {
-	const unsubscribe = infoPanelStore.subscribe((state) => {
-		imageInfo = state.imageInfo;
+	$effect(() => {
+		const unsubscribe = infoPanelStore.subscribe((state) => {
+			imageInfo = state.imageInfo;
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-function formatDuration(seconds?: number): string {
-	if (seconds == null || seconds <= 0) return '—';
-	const h = Math.floor(seconds / 3600);
-	const m = Math.floor((seconds % 3600) / 60);
-	const s = Math.floor(seconds % 60);
-	if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-	return `${m}:${s.toString().padStart(2, '0')}`;
-}
+	function formatDuration(seconds?: number): string {
+		if (seconds == null || seconds <= 0) return '—';
+		const h = Math.floor(seconds / 3600);
+		const m = Math.floor((seconds % 3600) / 60);
+		const s = Math.floor(seconds % 60);
+		if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
 
-function formatBitrate(bps?: number): string {
-	if (bps == null || bps <= 0) return '—';
-	if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
-	if (bps >= 1_000) return `${(bps / 1_000).toFixed(0)} Kbps`;
-	return `${bps} bps`;
-}
+	function formatBitrate(bps?: number): string {
+		if (bps == null || bps <= 0) return '—';
+		if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
+		if (bps >= 1_000) return `${(bps / 1_000).toFixed(0)} Kbps`;
+		return `${bps} bps`;
+	}
 
-function formatFileSize(bytes?: number): string {
-	if (bytes == null || bytes <= 0) return '—';
-	if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
-	if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(2)} MB`;
-	if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
-	return `${bytes} B`;
-}
+	function formatFileSize(bytes?: number): string {
+		if (bytes == null || bytes <= 0) return '—';
+		if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+		if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(2)} MB`;
+		if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`;
+		return `${bytes} B`;
+	}
 </script>
 
 {#if imageInfo}
 	<div class="space-y-2 text-sm">
 		<!-- 媒体类型 -->
-		<div class="flex justify-between items-center">
+		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">类型:</span>
 			<span class="flex items-center gap-1">
 				{#if imageInfo.isVideo}
@@ -52,15 +52,15 @@ function formatFileSize(bytes?: number): string {
 				{/if}
 			</span>
 		</div>
-		
+
 		<!-- 文件名 -->
 		<div class="flex justify-between">
 			<span class="text-muted-foreground">文件名:</span>
-			<span class="font-mono text-xs truncate max-w-[150px]" title={imageInfo.name}>
+			<span class="max-w-[150px] truncate font-mono text-xs" title={imageInfo.name}>
 				{imageInfo.name}
 			</span>
 		</div>
-		
+
 		<!-- 尺寸 -->
 		<div class="flex justify-between">
 			<span class="text-muted-foreground">尺寸:</span>
@@ -72,7 +72,7 @@ function formatFileSize(bytes?: number): string {
 				{/if}
 			</span>
 		</div>
-		
+
 		{#if imageInfo.isVideo}
 			<!-- 视频特有信息 -->
 			<div class="flex justify-between">
@@ -118,7 +118,5 @@ function formatFileSize(bytes?: number): string {
 		{/if}
 	</div>
 {:else}
-	<div class="text-sm text-muted-foreground text-center py-2">
-		暂无媒体信息
-	</div>
+	<div class="text-muted-foreground py-2 text-center text-sm">暂无媒体信息</div>
 {/if}

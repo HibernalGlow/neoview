@@ -65,7 +65,11 @@
 		return shortName;
 	}
 
-	function translateTagCached(tag: string, category: string, dict: EMMTranslationDict | undefined): string {
+	function translateTagCached(
+		tag: string,
+		category: string,
+		dict: EMMTranslationDict | undefined
+	): string {
 		const dictId = getObjectId(dict as unknown as object);
 		const cacheKey = `${dictId}|${category}|${tag}`;
 		const cached = tagTranslationCache.get(cacheKey);
@@ -141,9 +145,7 @@
 	});
 
 	// 判断文件类型
-	const isArchive = $derived(
-		isArchiveFile(item.targetPath ?? item.name)
-	);
+	const isArchive = $derived(isArchiveFile(item.targetPath ?? item.name));
 
 	// EMM 元数据
 	let emmMetadata = $state<{
@@ -653,7 +655,9 @@
 					const tagItem = {
 						tag: `${category}:${tag}`,
 						isCollect,
-						color: collectTag?.color || (matchedByMixed ? mixedCollectTag?.color : categoryColors[category]),
+						color:
+							collectTag?.color ||
+							(matchedByMixed ? mixedCollectTag?.color : categoryColors[category]),
 						display: `${shortCategory}:${translatedTag}`,
 						isMixedVariant: matchedByMixed,
 						isManual: false
@@ -898,7 +902,6 @@
 	<FileItemGridView
 		{item}
 		{thumbnail}
-
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

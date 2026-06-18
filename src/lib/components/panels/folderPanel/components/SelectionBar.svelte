@@ -1,82 +1,92 @@
 <script lang="ts">
-/**
- * SelectionBar - 勾选操作栏
- * 在勾选模式下显示，提供全选、反选、取消等操作
- */
-import { CheckSquare, Square, SquareX, Trash2, Copy, Scissors, X, Link, MousePointer } from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
-import * as Tooltip from '$lib/components/ui/tooltip';
-import { 
-	tabSelectedItems, 
-	tabItems,
-	folderTabActions,
-	activeTabId
-} from '../stores/folderTabStore';
-import { chainSelectModeByTab, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
-import { fileBrowserStore, type CheckModeClickBehavior } from '$lib/stores/fileBrowser.svelte';
+	/**
+	 * SelectionBar - 勾选操作栏
+	 * 在勾选模式下显示，提供全选、反选、取消等操作
+	 */
+	import {
+		CheckSquare,
+		Square,
+		SquareX,
+		Trash2,
+		Copy,
+		Scissors,
+		X,
+		Link,
+		MousePointer
+	} from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import {
+		tabSelectedItems,
+		tabItems,
+		folderTabActions,
+		activeTabId
+	} from '../stores/folderTabStore';
+	import { chainSelectModeByTab, toggleChainSelectMode } from '../stores/chainSelectStore.svelte';
+	import { fileBrowserStore, type CheckModeClickBehavior } from '$lib/stores/fileBrowser.svelte';
 
-// 别名映射
-const selectedItems = tabSelectedItems;
-const items = tabItems;
+	// 别名映射
+	const selectedItems = tabSelectedItems;
+	const items = tabItems;
 
-interface Props {
-	onDelete?: () => void;
-	onCopy?: () => void;
-	onCut?: () => void;
-	onClose?: () => void;
-}
+	interface Props {
+		onDelete?: () => void;
+		onCopy?: () => void;
+		onCut?: () => void;
+		onClose?: () => void;
+	}
 
-let { onDelete, onCopy, onCut, onClose }: Props = $props();
+	let { onDelete, onCopy, onCut, onClose }: Props = $props();
 
-// 选中数量
-const selectedCount = $derived($selectedItems.size);
-const totalCount = $derived($items.length);
-const allSelected = $derived(selectedCount > 0 && selectedCount === totalCount);
+	// 选中数量
+	const selectedCount = $derived($selectedItems.size);
+	const totalCount = $derived($items.length);
+	const allSelected = $derived(selectedCount > 0 && selectedCount === totalCount);
 
-// 链选模式状态 - 响应式订阅 store
-const isChainSelectMode = $derived($chainSelectModeByTab[$activeTabId] || false);
+	// 链选模式状态 - 响应式订阅 store
+	const isChainSelectMode = $derived($chainSelectModeByTab[$activeTabId] || false);
 
-// 点击行为设置 - 从 fileBrowserStore 获取
-let checkModeClickBehavior = $state<CheckModeClickBehavior>('open');
-$effect(() => {
-	const unsubscribe = fileBrowserStore.subscribe((state) => {
-		checkModeClickBehavior = state.checkModeClickBehavior;
+	// 点击行为设置 - 从 fileBrowserStore 获取
+	let checkModeClickBehavior = $state<CheckModeClickBehavior>('open');
+	$effect(() => {
+		const unsubscribe = fileBrowserStore.subscribe((state) => {
+			checkModeClickBehavior = state.checkModeClickBehavior;
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-function toggleCheckModeClickBehavior() {
-	const newValue: CheckModeClickBehavior = checkModeClickBehavior === 'open' ? 'select' : 'open';
-	fileBrowserStore.setCheckModeClickBehavior(newValue);
-}
+	function toggleCheckModeClickBehavior() {
+		const newValue: CheckModeClickBehavior = checkModeClickBehavior === 'open' ? 'select' : 'open';
+		fileBrowserStore.setCheckModeClickBehavior(newValue);
+	}
 
-function handleSelectAll() {
-	folderTabActions.selectAll();
-}
+	function handleSelectAll() {
+		folderTabActions.selectAll();
+	}
 
-function handleDeselectAll() {
-	folderTabActions.deselectAll();
-}
+	function handleDeselectAll() {
+		folderTabActions.deselectAll();
+	}
 
-function handleInvertSelection() {
-	folderTabActions.invertSelection();
-}
+	function handleInvertSelection() {
+		folderTabActions.invertSelection();
+	}
 
-function handleClose() {
-	folderTabActions.deselectAll();
-	folderTabActions.toggleMultiSelectMode();
-	onClose?.();
-}
+	function handleClose() {
+		folderTabActions.deselectAll();
+		folderTabActions.toggleMultiSelectMode();
+		onClose?.();
+	}
 </script>
 
-<div class="flex items-center gap-2 px-3 py-2 border-b">
+<div class="flex items-center gap-2 border-b px-3 py-2">
 	<!-- 选中计数 -->
 	<span class="text-sm font-medium">
-		<span class="text-primary">{selectedCount}</span> / {totalCount} 
+		<span class="text-primary">{selectedCount}</span> / {totalCount}
 	</span>
-	
+
 	<div class="flex-1"></div>
-	
+
 	<!-- 操作按钮 -->
 	<div class="flex items-center gap-1">
 		<!-- 全选 -->
@@ -89,27 +99,22 @@ function handleClose() {
 					onclick={handleSelectAll}
 					disabled={allSelected}
 				>
-					<CheckSquare class="h-4 w-4 mr-1" />
+					<CheckSquare class="mr-1 h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>选择全部项目</p></Tooltip.Content>
 		</Tooltip.Root>
-		
+
 		<!-- 反选 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-7 px-2"
-					onclick={handleInvertSelection}
-				>
-					<Square class="h-4 w-4 mr-1" />
+				<Button variant="ghost" size="sm" class="h-7 px-2" onclick={handleInvertSelection}>
+					<Square class="mr-1 h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>反转选择状态</p></Tooltip.Content>
 		</Tooltip.Root>
-		
+
 		<!-- 取消全选 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -120,12 +125,12 @@ function handleClose() {
 					onclick={handleDeselectAll}
 					disabled={selectedCount === 0}
 				>
-					<SquareX class="h-4 w-4 mr-1" />
+					<SquareX class="mr-1 h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content><p>取消全部选择</p></Tooltip.Content>
 		</Tooltip.Root>
-		
+
 		<!-- 链接选中 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -134,18 +139,20 @@ function handleClose() {
 					size="sm"
 					class="h-7 px-2"
 					onclick={(e: MouseEvent) => {
-					toggleChainSelectMode($activeTabId);
-				}}
+						toggleChainSelectMode($activeTabId);
+					}}
 				>
-					<Link class="h-4 w-4 mr-1" />
+					<Link class="mr-1 h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>链接选中模式</p>
-				<p class="text-muted-foreground text-xs">开启后，点击项目会选中从上一个选中项到当前项的所有项目</p>
+				<p class="text-muted-foreground text-xs">
+					开启后，点击项目会选中从上一个选中项到当前项的所有项目
+				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
-		
+
 		<!-- 点击行为切换 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -155,18 +162,20 @@ function handleClose() {
 					class="h-7 px-2"
 					onclick={toggleCheckModeClickBehavior}
 				>
-					<MousePointer class="h-4 w-4 mr-1" />
+					<MousePointer class="mr-1 h-4 w-4" />
 					{checkModeClickBehavior === 'select' ? '点选' : '点开'}
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>点击卡片行为: {checkModeClickBehavior === 'select' ? '选中' : '打开'}</p>
-				<p class="text-muted-foreground text-xs">当前: 点击卡片会{checkModeClickBehavior === 'select' ? '选中/取消选中项目' : '打开项目'}</p>
+				<p class="text-muted-foreground text-xs">
+					当前: 点击卡片会{checkModeClickBehavior === 'select' ? '选中/取消选中项目' : '打开项目'}
+				</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
-		
-		<div class="w-px h-5 bg-border mx-1"></div>
-		
+
+		<div class="bg-border mx-1 h-5 w-px"></div>
+
 		<!-- 复制 -->
 		{#if onCopy}
 			<Tooltip.Root>
@@ -178,14 +187,14 @@ function handleClose() {
 						onclick={onCopy}
 						disabled={selectedCount === 0}
 					>
-						<Copy class="h-4 w-4 mr-1" />
+						<Copy class="mr-1 h-4 w-4" />
 						复制
 					</Button>
 				</Tooltip.Trigger>
 				<Tooltip.Content><p>复制选中项</p></Tooltip.Content>
 			</Tooltip.Root>
 		{/if}
-		
+
 		<!-- 剪切 -->
 		{#if onCut}
 			<Tooltip.Root>
@@ -197,14 +206,14 @@ function handleClose() {
 						onclick={onCut}
 						disabled={selectedCount === 0}
 					>
-						<Scissors class="h-4 w-4 mr-1" />
+						<Scissors class="mr-1 h-4 w-4" />
 						剪切
 					</Button>
 				</Tooltip.Trigger>
 				<Tooltip.Content><p>剪切选中项</p></Tooltip.Content>
 			</Tooltip.Root>
 		{/if}
-		
+
 		<!-- 删除 -->
 		{#if onDelete}
 			<Tooltip.Root>
@@ -212,29 +221,24 @@ function handleClose() {
 					<Button
 						variant="ghost"
 						size="sm"
-						class="h-7 px-2 text-destructive hover:text-destructive"
+						class="text-destructive hover:text-destructive h-7 px-2"
 						onclick={onDelete}
 						disabled={selectedCount === 0}
 					>
-						<Trash2 class="h-4 w-4 mr-1" />
+						<Trash2 class="mr-1 h-4 w-4" />
 						删除
 					</Button>
 				</Tooltip.Trigger>
 				<Tooltip.Content><p>删除选中项</p></Tooltip.Content>
 			</Tooltip.Root>
 		{/if}
-		
-		<div class="w-px h-5 bg-border mx-1"></div>
-		
+
+		<div class="bg-border mx-1 h-5 w-px"></div>
+
 		<!-- 关闭勾选模式 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-7 w-7"
-					onclick={handleClose}
-				>
+				<Button variant="ghost" size="icon" class="h-7 w-7" onclick={handleClose}>
 					<X class="h-4 w-4" />
 				</Button>
 			</Tooltip.Trigger>

@@ -21,7 +21,7 @@ async function checkOllamaOnline(apiUrl: string): Promise<boolean> {
 	if (ollamaStatusCache && Date.now() - ollamaStatusCache.checkedAt < STATUS_CACHE_TTL) {
 		return ollamaStatusCache.online;
 	}
-	
+
 	try {
 		// 使用 Tauri 命令代理请求，绕过 CORS
 		const online = await invoke<boolean>('ollama_check_status', { apiUrl });
@@ -51,7 +51,7 @@ async function tryAutoStartOllama(): Promise<boolean> {
 		return false;
 	}
 	autoStartAttempted = true;
-	
+
 	try {
 		const command = Command.create('ollama', ['serve']);
 		command.on('error', (error: string) => {
@@ -59,10 +59,10 @@ async function tryAutoStartOllama(): Promise<boolean> {
 		});
 		command.spawn();
 		toast.info('正在自动启动 Ollama 服务...');
-		
+
 		// 等待服务启动
-		await new Promise(resolve => setTimeout(resolve, 3000));
-		
+		await new Promise((resolve) => setTimeout(resolve, 3000));
+
 		// 清除缓存并重新检查
 		ollamaStatusCache = null;
 		return true;
@@ -90,7 +90,10 @@ interface AiTranslationCache {
 /**
  * 从数据库读取 AI 翻译缓存
  */
-async function loadAiTranslationFromDb(key: string, modelFilter?: string): Promise<AiTranslationCache | null> {
+async function loadAiTranslationFromDb(
+	key: string,
+	modelFilter?: string
+): Promise<AiTranslationCache | null> {
 	try {
 		const json = await invoke<string | null>('load_ai_translation', { key, modelFilter });
 		if (json) {
@@ -105,13 +108,18 @@ async function loadAiTranslationFromDb(key: string, modelFilter?: string): Promi
 /**
  * 保存 AI 翻译到数据库
  */
-async function saveAiTranslationToDb(key: string, title: string, service: 'libre' | 'ollama', model?: string): Promise<void> {
+async function saveAiTranslationToDb(
+	key: string,
+	title: string,
+	service: 'libre' | 'ollama',
+	model?: string
+): Promise<void> {
 	try {
 		const cache: AiTranslationCache = {
 			title,
 			service,
 			model,
-			timestamp: Date.now(),
+			timestamp: Date.now()
 		};
 		await invoke('save_ai_translation', { key, aiTranslationJson: JSON.stringify(cache) });
 	} catch (e) {
@@ -170,7 +178,7 @@ const FILE_TYPE_EXT_MAP: Record<string, string[]> = {
 	folder: ['folder'],
 	archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'cbz', 'cbr', 'cb7'],
 	image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'tiff', 'jxl', 'avif'],
-	video: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'],
+	video: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm']
 };
 
 /**
@@ -209,25 +217,26 @@ export function getCleanupPatternsForType(
 ): string[] {
 	const ext = extension.toLowerCase();
 	const typeKey = getFileTypeKey(ext);
-	
+
 	// 优先使用新版 cleanupRules
 	if (config.cleanupRules && config.cleanupRules.length > 0) {
 		const patterns: string[] = [];
 		for (const rule of config.cleanupRules) {
 			if (!rule.enabled) continue;
-			
+
 			// 检查是否适用于当前文件类型
-			const applies = rule.applyTo.includes('all') ||
+			const applies =
+				rule.applyTo.includes('all') ||
 				(typeKey && rule.applyTo.includes(typeKey)) ||
 				rule.applyTo.includes(ext); // 支持直接指定扩展名
-			
+
 			if (applies) {
 				patterns.push(rule.pattern);
 			}
 		}
 		return patterns;
 	}
-	
+
 	// 旧版兼容：使用 titleCleanupByType
 	const byType = config.titleCleanupByType;
 	if (byType && Object.keys(byType).length > 0) {
@@ -240,7 +249,7 @@ export function getCleanupPatternsForType(
 			return byType[typeKey];
 		}
 	}
-	
+
 	// 使用默认规则
 	return config.titleCleanupPatterns;
 }
@@ -279,14 +288,14 @@ async function translateWithLibreTranslate(
 		const response = await fetch(`${apiUrl}/translate`, {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/json',
+				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
 				q: text,
 				source: sourceLang === 'auto' ? 'auto' : sourceLang,
 				target: targetLang,
-				api_key: apiKey || undefined,
-			}),
+				api_key: apiKey || undefined
+			})
 		});
 
 		if (!response.ok) {
@@ -307,7 +316,7 @@ const LANG_NAMES: Record<string, string> = {
 	en: '英语',
 	zh: '中文',
 	ko: '韩语',
-	auto: '原文',
+	auto: '原文'
 };
 
 /**
@@ -323,7 +332,7 @@ function parsePromptTemplate(
 ): string {
 	const sourceLangName = LANG_NAMES[sourceLang] || sourceLang;
 	const targetLangName = LANG_NAMES[targetLang] || targetLang;
-	
+
 	return template
 		.replace(/\{text\}/g, text)
 		.replace(/\{source_lang\}/g, sourceLangName)
@@ -343,7 +352,9 @@ async function translateWithOllama(
 	promptTemplate?: string
 ): Promise<TranslationResult> {
 	// 使用自定义模板或默认模板
-	const template = promptTemplate || '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}';
+	const template =
+		promptTemplate ||
+		'请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}';
 	const prompt = parsePromptTemplate(template, text, sourceLang, targetLang);
 
 	try {
@@ -353,7 +364,7 @@ async function translateWithOllama(
 			model,
 			prompt,
 			temperature: 0.3,
-			numPredict: 256,
+			numPredict: 256
 		});
 
 		const translated = response?.trim();
@@ -396,7 +407,7 @@ export async function translateText(
 					isOnline = await checkOllamaOnline(config.ollamaUrl);
 				}
 			}
-			
+
 			if (!isOnline) {
 				toast.error('Ollama 服务未启动，请先启动 Ollama 服务');
 				return { success: false, error: 'Ollama 服务未启动' };
@@ -563,11 +574,10 @@ export async function testConnection(): Promise<TranslationResult> {
 	}
 }
 
-
 /**
  * 使用 TanStack AI 进行流式翻译
  * 支持实时显示翻译进度
- * 
+ *
  * @param text 要翻译的文本
  * @param options 翻译选项
  * @returns 翻译结果
@@ -634,7 +644,7 @@ export async function translateTextWithStreaming(
 		onComplete: (translated) => {
 			// 缓存已在 translateWithTanStack 中处理
 			onComplete?.(translated);
-		},
+		}
 	});
 
 	if (result.success && result.translated) {

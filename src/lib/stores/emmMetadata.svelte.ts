@@ -75,11 +75,15 @@ export const emmMetadataStore = {
 			const useManualOnly = manualDbPaths.length > 0;
 			const baseDatabases = useManualOnly ? manualDbPaths : autoDatabases;
 			// 去重，并过滤掉 translations.db（它应该只用于翻译数据库路径）
-			const uniqueDatabases = Array.from(new Set(baseDatabases))
-				.filter(db => !db.toLowerCase().includes('translations.db'));
+			const uniqueDatabases = Array.from(new Set(baseDatabases)).filter(
+				(db) => !db.toLowerCase().includes('translations.db')
+			);
 
 			if (useManualOnly) {
-				console.debug('[EMMStore] initialize: 使用手动配置的主数据库列表（忽略自动检测结果）:', uniqueDatabases);
+				console.debug(
+					'[EMMStore] initialize: 使用手动配置的主数据库列表（忽略自动检测结果）:',
+					uniqueDatabases
+				);
 			} else {
 				console.debug('[EMMStore] initialize: 使用自动检测的主数据库列表:', uniqueDatabases);
 			}
@@ -87,18 +91,18 @@ export const emmMetadataStore = {
 			// 确定翻译数据库路径（优先手动配置，否则自动检测）
 			let translationDbPath = stateSnapshot.manualTranslationDbPath;
 			if (!translationDbPath) {
-				translationDbPath = await EMMAPI.findEMMTranslationDatabase() || undefined;
+				translationDbPath = (await EMMAPI.findEMMTranslationDatabase()) || undefined;
 			}
 			console.debug('[EMMStore] initialize: 翻译数据库路径:', translationDbPath);
 
-			update(s => ({
+			update((s) => ({
 				...s,
 				databasePaths: uniqueDatabases,
 				translationDbPath
 			}));
 
 			// 优先使用手动配置的设置文件，否则尝试自动查找
-			const settingPath = stateSnapshot.manualSettingPath || await EMMAPI.findEMMSettingFile();
+			const settingPath = stateSnapshot.manualSettingPath || (await EMMAPI.findEMMSettingFile());
 			console.debug('[EMMStore] initialize: 设置文件路径:', settingPath);
 
 			if (settingPath) {
@@ -107,11 +111,16 @@ export const emmMetadataStore = {
 					const tags = await EMMAPI.loadEMMCollectTags(settingPath);
 					console.debug('[EMMStore] initialize: 成功加载收藏标签，数量:', tags.length);
 					if (tags.length > 0) {
-						console.debug('[EMMStore] initialize: 前3个标签:', tags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
+						console.debug(
+							'[EMMStore] initialize: 前3个标签:',
+							tags.slice(0, 3).map((t) => ({ id: t.id, display: t.display, tag: t.tag }))
+						);
 					} else {
-						console.warn('[EMMStore] initialize: 警告：从设置文件加载的收藏标签为空，请检查 setting.json 中的 collectTag 字段');
+						console.warn(
+							'[EMMStore] initialize: 警告：从设置文件加载的收藏标签为空，请检查 setting.json 中的 collectTag 字段'
+						);
 					}
-					update(s => ({
+					update((s) => ({
 						...s,
 						collectTags: tags,
 						settingPath
@@ -119,7 +128,10 @@ export const emmMetadataStore = {
 					console.debug('[EMMStore] initialize: 收藏标签已更新到 store');
 				} catch (e) {
 					console.error('[EMMStore] initialize: 加载收藏标签失败:', e);
-					console.error('[EMMStore] initialize: 错误详情:', e instanceof Error ? e.message : String(e));
+					console.error(
+						'[EMMStore] initialize: 错误详情:',
+						e instanceof Error ? e.message : String(e)
+					);
 					if (e instanceof Error && e.stack) {
 						console.error('[EMMStore] initialize: 错误堆栈:', e.stack);
 					}
@@ -130,7 +142,7 @@ export const emmMetadataStore = {
 
 			// 加载翻译字典
 			const translationDictPath =
-				stateSnapshot.manualTranslationDictPath || await EMMAPI.findEMMTranslationFile();
+				stateSnapshot.manualTranslationDictPath || (await EMMAPI.findEMMTranslationFile());
 			console.debug('[EMMStore] initialize: 翻译字典路径:', translationDictPath);
 
 			if (translationDictPath) {
@@ -138,7 +150,7 @@ export const emmMetadataStore = {
 					console.debug('[EMMStore] initialize: 开始加载翻译字典，路径:', translationDictPath);
 					const dict = await EMMAPI.loadEMMTranslationDict(translationDictPath);
 					console.debug('[EMMStore] initialize: 成功加载翻译字典');
-					update(s => ({
+					update((s) => ({
 						...s,
 						translationDict: dict,
 						translationDictPath
@@ -189,7 +201,7 @@ export const emmMetadataStore = {
 			stateSnapshot.enableEMM,
 			stateSnapshot.fileListTagDisplayMode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			manualDatabasePaths: paths
 		}));
@@ -209,7 +221,7 @@ export const emmMetadataStore = {
 			stateSnapshot.enableEMM,
 			stateSnapshot.fileListTagDisplayMode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			manualTranslationDbPath: path,
 			translationDbPath: path
@@ -230,14 +242,14 @@ export const emmMetadataStore = {
 			stateSnapshot.enableEMM,
 			stateSnapshot.fileListTagDisplayMode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			manualSettingPath: path
 		}));
 		// 重新加载收藏标签
 		try {
 			const tags = await EMMAPI.loadEMMCollectTags(path);
-			update(state => ({
+			update((state) => ({
 				...state,
 				collectTags: tags,
 				settingPath: path
@@ -259,14 +271,14 @@ export const emmMetadataStore = {
 			stateSnapshot.enableEMM,
 			stateSnapshot.fileListTagDisplayMode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			manualTranslationDictPath: path
 		}));
 		// 重新加载翻译字典
 		try {
 			const dict = await EMMAPI.loadEMMTranslationDict(path);
-			update(state => ({
+			update((state) => ({
 				...state,
 				translationDict: dict,
 				translationDictPath: path
@@ -288,7 +300,7 @@ export const emmMetadataStore = {
 			enable,
 			stateSnapshot.fileListTagDisplayMode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			enableEMM: enable
 		}));
@@ -306,7 +318,7 @@ export const emmMetadataStore = {
 			stateSnapshot.enableEMM,
 			mode
 		);
-		update(state => ({
+		update((state) => ({
 			...state,
 			fileListTagDisplayMode: mode
 		}));
@@ -389,15 +401,15 @@ export const emmMetadataStore = {
 		const translationDbPath = currentState.translationDbPath;
 
 		// 从所有主数据库尝试加载（过滤掉 translations.db）
-		const mainDatabases = currentState.databasePaths.filter(db =>
-			!db.toLowerCase().includes('translations.db')
+		const mainDatabases = currentState.databasePaths.filter(
+			(db) => !db.toLowerCase().includes('translations.db')
 		);
 
 		for (const dbPath of mainDatabases) {
 			try {
 				const metadata = await EMMAPI.loadEMMMetadata(dbPath, hash, translationDbPath);
 				if (metadata) {
-					update(s => {
+					update((s) => {
 						const newCache = new Map(s.metadataCache);
 						newCache.set(hash, metadata);
 						return { ...s, metadataCache: newCache };
@@ -456,7 +468,7 @@ export const emmMetadataStore = {
 					url: cacheEntry.url,
 					filepath: cacheEntry.filepath
 				};
-				update(s => {
+				update((s) => {
 					const newCache = new Map(s.metadataCache);
 					newCache.set(metadata.hash, metadata);
 					const newPathCache = new Map(s.pathCache);
@@ -471,15 +483,15 @@ export const emmMetadataStore = {
 
 		// 2. 回退到外部数据库
 		const translationDbPath = currentState.translationDbPath;
-		const mainDatabases = currentState.databasePaths.filter(db =>
-			!db.toLowerCase().includes('translations.db')
+		const mainDatabases = currentState.databasePaths.filter(
+			(db) => !db.toLowerCase().includes('translations.db')
 		);
 
 		for (const dbPath of mainDatabases) {
 			try {
 				const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, filePath, translationDbPath);
 				if (metadata) {
-					update(s => {
+					update((s) => {
 						const newCache = new Map(s.metadataCache);
 						newCache.set(metadata.hash, metadata);
 						const newPathCache = new Map(s.pathCache);
@@ -494,7 +506,7 @@ export const emmMetadataStore = {
 		}
 
 		// 缓存 null 结果，避免重复查询
-		update(s => {
+		update((s) => {
 			const newPathCache = new Map(s.pathCache);
 			newPathCache.set(normalizedPath, null);
 			return { ...s, pathCache: newPathCache };
@@ -509,7 +521,10 @@ export const emmMetadataStore = {
 		const tags = stateSnapshot.collectTags;
 		console.debug('[EMMStore] getCollectTags: 返回收藏标签数量:', tags.length);
 		if (tags.length > 0) {
-			console.debug('[EMMStore] getCollectTags: 前3个标签:', tags.slice(0, 3).map(t => ({ id: t.id, display: t.display, tag: t.tag })));
+			console.debug(
+				'[EMMStore] getCollectTags: 前3个标签:',
+				tags.slice(0, 3).map((t) => ({ id: t.id, display: t.display, tag: t.tag }))
+			);
 		}
 		return tags;
 	},
@@ -552,7 +567,7 @@ export const emmMetadataStore = {
 				filepath: cacheEntry.filepath
 			};
 			// 存入缓存
-			update(s => {
+			update((s) => {
 				const newCache = new Map(s.metadataCache);
 				newCache.set(metadata.hash, metadata);
 				const newPathCache = new Map(s.pathCache);
@@ -568,7 +583,7 @@ export const emmMetadataStore = {
 	 * 清空缓存
 	 */
 	clearCache() {
-		update(state => ({
+		update((state) => ({
 			...state,
 			metadataCache: new Map(),
 			pathCache: new Map()
@@ -580,7 +595,7 @@ export const emmMetadataStore = {
 	 */
 	clearPathCacheForDirectory(dirPath: string) {
 		const normalizedDir = dirPath.replace(/\\/g, '/');
-		update(state => {
+		update((state) => {
 			const newPathCache = new Map(state.pathCache);
 			for (const key of newPathCache.keys()) {
 				if (key.startsWith(normalizedDir)) {
@@ -614,7 +629,6 @@ export const collectTagMap = derived(emmMetadataStore, ($state) => {
 	// console.debug('[EMMStore] collectTagMap updated, size:', map.size);
 	return map;
 });
-
 
 // 从模块重新导出
 export { isCollectTagHelper } from './emm/helpers';

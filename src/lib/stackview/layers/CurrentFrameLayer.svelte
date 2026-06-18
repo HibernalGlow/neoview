@@ -59,14 +59,14 @@
 	let transitionSettings = $state<PageTransitionSettings | null>(null);
 	let animationClass = $state('');
 	let animationStyle = $state('');
-	
+
 	// 记录上一次的页面索引
 	let lastPageIndex = -1;
 	let isFirstRender = true;
-	
+
 	// 【修复内存泄露】保存动画清理定时器的引用
 	let animationCleanupTimer: ReturnType<typeof setTimeout> | null = null;
-	
+
 	// 【修复内存泄露】保存订阅取消函数
 	let unsubscribeTransition: (() => void) | null = null;
 
@@ -75,7 +75,7 @@
 			transitionSettings = s;
 		});
 	});
-	
+
 	// 【修复内存泄露】组件销毁时清理资源
 	onDestroy(() => {
 		// 清理动画定时器
@@ -83,7 +83,7 @@
 			clearTimeout(animationCleanupTimer);
 			animationCleanupTimer = null;
 		}
-		
+
 		// 取消订阅
 		if (unsubscribeTransition) {
 			unsubscribeTransition();
@@ -99,30 +99,30 @@
 	// 触发翻页动画
 	async function triggerAnimation(dir: 'next' | 'prev') {
 		if (!transitionSettings || transitionSettings.type === 'none') return;
-		
+
 		// 【修复内存泄露】清除上一个动画的清理定时器
 		if (animationCleanupTimer !== null) {
 			clearTimeout(animationCleanupTimer);
 			animationCleanupTimer = null;
 		}
-		
+
 		const { type, duration, easing } = transitionSettings;
 		const easingCss = easingCssMap[easing];
-		
+
 		// 设置初始状态（动画起点）
 		animationClass = `page-transition-${type}-enter-${dir}`;
 		animationStyle = '';
-		
+
 		// 等待 DOM 更新
 		await tick();
-		
+
 		// 强制重绘
 		void document.body.offsetHeight;
-		
+
 		// 设置过渡并触发动画
 		animationStyle = `transition: transform ${duration}ms ${easingCss}, opacity ${duration}ms ${easingCss}`;
 		animationClass = `page-transition-${type}-enter-${dir} active`;
-		
+
 		// 【修复内存泄露】保存定时器引用，确保可以被清理
 		animationCleanupTimer = setTimeout(() => {
 			animationClass = '';
@@ -134,27 +134,27 @@
 	// 监听 frame 变化
 	$effect(() => {
 		const currentIndex = getCurrentPageIndex();
-		
+
 		// 跳过首次渲染和无效索引
 		if (isFirstRender || currentIndex === -1) {
 			isFirstRender = false;
 			lastPageIndex = currentIndex;
 			return;
 		}
-		
+
 		// 页面没有变化
 		if (currentIndex === lastPageIndex) return;
-		
+
 		// 检查动画是否启用
 		if (!transitionSettings?.enabled) {
 			lastPageIndex = currentIndex;
 			return;
 		}
-		
+
 		// 判断翻页方向并触发动画
 		const dir = currentIndex > lastPageIndex ? 'next' : 'prev';
 		lastPageIndex = currentIndex;
-		
+
 		triggerAnimation(dir);
 	});
 
@@ -399,7 +399,7 @@
 	/* ============================================
 	   翻页动画样式（内联以确保优先级）
 	   ============================================ */
-	
+
 	/* 淡入淡出 */
 	.scroll-frame-container.page-transition-fade-enter-next,
 	.scroll-frame-container.page-transition-fade-enter-prev {

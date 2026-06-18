@@ -13,10 +13,19 @@ import { animatedVideoModeStore } from '$lib/stores/animatedVideoMode.svelte';
 import { isAnimatedImageVideoCandidate } from '$lib/utils/animatedVideoModeUtils';
 import { BlobCache } from './blobCache';
 import { LoadQueueManager, LoadPriority, QueueClearedError, TaskCancelledError } from './loadQueue';
-import { readPageSourceV2, getImageDimensions, createThumbnailDataURL, clearExtractCache } from './imageReader';
+import {
+	readPageSourceV2,
+	getImageDimensions,
+	createThumbnailDataURL,
+	clearExtractCache
+} from './imageReader';
 import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
-import { calculatePreloadPlan, trackPageDirection, planToQueue, type PreloadConfig } from './preloadStrategy';
-
+import {
+	calculatePreloadPlan,
+	trackPageDirection,
+	planToQueue,
+	type PreloadConfig
+} from './preloadStrategy';
 
 /**
  * 更新缓存命中时的延迟追踪
@@ -38,7 +47,10 @@ export interface ImageLoaderCoreOptions {
 	maxConcurrentLoads?: number;
 	maxCacheSizeMB?: number;
 	onImageReady?: (pageIndex: number, url: string, blob?: Blob) => void;
-	onDimensionsReady?: (pageIndex: number, dimensions: { width: number; height: number } | null) => void;
+	onDimensionsReady?: (
+		pageIndex: number,
+		dimensions: { width: number; height: number } | null
+	) => void;
 	onError?: (pageIndex: number, error: Error) => void;
 }
 
@@ -71,7 +83,7 @@ export class ImageLoaderCore {
 		// 【优化】提高默认并发数从 4 到 6，充分利用现代多核 CPU
 		this.loadQueue = new LoadQueueManager(options.maxConcurrentLoads ?? 6);
 	}
-	
+
 	/**
 	 * 标记实例失效（切书时调用）
 	 */
@@ -85,10 +97,12 @@ export class ImageLoaderCore {
 	 * 【性能优化】注册尺寸就绪回调
 	 * 用于在预加载时缓存尺寸，避免翻页时重新计算
 	 */
-	setOnDimensionsReady(callback: (pageIndex: number, dimensions: { width: number; height: number } | null) => void): void {
+	setOnDimensionsReady(
+		callback: (pageIndex: number, dimensions: { width: number; height: number } | null) => void
+	): void {
 		this.options.onDimensionsReady = callback;
 	}
-	
+
 	/**
 	 * 检查实例是否有效
 	 */
@@ -99,7 +113,11 @@ export class ImageLoaderCore {
 	/**
 	 * 加载页面图片（带优先级）
 	 */
-	async loadPage(pageIndex: number, priority: number = LoadPriority.NORMAL, signal?: AbortSignal): Promise<LoadResult> {
+	async loadPage(
+		pageIndex: number,
+		priority: number = LoadPriority.NORMAL,
+		signal?: AbortSignal
+	): Promise<LoadResult> {
 		// 0. 检查已取消
 		if (signal?.aborted) {
 			throw new DOMException('Aborted', 'AbortError');
@@ -108,12 +126,12 @@ export class ImageLoaderCore {
 		// 1. 检查缓存
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
-			
+
 			// 【性能优化】优先使用已缓存的尺寸，避免重复解码
 			let dimensions = this.blobCache.getDimensions(pageIndex);
 			if (dimensions === undefined) {
 				// 尚未缓存尺寸，异步获取并缓存
-				getImageDimensions(item.blob).then(dims => {
+				getImageDimensions(item.blob).then((dims) => {
 					this.blobCache.setDimensions(pageIndex, dims);
 					this.options.onDimensionsReady?.(pageIndex, dims);
 				});
@@ -122,8 +140,11 @@ export class ImageLoaderCore {
 				// 已有缓存，直接通知
 				this.options.onDimensionsReady?.(pageIndex, dimensions);
 			}
-			
-			logImageTrace(`cache-${pageIndex}`, 'cache hit', { pageIndex, hasDimensions: dimensions !== null });
+
+			logImageTrace(`cache-${pageIndex}`, 'cache hit', {
+				pageIndex,
+				hasDimensions: dimensions !== null
+			});
 			return {
 				url: item.url,
 				blob: item.blob,
@@ -174,128 +195,138 @@ export class ImageLoaderCore {
 	 * 执行实际加载
 	 * 【优化】先返回图片，异步获取尺寸，不阻塞显示
 	 */
-	private async executeLoad(pageIndex: number, priority: number, signal?: AbortSignal): Promise<LoadResult> {
+	private async executeLoad(
+		pageIndex: number,
+		priority: number,
+		signal?: AbortSignal
+	): Promise<LoadResult> {
 		return new Promise((resolve, reject) => {
-			this.loadQueue.enqueue(pageIndex, priority, async () => {
-				// 检查取消
-				if (signal?.aborted) {
-					reject(new DOMException('Aborted', 'AbortError'));
-					return;
-				}
-				
-				// 【架构优化】检查实例是否已失效
-				if (this.invalidated) {
-					reject(new Error('Loader invalidated'));
-					return;
-				}
-				
-				// 再次检查缓存（可能在排队时被加载）
-				if (this.blobCache.has(pageIndex)) {
-					const item = this.blobCache.get(pageIndex)!;
-					const isCurrentPage = priority === LoadPriority.CRITICAL;
-					
-					// 记录前端缓存命中到监控
-					if (isCurrentPage) {
-						pipelineLatencyStore.record({
-							timestamp: Date.now(),
-							pageIndex,
-							traceId: `cache-${pageIndex}`,
-							bookSyncMs: 0,
-							backendLoadMs: 0,
-							ipcTransferMs: 0,
-							blobCreateMs: 0,
-							totalMs: 0,
-							dataSize: item.blob.size,
-							cacheHit: true,  // 前端缓存命中
-							isCurrentPage: true,
-							source: 'cache'
-						});
-					}
-					
-					// 先返回，异步获取尺寸
-					resolve({
-						url: item.url,
-						blob: item.blob,
-						dimensions: null, // 先返回 null，异步获取
-						fromCache: true
-					});
-					// 异步获取尺寸并回调
-					if (!this.invalidated) {
-						getImageDimensions(item.blob).then(dimensions => {
-							if (!this.invalidated) {
-								this.options.onDimensionsReady?.(pageIndex, dimensions);
-							}
-						});
-					}
-					return;
-				}
-
-				try {
-					// 【关键】检查是否为视频页，视频不走这个加载流程（避免大文件通过 IPC 传输卡死）
-					const currentBook = bookStore.currentBook;
-					const page = currentBook?.pages?.[pageIndex];
-					const mediaName = page?.name || page?.innerPath || page?.path || '';
-					const isAnimatedVideoPage =
-						animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(mediaName);
-					if (page && (isVideoFile(mediaName) || isAnimatedVideoPage)) {
-						// 视频文件跳过预加载，由 VideoContainer 使用 convertFileSrc 加载
-						reject(new Error(`Video file skipped from preload: ${page.path}`));
-						return;
-					}
-
-					// 读取图片（使用 PageManager，后端自动缓存和预加载）
-					const isCurrentPage = priority === LoadPriority.CRITICAL;
-					const source = await readPageSourceV2(pageIndex, { 
-						updateLatencyTrace: isCurrentPage,
-						isCurrentPage  // 当前页触发后端预加载
-					});
-					
-					// 【架构优化】再次检查（读取可能耗时较长）
-					if (this.invalidated || signal?.aborted) {
+			this.loadQueue
+				.enqueue(pageIndex, priority, async () => {
+					// 检查取消
+					if (signal?.aborted) {
 						reject(new DOMException('Aborted', 'AbortError'));
 						return;
 					}
-					
-					if (source.kind === 'url') {
-						this.directUrlCache.set(pageIndex, source.url);
-						logImageTrace(source.traceId, 'url cached', { pageIndex, priority });
-						this.options.onImageReady?.(pageIndex, source.url);
-						resolve({
-							url: source.url,
-							blob: undefined,
-							dimensions: null,
-							fromCache: false
-						});
-						this.options.onDimensionsReady?.(pageIndex, null);
+
+					// 【架构优化】检查实例是否已失效
+					if (this.invalidated) {
+						reject(new Error('Loader invalidated'));
 						return;
 					}
 
-					const url = this.blobCache.set(pageIndex, source.blob);
-					logImageTrace(source.traceId, 'blob cached', { pageIndex, size: source.blob.size, priority });
+					// 再次检查缓存（可能在排队时被加载）
+					if (this.blobCache.has(pageIndex)) {
+						const item = this.blobCache.get(pageIndex)!;
+						const isCurrentPage = priority === LoadPriority.CRITICAL;
 
-					this.options.onImageReady?.(pageIndex, url, source.blob);
+						// 记录前端缓存命中到监控
+						if (isCurrentPage) {
+							pipelineLatencyStore.record({
+								timestamp: Date.now(),
+								pageIndex,
+								traceId: `cache-${pageIndex}`,
+								bookSyncMs: 0,
+								backendLoadMs: 0,
+								ipcTransferMs: 0,
+								blobCreateMs: 0,
+								totalMs: 0,
+								dataSize: item.blob.size,
+								cacheHit: true, // 前端缓存命中
+								isCurrentPage: true,
+								source: 'cache'
+							});
+						}
 
-					resolve({
-						url,
-						blob: source.blob,
-						dimensions: null,
-						fromCache: false
-					});
-
-					if (!this.invalidated) {
-						getImageDimensions(source.blob).then(dimensions => {
-							if (!this.invalidated) {
-								this.blobCache.setDimensions(pageIndex, dimensions);
-								this.options.onDimensionsReady?.(pageIndex, dimensions);
-							}
+						// 先返回，异步获取尺寸
+						resolve({
+							url: item.url,
+							blob: item.blob,
+							dimensions: null, // 先返回 null，异步获取
+							fromCache: true
 						});
+						// 异步获取尺寸并回调
+						if (!this.invalidated) {
+							getImageDimensions(item.blob).then((dimensions) => {
+								if (!this.invalidated) {
+									this.options.onDimensionsReady?.(pageIndex, dimensions);
+								}
+							});
+						}
+						return;
 					}
-				} catch (error) {
-					const err = error instanceof Error ? error : new Error(String(error));
-					this.options.onError?.(pageIndex, err);
-					reject(err);
-				}
-			}).catch(reject);
+
+					try {
+						// 【关键】检查是否为视频页，视频不走这个加载流程（避免大文件通过 IPC 传输卡死）
+						const currentBook = bookStore.currentBook;
+						const page = currentBook?.pages?.[pageIndex];
+						const mediaName = page?.name || page?.innerPath || page?.path || '';
+						const isAnimatedVideoPage =
+							animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(mediaName);
+						if (page && (isVideoFile(mediaName) || isAnimatedVideoPage)) {
+							// 视频文件跳过预加载，由 VideoContainer 使用 convertFileSrc 加载
+							reject(new Error(`Video file skipped from preload: ${page.path}`));
+							return;
+						}
+
+						// 读取图片（使用 PageManager，后端自动缓存和预加载）
+						const isCurrentPage = priority === LoadPriority.CRITICAL;
+						const source = await readPageSourceV2(pageIndex, {
+							updateLatencyTrace: isCurrentPage,
+							isCurrentPage // 当前页触发后端预加载
+						});
+
+						// 【架构优化】再次检查（读取可能耗时较长）
+						if (this.invalidated || signal?.aborted) {
+							reject(new DOMException('Aborted', 'AbortError'));
+							return;
+						}
+
+						if (source.kind === 'url') {
+							this.directUrlCache.set(pageIndex, source.url);
+							logImageTrace(source.traceId, 'url cached', { pageIndex, priority });
+							this.options.onImageReady?.(pageIndex, source.url);
+							resolve({
+								url: source.url,
+								blob: undefined,
+								dimensions: null,
+								fromCache: false
+							});
+							this.options.onDimensionsReady?.(pageIndex, null);
+							return;
+						}
+
+						const url = this.blobCache.set(pageIndex, source.blob);
+						logImageTrace(source.traceId, 'blob cached', {
+							pageIndex,
+							size: source.blob.size,
+							priority
+						});
+
+						this.options.onImageReady?.(pageIndex, url, source.blob);
+
+						resolve({
+							url,
+							blob: source.blob,
+							dimensions: null,
+							fromCache: false
+						});
+
+						if (!this.invalidated) {
+							getImageDimensions(source.blob).then((dimensions) => {
+								if (!this.invalidated) {
+									this.blobCache.setDimensions(pageIndex, dimensions);
+									this.options.onDimensionsReady?.(pageIndex, dimensions);
+								}
+							});
+						}
+					} catch (error) {
+						const err = error instanceof Error ? error : new Error(String(error));
+						this.options.onError?.(pageIndex, err);
+						reject(err);
+					}
+				})
+				.catch(reject);
 		});
 	}
 
@@ -306,14 +337,14 @@ export class ImageLoaderCore {
 	 */
 	async loadCurrentPage(): Promise<LoadResult> {
 		const pageIndex = bookStore.currentPageIndex;
-		
+
 		// 如果缓存中有，立即返回
 		if (this.blobCache.has(pageIndex)) {
 			const item = this.blobCache.get(pageIndex)!;
 			console.log(`⚡ 快速显示缓存: 页码 ${pageIndex + 1}`);
 			// 更新延迟追踪（缓存命中）
 			updateCacheHitLatencyTrace(item.blob, pageIndex);
-			
+
 			// 【性能优化】使用缓存的尺寸，避免重复解码
 			let dimensions = this.blobCache.getDimensions(pageIndex);
 			if (dimensions === undefined) {
@@ -322,7 +353,7 @@ export class ImageLoaderCore {
 			} else if (dimensions !== null) {
 				this.options.onDimensionsReady?.(pageIndex, dimensions);
 			}
-			
+
 			// 【关键】通知缩略图服务主图已就绪
 			return {
 				url: item.url,
@@ -346,10 +377,10 @@ export class ImageLoaderCore {
 	private async schedulePreDecode(pageIndex: number): Promise<void> {
 		// 检查是否已有 bitmap
 		if (this.blobCache.getBitmap(pageIndex)) return;
-		
+
 		const blob = this.blobCache.getBlob(pageIndex);
 		if (!blob) return;
-		
+
 		try {
 			const bitmap = await createImageBitmap(blob);
 			if (!this.invalidated && this.blobCache.has(pageIndex)) {
@@ -377,7 +408,7 @@ export class ImageLoaderCore {
 		}
 
 		let blob: Blob;
-		
+
 		// 【优化】如果 Blob 已在缓存中，直接使用，不经过队列
 		if (this.blobCache.has(pageIndex)) {
 			const cached = this.blobCache.get(pageIndex);
@@ -399,7 +430,7 @@ export class ImageLoaderCore {
 			}
 			blob = result.blob;
 		}
-		
+
 		// 创建缩略图（前端 canvas 缩放）
 		const dataURL = await createThumbnailDataURL(blob);
 		this.thumbnailCache.set(pageIndex, dataURL);
@@ -517,15 +548,13 @@ export class ImageLoaderCore {
 		// 并行加载（限制并发）
 		const concurrency = Math.min(4, missing.length);
 		const chunks: number[][] = [];
-		
+
 		for (let i = 0; i < missing.length; i += concurrency) {
 			chunks.push(missing.slice(i, i + concurrency));
 		}
 
 		for (const chunk of chunks) {
-			await Promise.allSettled(
-				chunk.map(idx => this.loadPage(idx, LoadPriority.NORMAL))
-			);
+			await Promise.allSettled(chunk.map((idx) => this.loadPage(idx, LoadPriority.NORMAL)));
 		}
 	}
 
@@ -631,14 +660,14 @@ export function getImageLoaderCore(options?: ImageLoaderCoreOptions): ImageLoade
 	if (options) {
 		savedOptions = options;
 	}
-	
+
 	// 初始化实例池
 	if (instancePool.length === 0) {
 		for (let i = 0; i < POOL_SIZE; i++) {
 			instancePool.push(new ImageLoaderCore(savedOptions));
 		}
 	}
-	
+
 	return instancePool[currentIndex];
 }
 
@@ -648,23 +677,23 @@ export function getImageLoaderCore(options?: ImageLoaderCoreOptions): ImageLoade
  */
 export function switchToNextInstance(): ImageLoaderCore {
 	const oldInstance = instancePool[currentIndex];
-	
+
 	// 标记旧实例失效
 	oldInstance.invalidate();
-	
+
 	// 切换到下一个实例
 	currentIndex = (currentIndex + 1) % POOL_SIZE;
 	const newInstance = instancePool[currentIndex];
-	
+
 	// 确保新实例是干净的
 	newInstance.reset();
-	
+
 	// 异步清理旧实例（不阻塞）
 	setTimeout(() => {
 		oldInstance.clearCache();
 		console.log('📦 旧实例缓存已清理');
 	}, 100);
-	
+
 	console.log(`📦 切换到实例 ${currentIndex}`);
 	return newInstance;
 }

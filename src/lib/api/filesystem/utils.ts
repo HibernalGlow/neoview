@@ -12,25 +12,25 @@ import { invoke } from '@tauri-apps/api/core';
  * @param maxRetries 最大重试次数
  */
 export async function invokeWithRetry<T>(
-  cmd: string,
-  args: Record<string, unknown>,
-  maxRetries = 2
+	cmd: string,
+	args: Record<string, unknown>,
+	maxRetries = 2
 ): Promise<T> {
-  let lastError: Error | null = null;
-  for (let i = 0; i <= maxRetries; i++) {
-    try {
-      return await invoke<T>(cmd, args);
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
-      // 如果是 IPC 连接错误，等待后重试
-      if (i < maxRetries && lastError.message.includes('Failed to fetch')) {
-        await new Promise(r => setTimeout(r, 50 * (i + 1)));
-        continue;
-      }
-      throw lastError;
-    }
-  }
-  throw lastError;
+	let lastError: Error | null = null;
+	for (let i = 0; i <= maxRetries; i++) {
+		try {
+			return await invoke<T>(cmd, args);
+		} catch (e) {
+			lastError = e instanceof Error ? e : new Error(String(e));
+			// 如果是 IPC 连接错误，等待后重试
+			if (i < maxRetries && lastError.message.includes('Failed to fetch')) {
+				await new Promise((r) => setTimeout(r, 50 * (i + 1)));
+				continue;
+			}
+			throw lastError;
+		}
+	}
+	throw lastError;
 }
 
 /**
@@ -38,22 +38,22 @@ export async function invokeWithRetry<T>(
  * @param filePath 文件路径
  */
 export function getMimeTypeFromPath(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-  const mimeTypes: Record<string, string> = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'avif': 'image/avif',
-    'bmp': 'image/bmp',
-    'ico': 'image/x-icon',
-    'tiff': 'image/tiff',
-    'tif': 'image/tiff',
-    'svg': 'image/svg+xml',
-    'jxl': 'image/png', // JXL 在后端已转换为 PNG
-  };
-  return mimeTypes[ext] || 'image/jpeg'; // 默认 JPEG
+	const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+	const mimeTypes: Record<string, string> = {
+		jpg: 'image/jpeg',
+		jpeg: 'image/jpeg',
+		png: 'image/png',
+		gif: 'image/gif',
+		webp: 'image/webp',
+		avif: 'image/avif',
+		bmp: 'image/bmp',
+		ico: 'image/x-icon',
+		tiff: 'image/tiff',
+		tif: 'image/tiff',
+		svg: 'image/svg+xml',
+		jxl: 'image/png' // JXL 在后端已转换为 PNG
+	};
+	return mimeTypes[ext] || 'image/jpeg'; // 默认 JPEG
 }
 
 /**
@@ -61,10 +61,10 @@ export function getMimeTypeFromPath(filePath: string): string {
  * @param base64 Base64 编码的字符串
  */
 export function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
+	const binaryString = atob(base64);
+	const bytes = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes.buffer;
 }

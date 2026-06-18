@@ -201,4 +201,3 @@ export const DEFAULT_DATA_MODULES: DataModuleRow[] = [
 		icon: Cpu
 	}
 ];
-

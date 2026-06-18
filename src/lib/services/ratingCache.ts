@@ -84,7 +84,9 @@ class RatingCache {
 		if (uncachedKeys.length === 0) return result;
 
 		try {
-			const dbData = await invoke<Record<string, string | null>>('batch_get_rating_data', { paths: uncachedKeys });
+			const dbData = await invoke<Record<string, string | null>>('batch_get_rating_data', {
+				paths: uncachedKeys
+			});
 			for (const key of uncachedKeys) {
 				const json = dbData[key];
 				const data = parseRatingData(json);
@@ -124,14 +126,14 @@ class RatingCache {
 
 	invalidate(pathKey: string) {
 		this.cache.delete(pathKey);
-		this.accessOrder = this.accessOrder.filter(k => k !== pathKey);
+		this.accessOrder = this.accessOrder.filter((k) => k !== pathKey);
 	}
 
 	invalidateByPrefix(prefix: string) {
 		for (const key of this.cache.keys()) {
 			if (key.startsWith(prefix)) this.cache.delete(key);
 		}
-		this.accessOrder = this.accessOrder.filter(k => !k.startsWith(prefix));
+		this.accessOrder = this.accessOrder.filter((k) => !k.startsWith(prefix));
 	}
 
 	/**
@@ -163,7 +165,11 @@ export function getSortableRating(info: RatingInfo, defaultValue = 0): number {
 	return info.effectiveRating ?? defaultValue;
 }
 
-export async function compareByRating(pathA: string, pathB: string, ascending = false): Promise<number> {
+export async function compareByRating(
+	pathA: string,
+	pathB: string,
+	ascending = false
+): Promise<number> {
 	const ratings = await ratingCache.batchGetRatings([pathA, pathB]);
 	const ratingA = getSortableRating(ratings.get(pathA) || {});
 	const ratingB = getSortableRating(ratings.get(pathB) || {});

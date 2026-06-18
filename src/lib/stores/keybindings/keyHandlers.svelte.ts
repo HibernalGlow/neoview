@@ -11,7 +11,7 @@ import type {
 	BindingContext,
 	ActionBinding,
 	ViewArea,
-	MatchResult,
+	MatchResult
 } from './types';
 import { getContextPriority } from './constants';
 
@@ -173,20 +173,11 @@ export function findActionByAreaClickInContext(
 	return findActionByInputWithContext(bindings, activeContexts, (input) => {
 		if (input.type !== 'area') return false;
 		const a = input as AreaClick;
-		return (
-			a.area === area &&
-			(a.button || 'left') === button &&
-			(a.action || 'click') === action
-		);
+		return a.area === area && (a.button || 'left') === button && (a.action || 'click') === action;
 	});
 }
 
-export function calculateClickArea(
-	x: number,
-	y: number,
-	width: number,
-	height: number
-): ViewArea {
+export function calculateClickArea(x: number, y: number, width: number, height: number): ViewArea {
 	const topThird = height / 3;
 	const bottomThird = (height * 2) / 3;
 	const isTop = y < topThird;

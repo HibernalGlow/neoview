@@ -39,14 +39,14 @@ export function findParentLayerIndex(layers: FolderLayer[], targetPath: string):
  */
 export function findChildLayerIndex(layers: FolderLayer[], targetPath: string): number {
 	const normalizedTarget = normalizePath(targetPath);
-	
+
 	for (let i = 0; i < layers.length; i++) {
 		const layerPath = normalizePath(layers[i].path);
 		if (layerPath.startsWith(normalizedTarget + '/')) {
 			return i;
 		}
 	}
-	
+
 	return -1;
 }
 
@@ -54,7 +54,7 @@ export function findChildLayerIndex(layers: FolderLayer[], targetPath: string): 
  * 查找目标路径在 layers 中的精确匹配索引
  */
 export function findExactLayerIndex(layers: FolderLayer[], targetPath: string): number {
-	return layers.findIndex(l => normalizePath(l.path) === normalizePath(targetPath));
+	return layers.findIndex((l) => normalizePath(l.path) === normalizePath(targetPath));
 }
 
 /**
@@ -67,14 +67,14 @@ export function getPathsToPreload(layers: FolderLayer[], topLayerPath: string): 
 
 	// 检查父目录是否已经在 layers 中
 	const normalizedParent = normalizePath(parentPath);
-	const alreadyLoaded = layers.some(l => normalizePath(l.path) === normalizedParent);
+	const alreadyLoaded = layers.some((l) => normalizePath(l.path) === normalizedParent);
 	if (alreadyLoaded) return [];
 
 	// 获取父目录路径列表
 	const parentPaths = getParentPaths(topLayerPath, PRELOAD_PARENT_COUNT);
 
 	// 过滤掉已经加载的路径
-	return parentPaths.filter(p => !layers.some(l => normalizePath(l.path) === normalizePath(p)));
+	return parentPaths.filter((p) => !layers.some((l) => normalizePath(l.path) === normalizePath(p)));
 }
 
 /**
@@ -90,7 +90,10 @@ export type HistoryNavAction =
  * 分析历史导航应该执行的操作
  * 不包含实际的层创建逻辑，只返回决策结果
  */
-export function analyzeHistoryNavigation(layers: FolderLayer[], targetPath: string): HistoryNavAction {
+export function analyzeHistoryNavigation(
+	layers: FolderLayer[],
+	targetPath: string
+): HistoryNavAction {
 	// 1. 在现有 layers 中查找目标路径（精确匹配）
 	const targetIndex = findExactLayerIndex(layers, targetPath);
 	if (targetIndex !== -1) {

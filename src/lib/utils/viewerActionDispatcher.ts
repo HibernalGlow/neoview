@@ -8,9 +8,7 @@
  */
 export function dispatchViewerAction(action: string): void {
 	if (typeof window !== 'undefined') {
-		window.dispatchEvent(
-			new CustomEvent('neoview-viewer-action', { detail: { action } })
-		);
+		window.dispatchEvent(new CustomEvent('neoview-viewer-action', { detail: { action } }));
 	}
 }
 
@@ -31,7 +29,7 @@ export const VIDEO_ACTIONS = [
 	'videoSeekModeToggle'
 ] as const;
 
-export type VideoAction = typeof VIDEO_ACTIONS[number];
+export type VideoAction = (typeof VIDEO_ACTIONS)[number];
 
 /**
  * 检查是否是视频操作
@@ -80,7 +78,7 @@ export const SLIDESHOW_ACTIONS = [
 	'slideshowSkip'
 ] as const;
 
-export type SlideshowAction = typeof SLIDESHOW_ACTIONS[number];
+export type SlideshowAction = (typeof SLIDESHOW_ACTIONS)[number];
 
 /**
  * 检查是否是幻灯片操作

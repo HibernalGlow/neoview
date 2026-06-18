@@ -129,7 +129,7 @@
 <!-- 自动隐藏模式下的触发区域 -->
 {#if autoHide && !isVisible}
 	<div
-		class="fixed z-40 hover:bg-primary/10 transition-colors {triggerPositionClass}"
+		class="hover:bg-primary/10 fixed z-40 transition-colors {triggerPositionClass}"
 		onmouseenter={handleMouseEnter}
 		role="presentation"
 		aria-label="显示工具栏"
@@ -145,7 +145,7 @@
 	tabindex="0"
 >
 	<div
-		class="bg-background/95 backdrop-blur-sm border shadow-lg {isHorizontal
+		class="bg-background/95 border shadow-lg backdrop-blur-sm {isHorizontal
 			? position === 'top'
 				? 'border-b'
 				: 'border-t'
@@ -155,8 +155,8 @@
 	>
 		<div
 			class="flex items-center {isHorizontal
-				? 'flex-row h-12 px-4 gap-4'
-				: 'flex-col w-12 py-4 gap-4'}"
+				? 'h-12 flex-row gap-4 px-4'
+				: 'w-12 flex-col gap-4 py-4'}"
 		>
 			{#if children}
 				{@render children()}

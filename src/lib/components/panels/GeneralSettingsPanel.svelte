@@ -128,145 +128,155 @@
 		</Tabs.List>
 
 		<Tabs.Content value="basic" class="mt-3 space-y-3">
-		<!-- 语言设置 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">语言</Label>
-			<NativeSelect class="h-8 w-full max-w-xs text-xs" value="zh-CN">
-				<NativeSelectOption value="zh-CN">简体中文</NativeSelectOption>
-				<NativeSelectOption value="en-US">English</NativeSelectOption>
-				<NativeSelectOption value="ja-JP">日本語</NativeSelectOption>
-			</NativeSelect>
-		</div>
+			<!-- 语言设置 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">语言</Label>
+				<NativeSelect class="h-8 w-full max-w-xs text-xs" value="zh-CN">
+					<NativeSelectOption value="zh-CN">简体中文</NativeSelectOption>
+					<NativeSelectOption value="en-US">English</NativeSelectOption>
+					<NativeSelectOption value="ja-JP">日本語</NativeSelectOption>
+				</NativeSelect>
+			</div>
 
-		<!-- 主题设置 -->
-		<div class="space-y-2">
-			<Label class="text-sm font-semibold">主题</Label>
-			<NativeSelect class="w-full max-w-xs" value="auto">
-				<NativeSelectOption value="light">浅色</NativeSelectOption>
-				<NativeSelectOption value="dark">深色</NativeSelectOption>
-				<NativeSelectOption value="auto">跟随系统</NativeSelectOption>
-			</NativeSelect>
-		</div>
+			<!-- 主题设置 -->
+			<div class="space-y-2">
+				<Label class="text-sm font-semibold">主题</Label>
+				<NativeSelect class="w-full max-w-xs" value="auto">
+					<NativeSelectOption value="light">浅色</NativeSelectOption>
+					<NativeSelectOption value="dark">深色</NativeSelectOption>
+					<NativeSelectOption value="auto">跟随系统</NativeSelectOption>
+				</NativeSelect>
+			</div>
 		</Tabs.Content>
 
 		<Tabs.Content value="startup" class="mt-3 space-y-3">
-		<!-- 启动设置 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">启动行为</Label>
-			<label class="flex items-center justify-between gap-2">
-				<span class="text-xs">启动时打开上次的文件</span>
-				<button
-					type="button"
-					class="cursor-pointer"
-					onclick={() =>
-						settingsManager.updateNestedSettings('startup', {
-							openLastFile: !currentSettings.startup.openLastFile
-						})}
-				>
-					<Checkbox
-						checked={currentSettings.startup.openLastFile}
-						aria-label="启动时打开上次的文件"
-						class="h-4 w-4"
-					/>
-				</button>
-			</label>
-			<label class="flex items-center justify-between gap-2">
-				<span class="text-xs">最小化到系统托盘</span>
-				<button
-					type="button"
-					class="cursor-pointer"
-					onclick={() =>
-						settingsManager.updateNestedSettings('startup', {
-							minimizeToTray: !currentSettings.startup.minimizeToTray
-						})}
-				>
-					<Checkbox
-						checked={currentSettings.startup.minimizeToTray}
-						aria-label="最小化到系统托盘"
-						class="h-4 w-4"
-					/>
-				</button>
-			</label>
-			<label class="flex items-center justify-between gap-2">
-				<span class="text-xs">启动时恢复上次浏览的文件夹</span>
-				<button
-					type="button"
-					class="cursor-pointer"
-					onclick={() =>
-						settingsManager.updateNestedSettings('startup', {
-							openLastFolder: !currentSettings.startup.openLastFolder
-						})}
-				>
-					<Checkbox
-						checked={currentSettings.startup.openLastFolder}
-						aria-label="启动时恢复上次浏览的文件夹"
-						class="h-4 w-4"
-					/>
-				</button>
-			</label>
-		</div>
+			<!-- 启动设置 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">启动行为</Label>
+				<label class="flex items-center justify-between gap-2">
+					<span class="text-xs">启动时打开上次的文件</span>
+					<button
+						type="button"
+						class="cursor-pointer"
+						onclick={() =>
+							settingsManager.updateNestedSettings('startup', {
+								openLastFile: !currentSettings.startup.openLastFile
+							})}
+					>
+						<Checkbox
+							checked={currentSettings.startup.openLastFile}
+							aria-label="启动时打开上次的文件"
+							class="h-4 w-4"
+						/>
+					</button>
+				</label>
+				<label class="flex items-center justify-between gap-2">
+					<span class="text-xs">最小化到系统托盘</span>
+					<button
+						type="button"
+						class="cursor-pointer"
+						onclick={() =>
+							settingsManager.updateNestedSettings('startup', {
+								minimizeToTray: !currentSettings.startup.minimizeToTray
+							})}
+					>
+						<Checkbox
+							checked={currentSettings.startup.minimizeToTray}
+							aria-label="最小化到系统托盘"
+							class="h-4 w-4"
+						/>
+					</button>
+				</label>
+				<label class="flex items-center justify-between gap-2">
+					<span class="text-xs">启动时恢复上次浏览的文件夹</span>
+					<button
+						type="button"
+						class="cursor-pointer"
+						onclick={() =>
+							settingsManager.updateNestedSettings('startup', {
+								openLastFolder: !currentSettings.startup.openLastFolder
+							})}
+					>
+						<Checkbox
+							checked={currentSettings.startup.openLastFolder}
+							aria-label="启动时恢复上次浏览的文件夹"
+							class="h-4 w-4"
+						/>
+					</button>
+				</label>
+			</div>
 		</Tabs.Content>
 
 		<Tabs.Content value="integration" class="mt-3 space-y-3">
-		<!-- 资源管理器集成 -->
-		<div class="space-y-1.5">
-			<div class="flex items-center gap-2">
-				<FolderOpen class="h-3.5 w-3.5 text-muted-foreground" />
-				<Label class="text-xs font-bold">资源管理器集成</Label>
+			<!-- 资源管理器集成 -->
+			<div class="space-y-1.5">
+				<div class="flex items-center gap-2">
+					<FolderOpen class="text-muted-foreground h-3.5 w-3.5" />
+					<Label class="text-xs font-bold">资源管理器集成</Label>
+				</div>
+				<div class="space-y-1">
+					<label class="flex items-center justify-between gap-2">
+						<span class="text-xs">添加“在 NeoView 中打开”右键菜单</span>
+						<Switch
+							bind:checked={explorerContextMenuEnabled}
+							disabled={explorerContextMenuLoading}
+							class="scale-75"
+						/>
+					</label>
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-muted-foreground text-[10px]">可下载 .reg 手动导入注册表</span>
+						<Button
+							variant="outline"
+							size="sm"
+							class="h-7 text-[10px]"
+							onclick={downloadExplorerContextMenuReg}
+						>
+							导出 .reg
+						</Button>
+					</div>
+				</div>
 			</div>
-			<div class="space-y-1">
-				<label class="flex items-center justify-between gap-2">
-					<span class="text-xs">添加“在 NeoView 中打开”右键菜单</span>
-					<Switch
-						bind:checked={explorerContextMenuEnabled}
-						disabled={explorerContextMenuLoading}
-						class="scale-75"
-					/>
-				</label>
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-[10px] text-muted-foreground">可下载 .reg 手动导入注册表</span>
-					<Button variant="outline" size="sm" class="h-7 text-[10px]" onclick={downloadExplorerContextMenuReg}>
-						导出 .reg
+
+			<!-- 缩略图目录 -->
+			<div class="space-y-1.5">
+				<div class="flex items-center gap-2">
+					<FolderOpen class="text-muted-foreground h-3.5 w-3.5" />
+					<Label class="text-xs font-bold">缩略图目录</Label>
+				</div>
+				<div class="flex items-center gap-2">
+					<div class="flex-1 truncate rounded-md border px-2 py-0.5 text-[10px]">
+						{getThumbnailDirectoryLabel()}
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						class="h-7 gap-1 px-2 text-[10px]"
+						onclick={selectThumbnailDirectory}
+					>
+						<FolderOpen class="h-3.5 w-3.5" />
+						选择
 					</Button>
 				</div>
 			</div>
-		</div>
 
-		<!-- 缩略图目录 -->
-		<div class="space-y-1.5">
-			<div class="flex items-center gap-2">
-				<FolderOpen class="h-3.5 w-3.5 text-muted-foreground" />
-				<Label class="text-xs font-bold">缩略图目录</Label>
-			</div>
-			<div class="flex items-center gap-2">
-				<div class="flex-1 truncate rounded-md border px-2 py-0.5 text-[10px]">
-					{getThumbnailDirectoryLabel()}
+			<!-- 文件关联 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">文件关联</Label>
+				<div class="space-y-1">
+					<label class="flex items-center justify-between gap-2">
+						<span class="text-xs">图像文件</span>
+						<Checkbox checked aria-label="图像文件" class="h-4 w-4" />
+					</label>
+					<label class="flex items-center justify-between gap-2">
+						<span class="text-xs">压缩包</span>
+						<Checkbox checked aria-label="压缩包" class="h-4 w-4" />
+					</label>
+					<label class="flex items-center justify-between gap-2">
+						<span class="text-xs">PDF 文件</span>
+						<Checkbox aria-label="PDF 文件" class="h-4 w-4" />
+					</label>
 				</div>
-				<Button variant="outline" size="sm" class="h-7 gap-1 px-2 text-[10px]" onclick={selectThumbnailDirectory}>
-					<FolderOpen class="h-3.5 w-3.5" />
-					选择
-				</Button>
 			</div>
-		</div>
-
-		<!-- 文件关联 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">文件关联</Label>
-			<div class="space-y-1">
-				<label class="flex items-center justify-between gap-2">
-					<span class="text-xs">图像文件</span>
-					<Checkbox checked aria-label="图像文件" class="h-4 w-4" />
-				</label>
-				<label class="flex items-center justify-between gap-2">
-					<span class="text-xs">压缩包</span>
-					<Checkbox checked aria-label="压缩包" class="h-4 w-4" />
-				</label>
-				<label class="flex items-center justify-between gap-2">
-					<span class="text-xs">PDF 文件</span>
-					<Checkbox aria-label="PDF 文件" class="h-4 w-4" />
-				</label>
-			</div>
-		</div>
 		</Tabs.Content>
 	</Tabs.Root>
 </div>

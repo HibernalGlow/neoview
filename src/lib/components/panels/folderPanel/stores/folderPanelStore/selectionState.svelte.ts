@@ -22,76 +22,80 @@ export const showMigrationBar = derived(state, ($s) => $s.showMigrationBar);
 // ============ Selection Actions ============
 
 export function selectItem(path: string, toggle = false) {
-state.update((s) => {
-const newSelected = new Set<string>(s.selectedItems);
-if (toggle) {
-if (newSelected.has(path)) {
-newSelected.delete(path);
-} else {
-newSelected.add(path);
-}
-} else {
-newSelected.clear();
-newSelected.add(path);
-}
-return { ...s, selectedItems: newSelected };
-});
+	state.update((s) => {
+		const newSelected = new Set<string>(s.selectedItems);
+		if (toggle) {
+			if (newSelected.has(path)) {
+				newSelected.delete(path);
+			} else {
+				newSelected.add(path);
+			}
+		} else {
+			newSelected.clear();
+			newSelected.add(path);
+		}
+		return { ...s, selectedItems: newSelected };
+	});
 }
 
 export function selectAll() {
-state.update((s) => {
-const newSelected = new Set<string>(s.items.map((item) => item.path));
-return { ...s, selectedItems: newSelected };
-});
+	state.update((s) => {
+		const newSelected = new Set<string>(s.items.map((item) => item.path));
+		return { ...s, selectedItems: newSelected };
+	});
 }
 
 export function deselectAll() {
-state.update((s) => ({ ...s, selectedItems: new Set<string>() }));
+	state.update((s) => ({ ...s, selectedItems: new Set<string>() }));
 }
 
 export function setFocusedItem(item: FsItem | null) {
-state.update((s) => ({ ...s, focusedItem: item }));
+	state.update((s) => ({ ...s, focusedItem: item }));
 }
 
 // ============ Mode Actions ============
 
 export function toggleMultiSelectMode() {
-state.update((s) => ({ ...s, multiSelectMode: !s.multiSelectMode }));
+	state.update((s) => ({ ...s, multiSelectMode: !s.multiSelectMode }));
 }
 
 export function toggleDeleteMode() {
-state.update((s) => ({ ...s, deleteMode: !s.deleteMode }));
+	state.update((s) => ({ ...s, deleteMode: !s.deleteMode }));
 }
 
 // ============ Search Actions ============
 
 export function setSearchKeyword(keyword: string) {
-state.update((s) => ({ ...s, searchKeyword: keyword }));
+	state.update((s) => ({ ...s, searchKeyword: keyword }));
 }
 
 export function setSearchResults(results: FsItem[]) {
-state.update((s) => ({ ...s, searchResults: results }));
+	state.update((s) => ({ ...s, searchResults: results }));
 }
 
 export function setIsSearching(searching: boolean) {
-state.update((s) => ({ ...s, isSearching: searching }));
+	state.update((s) => ({ ...s, isSearching: searching }));
 }
 
 export function clearSearch() {
-state.update((s) => ({ ...s, searchKeyword: '', searchResults: [], isSearching: false }));
+	state.update((s) => ({ ...s, searchKeyword: '', searchResults: [], isSearching: false }));
 }
 
-export function setSearchSettings(settings: { includeSubfolders?: boolean; showHistoryOnFocus?: boolean; searchInPath?: boolean }) {
-state.update((s) => ({
-...s,
-searchSettings: { ...s.searchSettings, ...settings }
-}));
+export function setSearchSettings(settings: {
+	includeSubfolders?: boolean;
+	showHistoryOnFocus?: boolean;
+	searchInPath?: boolean;
+}) {
+	state.update((s) => ({
+		...s,
+		searchSettings: { ...s.searchSettings, ...settings }
+	}));
 }
 
 export function toggleShowSearchBar() {
-state.update((s) => ({ ...s, showSearchBar: !s.showSearchBar }));
+	state.update((s) => ({ ...s, showSearchBar: !s.showSearchBar }));
 }
 
 export function toggleShowMigrationBar() {
-state.update((s) => ({ ...s, showMigrationBar: !s.showMigrationBar }));
+	state.update((s) => ({ ...s, showMigrationBar: !s.showMigrationBar }));
 }

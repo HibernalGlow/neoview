@@ -1,13 +1,12 @@
-
 import {
 	type RowData,
 	type TableOptions,
 	type TableOptionsResolved,
 	type TableState,
-	createTable,
-} from "@tanstack/table-core";
+	createTable
+} from '@tanstack/table-core';
 
-const MERGE_SOURCES_SYMBOL = Symbol("MERGE_SOURCES");
+const MERGE_SOURCES_SYMBOL = Symbol('MERGE_SOURCES');
 
 /**
  * Creates a reactive TanStack table object for Svelte.
@@ -19,18 +18,12 @@ export function createSvelteTable<TData extends RowData>(options: TableOptions<T
 		state: {},
 		onStateChange() {},
 		renderFallbackValue: null,
-		mergeOptions: (
-			defaultOptions: TableOptions<TData>,
-			options: Partial<TableOptions<TData>>
-		) => {
+		mergeOptions: (defaultOptions: TableOptions<TData>, options: Partial<TableOptions<TData>>) => {
 			return mergeObjects(defaultOptions, options);
-		},
+		}
 	};
 
-	const resolvedOptions: TableOptionsResolved<TData> = mergeObjects(
-		baseDefaults,
-		options
-	);
+	const resolvedOptions: TableOptionsResolved<TData> = mergeObjects(baseDefaults, options);
 
 	const table = createTable(resolvedOptions);
 	let state = $state<Partial<TableState>>(table.initialState);
@@ -48,7 +41,7 @@ export function createSvelteTable<TData extends RowData>(options: TableOptions<T
 					else state = mergeObjects(state, updater);
 
 					options.onStateChange?.(updater);
-				},
+				}
 			});
 		});
 	}
@@ -79,7 +72,7 @@ export function mergeObjects<Sources extends readonly MaybeThunk<object>[]>(
 	// 【性能优化】打平嵌套的 mergeObjects 生成的代理
 	const flatSources: MaybeThunk<object>[] = [];
 	for (const s of sources) {
-		if (s && typeof s === "object" && MERGE_SOURCES_SYMBOL in s) {
+		if (s && typeof s === 'object' && MERGE_SOURCES_SYMBOL in s) {
 			flatSources.push(...(s[MERGE_SOURCES_SYMBOL as keyof typeof s] as MaybeThunk<object>[]));
 		} else {
 			flatSources.push(s);
@@ -87,10 +80,10 @@ export function mergeObjects<Sources extends readonly MaybeThunk<object>[]>(
 	}
 
 	const resolve = <T extends object>(src: MaybeThunk<T>): T | undefined =>
-		typeof src === "function" ? (src() ?? undefined) : src;
+		typeof src === 'function' ? (src() ?? undefined) : src;
 
 	// 【性能优化】缓存查找结果，避免在一次操作中反复线性查找
-	// 注意：此处必须使用标准 Map 而非 SvelteMap，因为在 Proxy get 中写入 
+	// 注意：此处必须使用标准 Map 而非 SvelteMap，因为在 Proxy get 中写入
 	// 响应式状态会导致无限循环 (effect_update_depth_exceeded)
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	const lookupCache = new Map<PropertyKey, object | undefined>();
@@ -143,8 +136,8 @@ export function mergeObjects<Sources extends readonly MaybeThunk<object>[]>(
 				configurable: true,
 				enumerable: true,
 				value: (src as Record<PropertyKey, unknown>)[key],
-				writable: true,
+				writable: true
 			};
-		},
+		}
 	}) as Intersection<{ [K in keyof Sources]: Sources[K] }>;
 }

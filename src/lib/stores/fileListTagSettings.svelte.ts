@@ -61,7 +61,7 @@ class FileListTagSettingsStore {
 			this._mode = mode;
 			saveMode(mode);
 			// 通知订阅者
-			this._subscribers.forEach(cb => cb(mode));
+			this._subscribers.forEach((cb) => cb(mode));
 		}
 	}
 
@@ -93,9 +93,12 @@ class FileListTagSettingsStore {
 	getModeLabel(mode?: FileListTagDisplayMode): string {
 		const m = mode ?? this._mode;
 		switch (m) {
-			case 'all': return '全部';
-			case 'collect': return '收藏';
-			case 'none': return '隐藏';
+			case 'all':
+				return '全部';
+			case 'collect':
+				return '收藏';
+			case 'none':
+				return '隐藏';
 		}
 	}
 
@@ -105,9 +108,12 @@ class FileListTagSettingsStore {
 	getModeDescription(mode?: FileListTagDisplayMode): string {
 		const m = mode ?? this._mode;
 		switch (m) {
-			case 'all': return '显示所有标签';
-			case 'collect': return '仅显示收藏的标签';
-			case 'none': return '不显示标签';
+			case 'all':
+				return '显示所有标签';
+			case 'collect':
+				return '仅显示收藏的标签';
+			case 'none':
+				return '不显示标签';
 		}
 	}
 }

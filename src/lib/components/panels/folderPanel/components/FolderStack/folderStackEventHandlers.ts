@@ -36,7 +36,7 @@ export interface ChainSelectResult {
 
 /**
  * 处理链选逻辑
- * 
+ *
  * @param ctx 选择上下文
  * @param currentIndex 当前点击的索引
  * @param itemPath 当前点击项的路径
@@ -108,7 +108,7 @@ export function handleChainSelect(
 
 /**
  * 处理范围选择（Shift + 点击）
- * 
+ *
  * @param displayItems 显示的项目列表
  * @param selectedItems 当前选中的项目
  * @param anchorIndex 锚点索引（最后一次选择的位置）
@@ -141,15 +141,12 @@ export type EmptyClickAction = 'none' | 'goUp' | 'goBack';
 
 /**
  * 判断是否应该响应空白区域点击
- * 
+ *
  * @param action 用户设置的点击行为
  * @param isVirtualPath 当前路径是否为虚拟路径
  * @returns 是否应该执行导航
  */
-export function shouldHandleEmptyClick(
-	action: EmptyClickAction,
-	isVirtualPath: boolean
-): boolean {
+export function shouldHandleEmptyClick(action: EmptyClickAction, isVirtualPath: boolean): boolean {
 	// 虚拟路径模式下不响应
 	if (isVirtualPath) return false;
 	// 无操作模式下不响应
@@ -167,7 +164,7 @@ export interface PenetrationResult {
 
 /**
  * 尝试穿透单文件文件夹
- * 
+ *
  * @param children 文件夹的子项
  * @returns 穿透结果
  */

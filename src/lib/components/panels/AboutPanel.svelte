@@ -50,8 +50,8 @@
 		</BoxReveal>
 
 		<BoxReveal duration={0.5} boxColor="var(--color-primary)">
-			<div class="flex items-center gap-2 text-sm text-muted-foreground">
-				<Sparkles class="h-4 w-4 text-primary" />
+			<div class="text-muted-foreground flex items-center gap-2 text-sm">
+				<Sparkles class="text-primary h-4 w-4" />
 				<span>版本 {version}</span>
 			</div>
 		</BoxReveal>
@@ -85,8 +85,8 @@
 			</h3>
 			<div class="grid grid-cols-2 gap-2">
 				{#each features as feature}
-					<div class="flex items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-sm">
-						<span class="h-1.5 w-1.5 rounded-full bg-primary"></span>
+					<div class="bg-secondary/50 flex items-center gap-2 rounded-lg px-3 py-2 text-sm">
+						<span class="bg-primary h-1.5 w-1.5 rounded-full"></span>
 						{feature}
 					</div>
 				{/each}
@@ -110,7 +110,7 @@
 
 	<!-- 版权信息 -->
 	<BoxReveal duration={0.5} boxColor="var(--color-primary)">
-		<p class="border-t pt-4 text-xs text-muted-foreground">
+		<p class="text-muted-foreground border-t pt-4 text-xs">
 			© 2024-2025 HibernalGlow. 基于 MIT 许可证开源。
 		</p>
 	</BoxReveal>

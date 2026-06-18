@@ -1,44 +1,49 @@
 <script lang="ts">
-/**
- * 来源拆分卡片
- */
-import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
-import { Progress } from '$lib/components/ui/progress';
+	/**
+	 * 来源拆分卡片
+	 */
+	import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
+	import { Progress } from '$lib/components/ui/progress';
 
-let historyEntries = $state<UnifiedHistoryEntry[]>([]);
+	let historyEntries = $state<UnifiedHistoryEntry[]>([]);
 
-$effect(() => {
-	const unsubscribe = unifiedHistoryStore.subscribe((value) => {
-		historyEntries = value ?? [];
+	$effect(() => {
+		const unsubscribe = unifiedHistoryStore.subscribe((value) => {
+			historyEntries = value ?? [];
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-function buildSourceStats() {
-	const bySource: Record<string, number> = {};
-	for (const entry of historyEntries) {
-		// 从路径推断来源类型
-		const path = entry.pathStack?.[0]?.path || '';
-		let source = '本地';
-		if (path.includes('.zip') || path.includes('.cbz') || path.includes('.cbr') || path.includes('.rar')) {
-			source = '压缩包';
-		} else if (path.includes('.pdf')) {
-			source = 'PDF';
+	function buildSourceStats() {
+		const bySource: Record<string, number> = {};
+		for (const entry of historyEntries) {
+			// 从路径推断来源类型
+			const path = entry.pathStack?.[0]?.path || '';
+			let source = '本地';
+			if (
+				path.includes('.zip') ||
+				path.includes('.cbz') ||
+				path.includes('.cbr') ||
+				path.includes('.rar')
+			) {
+				source = '压缩包';
+			} else if (path.includes('.pdf')) {
+				source = 'PDF';
+			}
+			bySource[source] = (bySource[source] ?? 0) + 1;
 		}
-		bySource[source] = (bySource[source] ?? 0) + 1;
+		const total = historyEntries.length;
+		const sorted = Object.entries(bySource)
+			.sort((a, b) => b[1] - a[1])
+			.map(([source, count]) => ({
+				source,
+				count,
+				percent: total > 0 ? Math.round((count / total) * 100) : 0
+			}));
+		return { sorted, total };
 	}
-	const total = historyEntries.length;
-	const sorted = Object.entries(bySource)
-		.sort((a, b) => b[1] - a[1])
-		.map(([source, count]) => ({
-			source,
-			count,
-			percent: total > 0 ? Math.round((count / total) * 100) : 0
-		}));
-	return { sorted, total };
-}
 
-const stats = $derived(buildSourceStats());
+	const stats = $derived(buildSourceStats());
 </script>
 
 <div class="space-y-3">
@@ -53,6 +58,6 @@ const stats = $derived(buildSourceStats());
 			</div>
 		{/each}
 	{:else}
-		<p class="text-xs text-muted-foreground text-center py-4">暂无来源数据</p>
+		<p class="text-muted-foreground py-4 text-center text-xs">暂无来源数据</p>
 	{/if}
 </div>

@@ -25,13 +25,7 @@
 		variant?: 'muted' | 'primary' | 'secondary' | 'accent' | 'destructive';
 	}
 
-	let {
-		text,
-		icon,
-		tooltip,
-		size = 'sm',
-		variant = 'muted'
-	}: Props = $props();
+	let { text, icon, tooltip, size = 'sm', variant = 'muted' }: Props = $props();
 
 	// 尺寸样式映射
 	const sizeClasses = {

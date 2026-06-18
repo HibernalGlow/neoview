@@ -2,10 +2,17 @@
  * 翻译集成模块
  * 将 TanStack AI 流式翻译与现有缓存机制集成
  */
-import { aiTranslationStore, type TranslationServiceType } from '$lib/stores/ai/translationStore.svelte';
+import {
+	aiTranslationStore,
+	type TranslationServiceType
+} from '$lib/stores/ai/translationStore.svelte';
 import { aiApiConfigStore } from '$lib/stores/aiApiConfig.svelte';
 import { createTanStackProvider } from './tanstackAdapter';
-import { translateWithStreaming, translateWithoutStreaming, type StreamingTranslationResult } from './streamingTranslation';
+import {
+	translateWithStreaming,
+	translateWithoutStreaming,
+	type StreamingTranslationResult
+} from './streamingTranslation';
 import { invoke } from '@tauri-apps/api/core';
 
 /**
@@ -32,7 +39,7 @@ async function saveAiTranslationToDb(
 			title,
 			service,
 			model,
-			timestamp: Date.now(),
+			timestamp: Date.now()
 		};
 		await invoke('save_ai_translation', { key, aiTranslationJson: JSON.stringify(cache) });
 	} catch (e) {
@@ -43,7 +50,10 @@ async function saveAiTranslationToDb(
 /**
  * 从数据库读取 AI 翻译缓存
  */
-async function loadAiTranslationFromDb(key: string, modelFilter?: string): Promise<AiTranslationCache | null> {
+async function loadAiTranslationFromDb(
+	key: string,
+	modelFilter?: string
+): Promise<AiTranslationCache | null> {
 	try {
 		const json = await invoke<string | null>('load_ai_translation', { key, modelFilter });
 		if (json) {
@@ -81,7 +91,7 @@ export interface IntegratedTranslationOptions {
 
 /**
  * 使用 TanStack AI 进行翻译（集成缓存）
- * 
+ *
  * @param options - 翻译选项
  * @returns 翻译结果
  */
@@ -97,7 +107,7 @@ export async function translateWithTanStack(
 		onChunk,
 		onComplete,
 		onError,
-		skipCache = false,
+		skipCache = false
 	} = options;
 
 	// 获取当前活动的 AI 提供商配置
@@ -150,7 +160,7 @@ export async function translateWithTanStack(
 					cacheTranslationResult(text, translated, provider.model);
 					onComplete?.(translated);
 				},
-				onError,
+				onError
 			});
 		} else {
 			result = await translateWithoutStreaming(tanstackConfig, {
@@ -163,7 +173,7 @@ export async function translateWithTanStack(
 					cacheTranslationResult(text, translated, provider.model);
 					onComplete?.(translated);
 				},
-				onError,
+				onError
 			});
 		}
 

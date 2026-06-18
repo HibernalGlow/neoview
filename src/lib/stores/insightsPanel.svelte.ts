@@ -1,6 +1,12 @@
 import { writable } from 'svelte/store';
 
-export type InsightsCardId =	'daily-trend' | 'bookmark-overview' | 'source-breakdown' | 'emm-tags' | 'reading-heatmap' | 'reading-streak';
+export type InsightsCardId =
+	| 'daily-trend'
+	| 'bookmark-overview'
+	| 'source-breakdown'
+	| 'emm-tags'
+	| 'reading-heatmap'
+	| 'reading-streak';
 
 export interface InsightsPanelState {
 	order: InsightsCardId[];
@@ -21,15 +27,21 @@ function ensureState(state?: Partial<InsightsPanelState>): InsightsPanelState {
 	const currentOrder = Array.isArray(state?.order) ? (state!.order as InsightsCardId[]) : [];
 	const mergedOrder = DEFAULT_CARD_ORDER.filter((id) => currentOrder.includes(id)).length
 		? [
-			...currentOrder.filter((id) => DEFAULT_CARD_ORDER.includes(id as InsightsCardId)),
-			...DEFAULT_CARD_ORDER.filter((id) => !currentOrder.includes(id))
-		  ]
+				...currentOrder.filter((id) => DEFAULT_CARD_ORDER.includes(id as InsightsCardId)),
+				...DEFAULT_CARD_ORDER.filter((id) => !currentOrder.includes(id))
+			]
 		: [...DEFAULT_CARD_ORDER];
 
-	const collapsed: Record<InsightsCardId, boolean> = { ...DEFAULT_CARD_ORDER.reduce((acc, id) => {
-		acc[id] = false;
-		return acc;
-	}, {} as Record<InsightsCardId, boolean>), ...(state?.collapsed ?? {}) } as Record<InsightsCardId, boolean>;
+	const collapsed: Record<InsightsCardId, boolean> = {
+		...DEFAULT_CARD_ORDER.reduce(
+			(acc, id) => {
+				acc[id] = false;
+				return acc;
+			},
+			{} as Record<InsightsCardId, boolean>
+		),
+		...(state?.collapsed ?? {})
+	} as Record<InsightsCardId, boolean>;
 
 	return {
 		order: mergedOrder as InsightsCardId[],
@@ -86,7 +98,9 @@ export const insightsPanelStore = {
 		}));
 	},
 	reorder(nextOrder: InsightsCardId[]) {
-		const deduped = nextOrder.filter((id, index) => nextOrder.indexOf(id) === index && DEFAULT_CARD_ORDER.includes(id));
+		const deduped = nextOrder.filter(
+			(id, index) => nextOrder.indexOf(id) === index && DEFAULT_CARD_ORDER.includes(id)
+		);
 		const merged = [...deduped, ...DEFAULT_CARD_ORDER.filter((id) => !deduped.includes(id))];
 		update((state) => ({
 			...state,

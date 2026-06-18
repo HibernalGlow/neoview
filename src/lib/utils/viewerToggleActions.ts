@@ -1,8 +1,5 @@
 import type { ActionBinding } from '$lib/stores/keybindings/types';
-import {
-	viewerPageInfoVisible,
-	viewerProgressVisible
-} from '$lib/stores/ui.svelte';
+import { viewerPageInfoVisible, viewerProgressVisible } from '$lib/stores/ui.svelte';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import { settingsManager, type AutoRotateMode } from '$lib/settings/settingsManager';
 import { defaultSettings } from '$lib/settings/defaults';
@@ -12,7 +9,12 @@ type DynamicBackgroundMode = 'auto' | 'ambient' | 'aurora' | 'spotlight';
 type BackgroundMode = 'solid' | DynamicBackgroundMode;
 type SwitchToastSettings = NonNullable<ReturnType<typeof getSettings>['view']['switchToast']>;
 
-const DYNAMIC_BACKGROUND_MODES: DynamicBackgroundMode[] = ['auto', 'ambient', 'aurora', 'spotlight'];
+const DYNAMIC_BACKGROUND_MODES: DynamicBackgroundMode[] = [
+	'auto',
+	'ambient',
+	'aurora',
+	'spotlight'
+];
 const AUTO_ROTATE_SEQUENCE: AutoRotateMode[] = [
 	'none',
 	'left',

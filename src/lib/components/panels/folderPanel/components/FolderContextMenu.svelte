@@ -4,8 +4,8 @@
 	 * 参考旧版 FileBrowser 的右键菜单功能
 	 * 使用 Portal 将菜单渲染到 body，避免被父容器的 overflow 裁剪
 	 */
-	import { mergeProps } from "bits-ui";
-	import * as Tooltip from "$lib/components/ui/tooltip/index.js";
+	import { mergeProps } from 'bits-ui';
+	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import type { FsItem } from '$lib/types';
 	import {
 		Folder,
@@ -233,7 +233,7 @@
 		onmousedown={(e) => e.stopPropagation()}
 	>
 		<div
-			class="bg-popover/80 backdrop-blur-md text-popover-foreground min-w-45 overflow-hidden rounded-md border shadow-md"
+			class="bg-popover/80 text-popover-foreground min-w-45 overflow-hidden rounded-md border shadow-md backdrop-blur-md"
 			style="max-height: {maxHeight}px;"
 		>
 			<div class="overflow-y-auto p-1" style="max-height: {maxHeight}px;">
@@ -245,7 +245,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleCut
 										},
 										tooltipProps
@@ -264,7 +265,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleCopy
 										},
 										tooltipProps
@@ -283,7 +285,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handlePaste
 										},
 										tooltipProps
@@ -302,7 +305,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-destructive hover:text-destructive-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleDelete
 										},
 										tooltipProps
@@ -321,7 +325,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleRename
 										},
 										tooltipProps
@@ -344,7 +349,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleBrowse
 											},
 											tooltipProps
@@ -363,7 +369,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleOpenInNewTab
 											},
 											tooltipProps
@@ -382,7 +389,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleOpenAsBook
 											},
 											tooltipProps
@@ -401,7 +409,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleOpenAsBook
 											},
 											tooltipProps
@@ -420,7 +429,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleOpenInNewTab
 											},
 											tooltipProps
@@ -439,7 +449,8 @@
 									<button
 										{...mergeProps(
 											{
-												class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+												class:
+													'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 												onclick: handleOpenWithSystem
 											},
 											tooltipProps
@@ -459,7 +470,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleOpenInExplorer
 										},
 										tooltipProps
@@ -478,7 +490,8 @@
 								<button
 									{...mergeProps(
 										{
-											class: 'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
+											class:
+												'hover:bg-accent hover:text-accent-foreground flex h-9 w-9 items-center justify-center rounded-sm transition-colors',
 											onclick: handleUndoDelete
 										},
 										tooltipProps

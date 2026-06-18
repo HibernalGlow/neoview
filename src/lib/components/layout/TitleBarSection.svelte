@@ -357,7 +357,9 @@
 	function isInteractiveElement(target: EventTarget | null): boolean {
 		const element = target as HTMLElement | null;
 		if (!element) return false;
-		return Boolean(element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]'));
+		return Boolean(
+			element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]')
+		);
 	}
 
 	async function handleTitleBarDoubleClick(event: MouseEvent): Promise<void> {
@@ -380,7 +382,10 @@
 		| 'SouthEast'
 		| 'SouthWest';
 
-	async function handleResizeMouseDown(direction: ResizeDirection, event: MouseEvent): Promise<void> {
+	async function handleResizeMouseDown(
+		direction: ResizeDirection,
+		event: MouseEvent
+	): Promise<void> {
 		if (event.button !== 0) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -403,7 +408,9 @@
 	}
 
 	function handleResizeOverlayMouseDown(event: MouseEvent): void {
-		const element = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-resize-direction]');
+		const element = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+			'[data-resize-direction]'
+		);
 		const direction = element?.dataset.resizeDirection as ResizeDirection | undefined;
 		if (!direction) return;
 		void handleResizeMouseDown(direction, event);
@@ -458,7 +465,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
 	data-tauri-drag-region
-	class="flex h-8 select-none items-center justify-between border-b px-2"
+	class="flex h-8 items-center justify-between border-b px-2 select-none"
 	style="background-color: color-mix(in oklch, var(--sidebar) {opacity}%, transparent); color: var(--sidebar-foreground); backdrop-filter: blur({blur}px);"
 	role="banner"
 	aria-label="主窗口标题栏"
@@ -506,18 +513,23 @@
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$leftSidebarPinned ? 'default' : ($leftSidebarOpen ? 'secondary' : 'ghost')}
+					variant={$leftSidebarPinned ? 'default' : $leftSidebarOpen ? 'secondary' : 'ghost'}
 					size="icon"
 					class="h-5 w-5"
 					style="pointer-events: auto;"
 					onclick={toggleLeftOpen}
-					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); toggleLeftPinned(); }}
+					oncontextmenu={(e: MouseEvent) => {
+						e.preventDefault();
+						toggleLeftPinned();
+					}}
 				>
 					<PanelLeft class="h-3 w-3" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>左栏{$leftSidebarPinned ? '（已固定）' : $leftSidebarOpen ? '（已打开）' : '（已关闭）'}</p>
+				<p>
+					左栏{$leftSidebarPinned ? '（已固定）' : $leftSidebarOpen ? '（已打开）' : '（已关闭）'}
+				</p>
 				<p class="text-muted-foreground text-xs">右键切换固定</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
@@ -526,18 +538,23 @@
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
-					variant={$rightSidebarPinned ? 'default' : ($rightSidebarOpen ? 'secondary' : 'ghost')}
+					variant={$rightSidebarPinned ? 'default' : $rightSidebarOpen ? 'secondary' : 'ghost'}
 					size="icon"
 					class="h-5 w-5"
 					style="pointer-events: auto;"
 					onclick={toggleRightOpen}
-					oncontextmenu={(e: MouseEvent) => { e.preventDefault(); toggleRightPinned(); }}
+					oncontextmenu={(e: MouseEvent) => {
+						e.preventDefault();
+						toggleRightPinned();
+					}}
 				>
 					<PanelRight class="h-3 w-3" />
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				<p>右栏{$rightSidebarPinned ? '（已固定）' : $rightSidebarOpen ? '（已打开）' : '（已关闭）'}</p>
+				<p>
+					右栏{$rightSidebarPinned ? '（已固定）' : $rightSidebarOpen ? '（已打开）' : '（已关闭）'}
+				</p>
 				<p class="text-muted-foreground text-xs">右键切换固定</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
@@ -633,7 +650,7 @@
 									{/if}
 								</div>
 								<div class="flex flex-col gap-0.5">
-									<span class="text-xs font-medium leading-tight">{theme.name}</span>
+									<span class="text-xs leading-tight font-medium">{theme.name}</span>
 									{#if theme.description}
 										<span class="text-muted-foreground line-clamp-1 text-[10px] leading-tight">
 											{theme.description}
@@ -680,12 +697,7 @@
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					<DropdownMenu.Trigger>
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-6 w-6"
-							style="pointer-events: auto;"
-						>
+						<Button variant="ghost" size="icon" class="h-6 w-6" style="pointer-events: auto;">
 							<Layers class="h-4 w-4" />
 						</Button>
 					</DropdownMenu.Trigger>
@@ -813,13 +825,37 @@
 	aria-hidden="true"
 	onmousedown={handleResizeOverlayMouseDown}
 >
-	<div data-resize-direction="West" class="pointer-events-auto absolute left-0 top-0 h-full w-2 cursor-w-resize"></div>
-	<div data-resize-direction="East" class="pointer-events-auto absolute right-0 top-0 h-full w-2 cursor-e-resize"></div>
-	<div data-resize-direction="North" class="pointer-events-auto absolute left-0 top-0 h-2 w-full cursor-n-resize"></div>
-	<div data-resize-direction="South" class="pointer-events-auto absolute bottom-0 left-0 h-2 w-full cursor-s-resize"></div>
+	<div
+		data-resize-direction="West"
+		class="pointer-events-auto absolute top-0 left-0 h-full w-2 cursor-w-resize"
+	></div>
+	<div
+		data-resize-direction="East"
+		class="pointer-events-auto absolute top-0 right-0 h-full w-2 cursor-e-resize"
+	></div>
+	<div
+		data-resize-direction="North"
+		class="pointer-events-auto absolute top-0 left-0 h-2 w-full cursor-n-resize"
+	></div>
+	<div
+		data-resize-direction="South"
+		class="pointer-events-auto absolute bottom-0 left-0 h-2 w-full cursor-s-resize"
+	></div>
 
-	<div data-resize-direction="NorthWest" class="pointer-events-auto absolute left-0 top-0 h-3 w-3 cursor-nw-resize"></div>
-	<div data-resize-direction="NorthEast" class="pointer-events-auto absolute right-0 top-0 h-3 w-3 cursor-ne-resize"></div>
-	<div data-resize-direction="SouthWest" class="pointer-events-auto absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize"></div>
-	<div data-resize-direction="SouthEast" class="pointer-events-auto absolute bottom-0 right-0 h-3 w-3 cursor-se-resize"></div>
+	<div
+		data-resize-direction="NorthWest"
+		class="pointer-events-auto absolute top-0 left-0 h-3 w-3 cursor-nw-resize"
+	></div>
+	<div
+		data-resize-direction="NorthEast"
+		class="pointer-events-auto absolute top-0 right-0 h-3 w-3 cursor-ne-resize"
+	></div>
+	<div
+		data-resize-direction="SouthWest"
+		class="pointer-events-auto absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize"
+	></div>
+	<div
+		data-resize-direction="SouthEast"
+		class="pointer-events-auto absolute right-0 bottom-0 h-3 w-3 cursor-se-resize"
+	></div>
 </div>

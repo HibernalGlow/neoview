@@ -1,86 +1,89 @@
 <script lang="ts">
-/**
- * 评分面板
- * 从 EmmPanelSection 提取的子组件
- * 负责文件夹评分管理和本书设置
- */
-import { Star, ChevronUp, ChevronDown, RefreshCcw, Download, Trash2 } from '@lucide/svelte';
-import * as Button from '$lib/components/ui/button';
-import * as Input from '$lib/components/ui/input';
-import * as Tooltip from '$lib/components/ui/tooltip';
-import { folderRatingStore } from '$lib/stores/emm/folderRating';
-import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-import { confirm } from '$lib/stores/confirmDialog.svelte';
+	/**
+	 * 评分面板
+	 * 从 EmmPanelSection 提取的子组件
+	 * 负责文件夹评分管理和本书设置
+	 */
+	import { Star, ChevronUp, ChevronDown, RefreshCcw, Download, Trash2 } from '@lucide/svelte';
+	import * as Button from '$lib/components/ui/button';
+	import * as Input from '$lib/components/ui/input';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { folderRatingStore } from '$lib/stores/emm/folderRating';
+	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+	import { confirm } from '$lib/stores/confirmDialog.svelte';
 
-// 状态
-let showFolderRatingsCard = $state(true);
-let folderRatingStats = $state<{ count: number; lastUpdated: string | null }>({ count: 0, lastUpdated: null });
-let isUpdatingRatings = $state(false);
-let folderRatingPath = $state('');
-
-// 订阅文件夹评分缓存
-$effect(() => {
-	const unsubscribe = folderRatingStore.subscribe((cache) => {
-		const count = Object.keys(cache.ratings).length;
-		const lastUpdated = cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : null;
-		folderRatingStats = { count, lastUpdated };
+	// 状态
+	let showFolderRatingsCard = $state(true);
+	let folderRatingStats = $state<{ count: number; lastUpdated: string | null }>({
+		count: 0,
+		lastUpdated: null
 	});
-	return unsubscribe;
-});
+	let isUpdatingRatings = $state(false);
+	let folderRatingPath = $state('');
 
-// 更新文件夹评分
-async function handleUpdateFolderRatings() {
-	isUpdatingRatings = true;
-	try {
-		await emmMetadataStore.calculateFolderRatings();
-	} finally {
-		isUpdatingRatings = false;
-	}
-}
-
-// 导出文件夹评分为 JSON
-function handleExportFolderRatings() {
-	const cache = folderRatingStore.exportCache();
-	const json = JSON.stringify(cache, null, 2);
-	const blob = new Blob([json], { type: 'application/json' });
-	const url = URL.createObjectURL(blob);
-
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = `neoview-folder-ratings-${Date.now()}.json`;
-	document.body.appendChild(a);
-	a.click();
-	document.body.removeChild(a);
-	URL.revokeObjectURL(url);
-}
-
-// 重置文件夹评分缓存
-async function handleClearFolderRatings() {
-	const confirmed = await confirm({
-		title: '确认清除',
-		description: '确定要清除所有文件夹评分缓存吗？',
-		confirmText: '清除',
-		cancelText: '取消',
-		variant: 'destructive'
+	// 订阅文件夹评分缓存
+	$effect(() => {
+		const unsubscribe = folderRatingStore.subscribe((cache) => {
+			const count = Object.keys(cache.ratings).length;
+			const lastUpdated = cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : null;
+			folderRatingStats = { count, lastUpdated };
+		});
+		return unsubscribe;
 	});
-	if (confirmed) {
-		folderRatingStore.clearCache();
-	}
-}
 
-// 按路径补充评分
-function handleCalculateForPath() {
-	if (folderRatingPath.trim()) {
-		folderRatingStore.calculateRatingsForPath(folderRatingPath.trim());
+	// 更新文件夹评分
+	async function handleUpdateFolderRatings() {
+		isUpdatingRatings = true;
+		try {
+			await emmMetadataStore.calculateFolderRatings();
+		} finally {
+			isUpdatingRatings = false;
+		}
 	}
-}
+
+	// 导出文件夹评分为 JSON
+	function handleExportFolderRatings() {
+		const cache = folderRatingStore.exportCache();
+		const json = JSON.stringify(cache, null, 2);
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `neoview-folder-ratings-${Date.now()}.json`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+
+	// 重置文件夹评分缓存
+	async function handleClearFolderRatings() {
+		const confirmed = await confirm({
+			title: '确认清除',
+			description: '确定要清除所有文件夹评分缓存吗？',
+			confirmText: '清除',
+			cancelText: '取消',
+			variant: 'destructive'
+		});
+		if (confirmed) {
+			folderRatingStore.clearCache();
+		}
+	}
+
+	// 按路径补充评分
+	function handleCalculateForPath() {
+		if (folderRatingPath.trim()) {
+			folderRatingStore.calculateRatingsForPath(folderRatingPath.trim());
+		}
+	}
 </script>
 
 <!-- 文件夹评分管理 -->
-<div class="border rounded-lg bg-muted/30">
+<div class="bg-muted/30 rounded-lg border">
 	<button
 		type="button"
-		class="w-full p-2 flex items-center justify-between text-xs font-medium"
+		class="flex w-full items-center justify-between p-2 text-xs font-medium"
 		onclick={() => (showFolderRatingsCard = !showFolderRatingsCard)}
 	>
 		<div class="flex items-center gap-1.5">
@@ -89,13 +92,13 @@ function handleCalculateForPath() {
 			<span class="text-muted-foreground">({folderRatingStats.count})</span>
 		</div>
 		{#if showFolderRatingsCard}
-			<ChevronUp class="h-3.5 w-3.5 text-muted-foreground" />
+			<ChevronUp class="text-muted-foreground h-3.5 w-3.5" />
 		{:else}
-			<ChevronDown class="h-3.5 w-3.5 text-muted-foreground" />
+			<ChevronDown class="text-muted-foreground h-3.5 w-3.5" />
 		{/if}
 	</button>
 	{#if showFolderRatingsCard}
-		<div class="p-2 pt-0 space-y-2 text-xs">
+		<div class="space-y-2 p-2 pt-0 text-xs">
 			<p class="text-muted-foreground">
 				基于 EMM 数据库计算的文件夹平均评分缓存。
 				{#if folderRatingStats.lastUpdated}
@@ -108,7 +111,7 @@ function handleCalculateForPath() {
 						<Button.Root
 							variant="outline"
 							size="sm"
-							class="h-7 px-2 gap-1 text-[10px]"
+							class="h-7 gap-1 px-2 text-[10px]"
 							onclick={handleUpdateFolderRatings}
 							disabled={isUpdatingRatings}
 						>
@@ -125,7 +128,7 @@ function handleCalculateForPath() {
 						<Button.Root
 							variant="outline"
 							size="sm"
-							class="h-7 px-2 gap-1 text-[10px]"
+							class="h-7 gap-1 px-2 text-[10px]"
 							onclick={handleExportFolderRatings}
 							disabled={folderRatingStats.count === 0}
 						>
@@ -142,7 +145,7 @@ function handleCalculateForPath() {
 						<Button.Root
 							variant="outline"
 							size="sm"
-							class="h-7 px-2 gap-1 text-[10px] text-destructive hover:text-destructive"
+							class="text-destructive hover:text-destructive h-7 gap-1 px-2 text-[10px]"
 							onclick={handleClearFolderRatings}
 							disabled={folderRatingStats.count === 0}
 						>
@@ -156,19 +159,19 @@ function handleCalculateForPath() {
 				</Tooltip.Root>
 			</div>
 			<!-- 按路径补充评分 -->
-			<div class="flex gap-1.5 items-center">
+			<div class="flex items-center gap-1.5">
 				<Input.Root
 					type="text"
 					bind:value={folderRatingPath}
 					placeholder="输入路径补充评分..."
-					class="h-7 text-[10px] flex-1"
+					class="h-7 flex-1 text-[10px]"
 				/>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button.Root
 							variant="outline"
 							size="sm"
-							class="h-7 px-2 gap-1 text-[10px]"
+							class="h-7 gap-1 px-2 text-[10px]"
 							onclick={handleCalculateForPath}
 							disabled={!folderRatingPath || isUpdatingRatings}
 						>

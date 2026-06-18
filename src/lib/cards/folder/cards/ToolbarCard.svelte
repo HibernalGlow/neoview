@@ -13,9 +13,13 @@
 	import SearchBar from '$lib/components/ui/SearchBar.svelte';
 	import VirtualSearchBar from '$lib/components/ui/VirtualSearchBar.svelte';
 	import FavoriteTagPanel from '$lib/components/panels/folderPanel/components/FavoriteTagPanel.svelte';
-	
+
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, isVirtualPath, tabShowPenetrateSettingsBar } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+	import {
+		folderTabActions,
+		isVirtualPath,
+		tabShowPenetrateSettingsBar
+	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 	import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 	import { loadVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
@@ -37,12 +41,21 @@
 		/** 是否垂直布局（左右位置时使用） */
 		vertical?: boolean;
 	}
-	let { onRefresh, onGoBack, onGoForward, onGoUp, onGoHome, onSetHome, onBatchDelete, vertical = false }: Props = $props();
+	let {
+		onRefresh,
+		onGoBack,
+		onGoForward,
+		onGoUp,
+		onGoHome,
+		onSetHome,
+		onBatchDelete,
+		vertical = false
+	}: Props = $props();
 
 	// ==================== Context ====================
 	const ctx = getFolderContext();
-	const { 
-		isVirtualInstance, 
+	const {
+		isVirtualInstance,
 		panelMode,
 		searchKeyword,
 		searchSettings,
@@ -50,13 +63,13 @@
 		localSearchStore,
 		initialPath
 	} = ctx;
-	
+
 	// 转换为 FolderToolbar 需要的 virtualMode 格式
 	const virtualMode = $derived(panelMode === 'folder' ? null : panelMode);
 
 	// ==================== Hooks ====================
 	const searchActions = createSearchActions();
-	
+
 	// 虚拟路径使用本地 store 设置关键词
 	function setSearchKeyword(kw: string) {
 		if (isVirtualInstance) {
@@ -65,11 +78,8 @@
 			folderTabActions.setSearchKeyword(kw);
 		}
 	}
-	
-	const tagActions = createTagActions(
-		() => get(searchKeyword),
-		setSearchKeyword
-	);
+
+	const tagActions = createTagActions(() => get(searchKeyword), setSearchKeyword);
 	let randomTags = $derived(tagActions.randomTags);
 
 	// ==================== 工具栏操作 ====================
@@ -130,7 +140,7 @@
 	}
 
 	// ==================== 搜索 ====================
-	
+
 	// 获取虚拟路径数据源
 	function getVirtualItems(): FsItem[] {
 		if (!initialPath) return [];
@@ -141,7 +151,7 @@
 			return [];
 		}
 	}
-	
+
 	// 虚拟路径搜索处理（用于 VirtualSearchBar）
 	function handleVirtualSearch(results: FsItem[], keyword: string) {
 		console.log('[ToolbarCard.handleVirtualSearch]', { keyword, resultCount: results.length });
@@ -149,12 +159,12 @@
 		localSearchStore.results.set(results);
 		localSearchStore.isSearching.set(false);
 	}
-	
+
 	// 虚拟路径搜索值变化
 	function handleVirtualSearchValueChange(val: string) {
 		localSearchStore.keyword.set(val);
 	}
-	
+
 	// 普通路径搜索处理（用于 SearchBar）
 	function handleSearch(keyword: string) {
 		console.log('[ToolbarCard.handleSearch] 普通路径搜索', { keyword });
@@ -168,18 +178,18 @@
 
 <!-- 工具栏 -->
 <FolderToolbar
-	onRefresh={onRefresh}
+	{onRefresh}
 	onToggleFolderTree={handleToggleFolderTree}
-	onGoBack={onGoBack}
-	onGoForward={onGoForward}
-	onGoUp={onGoUp}
-	onGoHome={onGoHome}
-	onSetHome={onSetHome}
+	{onGoBack}
+	{onGoForward}
+	{onGoUp}
+	{onGoHome}
+	{onSetHome}
 	onToggleDeleteStrategy={handleToggleDeleteStrategy}
 	onToggleInlineTree={handleToggleInlineTree}
 	showRandomTagBar={ctx.showRandomTagBar}
 	onToggleRandomTagBar={handleToggleRandomTagBar}
-	virtualMode={virtualMode}
+	{virtualMode}
 	{vertical}
 />
 

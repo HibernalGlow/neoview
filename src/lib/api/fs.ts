@@ -24,9 +24,16 @@ export async function loadImage(path: string, options: LoadImageOptions = {}): P
 /**
  * 加载图片为 Blob（推荐，避免重复转换）
  */
-export async function loadImageAsBlob(path: string, options: LoadImageOptions = {}): Promise<{ blob: Blob; traceId: string }> {
+export async function loadImageAsBlob(
+	path: string,
+	options: LoadImageOptions = {}
+): Promise<{ blob: Blob; traceId: string }> {
 	const traceId = options.traceId ?? createImageTraceId('fs', options.pageIndex);
-	logImageTrace(traceId, 'invoke load_image', { path, pageIndex: options.pageIndex, bookPath: options.bookPath });
+	logImageTrace(traceId, 'invoke load_image', {
+		path,
+		pageIndex: options.pageIndex,
+		bookPath: options.bookPath
+	});
 
 	const binaryData = await invoke<number[]>('load_image', {
 		path,

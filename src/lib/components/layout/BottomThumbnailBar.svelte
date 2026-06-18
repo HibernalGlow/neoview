@@ -6,7 +6,12 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { readable } from 'svelte/store';
 	import { bookStore } from '$lib/stores/book.svelte';
-	import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailEntry } from '$lib/stores/unifiedThumbnailStore.svelte';
+	import {
+		unifiedThumbnailStore,
+		generateThumbKey,
+		type ThumbnailSource,
+		type ThumbnailEntry
+	} from '$lib/stores/unifiedThumbnailStore.svelte';
 	import {
 		bottomThumbnailBarPinned,
 		bottomBarLockState,
@@ -20,7 +25,16 @@
 
 	import HorizontalListSlider from '$lib/components/panels/file/components/HorizontalListSlider.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Image as ImageIcon, Pin, PinOff, GripHorizontal, Target, Hash, Grid3X3, Sparkles } from '@lucide/svelte';
+	import {
+		Image as ImageIcon,
+		Pin,
+		PinOff,
+		GripHorizontal,
+		Target,
+		Hash,
+		Grid3X3,
+		Sparkles
+	} from '@lucide/svelte';
 	import { appState, type StateSelector } from '$lib/core/state/appState';
 	import MagicCard from '../ui/MagicCard.svelte';
 	import {
@@ -90,7 +104,7 @@
 				archivePath: book.path,
 				innerPath: page.innerPath || page.name || page.path,
 				entryIndex: page.entryIndex ?? pageIndex,
-				fileSize: page.size ?? 0,
+				fileSize: page.size ?? 0
 			};
 		}
 
@@ -99,7 +113,7 @@
 			bookPath: book.path,
 			pageIndex,
 			pagePath: page.path,
-			fileSize: page.size ?? 0,
+			fileSize: page.size ?? 0
 		};
 	}
 
@@ -326,7 +340,12 @@
 			}
 		}
 		if (items.length > 0) {
-			unifiedThumbnailStore.requestThumbnails(items, `reader-bar-${book.path}`, 'reader-visible', centerIndex);
+			unifiedThumbnailStore.requestThumbnails(
+				items,
+				`reader-bar-${book.path}`,
+				'reader-visible',
+				centerIndex
+			);
 		}
 	}
 
@@ -384,7 +403,12 @@
 			}
 		}
 		if (items.length > 0) {
-			unifiedThumbnailStore.requestThumbnails(items, `reader-bar-${book.path}`, 'reader-visible', safeCenter);
+			unifiedThumbnailStore.requestThumbnails(
+				items,
+				`reader-bar-${book.path}`,
+				'reader-visible',
+				safeCenter
+			);
 		}
 	}
 

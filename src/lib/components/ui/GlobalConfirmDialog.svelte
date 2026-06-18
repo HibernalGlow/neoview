@@ -1,20 +1,20 @@
 <script lang="ts">
-/**
- * GlobalConfirmDialog - 全局确认对话框组件
- * 连接到全局 confirmDialog store，在 App.svelte 中挂载一次即可
- */
-import * as AlertDialog from '$lib/components/ui/alert-dialog';
-import { buttonVariants } from '$lib/components/ui/button';
-import { AlertTriangle, Info, Trash2 } from '@lucide/svelte';
-import { cn } from '$lib/utils';
-import { 
-	getDialogState, 
-	handleConfirm, 
-	handleCancel, 
-	handleOpenChange 
-} from '$lib/stores/confirmDialog.svelte';
+	/**
+	 * GlobalConfirmDialog - 全局确认对话框组件
+	 * 连接到全局 confirmDialog store，在 App.svelte 中挂载一次即可
+	 */
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import { buttonVariants } from '$lib/components/ui/button';
+	import { AlertTriangle, Info, Trash2 } from '@lucide/svelte';
+	import { cn } from '$lib/utils';
+	import {
+		getDialogState,
+		handleConfirm,
+		handleCancel,
+		handleOpenChange
+	} from '$lib/stores/confirmDialog.svelte';
 
-const state = getDialogState();
+	const state = getDialogState();
 </script>
 
 <AlertDialog.Root bind:open={state.open} onOpenChange={handleOpenChange}>
@@ -22,11 +22,11 @@ const state = getDialogState();
 		<AlertDialog.Header>
 			<AlertDialog.Title class="flex items-center gap-2">
 				{#if state.variant === 'destructive'}
-					<Trash2 class="h-5 w-5 text-destructive" />
+					<Trash2 class="text-destructive h-5 w-5" />
 				{:else if state.variant === 'warning'}
 					<AlertTriangle class="h-5 w-5 text-yellow-500" />
 				{:else}
-					<Info class="h-5 w-5 text-primary" />
+					<Info class="text-primary h-5 w-5" />
 				{/if}
 				{state.title}
 			</AlertDialog.Title>
@@ -35,14 +35,13 @@ const state = getDialogState();
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer class="gap-2 sm:gap-0">
-			<AlertDialog.Cancel 
-				class={cn(buttonVariants({ variant: "outline" }))}
-				onclick={handleCancel}
-			>
+			<AlertDialog.Cancel class={cn(buttonVariants({ variant: 'outline' }))} onclick={handleCancel}>
 				{state.cancelText}
 			</AlertDialog.Cancel>
-			<AlertDialog.Action 
-				class={cn(buttonVariants({ variant: state.variant === 'destructive' ? 'destructive' : 'default' }))}
+			<AlertDialog.Action
+				class={cn(
+					buttonVariants({ variant: state.variant === 'destructive' ? 'destructive' : 'default' })
+				)}
 				onclick={handleConfirm}
 			>
 				{state.confirmText}

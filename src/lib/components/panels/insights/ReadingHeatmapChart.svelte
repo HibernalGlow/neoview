@@ -68,7 +68,7 @@
 						onpointerenter={(event) => showTooltip(event, cell)}
 						onpointermove={(event) => showTooltip(event, cell)}
 						onpointerleave={hideTooltip}
-					/>
+					></rect>
 				</g>
 			{/each}
 		</g>
@@ -79,14 +79,14 @@
 
 		{#each hourLabels as label, hIndex}
 			{@const x = 32 + hIndex * 3 * 14}
-			<text x={x} y={viewHeight - 2} class="fill-muted-foreground text-[10px]">{label}</text>
+			<text {x} y={viewHeight - 2} class="fill-muted-foreground text-[10px]">{label}</text>
 		{/each}
 	</svg>
 </ChartContainer>
 
 {#if tooltip.visible}
 	<div
-		class="pointer-events-none fixed z-50 rounded-md border bg-popover/80 backdrop-blur-md px-2 py-1 text-xs text-popover-foreground shadow-md"
+		class="bg-popover/80 text-popover-foreground pointer-events-none fixed z-50 rounded-md border px-2 py-1 text-xs shadow-md backdrop-blur-md"
 		style={`left: ${tooltip.x + 12}px; top: ${tooltip.y + 12}px;`}
 	>
 		{tooltip.text}

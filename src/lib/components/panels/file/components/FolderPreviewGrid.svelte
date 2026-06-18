@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * FolderPreviewGrid - 文件夹 2x2 预览网格组件
-	 * 
+	 *
 	 * 显示文件夹内前 4 张图片的缩略图预览
 	 * 参考 OpenComic 的文件夹预览实现
 	 */
@@ -30,13 +30,13 @@
 <div class="relative h-full w-full overflow-hidden">
 	{#if loading}
 		<!-- 加载中骨架屏 -->
-		<div class="absolute inset-0 animate-pulse bg-accent"></div>
+		<div class="bg-accent absolute inset-0 animate-pulse"></div>
 		<div class="relative flex h-full w-full items-center justify-center">
 			<Folder class="text-primary/50 h-12 w-12" />
 		</div>
 	{:else if thumbnails.length === 0}
 		<!-- 无预览图时显示文件夹图标 -->
-		<div class="absolute inset-0 animate-pulse bg-accent"></div>
+		<div class="bg-accent absolute inset-0 animate-pulse"></div>
 		<div class="relative flex h-full w-full items-center justify-center">
 			<Folder class="text-primary/50 h-16 w-16" />
 		</div>
@@ -53,7 +53,7 @@
 		<!-- 2-4 张图显示为 2x2 网格 -->
 		<div class="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5">
 			{#each [0, 1, 2, 3] as index}
-				<div class="relative overflow-hidden bg-secondary">
+				<div class="bg-secondary relative overflow-hidden">
 					{#if thumbnails[index]}
 						<img
 							src={thumbnails[index]}

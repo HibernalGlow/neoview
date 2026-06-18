@@ -58,14 +58,14 @@
 
 <!-- 鼠标触发区域（顶部隐形条） -->
 <div
-	class="fixed top-0 left-0 right-0 h-2 z-40"
+	class="fixed top-0 right-0 left-0 z-40 h-2"
 	onmouseenter={handleMouseEnter}
 	role="presentation"
 ></div>
 
 <!-- 工具栏容器 -->
 <div
-	class="fixed top-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+	class="fixed top-0 right-0 left-0 z-50 transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: '-translate-y-full'}"
 	onmouseenter={handleMouseEnter}
@@ -73,20 +73,20 @@
 	role="toolbar"
 	tabindex="0"
 >
-	<div class="bg-background/95 backdrop-blur-sm border-b shadow-lg">
-		<div class="h-12 px-4 flex items-center justify-between gap-4">
+	<div class="bg-background/95 border-b shadow-lg backdrop-blur-sm">
+		<div class="flex h-12 items-center justify-between gap-4 px-4">
 			<!-- 左侧：面包屑导航 -->
-			<div class="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+			<div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
 				<Button variant="ghost" size="icon" class="h-8 w-8 shrink-0">
 					<Home class="h-4 w-4" />
 				</Button>
 
 				{#each breadcrumbs as crumb, index}
 					{#if index > 0}
-						<ChevronRight class="h-3 w-3 text-muted-foreground shrink-0" />
+						<ChevronRight class="text-muted-foreground h-3 w-3 shrink-0" />
 					{/if}
 					<button
-						class="px-2 py-1 text-sm hover:bg-accent rounded transition-colors truncate max-w-50 {index ===
+						class="hover:bg-accent max-w-50 truncate rounded px-2 py-1 text-sm transition-colors {index ===
 						breadcrumbs.length - 1
 							? 'font-semibold'
 							: 'text-muted-foreground'}"
@@ -98,31 +98,31 @@
 			</div>
 
 			<!-- 中间：页面信息 -->
-			<div class="text-sm text-muted-foreground font-mono shrink-0">
-				<span class="font-semibold text-foreground">15</span>
+			<div class="text-muted-foreground shrink-0 font-mono text-sm">
+				<span class="text-foreground font-semibold">15</span>
 				<span class="mx-1">/</span>
 				<span>200</span>
 			</div>
 
 			<!-- 右侧：图片操作 -->
-			<div class="flex items-center gap-1 shrink-0">
+			<div class="flex shrink-0 items-center gap-1">
 				<!-- 缩放控制 -->
 				<Button variant="ghost" size="icon" class="h-8 w-8" title="缩小">
 					<ZoomOut class="h-4 w-4" />
 				</Button>
-				<span class="text-xs text-muted-foreground font-mono w-12 text-center">100%</span>
+				<span class="text-muted-foreground w-12 text-center font-mono text-xs">100%</span>
 				<Button variant="ghost" size="icon" class="h-8 w-8" title="放大">
 					<ZoomIn class="h-4 w-4" />
 				</Button>
 
-				<div class="w-px h-6 bg-border mx-1"></div>
+				<div class="bg-border mx-1 h-6 w-px"></div>
 
 				<!-- 旋转 -->
 				<Button variant="ghost" size="icon" class="h-8 w-8" title="旋转">
 					<RotateCw class="h-4 w-4" />
 				</Button>
 
-				<div class="w-px h-6 bg-border mx-1"></div>
+				<div class="bg-border mx-1 h-6 w-px"></div>
 
 				<!-- 单页/双页切换 -->
 				<Button
@@ -144,7 +144,7 @@
 					<BookOpen class="h-4 w-4" />
 				</Button>
 
-				<div class="w-px h-6 bg-border mx-1"></div>
+				<div class="bg-border mx-1 h-6 w-px"></div>
 
 				<!-- 全屏 -->
 				<Button

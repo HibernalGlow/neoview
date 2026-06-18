@@ -37,7 +37,7 @@ export interface PanelCardConfig {
 function generateDefaultConfigs(): Partial<Record<PanelId, Omit<CardConfig, 'panelId'>[]>> {
 	const result: Partial<Record<PanelId, Omit<CardConfig, 'panelId'>[]>> = {};
 	const cardPanels = getCardSupportingPanels();
-	
+
 	for (const panelId of cardPanels) {
 		const cardIds = getDefaultCardsForPanel(panelId);
 		result[panelId] = cardIds.map((cardId, index) => {
@@ -52,7 +52,7 @@ function generateDefaultConfigs(): Partial<Record<PanelId, Omit<CardConfig, 'pan
 			};
 		});
 	}
-	
+
 	return result;
 }
 
@@ -81,16 +81,15 @@ function createCardConfigStore() {
 				for (const panelId of cardPanels) {
 					const storedCards = parsed[panelId] || [];
 					// 过滤掉不存在于 cardRegistry 中的卡片
-					const validStoredCards = storedCards.filter(c => cardRegistry[c.id]);
-					const validIds = validStoredCards.map(c => c.id);
+					const validStoredCards = storedCards.filter((c) => cardRegistry[c.id]);
+					const validIds = validStoredCards.map((c) => c.id);
 					const defaultCards = defaultCardConfigs[panelId] || [];
 					// 计算已存储卡片的最大 order
-					const maxOrder = validStoredCards.length > 0 
-						? Math.max(...validStoredCards.map(c => c.order)) 
-						: -1;
+					const maxOrder =
+						validStoredCards.length > 0 ? Math.max(...validStoredCards.map((c) => c.order)) : -1;
 					// 保留已存储的有效卡片配置（保留其 order），添加新卡片到末尾
 					const newCards = defaultCards
-						.filter(c => !validIds.includes(c.id))
+						.filter((c) => !validIds.includes(c.id))
 						.map((c, i) => ({ ...c, panelId, order: maxOrder + 1 + i }));
 					// 合并但不重新分配 order，保留用户的排序
 					result[panelId] = [...validStoredCards, ...newCards];
@@ -104,7 +103,7 @@ function createCardConfigStore() {
 		const result: Partial<Record<PanelId, CardConfig[]>> = {};
 		for (const panelId of cardPanels) {
 			const cards = defaultCardConfigs[panelId] || [];
-			result[panelId] = cards.map(c => ({ ...c, panelId }));
+			result[panelId] = cards.map((c) => ({ ...c, panelId }));
 		}
 		return result;
 	}
@@ -127,7 +126,7 @@ function createCardConfigStore() {
 
 	// 获取所有支持卡片的面板配置
 	function getAllPanels(): PanelCardConfig[] {
-		return getCardPanelIds().map(panelId => ({
+		return getCardPanelIds().map((panelId) => ({
 			panelId,
 			title: getPanelTitle(panelId),
 			cards: getPanelCards(panelId)
@@ -138,7 +137,7 @@ function createCardConfigStore() {
 	function setCardVisible(panelId: PanelId, cardId: string, visible: boolean) {
 		const cards = configs[panelId];
 		if (!cards) return;
-		const idx = cards.findIndex(c => c.id === cardId);
+		const idx = cards.findIndex((c) => c.id === cardId);
 		if (idx !== -1) {
 			cards[idx] = { ...cards[idx], visible };
 			configs = { ...configs, [panelId]: [...cards] };
@@ -150,7 +149,7 @@ function createCardConfigStore() {
 	function setCardExpanded(panelId: PanelId, cardId: string, expanded: boolean) {
 		const cards = configs[panelId];
 		if (!cards) return;
-		const idx = cards.findIndex(c => c.id === cardId);
+		const idx = cards.findIndex((c) => c.id === cardId);
 		if (idx !== -1) {
 			cards[idx] = { ...cards[idx], expanded };
 			configs = { ...configs, [panelId]: [...cards] };
@@ -162,15 +161,15 @@ function createCardConfigStore() {
 	function moveCard(panelId: PanelId, cardId: string, newOrder: number) {
 		const cards = configs[panelId];
 		if (!cards) return;
-		
-		const cardIdx = cards.findIndex(c => c.id === cardId);
+
+		const cardIdx = cards.findIndex((c) => c.id === cardId);
 		if (cardIdx === -1) return;
-		
+
 		const card = cards[cardIdx];
 		const oldOrder = card.order;
-		
+
 		// 更新所有卡片的顺序
-		const newCards = cards.map(c => {
+		const newCards = cards.map((c) => {
 			if (c.id === cardId) {
 				return { ...c, order: newOrder };
 			}
@@ -187,7 +186,7 @@ function createCardConfigStore() {
 			}
 			return c;
 		});
-		
+
 		configs = { ...configs, [panelId]: newCards };
 		saveConfigs(configs);
 	}
@@ -196,7 +195,7 @@ function createCardConfigStore() {
 	function resetPanel(panelId: PanelId) {
 		configs = {
 			...configs,
-			[panelId]: (defaultCardConfigs[panelId] || []).map(c => ({ ...c, panelId }))
+			[panelId]: (defaultCardConfigs[panelId] || []).map((c) => ({ ...c, panelId }))
 		};
 		saveConfigs(configs);
 	}
@@ -205,7 +204,7 @@ function createCardConfigStore() {
 	function resetAll() {
 		const result: Record<PanelId, CardConfig[]> = {} as Record<PanelId, CardConfig[]>;
 		for (const panelId of Object.keys(defaultCardConfigs) as PanelId[]) {
-			result[panelId] = (defaultCardConfigs[panelId] || []).map(c => ({ ...c, panelId }));
+			result[panelId] = (defaultCardConfigs[panelId] || []).map((c) => ({ ...c, panelId }));
 		}
 		configs = result;
 		saveConfigs(configs);
@@ -216,25 +215,25 @@ function createCardConfigStore() {
 		// 找到卡片当前所在面板
 		let fromPanelId: PanelId | null = null;
 		let card: CardConfig | null = null;
-		
+
 		for (const [panelId, cards] of Object.entries(configs)) {
-			const found = cards?.find(c => c.id === cardId);
+			const found = cards?.find((c) => c.id === cardId);
 			if (found) {
 				fromPanelId = panelId as PanelId;
 				card = found;
 				break;
 			}
 		}
-		
+
 		if (!fromPanelId || !card || fromPanelId === toPanelId) return;
-		
+
 		const fromCards = configs[fromPanelId] || [];
 		const toCards = configs[toPanelId] || [];
-		
+
 		// 更新配置
 		configs = {
 			...configs,
-			[fromPanelId]: fromCards.filter(c => c.id !== cardId).map((c, i) => ({ ...c, order: i })),
+			[fromPanelId]: fromCards.filter((c) => c.id !== cardId).map((c, i) => ({ ...c, order: i })),
 			[toPanelId]: [...toCards, { ...card, panelId: toPanelId, order: toCards.length }]
 		};
 		saveConfigs(configs);
@@ -244,22 +243,22 @@ function createCardConfigStore() {
 	function setCardHeight(panelId: PanelId, cardId: string, height: number | undefined) {
 		const panelCards = configs[panelId];
 		if (!panelCards) return;
-		
-		const newCards = panelCards.map(c => 
-			c.id === cardId ? { ...c, height } : c
-		);
-		
+
+		const newCards = panelCards.map((c) => (c.id === cardId ? { ...c, height } : c));
+
 		configs = { ...configs, [panelId]: newCards };
 		saveConfigs(configs);
 	}
 
 	// 获取卡片配置
 	function getCardConfig(panelId: PanelId, cardId: string): CardConfig | undefined {
-		return configs[panelId]?.find(c => c.id === cardId);
+		return configs[panelId]?.find((c) => c.id === cardId);
 	}
 
 	return {
-		get configs() { return configs; },
+		get configs() {
+			return configs;
+		},
 		getPanelCards,
 		getAllPanels,
 		getCardConfig,

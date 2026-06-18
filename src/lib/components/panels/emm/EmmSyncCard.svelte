@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { Database, RefreshCcw, Check, X, AlertCircle, FolderSync, Wrench, Plus } from '@lucide/svelte';
+	import {
+		Database,
+		RefreshCcw,
+		Check,
+		X,
+		AlertCircle,
+		FolderSync,
+		Wrench,
+		Plus
+	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
 	import {
@@ -89,9 +98,9 @@
 	const canSync = $derived(validation && isAllConfigValid(validation) && !isSyncing);
 </script>
 
-<div class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60">
+<div class="bg-muted/10 hover:border-primary/60 space-y-3 rounded-lg border p-3 transition-all">
 	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2 font-semibold text-sm">
+		<div class="flex items-center gap-2 text-sm font-semibold">
 			<FolderSync class="h-4 w-4" />
 			<span>EMM 数据同步</span>
 		</div>
@@ -102,7 +111,7 @@
 			onclick={handleValidate}
 			disabled={isValidating}
 		>
-			<RefreshCcw class="h-3 w-3 mr-1" />
+			<RefreshCcw class="mr-1 h-3 w-3" />
 			验证配置
 		</Button>
 	</div>
@@ -117,7 +126,7 @@
 					<X class="h-3.5 w-3.5 {getStatusColor(validation.mainDatabase.valid)}" />
 				{/if}
 				<span class="text-muted-foreground">主数据库:</span>
-				<span class="truncate flex-1" title={validation.mainDatabase.path}>
+				<span class="flex-1 truncate" title={validation.mainDatabase.path}>
 					{validation.mainDatabase.path || '未配置'}
 				</span>
 			</div>
@@ -128,7 +137,7 @@
 					<X class="h-3.5 w-3.5 {getStatusColor(validation.translationDatabase.valid)}" />
 				{/if}
 				<span class="text-muted-foreground">翻译数据库:</span>
-				<span class="truncate flex-1" title={validation.translationDatabase.path}>
+				<span class="flex-1 truncate" title={validation.translationDatabase.path}>
 					{validation.translationDatabase.path || '未配置'}
 				</span>
 			</div>
@@ -139,7 +148,7 @@
 					<X class="h-3.5 w-3.5 {getStatusColor(validation.settingFile.valid)}" />
 				{/if}
 				<span class="text-muted-foreground">设置文件:</span>
-				<span class="truncate flex-1" title={validation.settingFile.path}>
+				<span class="flex-1 truncate" title={validation.settingFile.path}>
 					{validation.settingFile.path || '未配置'}
 				</span>
 			</div>
@@ -150,40 +159,40 @@
 					<X class="h-3.5 w-3.5 {getStatusColor(validation.translationDict.valid)}" />
 				{/if}
 				<span class="text-muted-foreground">翻译字典:</span>
-				<span class="truncate flex-1" title={validation.translationDict.path}>
+				<span class="flex-1 truncate" title={validation.translationDict.path}>
 					{validation.translationDict.path || '未配置'}
 				</span>
 			</div>
 		</div>
 	{:else}
-		<p class="text-xs text-muted-foreground">点击"验证配置"检查 EMM 配置文件</p>
+		<p class="text-muted-foreground text-xs">点击"验证配置"检查 EMM 配置文件</p>
 	{/if}
 
 	<!-- 同步进度 -->
 	{#if isSyncing}
 		<div class="space-y-2">
 			<Progress value={progressPercent} class="h-2" />
-			<p class="text-xs text-muted-foreground">{syncProgress.message}</p>
+			<p class="text-muted-foreground text-xs">{syncProgress.message}</p>
 		</div>
 	{/if}
 
 	<!-- 错误信息 -->
 	{#if error}
 		<div class="flex items-start gap-2 text-xs text-red-500">
-			<AlertCircle class="h-3.5 w-3.5 mt-0.5 shrink-0" />
+			<AlertCircle class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 			<span>{error}</span>
 		</div>
 	{/if}
 
 	<!-- 迁移消息 -->
 	{#if migrateMessage}
-		<div class="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+		<div class="text-muted-foreground bg-muted/50 rounded p-2 text-xs">
 			{migrateMessage}
 		</div>
 	{/if}
 
 	<!-- 上次同步时间 -->
-	<div class="flex items-center justify-between text-xs text-muted-foreground">
+	<div class="text-muted-foreground flex items-center justify-between text-xs">
 		<span>上次同步: {formatSyncTime(lastSyncTime)}</span>
 	</div>
 
@@ -209,19 +218,14 @@
 			<Plus class="h-3.5 w-3.5" />
 			{isSyncing ? '同步中...' : '增量'}
 		</Button>
-		<Button
-			size="sm"
-			class="gap-1"
-			onclick={handleSync}
-			disabled={!canSync}
-		>
+		<Button size="sm" class="gap-1" onclick={handleSync} disabled={!canSync}>
 			<Database class="h-3.5 w-3.5" />
 			{isSyncing ? '同步中...' : '全量'}
 		</Button>
 	</div>
 
-	<p class="text-[10px] text-muted-foreground">
-		<strong>迁移</strong>：为旧数据库添加字段<br/>
+	<p class="text-muted-foreground text-[10px]">
+		<strong>迁移</strong>：为旧数据库添加字段<br />
 		<strong>增量</strong>：只更新空白条目 · <strong>全量</strong>：重新同步所有
 	</p>
 </div>

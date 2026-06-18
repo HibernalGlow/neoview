@@ -202,7 +202,7 @@
 
 <div
 	bind:this={containerEl}
-	class="flex h-8 items-center justify-end gap-1 overflow-x-auto whitespace-nowrap px-2 py-1"
+	class="flex h-8 items-center justify-end gap-1 overflow-x-auto px-2 py-1 whitespace-nowrap"
 >
 	{#if isEditing}
 		<form

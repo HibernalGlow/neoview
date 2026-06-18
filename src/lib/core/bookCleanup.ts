@@ -15,7 +15,6 @@
 import { clearTempfileCache } from '$lib/components/viewer/flow/imageReader';
 import { thumbnailPersistence } from '$lib/core/cache';
 
-
 /**
  * 清理当前书籍占用的所有内存资源
  *

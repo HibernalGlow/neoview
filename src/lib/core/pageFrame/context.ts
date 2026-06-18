@@ -1,23 +1,23 @@
 /**
  * PageFrameContext - 页面帧上下文配置
- * 
+ *
  * 翻译自 Rust 后端的 context.rs
  * 控制页面帧的构建行为
  */
 
-import type { 
-	PageMode, 
-	ReadOrder, 
-	Size, 
-	AutoRotateType, 
+import type {
+	PageMode,
+	ReadOrder,
+	Size,
+	AutoRotateType,
 	StretchMode,
-	WidePageStretch 
+	WidePageStretch
 } from './types';
 import { ReadOrder as ReadOrderUtils } from './types';
 
 /**
  * 页面帧上下文配置
- * 
+ *
  * 控制页面帧的构建行为，包括：
  * - 单页/双页模式
  * - 阅读方向
@@ -70,27 +70,27 @@ export const PageFrameContextUtils = {
 	create(): PageFrameContext {
 		return { ...defaultPageFrameContext };
 	},
-	
+
 	/** 获取方向值 (1=LTR, -1=RTL) */
 	direction(ctx: PageFrameContext): number {
 		return ReadOrderUtils.direction(ctx.readOrder);
 	},
-	
+
 	/** 是否为单页模式 */
 	isSingleMode(ctx: PageFrameContext): boolean {
 		return ctx.pageMode === 'single';
 	},
-	
+
 	/** 是否为双页模式 */
 	isDoubleMode(ctx: PageFrameContext): boolean {
 		return ctx.pageMode === 'double';
 	},
-	
+
 	/** 是否为 RTL 模式 */
 	isRtl(ctx: PageFrameContext): boolean {
 		return ctx.readOrder === 'rtl';
 	},
-	
+
 	/** 是否为 LTR 模式 */
 	isLtr(ctx: PageFrameContext): boolean {
 		return ctx.readOrder === 'ltr';

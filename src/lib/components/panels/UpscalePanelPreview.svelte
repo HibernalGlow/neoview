@@ -4,27 +4,27 @@
 	let {
 		upscaledImageUrl = null,
 		originalImageUrl = null,
-	isProcessing = false,
-	showOriginal = false,
-	showUpscaled = false
+		isProcessing = false,
+		showOriginal = false,
+		showUpscaled = false
 	}: {
 		upscaledImageUrl?: string | null;
 		originalImageUrl?: string | null;
-	isProcessing?: boolean;
-	showOriginal?: boolean;
-	showUpscaled?: boolean;
+		isProcessing?: boolean;
+		showOriginal?: boolean;
+		showUpscaled?: boolean;
 	} = $props();
 </script>
 
 <div class="space-y-3">
 	{#if showOriginal}
 		<div class="preview-section">
-			<div class="flex items-center gap-2 text-sm font-medium mb-2">
-				<ImageIcon class="w-4 h-4" />
+			<div class="mb-2 flex items-center gap-2 text-sm font-medium">
+				<ImageIcon class="h-4 w-4" />
 				<span>原图预览</span>
 				{#if isProcessing && !upscaledImageUrl && showUpscaled}
 					<span class="badge processing">
-						<Loader2 class="w-3 h-3 animate-spin" />
+						<Loader2 class="h-3 w-3 animate-spin" />
 						等待超分...
 					</span>
 				{/if}
@@ -43,8 +43,8 @@
 
 	{#if showUpscaled}
 		<div class="preview-section">
-			<div class="flex items-center gap-2 text-sm font-medium mb-2">
-				<CheckCircle class="w-4 h-4 {upscaledImageUrl ? 'text-green-500' : ''}" />
+			<div class="mb-2 flex items-center gap-2 text-sm font-medium">
+				<CheckCircle class="h-4 w-4 {upscaledImageUrl ? 'text-green-500' : ''}" />
 				<span>超分结果</span>
 			</div>
 			{#if upscaledImageUrl}

@@ -197,10 +197,7 @@ export function createErrorBoundaryState(): ErrorBoundaryState {
 /**
  * 设置错误
  */
-export function setError(
-	state: ErrorBoundaryState,
-	error: unknown
-): ErrorBoundaryState {
+export function setError(state: ErrorBoundaryState, error: unknown): ErrorBoundaryState {
 	return {
 		...state,
 		hasError: true,

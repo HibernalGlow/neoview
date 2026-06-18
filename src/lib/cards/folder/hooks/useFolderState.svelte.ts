@@ -92,13 +92,9 @@ export function createFolderState(initialPath?: string) {
 	let showRandomTagBar = $state(false);
 
 	// 计算属性
-	const displayTabs = $derived(
-		localTabState ? [localTabState] : currentAllTabs
-	);
+	const displayTabs = $derived(localTabState ? [localTabState] : currentAllTabs);
 
-	const displayActiveTabId = $derived(
-		localTabState?.id || currentActiveTabId
-	);
+	const displayActiveTabId = $derived(localTabState?.id || currentActiveTabId);
 
 	// 订阅全局状态（非虚拟实例）
 	function subscribeGlobalState() {
@@ -158,51 +154,117 @@ export function createFolderState(initialPath?: string) {
 		navigationCommand,
 
 		// 计算属性 getter
-		get displayTabs() { return displayTabs; },
-		get displayActiveTabId() { return displayActiveTabId; },
-		get isVirtualInstance() { return isVirtualInstance; },
-		get ownTabId() { return ownTabId; },
-		get homePath() { return homePath; },
-		get localTabState() { return localTabState; },
+		get displayTabs() {
+			return displayTabs;
+		},
+		get displayActiveTabId() {
+			return displayActiveTabId;
+		},
+		get isVirtualInstance() {
+			return isVirtualInstance;
+		},
+		get ownTabId() {
+			return ownTabId;
+		},
+		get homePath() {
+			return homePath;
+		},
+		get localTabState() {
+			return localTabState;
+		},
 
 		// 右键菜单
-		get contextMenu() { return contextMenu; },
-		set contextMenu(v) { contextMenu = v; },
+		get contextMenu() {
+			return contextMenu;
+		},
+		set contextMenu(v) {
+			contextMenu = v;
+		},
 
 		// 剪贴板
-		get clipboardItem() { return clipboardItem; },
-		set clipboardItem(v) { clipboardItem = v; },
+		get clipboardItem() {
+			return clipboardItem;
+		},
+		set clipboardItem(v) {
+			clipboardItem = v;
+		},
 
 		// 确认对话框
-		get confirmDialogOpen() { return confirmDialogOpen; },
-		set confirmDialogOpen(v) { confirmDialogOpen = v; },
-		get confirmDialogTitle() { return confirmDialogTitle; },
-		set confirmDialogTitle(v) { confirmDialogTitle = v; },
-		get confirmDialogDescription() { return confirmDialogDescription; },
-		set confirmDialogDescription(v) { confirmDialogDescription = v; },
-		get confirmDialogConfirmText() { return confirmDialogConfirmText; },
-		set confirmDialogConfirmText(v) { confirmDialogConfirmText = v; },
-		get confirmDialogVariant() { return confirmDialogVariant; },
-		set confirmDialogVariant(v) { confirmDialogVariant = v; },
-		get confirmDialogOnConfirm() { return confirmDialogOnConfirm; },
-		set confirmDialogOnConfirm(v) { confirmDialogOnConfirm = v; },
+		get confirmDialogOpen() {
+			return confirmDialogOpen;
+		},
+		set confirmDialogOpen(v) {
+			confirmDialogOpen = v;
+		},
+		get confirmDialogTitle() {
+			return confirmDialogTitle;
+		},
+		set confirmDialogTitle(v) {
+			confirmDialogTitle = v;
+		},
+		get confirmDialogDescription() {
+			return confirmDialogDescription;
+		},
+		set confirmDialogDescription(v) {
+			confirmDialogDescription = v;
+		},
+		get confirmDialogConfirmText() {
+			return confirmDialogConfirmText;
+		},
+		set confirmDialogConfirmText(v) {
+			confirmDialogConfirmText = v;
+		},
+		get confirmDialogVariant() {
+			return confirmDialogVariant;
+		},
+		set confirmDialogVariant(v) {
+			confirmDialogVariant = v;
+		},
+		get confirmDialogOnConfirm() {
+			return confirmDialogOnConfirm;
+		},
+		set confirmDialogOnConfirm(v) {
+			confirmDialogOnConfirm = v;
+		},
 
 		// 重命名对话框
-		get renameDialogOpen() { return renameDialogOpen; },
-		set renameDialogOpen(v) { renameDialogOpen = v; },
-		get renameDialogItem() { return renameDialogItem; },
-		set renameDialogItem(v) { renameDialogItem = v; },
+		get renameDialogOpen() {
+			return renameDialogOpen;
+		},
+		set renameDialogOpen(v) {
+			renameDialogOpen = v;
+		},
+		get renameDialogItem() {
+			return renameDialogItem;
+		},
+		set renameDialogItem(v) {
+			renameDialogItem = v;
+		},
 
 		// UI 状态
-		get showFavoriteTagPanel() { return showFavoriteTagPanel; },
-		set showFavoriteTagPanel(v) { showFavoriteTagPanel = v; },
-		get showMigrationManager() { return showMigrationManager; },
-		set showMigrationManager(v) { showMigrationManager = v; },
-		get showRandomTagBar() { return showRandomTagBar; },
-		set showRandomTagBar(v) { showRandomTagBar = v; },
+		get showFavoriteTagPanel() {
+			return showFavoriteTagPanel;
+		},
+		set showFavoriteTagPanel(v) {
+			showFavoriteTagPanel = v;
+		},
+		get showMigrationManager() {
+			return showMigrationManager;
+		},
+		set showMigrationManager(v) {
+			showMigrationManager = v;
+		},
+		get showRandomTagBar() {
+			return showRandomTagBar;
+		},
+		set showRandomTagBar(v) {
+			showRandomTagBar = v;
+		},
 
 		// Setter
-		set homePath(v) { homePath = v; },
+		set homePath(v) {
+			homePath = v;
+		},
 
 		// 方法
 		subscribeGlobalState,

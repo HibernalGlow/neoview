@@ -96,23 +96,23 @@ export function calculateThumbnailDimensions(
 	barHeight: number
 ): ThumbnailDimensions {
 	const maxHeight = barHeight - 40; // 留出边距
-	
+
 	if (!originalWidth || !originalHeight) {
 		// 默认尺寸
 		return { width: maxHeight * 0.7, height: maxHeight };
 	}
-	
+
 	const aspectRatio = originalWidth / originalHeight;
 	let height = maxHeight;
 	let width = height * aspectRatio;
-	
+
 	// 限制最大宽度
 	const maxWidth = maxHeight * 2;
 	if (width > maxWidth) {
 		width = maxWidth;
 		height = width / aspectRatio;
 	}
-	
+
 	return { width, height };
 }
 

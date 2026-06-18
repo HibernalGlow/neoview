@@ -1,6 +1,6 @@
 /**
  * IndexedDB 持久化缓存
- * 
+ *
  * 提供缓存数据的持久化存储，支持：
  * - 自动过期清理
  * - 批量操作
@@ -43,7 +43,7 @@ export class PersistentCache<T> {
 			dbName: config.dbName,
 			storeName: config.storeName,
 			maxAge: config.maxAge,
-			version: config.version ?? 1,
+			version: config.version ?? 1
 		};
 	}
 
@@ -71,7 +71,7 @@ export class PersistentCache<T> {
 
 			request.onupgradeneeded = (event) => {
 				const db = (event.target as IDBOpenDBRequest).result;
-				
+
 				// 创建存储（如果不存在）
 				if (!db.objectStoreNames.contains(this.config.storeName)) {
 					const store = db.createObjectStore(this.config.storeName, { keyPath: 'key' });
@@ -127,7 +127,7 @@ export class PersistentCache<T> {
 				key,
 				value,
 				createdAt: Date.now(),
-				expiresAt: this.config.maxAge ? Date.now() + this.config.maxAge : undefined,
+				expiresAt: this.config.maxAge ? Date.now() + this.config.maxAge : undefined
 			};
 
 			const request = store.put(entry);
@@ -277,7 +277,7 @@ export class PersistentCache<T> {
 					key,
 					value,
 					createdAt: now,
-					expiresAt: this.config.maxAge ? now + this.config.maxAge : undefined,
+					expiresAt: this.config.maxAge ? now + this.config.maxAge : undefined
 				};
 				store.put(entry);
 			}
@@ -328,7 +328,7 @@ export async function estimateStorageUsage(): Promise<{ usage: number; quota: nu
 		const estimate = await navigator.storage.estimate();
 		return {
 			usage: estimate.usage ?? 0,
-			quota: estimate.quota ?? 0,
+			quota: estimate.quota ?? 0
 		};
 	} catch {
 		return null;

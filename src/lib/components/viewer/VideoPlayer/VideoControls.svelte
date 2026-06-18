@@ -3,14 +3,7 @@
 	 * VideoControls - 视频控制按钮组件
 	 * 包含播放/暂停、快进/快退、循环模式等基本控制
 	 */
-	import {
-		Play,
-		Pause,
-		SkipBack,
-		SkipForward,
-		Repeat,
-		Repeat1
-	} from '@lucide/svelte';
+	import { Play, Pause, SkipBack, SkipForward, Repeat, Repeat1 } from '@lucide/svelte';
 
 	type LoopMode = 'none' | 'list' | 'single';
 
@@ -23,14 +16,8 @@
 		onCycleLoopMode: () => void;
 	}
 
-	let {
-		isPlaying,
-		loopMode,
-		onTogglePlay,
-		onSkipBackward,
-		onSkipForward,
-		onCycleLoopMode
-	}: Props = $props();
+	let { isPlaying, loopMode, onTogglePlay, onSkipBackward, onSkipForward, onCycleLoopMode }: Props =
+		$props();
 </script>
 
 <!-- 播放/暂停 -->
@@ -40,9 +27,9 @@
 	aria-label={isPlaying ? '暂停' : '播放'}
 >
 	{#if isPlaying}
-		<Pause class="h-6 w-6 text-primary" />
+		<Pause class="text-primary h-6 w-6" />
 	{:else}
-		<Play class="h-6 w-6 text-primary" />
+		<Play class="text-primary h-6 w-6" />
 	{/if}
 </button>
 
@@ -52,7 +39,7 @@
 	onclick={onSkipBackward}
 	aria-label="后退10秒"
 >
-	<SkipBack class="h-5 w-5 text-primary" />
+	<SkipBack class="text-primary h-5 w-5" />
 </button>
 
 <!-- 快进 -->
@@ -61,7 +48,7 @@
 	onclick={onSkipForward}
 	aria-label="前进10秒"
 >
-	<SkipForward class="h-5 w-5 text-primary" />
+	<SkipForward class="text-primary h-5 w-5" />
 </button>
 
 <!-- 循环模式 -->
@@ -71,19 +58,13 @@
 		event.stopPropagation();
 		onCycleLoopMode();
 	}}
-	aria-label={
-		loopMode === 'none'
-			? '不循环'
-			: loopMode === 'single'
-				? '单个循环'
-				: '列表循环'
-	}
+	aria-label={loopMode === 'none' ? '不循环' : loopMode === 'single' ? '单个循环' : '列表循环'}
 >
 	{#if loopMode === 'single'}
-		<Repeat1 class="h-5 w-5 text-primary" />
+		<Repeat1 class="text-primary h-5 w-5" />
 	{:else if loopMode === 'list'}
-		<Repeat class="h-5 w-5 text-primary" />
+		<Repeat class="text-primary h-5 w-5" />
 	{:else}
-		<Repeat class="h-5 w-5 text-primary opacity-40" />
+		<Repeat class="text-primary h-5 w-5 opacity-40" />
 	{/if}
 </button>

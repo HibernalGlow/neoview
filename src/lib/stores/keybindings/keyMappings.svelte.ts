@@ -195,7 +195,13 @@ const radialBindings: ActionBinding[] = [
 				action: 'press',
 				trigger: 'instant'
 			},
-			{ type: 'touch', gesture: 'long-press', trigger: 'hold', durationMs: 450, moveTolerancePx: 12 }
+			{
+				type: 'touch',
+				gesture: 'long-press',
+				trigger: 'hold',
+				durationMs: 450,
+				moveTolerancePx: 12
+			}
 		]
 	},
 	{

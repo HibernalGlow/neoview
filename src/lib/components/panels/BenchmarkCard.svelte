@@ -72,26 +72,26 @@
 
 	function generateCopyText(): string {
 		if (reports.length === 0) return '';
-		
+
 		const lines: string[] = [];
 		lines.push('=== 图像解码基准测试结果 ===');
 		lines.push(`测试时间: ${new Date().toLocaleString()}`);
 		lines.push(`测试文件数: ${reports.length}`);
 		lines.push('');
-		
+
 		for (const report of reports) {
 			const fileName = report.file_path.split(/[/\\]/).pop() || report.file_path;
 			lines.push(`📁 ${fileName}`);
 			lines.push(`   源文件大小: ${formatFileSize(report.file_size)}`);
 			lines.push('');
-			
+
 			// 按耗时排序
 			const sortedResults = [...report.results].sort((a, b) => {
 				if (!a.success) return 1;
 				if (!b.success) return -1;
 				return a.duration_ms - b.duration_ms;
 			});
-			
+
 			for (const result of sortedResults) {
 				const status = result.success ? '✅' : '❌';
 				const time = result.success ? `${result.duration_ms.toFixed(1)}ms` : 'FAILED';
@@ -102,13 +102,13 @@
 			}
 			lines.push('');
 		}
-		
+
 		// 添加最快方法统计
 		if (reports.length > 0) {
 			lines.push('--- 性能排名 (解码) ---');
 			const decodeMethods = ['image crate', 'WIC (Windows)', 'jxl-oxide'];
 			const decodeStats = new Map<string, number[]>();
-			
+
 			for (const report of reports) {
 				for (const result of report.results) {
 					if (decodeMethods.includes(result.method) && result.success) {
@@ -119,7 +119,7 @@
 					}
 				}
 			}
-			
+
 			const avgStats = [...decodeStats.entries()]
 				.map(([method, times]) => ({
 					method,
@@ -127,16 +127,21 @@
 					count: times.length
 				}))
 				.sort((a, b) => a.avg - b.avg);
-			
+
 			for (const stat of avgStats) {
 				lines.push(`   ${stat.method}: 平均 ${stat.avg.toFixed(1)}ms (${stat.count}次)`);
 			}
-			
+
 			lines.push('');
 			lines.push('--- 性能排名 (完整缩略图) ---');
-			const thumbMethods = ['thumbnail/image→webp', 'thumbnail/WIC→webp', 'thumbnail/WIC→jpg', 'thumbnail/WIC→png'];
+			const thumbMethods = [
+				'thumbnail/image→webp',
+				'thumbnail/WIC→webp',
+				'thumbnail/WIC→jpg',
+				'thumbnail/WIC→png'
+			];
 			const thumbStats = new Map<string, number[]>();
-			
+
 			for (const report of reports) {
 				for (const result of report.results) {
 					if (thumbMethods.includes(result.method) && result.success) {
@@ -147,7 +152,7 @@
 					}
 				}
 			}
-			
+
 			const avgThumbStats = [...thumbStats.entries()]
 				.map(([method, times]) => ({
 					method,
@@ -155,12 +160,12 @@
 					count: times.length
 				}))
 				.sort((a, b) => a.avg - b.avg);
-			
+
 			for (const stat of avgThumbStats) {
 				lines.push(`   ${stat.method}: 平均 ${stat.avg.toFixed(1)}ms (${stat.count}次)`);
 			}
 		}
-		
+
 		return lines.join('\n');
 	}
 
@@ -176,19 +181,17 @@
 
 <Card class="w-full">
 	<CardHeader class="pb-2">
-		<CardTitle class="text-sm flex items-center gap-2">
-			<Timer class="w-4 h-4" />
+		<CardTitle class="flex items-center gap-2 text-sm">
+			<Timer class="h-4 w-4" />
 			图像解码基准测试
 		</CardTitle>
 	</CardHeader>
 	<CardContent class="space-y-3">
-		<p class="text-xs text-muted-foreground">
-			测试 image crate、WIC 对各种格式的解码性能
-		</p>
+		<p class="text-muted-foreground text-xs">测试 image crate、WIC 对各种格式的解码性能</p>
 
 		<div class="flex gap-2">
 			<Button onclick={selectFiles} variant="outline" size="sm" class="flex-1">
-				<FolderOpen class="w-3 h-3 mr-1" />
+				<FolderOpen class="mr-1 h-3 w-3" />
 				选择 ({selectedFiles.length})
 			</Button>
 			<Button
@@ -205,28 +208,30 @@
 			<div class="flex justify-end">
 				<Button onclick={copyResults} variant="ghost" size="sm">
 					{#if copied}
-						<Check class="w-3 h-3 mr-1 text-green-500" />
+						<Check class="mr-1 h-3 w-3 text-green-500" />
 						已复制
 					{:else}
-						<Copy class="w-3 h-3 mr-1" />
+						<Copy class="mr-1 h-3 w-3" />
 						复制结果
 					{/if}
 				</Button>
 			</div>
 
-			<div class="max-h-60 overflow-auto space-y-2">
+			<div class="max-h-60 space-y-2 overflow-auto">
 				{#each reports as report}
-					<div class="text-xs border rounded p-2 space-y-1">
+					<div class="space-y-1 rounded border p-2 text-xs">
 						<div class="flex justify-between">
-							<span class="font-medium truncate" title={report.file_path}>
+							<span class="truncate font-medium" title={report.file_path}>
 								{report.file_path.split(/[/\\]/).pop()}
 							</span>
 							<span class="text-muted-foreground">{formatFileSize(report.file_size)}</span>
 						</div>
 						{#each report.results as result}
-							<div class="flex justify-between items-center text-[10px] text-muted-foreground">
-								<span class:text-blue-500={result.method.includes('WIC')}
-									  class:text-green-500={result.method.includes('image')}>
+							<div class="text-muted-foreground flex items-center justify-between text-[10px]">
+								<span
+									class:text-blue-500={result.method.includes('WIC')}
+									class:text-green-500={result.method.includes('image')}
+								>
 									{result.method}
 								</span>
 								<span class="flex gap-2">
@@ -234,7 +239,7 @@
 										<span>{formatFileSize(result.output_size)}</span>
 									{/if}
 									{#if result.success}
-										<span class="text-green-600 font-mono">{result.duration_ms.toFixed(1)}ms</span>
+										<span class="font-mono text-green-600">{result.duration_ms.toFixed(1)}ms</span>
 									{:else}
 										<span class="text-red-500">失败</span>
 									{/if}

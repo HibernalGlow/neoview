@@ -94,13 +94,13 @@
 			const { x, y } = pendingUpdate;
 			lastX = x;
 			lastY = y;
-			
+
 			// 【性能优化】直接操作 DOM，绕过 Svelte 响应式
 			for (const el of targetElements) {
 				(el as HTMLElement).style.setProperty('--view-x', `${x}%`);
 				(el as HTMLElement).style.setProperty('--view-y', `${y}%`);
 			}
-			
+
 			// 仍然调用回调（用于其他逻辑，如翻页重置）
 			onPositionChange?.(x, y);
 			pendingUpdate = null;
@@ -171,7 +171,7 @@
 				updateTargetElements();
 			});
 			resizeObserver.observe(layerRef);
-			
+
 			// 【性能优化】使用 MutationObserver 监听 DOM 变化（带防抖）
 			// 当书籍切换时，frame-layer 元素会被替换
 			mutationObserver = new MutationObserver(() => {
@@ -185,7 +185,7 @@
 				childList: true,
 				subtree: false // 只监听直接子元素变化
 			});
-			
+
 			// 初始更新
 			updateRect();
 			updateTargetElements();
@@ -200,7 +200,7 @@
 		if (resizeObserver) {
 			resizeObserver.disconnect();
 		}
-		
+
 		if (mutationObserver) {
 			mutationObserver.disconnect();
 		}
@@ -208,7 +208,7 @@
 		if (rafId !== null) {
 			cancelAnimationFrame(rafId);
 		}
-		
+
 		// 【修复内存泄漏】清理防抖定时器
 		if (mutationTimeout) {
 			clearTimeout(mutationTimeout);

@@ -13,36 +13,36 @@ const randomSeedCache = new Map<string, number>();
 const MAX_SEED_CACHE_SIZE = 100;
 
 export function getRandomSeedForPath(path: string): number {
-  const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-  if (randomSeedCache.has(normalizedPath)) {
-    return randomSeedCache.get(normalizedPath)!;
-  }
-  const seed = Math.random() * 2147483647 | 0;
-  if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
-    const firstKey = randomSeedCache.keys().next().value;
-    if (firstKey) randomSeedCache.delete(firstKey);
-  }
-  randomSeedCache.set(normalizedPath, seed);
-  return seed;
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+	if (randomSeedCache.has(normalizedPath)) {
+		return randomSeedCache.get(normalizedPath)!;
+	}
+	const seed = (Math.random() * 2147483647) | 0;
+	if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+		const firstKey = randomSeedCache.keys().next().value;
+		if (firstKey) randomSeedCache.delete(firstKey);
+	}
+	randomSeedCache.set(normalizedPath, seed);
+	return seed;
 }
 
 export function seededRandom(seed: number): () => number {
-  return function() {
-    let t = seed += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
+	return function () {
+		let t = (seed += 0x6d2b79f5);
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
 }
 
 export function seededShuffle<T>(items: T[], seed: number): T[] {
-  const shuffled = [...items];
-  const random = seededRandom(seed);
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
+	const shuffled = [...items];
+	const random = seededRandom(seed);
+	for (let i = shuffled.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	}
+	return shuffled;
 }
 
 /**
@@ -50,117 +50,120 @@ export function seededShuffle<T>(items: T[], seed: number): T[] {
  * path 参数用于随机排序种子记忆
  */
 export function sortItems(
-  items: FsItem[], 
-  field: string, 
-  order: string, 
-  skipFolderFirst = false, 
-  path?: string
+	items: FsItem[],
+	field: string,
+	order: string,
+	skipFolderFirst = false,
+	path?: string
 ): FsItem[] {
-  // 随机排序特殊处理
-  if (field === 'random') {
-    const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
-    if (skipFolderFirst) {
-      return seededShuffle(items, seed);
-    }
-    const folders = items.filter(item => item.isDir);
-    const files = items.filter(item => !item.isDir);
-    const shuffledFolders = seededShuffle(folders, seed);
-    const shuffledFiles = seededShuffle(files, seed + 1);
-    const result = [...shuffledFolders, ...shuffledFiles];
-    return order === 'asc' ? result : result.reverse();
-  }
+	// 随机排序特殊处理
+	if (field === 'random') {
+		const seed = path ? getRandomSeedForPath(path) : (Math.random() * 2147483647) | 0;
+		if (skipFolderFirst) {
+			return seededShuffle(items, seed);
+		}
+		const folders = items.filter((item) => item.isDir);
+		const files = items.filter((item) => !item.isDir);
+		const shuffledFolders = seededShuffle(folders, seed);
+		const shuffledFiles = seededShuffle(files, seed + 1);
+		const result = [...shuffledFolders, ...shuffledFiles];
+		return order === 'asc' ? result : result.reverse();
+	}
 
-  // rating 排序特殊处理
-  if (field === 'rating') {
-    const defaultRating = getDefaultRating();
-    const sorted = [...items].sort((a, b) => {
-      if (!skipFolderFirst && a.isDir !== b.isDir) {
-        return a.isDir ? -1 : 1;
-      }
-      const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
-      const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
-      if (ratingA === ratingB) {
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      }
-      const comparison = ratingA - ratingB;
-      return order === 'asc' ? comparison : -comparison;
-    });
-    return sorted;
-  }
+	// rating 排序特殊处理
+	if (field === 'rating') {
+		const defaultRating = getDefaultRating();
+		const sorted = [...items].sort((a, b) => {
+			if (!skipFolderFirst && a.isDir !== b.isDir) {
+				return a.isDir ? -1 : 1;
+			}
+			const ratingA = folderRatingStore.getEffectiveRating(a.path) ?? defaultRating;
+			const ratingB = folderRatingStore.getEffectiveRating(b.path) ?? defaultRating;
+			if (ratingA === ratingB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+			const comparison = ratingA - ratingB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
+	}
 
-  // collectTagCount 排序特殊处理
-  if (field === 'collectTagCount') {
-    const sorted = [...items].sort((a, b) => {
-      if (!skipFolderFirst && a.isDir !== b.isDir) {
-        return a.isDir ? -1 : 1;
-      }
-      const countA = collectTagCountStore.getCount(a.path);
-      const countB = collectTagCountStore.getCount(b.path);
-      if (countA === countB) {
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      }
-      const comparison = countA - countB;
-      return order === 'asc' ? comparison : -comparison;
-    });
-    return sorted;
-  }
+	// collectTagCount 排序特殊处理
+	if (field === 'collectTagCount') {
+		const sorted = [...items].sort((a, b) => {
+			if (!skipFolderFirst && a.isDir !== b.isDir) {
+				return a.isDir ? -1 : 1;
+			}
+			const countA = collectTagCountStore.getCount(a.path);
+			const countB = collectTagCountStore.getCount(b.path);
+			if (countA === countB) {
+				return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+			}
+			const comparison = countA - countB;
+			return order === 'asc' ? comparison : -comparison;
+		});
+		return sorted;
+	}
 
-  const sorted = [...items].sort((a, b) => {
-    if (!skipFolderFirst && a.isDir !== b.isDir) {
-      return a.isDir ? -1 : 1;
-    }
+	const sorted = [...items].sort((a, b) => {
+		if (!skipFolderFirst && a.isDir !== b.isDir) {
+			return a.isDir ? -1 : 1;
+		}
 
-    let comparison = 0;
-    switch (field) {
-      case 'name':
-        comparison = a.name.localeCompare(b.name, undefined, {
-          numeric: true,
-          sensitivity: 'base'
-        });
-        break;
-      case 'date':
-        comparison = (a.modified || 0) - (b.modified || 0);
-        break;
-      case 'size': {
-        let sizeA = a.size || 0;
-        let sizeB = b.size || 0;
-        // 文件夹 size 在后端快速模式下默认为 0，使用 folderSizeCache 的缓存值
-        if (a.isDir && sizeA === 0) {
-          sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
-        }
-        if (b.isDir && sizeB === 0) {
-          sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
-        }
-        comparison = sizeA - sizeB;
-        break;
-      }
-      case 'type': {
-        const extA = a.name.split('.').pop()?.toLowerCase() || '';
-        const extB = b.name.split('.').pop()?.toLowerCase() || '';
-        comparison = extA.localeCompare(extB);
-        break;
-      }
-    }
+		let comparison = 0;
+		switch (field) {
+			case 'name':
+				comparison = a.name.localeCompare(b.name, undefined, {
+					numeric: true,
+					sensitivity: 'base'
+				});
+				break;
+			case 'date':
+				comparison = (a.modified || 0) - (b.modified || 0);
+				break;
+			case 'size': {
+				let sizeA = a.size || 0;
+				let sizeB = b.size || 0;
+				// 文件夹 size 在后端快速模式下默认为 0，使用 folderSizeCache 的缓存值
+				if (a.isDir && sizeA === 0) {
+					sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
+				}
+				if (b.isDir && sizeB === 0) {
+					sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
+				}
+				comparison = sizeA - sizeB;
+				break;
+			}
+			case 'type': {
+				const extA = a.name.split('.').pop()?.toLowerCase() || '';
+				const extB = b.name.split('.').pop()?.toLowerCase() || '';
+				comparison = extA.localeCompare(extB);
+				break;
+			}
+		}
 
-    return order === 'desc' ? -comparison : comparison;
-  });
+		return order === 'desc' ? -comparison : comparison;
+	});
 
-  // 按 size 排序时，异步触发文件夹大小加载（缓存为空时），加载完成后 UI 会因响应式更新而重新排序
-  if (field === 'size') {
-    const foldersNeedingSize = items.filter(item => item.isDir && (item.size || 0) === 0 && getCachedFolderSizeForSort(item.path) === null);
-    if (foldersNeedingSize.length > 0) {
-      requestFolderSizes(foldersNeedingSize.map(item => item.path));
-    }
-  }
+	// 按 size 排序时，异步触发文件夹大小加载（缓存为空时），加载完成后 UI 会因响应式更新而重新排序
+	if (field === 'size') {
+		const foldersNeedingSize = items.filter(
+			(item) =>
+				item.isDir && (item.size || 0) === 0 && getCachedFolderSizeForSort(item.path) === null
+		);
+		if (foldersNeedingSize.length > 0) {
+			requestFolderSizes(foldersNeedingSize.map((item) => item.path));
+		}
+	}
 
-  return sorted;
+	return sorted;
 }
 
 /**
  * 过滤函数
  */
 export function filterItems(items: FsItem[], keyword: string): FsItem[] {
-  if (!keyword.trim()) return items;
-  const lowerKeyword = keyword.toLowerCase();
-  return items.filter((item) => item.name.toLowerCase().includes(lowerKeyword));
+	if (!keyword.trim()) return items;
+	const lowerKeyword = keyword.toLowerCase();
+	return items.filter((item) => item.name.toLowerCase().includes(lowerKeyword));
 }

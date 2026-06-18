@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 外观主题设置卡片
- */
-import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
+	/**
+	 * 外观主题设置卡片
+	 */
+	import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import ThemePanel from '$lib/components/panels/ThemePanel.svelte';
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

@@ -1,220 +1,239 @@
 <script lang="ts">
-/**
- * BreadcrumbBar - 面包屑导航栏
- * 参考 NeeView 的 BreadcrumbBar 设计
- * 支持点击导航和直接输入路径
- */
-import { ChevronRight, MoreHorizontal, Edit2, Plus, Bookmark, Clock, Folder, HardDrive } from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
-import { Input } from '$lib/components/ui/input';
-import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-import * as Tooltip from '$lib/components/ui/tooltip';
-import Icon from '$lib/components/ui/Icon.svelte';
-import { tabCurrentPath, folderTabActions, isVirtualPath, getVirtualPathType, VIRTUAL_PATHS } from '../stores/folderTabStore';
+	/**
+	 * BreadcrumbBar - 面包屑导航栏
+	 * 参考 NeeView 的 BreadcrumbBar 设计
+	 * 支持点击导航和直接输入路径
+	 */
+	import {
+		ChevronRight,
+		MoreHorizontal,
+		Edit2,
+		Plus,
+		Bookmark,
+		Clock,
+		Folder,
+		HardDrive
+	} from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import Icon from '$lib/components/ui/Icon.svelte';
+	import {
+		tabCurrentPath,
+		folderTabActions,
+		isVirtualPath,
+		getVirtualPathType,
+		VIRTUAL_PATHS
+	} from '../stores/folderTabStore';
 
-interface Props {
-	onNavigate?: (path: string) => void;
-	/** 新建标签页回调（可选，默认使用全局 store） */
-	onCreateTab?: () => void;
-	homePath?: string;
-	/** 外部传入的路径（用于虚拟实例独立显示） */
-	externalPath?: string;
-	/** 是否垂直布局（左右位置时使用） */
-	vertical?: boolean;
-}
-
-let { onNavigate, onCreateTab, homePath = '', externalPath, vertical = false }: Props = $props();
-
-// 使用外部路径或全局 store 的 currentPath
-import { get } from 'svelte/store';
-let displayPath = $state('');
-
-$effect(() => {
-	// 如果有外部路径，使用它；否则订阅全局 store
-	if (externalPath !== undefined) {
-		displayPath = externalPath;
-	} else {
-		const unsub = tabCurrentPath.subscribe(v => { displayPath = v; });
-		return unsub;
+	interface Props {
+		onNavigate?: (path: string) => void;
+		/** 新建标签页回调（可选，默认使用全局 store） */
+		onCreateTab?: () => void;
+		homePath?: string;
+		/** 外部传入的路径（用于虚拟实例独立显示） */
+		externalPath?: string;
+		/** 是否垂直布局（左右位置时使用） */
+		vertical?: boolean;
 	}
-});
 
-function handleCreateTab() {
-	if (onCreateTab) {
-		onCreateTab();
-	} else {
-		folderTabActions.createTab(homePath);
-	}
-}
+	let { onNavigate, onCreateTab, homePath = '', externalPath, vertical = false }: Props = $props();
 
-// 编辑模式状态
-let isEditing = $state(false);
-let editValue = $state('');
-let inputRef: HTMLInputElement | null = $state(null);
+	// 使用外部路径或全局 store 的 currentPath
+	import { get } from 'svelte/store';
+	let displayPath = $state('');
 
-function startEditing() {
-	editValue = displayPath;
-	isEditing = true;
-	// 下一帧聚焦输入框
-	requestAnimationFrame(() => {
-		inputRef?.focus();
-		inputRef?.select();
-	});
-}
-
-function cancelEditing() {
-	isEditing = false;
-	editValue = '';
-}
-
-function confirmEditing() {
-	if (editValue.trim()) {
-		let finalPath = editValue.trim();
-		
-		// 检测是否为虚拟路径
-		if (isVirtualPath(finalPath)) {
-			// 虚拟路径直接使用，不做规范化
-			folderTabActions.setPath(finalPath);
-			onNavigate?.(finalPath);
+	$effect(() => {
+		// 如果有外部路径，使用它；否则订阅全局 store
+		if (externalPath !== undefined) {
+			displayPath = externalPath;
 		} else {
-			// 规范化路径：Windows 使用反斜杠
-			let normalizedPath = finalPath.replace(/\//g, '\\');
-			// 确保 Windows 盘符格式正确
-			if (/^[a-zA-Z]:$/.test(normalizedPath)) {
-				normalizedPath += '\\';
-			}
-			// 确保 Windows 盘符后有反斜杠
-			if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
-				normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
-			}
-			folderTabActions.setPath(normalizedPath);
-			onNavigate?.(normalizedPath);
+			const unsub = tabCurrentPath.subscribe((v) => {
+				displayPath = v;
+			});
+			return unsub;
+		}
+	});
+
+	function handleCreateTab() {
+		if (onCreateTab) {
+			onCreateTab();
+		} else {
+			folderTabActions.createTab(homePath);
 		}
 	}
-	isEditing = false;
-}
 
-function handleInputKeyDown(e: KeyboardEvent) {
-	if (e.key === 'Enter') {
-		e.preventDefault();
-		confirmEditing();
-	} else if (e.key === 'Escape') {
-		e.preventDefault();
-		cancelEditing();
+	// 编辑模式状态
+	let isEditing = $state(false);
+	let editValue = $state('');
+	let inputRef: HTMLInputElement | null = $state(null);
+
+	function startEditing() {
+		editValue = displayPath;
+		isEditing = true;
+		// 下一帧聚焦输入框
+		requestAnimationFrame(() => {
+			inputRef?.focus();
+			inputRef?.select();
+		});
 	}
-}
 
-function handleInputBlur() {
-	// 延迟取消，允许点击确认按钮
-	setTimeout(() => {
-		if (isEditing) {
+	function cancelEditing() {
+		isEditing = false;
+		editValue = '';
+	}
+
+	function confirmEditing() {
+		if (editValue.trim()) {
+			let finalPath = editValue.trim();
+
+			// 检测是否为虚拟路径
+			if (isVirtualPath(finalPath)) {
+				// 虚拟路径直接使用，不做规范化
+				folderTabActions.setPath(finalPath);
+				onNavigate?.(finalPath);
+			} else {
+				// 规范化路径：Windows 使用反斜杠
+				let normalizedPath = finalPath.replace(/\//g, '\\');
+				// 确保 Windows 盘符格式正确
+				if (/^[a-zA-Z]:$/.test(normalizedPath)) {
+					normalizedPath += '\\';
+				}
+				// 确保 Windows 盘符后有反斜杠
+				if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
+					normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
+				}
+				folderTabActions.setPath(normalizedPath);
+				onNavigate?.(normalizedPath);
+			}
+		}
+		isEditing = false;
+	}
+
+	function handleInputKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			confirmEditing();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
 			cancelEditing();
 		}
-	}, 150);
-}
-
-interface BreadcrumbItem {
-	name: string;
-	path: string;
-	isRoot: boolean;
-}
-
-// 解析路径为面包屑项
-function parsePath(path: string): BreadcrumbItem[] {
-	if (!path) return [];
-
-	// 虚拟路径特殊处理
-	if (isVirtualPath(path)) {
-		const type = getVirtualPathType(path);
-		return [{
-			name: type === 'bookmark' ? '书签' : type === 'history' ? '历史' : path,
-			path: path,
-			isRoot: true
-		}];
 	}
 
-	// 统一使用反斜杠处理
-	const normalized = path.replace(/\//g, '\\');
-	const parts = normalized.split('\\').filter(Boolean);
+	function handleInputBlur() {
+		// 延迟取消，允许点击确认按钮
+		setTimeout(() => {
+			if (isEditing) {
+				cancelEditing();
+			}
+		}, 150);
+	}
 
-	const items: BreadcrumbItem[] = [];
+	interface BreadcrumbItem {
+		name: string;
+		path: string;
+		isRoot: boolean;
+	}
 
-	// Windows 盘符处理
-	if (path.includes(':')) {
-		const drive = parts[0]; // e.g., "E:"
-		const drivePath = drive + '\\'; // e.g., "E:\"
-		items.push({
-			name: drive,
-			path: drivePath,
-			isRoot: true
+	// 解析路径为面包屑项
+	function parsePath(path: string): BreadcrumbItem[] {
+		if (!path) return [];
+
+		// 虚拟路径特殊处理
+		if (isVirtualPath(path)) {
+			const type = getVirtualPathType(path);
+			return [
+				{
+					name: type === 'bookmark' ? '书签' : type === 'history' ? '历史' : path,
+					path: path,
+					isRoot: true
+				}
+			];
+		}
+
+		// 统一使用反斜杠处理
+		const normalized = path.replace(/\//g, '\\');
+		const parts = normalized.split('\\').filter(Boolean);
+
+		const items: BreadcrumbItem[] = [];
+
+		// Windows 盘符处理
+		if (path.includes(':')) {
+			const drive = parts[0]; // e.g., "E:"
+			const drivePath = drive + '\\'; // e.g., "E:\"
+			items.push({
+				name: drive,
+				path: drivePath,
+				isRoot: true
+			});
+
+			let currentPath = drivePath;
+			for (let i = 1; i < parts.length; i++) {
+				currentPath = currentPath + parts[i];
+				items.push({
+					name: parts[i],
+					path: currentPath,
+					isRoot: false
+				});
+				// 添加分隔符供下一次迭代使用
+				currentPath += '\\';
+			}
+		} else {
+			// Unix 路径
+			let currentPath = '';
+			for (const part of parts) {
+				currentPath += '/' + part;
+				items.push({
+					name: part,
+					path: currentPath,
+					isRoot: items.length === 0
+				});
+			}
+		}
+
+		return items;
+	}
+
+	// 计算可见的面包屑项（响应式宽度）
+	let containerRef: HTMLDivElement | null = $state(null);
+	let maxVisibleItems = $state(5);
+
+	$effect(() => {
+		if (!containerRef) return;
+
+		const observer = new ResizeObserver((entries) => {
+			const width = entries[0]?.contentRect.width ?? 300;
+			// 根据宽度动态计算可显示的项数
+			maxVisibleItems = Math.max(2, Math.floor(width / 80));
 		});
 
-		let currentPath = drivePath;
-		for (let i = 1; i < parts.length; i++) {
-			currentPath = currentPath + parts[i];
-			items.push({
-				name: parts[i],
-				path: currentPath,
-				isRoot: false
-			});
-			// 添加分隔符供下一次迭代使用
-			currentPath += '\\';
-		}
-	} else {
-		// Unix 路径
-		let currentPath = '';
-		for (const part of parts) {
-			currentPath += '/' + part;
-			items.push({
-				name: part,
-				path: currentPath,
-				isRoot: items.length === 0
-			});
-		}
-	}
+		observer.observe(containerRef);
 
-	return items;
-}
-
-// 计算可见的面包屑项（响应式宽度）
-let containerRef: HTMLDivElement | null = $state(null);
-let maxVisibleItems = $state(5);
-
-$effect(() => {
-	if (!containerRef) return;
-
-	const observer = new ResizeObserver((entries) => {
-		const width = entries[0]?.contentRect.width ?? 300;
-		// 根据宽度动态计算可显示的项数
-		maxVisibleItems = Math.max(2, Math.floor(width / 80));
+		return () => observer.disconnect();
 	});
 
-	observer.observe(containerRef);
+	let breadcrumbItems = $derived(parsePath(displayPath));
 
-	return () => observer.disconnect();
-});
+	let visibleItems = $derived(() => {
+		if (breadcrumbItems.length <= maxVisibleItems) {
+			return { collapsed: [], visible: breadcrumbItems };
+		}
 
-let breadcrumbItems = $derived(parsePath(displayPath));
+		// 始终显示第一个（根）和最后几个
+		const collapsed = breadcrumbItems.slice(1, breadcrumbItems.length - maxVisibleItems + 1);
+		const visible = [
+			breadcrumbItems[0],
+			...breadcrumbItems.slice(breadcrumbItems.length - maxVisibleItems + 1)
+		];
 
-let visibleItems = $derived(() => {
-	if (breadcrumbItems.length <= maxVisibleItems) {
-		return { collapsed: [], visible: breadcrumbItems };
+		return { collapsed, visible };
+	});
+
+	function handleNavigate(path: string) {
+		folderTabActions.setPath(path);
+		onNavigate?.(path);
 	}
-
-	// 始终显示第一个（根）和最后几个
-	const collapsed = breadcrumbItems.slice(1, breadcrumbItems.length - maxVisibleItems + 1);
-	const visible = [
-		breadcrumbItems[0],
-		...breadcrumbItems.slice(breadcrumbItems.length - maxVisibleItems + 1)
-	];
-
-	return { collapsed, visible };
-});
-
-function handleNavigate(path: string) {
-	folderTabActions.setPath(path);
-	onNavigate?.(path);
-}
 </script>
 
 {#if vertical}
@@ -233,7 +252,7 @@ function handleNavigate(path: string) {
 					bind:value={editValue}
 					onkeydown={handleInputKeyDown}
 					onblur={handleInputBlur}
-					class="bg-background border-input h-full w-6 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+					class="bg-background border-input focus:ring-primary h-full w-6 rounded border px-2 text-xs focus:ring-1 focus:outline-none"
 					style="writing-mode: horizontal-tb;"
 					placeholder="输入路径..."
 				/>
@@ -241,7 +260,9 @@ function handleNavigate(path: string) {
 				<!-- 面包屑模式 -->
 				<!-- 根图标 -->
 				{#if breadcrumbItems.length > 0}
-					{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
+					{@const virtualType = isVirtualPath(breadcrumbItems[0].path)
+						? getVirtualPathType(breadcrumbItems[0].path)
+						: null}
 					<Button
 						variant="ghost"
 						size="sm"
@@ -249,9 +270,13 @@ function handleNavigate(path: string) {
 						onclick={() => handleNavigate(breadcrumbItems[0].path)}
 					>
 						{#if virtualType === 'bookmark'}
-							<Icon name="bookmark" fallback={Bookmark} class="h-3.5 w-3.5 text-amber-500 rotate-90" />
+							<Icon
+								name="bookmark"
+								fallback={Bookmark}
+								class="h-3.5 w-3.5 rotate-90 text-amber-500"
+							/>
 						{:else if virtualType === 'history'}
-							<Icon name="history" fallback={Clock} class="h-3.5 w-3.5 text-blue-500 rotate-90" />
+							<Icon name="history" fallback={Clock} class="h-3.5 w-3.5 rotate-90 text-blue-500" />
 						{:else if breadcrumbItems[0].isRoot}
 							<Icon name="storage" fallback={HardDrive} class="h-3.5 w-3.5 rotate-90" />
 						{:else}
@@ -289,7 +314,7 @@ function handleNavigate(path: string) {
 					<Button
 						variant="ghost"
 						size="sm"
-						class="h-auto w-6 min-h-0 max-h-[120px] px-1.5 py-1"
+						class="h-auto max-h-[120px] min-h-0 w-6 px-1.5 py-1"
 						onclick={() => handleNavigate(item.path)}
 					>
 						<span class="truncate text-xs">{item.name}</span>
@@ -344,7 +369,7 @@ function handleNavigate(path: string) {
 					bind:value={editValue}
 					onkeydown={handleInputKeyDown}
 					onblur={handleInputBlur}
-					class="bg-background border-input h-6 flex-1 rounded border px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+					class="bg-background border-input focus:ring-primary h-6 flex-1 rounded border px-2 text-xs focus:ring-1 focus:outline-none"
 					placeholder="输入路径..."
 				/>
 			</div>
@@ -352,7 +377,9 @@ function handleNavigate(path: string) {
 			<!-- 面包屑模式 -->
 			<!-- 根图标 -->
 			{#if breadcrumbItems.length > 0}
-				{@const virtualType = isVirtualPath(breadcrumbItems[0].path) ? getVirtualPathType(breadcrumbItems[0].path) : null}
+				{@const virtualType = isVirtualPath(breadcrumbItems[0].path)
+					? getVirtualPathType(breadcrumbItems[0].path)
+					: null}
 				<Button
 					variant="ghost"
 					size="sm"
@@ -400,7 +427,7 @@ function handleNavigate(path: string) {
 				<Button
 					variant="ghost"
 					size="sm"
-					class="h-6 min-w-0 max-w-[120px] px-1.5"
+					class="h-6 max-w-[120px] min-w-0 px-1.5"
 					onclick={() => handleNavigate(item.path)}
 				>
 					<span class="truncate text-xs">{item.name}</span>
@@ -423,12 +450,7 @@ function handleNavigate(path: string) {
 				<!-- 新建页签按钮 -->
 				<Tooltip.Root>
 					<Tooltip.Trigger>
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-6 w-6 shrink-0"
-							onclick={handleCreateTab}
-						>
+						<Button variant="ghost" size="icon" class="h-6 w-6 shrink-0" onclick={handleCreateTab}>
 							<Plus class="h-3 w-3" />
 						</Button>
 					</Tooltip.Trigger>

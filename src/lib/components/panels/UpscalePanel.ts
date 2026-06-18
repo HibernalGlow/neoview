@@ -12,24 +12,24 @@ export interface ConditionExpression {
 
 // 超分条件定义
 export interface UpscaleCondition {
-	id: string;                  // 稳定标识
-	name: string;                // Tab 标题
+	id: string; // 稳定标识
+	name: string; // Tab 标题
 	enabled: boolean;
-	priority: number;            // 决定"向后进位"顺序
+	priority: number; // 决定"向后进位"顺序
 	match: {
 		minWidth?: number;
 		minHeight?: number;
 		maxWidth?: number;
 		maxHeight?: number;
 		// 总像素量限制（单位：百万像素 MPx，支持小数，0 表示不限制）
-		minPixels?: number;        // 最小像素量（MPx）
-		maxPixels?: number;        // 最大像素量（MPx）
+		minPixels?: number; // 最小像素量（MPx）
+		maxPixels?: number; // 最大像素量（MPx）
 		dimensionMode?: 'and' | 'or';
 		createdBetween?: [number, number]; // epoch
 		modifiedBetween?: [number, number];
-		regexBookPath?: string;    // 正则表达式字符串
+		regexBookPath?: string; // 正则表达式字符串
 		regexImagePath?: string;
-		matchInnerPath?: boolean;  // 是否匹配内部路径，默认false只匹配book路径
+		matchInnerPath?: boolean; // 是否匹配内部路径，默认false只匹配book路径
 		excludeFromPreload?: boolean; // 筛出预超分队列
 		metadata?: Record<string, ConditionExpression>; // 自定义键
 	};
@@ -129,7 +129,7 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 		}
 
 		const parsed = JSON.parse(stored) as Partial<UpscalePanelSettings>;
-		
+
 		// 处理条件列表，确保向后兼容
 		let conditionsList = getDefaultConditionPresets();
 		if (parsed.conditionsList) {
@@ -165,7 +165,8 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 		return {
 			...defaultPanelSettings,
 			...parsed,
-			conditionalUpscaleEnabled: parsed.conditionalUpscaleEnabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
+			conditionalUpscaleEnabled:
+				parsed.conditionalUpscaleEnabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
 			conditionsList
 		};
 	} catch (error) {

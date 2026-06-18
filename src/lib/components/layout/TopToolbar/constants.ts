@@ -68,7 +68,7 @@ export function getZoomModeIcon(mode: ZoomMode) {
  * 获取缩放模式的中文标签
  */
 export function getZoomModeLabel(mode: ZoomMode): string {
-	const option = ZOOM_MODE_OPTIONS.find(o => o.mode === mode);
+	const option = ZOOM_MODE_OPTIONS.find((o) => o.mode === mode);
 	return option?.label ?? '原始大小';
 }
 

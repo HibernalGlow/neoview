@@ -6,83 +6,83 @@ import { invoke } from '@tauri-apps/api/core';
 
 /** 超分条件配置（与后端对应） */
 export interface UpscaleConditionConfig {
-  id: string;
-  name: string;
-  enabled: boolean;
-  priority: number;
-  minWidth: number;
-  minHeight: number;
-  maxWidth: number;
-  maxHeight: number;
-  /** 最小像素量（百万像素 MPx，0 表示不限制） */
-  minPixels?: number;
-  /** 最大像素量（百万像素 MPx，0 表示不限制） */
-  maxPixels?: number;
-  /** 书籍路径正则表达式 */
-  regexBookPath?: string;
-  /** 图片路径正则表达式 */
-  regexImagePath?: string;
-  /** 是否匹配内部路径 */
-  matchInnerPath?: boolean;
-  modelName: string;
-  scale: number;
-  tileSize: number;
-  noiseLevel: number;
-  skip: boolean;
+	id: string;
+	name: string;
+	enabled: boolean;
+	priority: number;
+	minWidth: number;
+	minHeight: number;
+	maxWidth: number;
+	maxHeight: number;
+	/** 最小像素量（百万像素 MPx，0 表示不限制） */
+	minPixels?: number;
+	/** 最大像素量（百万像素 MPx，0 表示不限制） */
+	maxPixels?: number;
+	/** 书籍路径正则表达式 */
+	regexBookPath?: string;
+	/** 图片路径正则表达式 */
+	regexImagePath?: string;
+	/** 是否匹配内部路径 */
+	matchInnerPath?: boolean;
+	modelName: string;
+	scale: number;
+	tileSize: number;
+	noiseLevel: number;
+	skip: boolean;
 }
 
 export interface StartupConfig {
-  /** 缓存根目录（缩略图等） */
-  cacheDir?: string;
-  /** 超分缓存目录 */
-  cacheUpscaleDir?: string;
-  /** Python 模块路径 */
-  pythonModulePath?: string;
-  /** 超分条件启用状态 */
-  upscaleConditionsEnabled?: boolean;
-  /** 超分条件列表 */
-  upscaleConditions?: UpscaleConditionConfig[];
+	/** 缓存根目录（缩略图等） */
+	cacheDir?: string;
+	/** 超分缓存目录 */
+	cacheUpscaleDir?: string;
+	/** Python 模块路径 */
+	pythonModulePath?: string;
+	/** 超分条件启用状态 */
+	upscaleConditionsEnabled?: boolean;
+	/** 超分条件列表 */
+	upscaleConditions?: UpscaleConditionConfig[];
 }
 
 /**
  * 获取启动配置
  */
 export async function getStartupConfig(): Promise<StartupConfig> {
-  try {
-    return await invoke<StartupConfig>('get_startup_config');
-  } catch (err) {
-    console.error('获取启动配置失败:', err);
-    return {};
-  }
+	try {
+		return await invoke<StartupConfig>('get_startup_config');
+	} catch (err) {
+		console.error('获取启动配置失败:', err);
+		return {};
+	}
 }
 
 /**
  * 保存启动配置
  */
 export async function saveStartupConfig(config: StartupConfig): Promise<void> {
-  try {
-    await invoke('save_startup_config', { config });
-    console.log('✅ 启动配置已保存');
-  } catch (err) {
-    console.error('❌ 保存启动配置失败:', err);
-    throw err;
-  }
+	try {
+		await invoke('save_startup_config', { config });
+		console.log('✅ 启动配置已保存');
+	} catch (err) {
+		console.error('❌ 保存启动配置失败:', err);
+		throw err;
+	}
 }
 
 /**
  * 更新启动配置的单个字段
  */
 export async function updateStartupConfigField(
-  field: keyof StartupConfig,
-  value: string | null
+	field: keyof StartupConfig,
+	value: string | null
 ): Promise<void> {
-  try {
-    await invoke('update_startup_config_field', { field, value });
-    console.log(`✅ 启动配置字段 ${field} 已更新`);
-  } catch (err) {
-    console.error(`❌ 更新启动配置字段 ${field} 失败:`, err);
-    throw err;
-  }
+	try {
+		await invoke('update_startup_config_field', { field, value });
+		console.log(`✅ 启动配置字段 ${field} 已更新`);
+	} catch (err) {
+		console.error(`❌ 更新启动配置字段 ${field} 失败:`, err);
+		throw err;
+	}
 }
 
 /**
@@ -90,24 +90,24 @@ export async function updateStartupConfigField(
  * 在设置页面保存时调用
  */
 export async function syncSettingsToStartupConfig(settings: {
-  thumbnailDirectory?: string;
+	thumbnailDirectory?: string;
 }): Promise<void> {
-  try {
-    // 获取当前完整配置
-    const currentConfig = await getStartupConfig();
-    
-    // 更新缓存目录字段（完整保存）
-    const updatedConfig: StartupConfig = {
-      ...currentConfig,
-      cacheDir: settings.thumbnailDirectory,
-      cacheUpscaleDir: settings.thumbnailDirectory 
-        ? `${settings.thumbnailDirectory}\\pyo3-upscale` 
-        : undefined,
-    };
-    
-    await saveStartupConfig(updatedConfig);
-  } catch (err) {
-    console.error('❌ 同步缓存目录失败:', err);
-    throw err;
-  }
+	try {
+		// 获取当前完整配置
+		const currentConfig = await getStartupConfig();
+
+		// 更新缓存目录字段（完整保存）
+		const updatedConfig: StartupConfig = {
+			...currentConfig,
+			cacheDir: settings.thumbnailDirectory,
+			cacheUpscaleDir: settings.thumbnailDirectory
+				? `${settings.thumbnailDirectory}\\pyo3-upscale`
+				: undefined
+		};
+
+		await saveStartupConfig(updatedConfig);
+	} catch (err) {
+		console.error('❌ 同步缓存目录失败:', err);
+		throw err;
+	}
 }

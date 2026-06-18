@@ -114,9 +114,10 @@
 			return [item];
 		}
 
-		const sourceItems = ctx.isVirtualInstance && initialPathSnapshot
-			? loadVirtualPathData(initialPathSnapshot)
-			: (get(ctx.items) as FsItem[]);
+		const sourceItems =
+			ctx.isVirtualInstance && initialPathSnapshot
+				? loadVirtualPathData(initialPathSnapshot)
+				: (get(ctx.items) as FsItem[]);
 
 		const byPath = new Map(sourceItems.map((entry) => [entry.path, entry] as const));
 		const targets = selectedPaths
@@ -197,7 +198,7 @@
 	function handleEditTags(item: import('$lib/types').FsItem) {
 		// 获取选中项
 		const selectedPaths = Array.from(get(ctx.selectedItems));
-		
+
 		if (selectedPaths.length > 1) {
 			// 批量模式：多个文件选中
 			tagEditorPath = selectedPaths[0]; // 第一个用于显示
@@ -277,19 +278,28 @@
 					const savedHome = localStorage.getItem('neoview-homepage-path');
 					const defaultHome = initialPathSnapshot || (await homeDir());
 					ctx.homePath = savedHome || defaultHome;
-					
+
 					// 检查当前活动标签页是否有路径
 					const currentPath = get(ctx.currentPath);
 					const activeTab = folderTabActions.getActiveTab();
-					console.log('[FileListPanel] onMount - currentPath:', currentPath, 'activeTab.currentPath:', activeTab?.currentPath, 'activeTab.homePath:', activeTab?.homePath, 'ctx.homePath:', ctx.homePath);
-					
+					console.log(
+						'[FileListPanel] onMount - currentPath:',
+						currentPath,
+						'activeTab.currentPath:',
+						activeTab?.currentPath,
+						'activeTab.homePath:',
+						activeTab?.homePath,
+						'ctx.homePath:',
+						ctx.homePath
+					);
+
 					// 如果当前标签页没有路径，设置为 homePath
 					// 这处理首次打开应用的情况
 					if (activeTab && !activeTab.currentPath && !activeTab.homePath) {
 						console.log('[FileListPanel] 首次打开，设置标签页路径为:', ctx.homePath);
 						folderTabActions.setPath(ctx.homePath, false);
 					}
-					
+
 					folderTabActions.setHomePath(ctx.homePath);
 				}
 				if (!favoriteTagStore.isEMMLoaded()) await favoriteTagStore.loadFromEMM();
@@ -310,26 +320,41 @@
 </script>
 
 <!-- 主布局容器 -->
-<div class="bg-muted/10 flex h-full overflow-hidden {$breadcrumbPosition === 'left' || $breadcrumbPosition === 'right' ? 'flex-row' : 'flex-col'}">
+<div
+	class="bg-muted/10 flex h-full overflow-hidden {$breadcrumbPosition === 'left' ||
+	$breadcrumbPosition === 'right'
+		? 'flex-row'
+		: 'flex-col'}"
+>
 	<!-- 面包屑在左侧（垂直布局） -->
 	{#if $breadcrumbPosition === 'left'}
-		<div class="border-r border-border/50 shrink-0">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} externalPath={effectiveCurrentPath} />
+		<div class="border-border/50 shrink-0 border-r">
+			<BreadcrumbBar
+				onNavigate={actions.handleNavigate}
+				homePath={ctx.homePath}
+				vertical={true}
+				externalPath={effectiveCurrentPath}
+			/>
 		</div>
 	{/if}
 
 	<!-- 面包屑在顶部 -->
 	{#if $breadcrumbPosition === 'top'}
-		<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} externalPath={effectiveCurrentPath} />
+		<BreadcrumbBar
+			onNavigate={actions.handleNavigate}
+			homePath={ctx.homePath}
+			externalPath={effectiveCurrentPath}
+		/>
 	{/if}
 
 	<!-- 书签列表顶栏 Tag（仅书签面板） -->
 	{#if ctx.panelMode === 'bookmark'}
-		<div class="border-b border-border/50 bg-muted/20">
+		<div class="border-border/50 bg-muted/20 border-b">
 			<div class="flex items-center gap-1 overflow-x-auto px-2 py-1.5">
 				<button
 					type="button"
-					class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId === BOOKMARK_LIST_IDS.all
+					class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId ===
+					BOOKMARK_LIST_IDS.all
 						? 'border-primary/60 bg-primary/15 text-primary'
 						: 'border-border bg-background/80 hover:bg-accent'}"
 					onclick={() => switchBookmarkList(BOOKMARK_LIST_IDS.all)}
@@ -339,7 +364,8 @@
 				{#each getBookmarkListsForTags() as list (list.id)}
 					<button
 						type="button"
-						class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId === list.id
+						class="h-7 shrink-0 rounded-full border px-3 text-xs transition-colors {activeBookmarkListId ===
+						list.id
 							? 'border-primary/60 bg-primary/15 text-primary'
 							: 'border-border bg-background/80 hover:bg-accent'}"
 						onclick={() => switchBookmarkList(list.id)}
@@ -360,18 +386,22 @@
 	{/if}
 
 	<!-- 中间主区域（标签栏+工具栏+文件列表） -->
-	<div class="flex flex-1 min-w-0 min-h-0 {$tabBarLayout === 'left' || $tabBarLayout === 'right' ? 'flex-row' : 'flex-col'}">
+	<div
+		class="flex min-h-0 min-w-0 flex-1 {$tabBarLayout === 'left' || $tabBarLayout === 'right'
+			? 'flex-row'
+			: 'flex-col'}"
+	>
 		<!-- 标签栏在左侧 -->
 		{#if $tabBarLayout === 'left'}
 			<div
-				class="flex flex-col border-r border-border/50 shrink-0 relative"
+				class="border-border/50 relative flex shrink-0 flex-col border-r"
 				style="width: {$tabBarWidth}px"
 			>
 				<FolderTabBar homePath={ctx.homePath} />
 				<!-- 拖拽调整宽度的手柄 -->
 				<button
 					type="button"
-					class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+					class="hover:bg-primary/50 absolute top-0 right-0 bottom-0 w-1 cursor-col-resize transition-colors"
 					aria-label="调整标签栏宽度"
 					onmousedown={(e) => {
 						e.preventDefault();
@@ -398,10 +428,15 @@
 		{/if}
 
 		<!-- 主内容区（工具栏+文件列表） -->
-		<div class="flex flex-1 min-w-0 min-h-0 {$toolbarPosition === 'left' || $toolbarPosition === 'right' ? 'flex-row' : 'flex-col'}">
+		<div
+			class="flex min-h-0 min-w-0 flex-1 {$toolbarPosition === 'left' ||
+			$toolbarPosition === 'right'
+				? 'flex-row'
+				: 'flex-col'}"
+		>
 			<!-- 工具栏在左侧 -->
 			{#if $toolbarPosition === 'left'}
-				<div class="border-r border-border/50 shrink-0">
+				<div class="border-border/50 shrink-0 border-r">
 					<ToolbarCard
 						onRefresh={actions.handleRefresh}
 						onGoBack={actions.handleGoBack}
@@ -440,7 +475,7 @@
 
 			<!-- 工具栏在底部 -->
 			{#if $toolbarPosition === 'bottom'}
-				<div class="border-t border-border/50">
+				<div class="border-border/50 border-t">
 					<ToolbarCard
 						onRefresh={actions.handleRefresh}
 						onGoBack={actions.handleGoBack}
@@ -455,7 +490,7 @@
 
 			<!-- 工具栏在右侧 -->
 			{#if $toolbarPosition === 'right'}
-				<div class="border-l border-border/50 shrink-0">
+				<div class="border-border/50 shrink-0 border-l">
 					<ToolbarCard
 						onRefresh={actions.handleRefresh}
 						onGoBack={actions.handleGoBack}
@@ -472,7 +507,7 @@
 
 		<!-- 标签栏在底部 -->
 		{#if $tabBarLayout === 'bottom'}
-			<div class="border-t border-border/50">
+			<div class="border-border/50 border-t">
 				<FolderTabBar homePath={ctx.homePath} />
 			</div>
 		{/if}
@@ -480,13 +515,13 @@
 		<!-- 标签栏在右侧 -->
 		{#if $tabBarLayout === 'right'}
 			<div
-				class="flex flex-col border-l border-border/50 shrink-0 relative"
+				class="border-border/50 relative flex shrink-0 flex-col border-l"
 				style="width: {$tabBarWidth}px"
 			>
 				<!-- 拖拽调整宽度的手柄 -->
 				<button
 					type="button"
-					class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
+					class="hover:bg-primary/50 absolute top-0 bottom-0 left-0 w-1 cursor-col-resize transition-colors"
 					aria-label="调整标签栏宽度"
 					onmousedown={(e) => {
 						e.preventDefault();
@@ -511,15 +546,24 @@
 
 	<!-- 面包屑在底部 -->
 	{#if $breadcrumbPosition === 'bottom'}
-		<div class="border-t border-border/50">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} externalPath={effectiveCurrentPath} />
+		<div class="border-border/50 border-t">
+			<BreadcrumbBar
+				onNavigate={actions.handleNavigate}
+				homePath={ctx.homePath}
+				externalPath={effectiveCurrentPath}
+			/>
 		</div>
 	{/if}
 
 	<!-- 面包屑在右侧（垂直布局） -->
 	{#if $breadcrumbPosition === 'right'}
-		<div class="border-l border-border/50 shrink-0">
-			<BreadcrumbBar onNavigate={actions.handleNavigate} homePath={ctx.homePath} vertical={true} externalPath={effectiveCurrentPath} />
+		<div class="border-border/50 shrink-0 border-l">
+			<BreadcrumbBar
+				onNavigate={actions.handleNavigate}
+				homePath={ctx.homePath}
+				vertical={true}
+				externalPath={effectiveCurrentPath}
+			/>
 		</div>
 	{/if}
 </div>
@@ -561,8 +605,8 @@
 		</Dialog.Header>
 
 		<div class="space-y-3 py-2">
-			<div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-				<div class="mb-1 text-xs text-muted-foreground">待添加项目</div>
+			<div class="border-border/60 bg-muted/20 rounded-md border px-3 py-2">
+				<div class="text-muted-foreground mb-1 text-xs">待添加项目</div>
 				<div class="max-h-24 space-y-1 overflow-y-auto text-xs">
 					{#if addBookmarkTargets.length === 0}
 						<div class="text-muted-foreground">无可添加项目</div>
@@ -575,10 +619,12 @@
 			</div>
 
 			<div>
-				<div class="mb-1 text-xs text-muted-foreground">选择列表</div>
-				<div class="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border/60 p-2">
+				<div class="text-muted-foreground mb-1 text-xs">选择列表</div>
+				<div class="border-border/60 max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
 					{#each bookmarkLists as list (list.id)}
-						<label class="hover:bg-accent/60 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm">
+						<label
+							class="hover:bg-accent/60 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm"
+						>
 							<input
 								type="checkbox"
 								checked={addBookmarkSelectedListIds.includes(list.id)}
@@ -590,8 +636,8 @@
 				</div>
 			</div>
 
-			<div class="rounded-md border border-border/60 bg-muted/20 p-2">
-				<div class="mb-2 text-xs text-muted-foreground">新建列表</div>
+			<div class="border-border/60 bg-muted/20 rounded-md border p-2">
+				<div class="text-muted-foreground mb-2 text-xs">新建列表</div>
 				<div class="flex flex-wrap items-center gap-2">
 					<Input
 						placeholder="输入新列表名称"
@@ -599,7 +645,7 @@
 						oninput={(e) => (newBookmarkListName = (e.target as HTMLInputElement).value)}
 						class="h-8 min-w-40 flex-1"
 					/>
-					<label class="flex items-center gap-1 text-xs text-muted-foreground">
+					<label class="text-muted-foreground flex items-center gap-1 text-xs">
 						<input
 							type="checkbox"
 							checked={newBookmarkListIsFavorite}
@@ -644,7 +690,9 @@
 		title="重命名"
 		initialValue={ctx.renameDialogItem.name}
 		onConfirm={actions.executeRename}
-		onCancel={() => { ctx.renameDialogItem = null; }}
+		onCancel={() => {
+			ctx.renameDialogItem = null;
+		}}
 	/>
 {/if}
 

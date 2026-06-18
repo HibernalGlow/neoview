@@ -1,90 +1,92 @@
 <script lang="ts">
-  /**
-   * 可调整大小的面板组件
-   */
-  import { onMount } from 'svelte';
+	/**
+	 * 可调整大小的面板组件
+	 */
+	import { onMount } from 'svelte';
 
-  interface Props {
-    minWidth?: number;
-    maxWidth?: number;
-    defaultWidth?: number;
-    side?: 'left' | 'right';
-    onResize?: (width: number) => void;
-    children?: any;
-  }
+	interface Props {
+		minWidth?: number;
+		maxWidth?: number;
+		defaultWidth?: number;
+		side?: 'left' | 'right';
+		onResize?: (width: number) => void;
+		children?: any;
+	}
 
-  let {
-    minWidth = 200,
-    maxWidth = 600,
-    defaultWidth = 300,
-    side = 'left',
-    onResize,
-    children
-  }: Props = $props();
+	let {
+		minWidth = 200,
+		maxWidth = 600,
+		defaultWidth = 300,
+		side = 'left',
+		onResize,
+		children
+	}: Props = $props();
 
-  let width = $state(300);
-  let isResizing = $state(false);
-  let startX = $state(0);
-  let startWidth = $state(0);
+	let width = $state(300);
+	let isResizing = $state(false);
+	let startX = $state(0);
+	let startWidth = $state(0);
 
-  $effect(() => {
-    width = defaultWidth;
-  });
+	$effect(() => {
+		width = defaultWidth;
+	});
 
-  function handleMouseDown(e: MouseEvent) {
-    isResizing = true;
-    startX = e.clientX;
-    startWidth = width;
-    e.preventDefault();
-  }
+	function handleMouseDown(e: MouseEvent) {
+		isResizing = true;
+		startX = e.clientX;
+		startWidth = width;
+		e.preventDefault();
+	}
 
-  function handleMouseMove(e: MouseEvent) {
-    if (!isResizing) return;
+	function handleMouseMove(e: MouseEvent) {
+		if (!isResizing) return;
 
-    const delta = side === 'left' ? e.clientX - startX : startX - e.clientX;
-    const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
-    
-    width = newWidth;
-    onResize?.(newWidth);
-  }
+		const delta = side === 'left' ? e.clientX - startX : startX - e.clientX;
+		const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
 
-  function handleMouseUp() {
-    isResizing = false;
-  }
+		width = newWidth;
+		onResize?.(newWidth);
+	}
 
-  onMount(() => {
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+	function handleMouseUp() {
+		isResizing = false;
+	}
 
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  });
+	onMount(() => {
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+
+		return () => {
+			document.removeEventListener('mousemove', handleMouseMove);
+			document.removeEventListener('mouseup', handleMouseUp);
+		};
+	});
 </script>
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} />
 
 <div class="relative flex" style="width: {width}px">
-  <!-- 面板内容 -->
-  <div class="flex-1 overflow-hidden">
-    {@render children?.()}
-  </div>
+	<!-- 面板内容 -->
+	<div class="flex-1 overflow-hidden">
+		{@render children?.()}
+	</div>
 
-  <!-- 可拖拽的分隔条 -->
-  <button
-    type="button"
-    class="absolute top-0 bottom-0 w-1 cursor-col-resize group {isResizing ? 'bg-blue-500' : 'hover:bg-blue-400 bg-gray-200'} transition-colors"
-    style="{side === 'left' ? 'right: -1px' : 'left: -1px'}"
-    onmousedown={handleMouseDown}
-    onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-      }
-    }}
-    tabindex="-1"
-  >
-    <!-- 拖拽区域（加大点击区域） -->
-    <div class="absolute top-0 bottom-0 -left-1 -right-1"></div>
-  </button>
+	<!-- 可拖拽的分隔条 -->
+	<button
+		type="button"
+		class="group absolute top-0 bottom-0 w-1 cursor-col-resize {isResizing
+			? 'bg-blue-500'
+			: 'bg-gray-200 hover:bg-blue-400'} transition-colors"
+		style={side === 'left' ? 'right: -1px' : 'left: -1px'}
+		onmousedown={handleMouseDown}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+			}
+		}}
+		tabindex="-1"
+	>
+		<!-- 拖拽区域（加大点击区域） -->
+		<div class="absolute top-0 -right-1 bottom-0 -left-1"></div>
+	</button>
 </div>

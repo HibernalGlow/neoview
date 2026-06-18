@@ -32,10 +32,7 @@ export async function invokeWithTimeout<T>(
 		}, timeout);
 	});
 
-	return Promise.race([
-		invoke<T>(command, args),
-		timeoutPromise
-	]);
+	return Promise.race([invoke<T>(command, args), timeoutPromise]);
 }
 
 /**
@@ -51,9 +48,7 @@ export function isTimeoutError(error: unknown): error is IpcTimeoutError {
 export function isIpcError(error: unknown): boolean {
 	if (error instanceof Error) {
 		const msg = error.message.toLowerCase();
-		return msg.includes('ipc') || 
-			   msg.includes('connection') || 
-			   msg.includes('channel closed');
+		return msg.includes('ipc') || msg.includes('connection') || msg.includes('channel closed');
 	}
 	return false;
 }

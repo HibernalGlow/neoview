@@ -9,10 +9,7 @@
 		cacheDir?: string;
 	};
 
-	let {
-		cacheStats = { totalFiles: 0, totalSize: 0 },
-		formattedSize = '0 B'
-	} = $props();
+	let { cacheStats = { totalFiles: 0, totalSize: 0 }, formattedSize = '0 B' } = $props();
 
 	const dispatch = createEventDispatcher();
 
@@ -33,8 +30,8 @@
 		</div>
 	</div>
 
-	<Button onclick={handleClear} class="w-full mt-2" variant="outline">
-		<Trash2 class="w-4 h-4 mr-2" />
+	<Button onclick={handleClear} class="mt-2 w-full" variant="outline">
+		<Trash2 class="mr-2 h-4 w-4" />
 		清理缓存 (30天前)
 	</Button>
 </div>

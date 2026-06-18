@@ -50,23 +50,28 @@
 	function startRecordingGesture(binding: MouseGestureBinding) {
 		recordingGesture = binding;
 		// 手势录制通过事件系统在 GestureLayer 中实现
-		window.dispatchEvent(new CustomEvent('neoview-start-gesture-recording', {
-			detail: { binding, callback: (pattern: string) => {
-				if (pattern && recordingGesture) {
-					mouseGestureBindings.update(bindings => 
-						bindings.map(b => b.pattern === recordingGesture!.pattern ? { ...b, pattern } : b)
-					);
+		window.dispatchEvent(
+			new CustomEvent('neoview-start-gesture-recording', {
+				detail: {
+					binding,
+					callback: (pattern: string) => {
+						if (pattern && recordingGesture) {
+							mouseGestureBindings.update((bindings) =>
+								bindings.map((b) =>
+									b.pattern === recordingGesture!.pattern ? { ...b, pattern } : b
+								)
+							);
+						}
+						recordingGesture = null;
+					}
 				}
-				recordingGesture = null;
-			}}
-		}));
+			})
+		);
 		showInfoToast('请在图像查看器中右键拖拽来录制手势');
 	}
 
 	function deleteGesture(pattern: string) {
-		mouseGestureBindings.update((bindings) =>
-			bindings.filter((b) => b.pattern !== pattern)
-		);
+		mouseGestureBindings.update((bindings) => bindings.filter((b) => b.pattern !== pattern));
 	}
 
 	function deleteWheelBinding(id: string) {
@@ -116,7 +121,11 @@
 			.join(' ');
 	}
 
-	function getModifiersText(modifiers?: { ctrl?: boolean; shift?: boolean; alt?: boolean }): string {
+	function getModifiersText(modifiers?: {
+		ctrl?: boolean;
+		shift?: boolean;
+		alt?: boolean;
+	}): string {
 		if (!modifiers) return '';
 		const parts: string[] = [];
 		if (modifiers.ctrl) parts.push('Ctrl');
@@ -130,7 +139,7 @@
 	<div class="space-y-4">
 		<div>
 			<h3 class="text-lg font-semibold">鼠标手势</h3>
-			<p class="text-sm text-muted-foreground">右键拖拽执行快捷操作</p>
+			<p class="text-muted-foreground text-sm">右键拖拽执行快捷操作</p>
 		</div>
 
 		<!-- 手势开关 -->
@@ -154,7 +163,7 @@
 						bind:value={gestureMinDistance}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">{gestureMinDistance}px</span>
+					<span class="text-muted-foreground text-sm">{gestureMinDistance}px</span>
 				</div>
 			</div>
 
@@ -169,7 +178,7 @@
 						bind:value={gestureStrokeWidth}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">{gestureStrokeWidth}px</span>
+					<span class="text-muted-foreground text-sm">{gestureStrokeWidth}px</span>
 				</div>
 			</div>
 
@@ -180,9 +189,9 @@
 						id="gesture-color"
 						type="color"
 						bind:value={gestureStrokeColor}
-						class="w-24 h-10"
+						class="h-10 w-24"
 					/>
-					<span class="text-xs text-muted-foreground font-mono">{gestureStrokeColor}</span>
+					<span class="text-muted-foreground font-mono text-xs">{gestureStrokeColor}</span>
 				</div>
 			</div>
 		</div>
@@ -194,25 +203,25 @@
 			<div class="flex items-center justify-between">
 				<h4 class="text-sm font-medium">手势绑定</h4>
 				<Button variant="outline" size="sm" onclick={resetMouseSettings}>
-					<RotateCcw class="h-3 w-3 mr-2" />
+					<RotateCcw class="mr-2 h-3 w-3" />
 					重置
 				</Button>
 			</div>
 
 			{#each Object.entries(gesturesByCategory()) as [category, bindings]}
 				<div class="space-y-2">
-					<h5 class="text-xs font-medium text-muted-foreground uppercase">{category}</h5>
+					<h5 class="text-muted-foreground text-xs font-medium uppercase">{category}</h5>
 					<div class="space-y-1">
 						{#each bindings as binding}
 							<div
-								class="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+								class="hover:bg-accent flex items-center justify-between rounded-lg border p-3 transition-colors"
 							>
 								<div class="flex-1">
 									<div class="flex items-center gap-2">
 										<span class="text-2xl">{getGestureDirectionName(binding.pattern)}</span>
 										<div>
 											<div class="text-sm font-medium">{binding.description}</div>
-											<div class="text-xs text-muted-foreground">{binding.command}</div>
+											<div class="text-muted-foreground text-xs">{binding.command}</div>
 										</div>
 									</div>
 								</div>
@@ -244,8 +253,12 @@
 				</div>
 			{/each}
 
-			<Button variant="outline" class="w-full" onclick={() => showInfoToast('添加新手势功能即将推出')}>
-				<Plus class="h-4 w-4 mr-2" />
+			<Button
+				variant="outline"
+				class="w-full"
+				onclick={() => showInfoToast('添加新手势功能即将推出')}
+			>
+				<Plus class="mr-2 h-4 w-4" />
 				添加新手势
 			</Button>
 		</div>
@@ -257,13 +270,13 @@
 	<div class="space-y-4">
 		<div>
 			<h3 class="text-lg font-semibold">鼠标滚轮</h3>
-			<p class="text-sm text-muted-foreground">配置滚轮行为和快捷键</p>
+			<p class="text-muted-foreground text-sm">配置滚轮行为和快捷键</p>
 		</div>
 
 		<div class="space-y-2">
 			{#each wheelBindingsList() as binding}
 				<div
-					class="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+					class="hover:bg-accent flex items-center justify-between rounded-lg border p-3 transition-colors"
 				>
 					<div class="flex-1">
 						<div class="text-sm font-medium">
@@ -271,7 +284,7 @@
 								? '向上 ↑'
 								: '向下 ↓'}
 						</div>
-						<div class="text-xs text-muted-foreground">
+						<div class="text-muted-foreground text-xs">
 							{binding.description} ({binding.command})
 						</div>
 					</div>
@@ -287,16 +300,20 @@
 			{/each}
 		</div>
 
-		<Button variant="outline" class="w-full" onclick={() => showInfoToast('添加新滚轮绑定功能即将推出')}>
-			<Plus class="h-4 w-4 mr-2" />
+		<Button
+			variant="outline"
+			class="w-full"
+			onclick={() => showInfoToast('添加新滚轮绑定功能即将推出')}
+		>
+			<Plus class="mr-2 h-4 w-4" />
 			添加滚轮绑定
 		</Button>
 	</div>
 
 	{#if recordingGesture}
-		<div class="fixed bottom-4 right-4 p-4 bg-card border rounded-lg shadow-lg">
-			<p class="text-sm mb-2">正在录制手势: {recordingGesture.description}</p>
-			<p class="text-xs text-muted-foreground mb-3">请在图像查看器中右键拖拽</p>
+		<div class="bg-card fixed right-4 bottom-4 rounded-lg border p-4 shadow-lg">
+			<p class="mb-2 text-sm">正在录制手势: {recordingGesture.description}</p>
+			<p class="text-muted-foreground mb-3 text-xs">请在图像查看器中右键拖拽</p>
 			<Button variant="outline" size="sm" onclick={() => (recordingGesture = null)}>取消</Button>
 		</div>
 	{/if}

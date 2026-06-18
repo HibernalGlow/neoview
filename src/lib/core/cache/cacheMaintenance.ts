@@ -6,7 +6,11 @@ taskScheduler.subscribe((snapshot) => {
 	if (snapshot.id !== pendingCleanupJobId) {
 		return;
 	}
-	if (snapshot.status === 'completed' || snapshot.status === 'failed' || snapshot.status === 'cancelled') {
+	if (
+		snapshot.status === 'completed' ||
+		snapshot.status === 'failed' ||
+		snapshot.status === 'cancelled'
+	) {
 		pendingCleanupJobId = null;
 	}
 });
@@ -27,8 +31,3 @@ export function scheduleUpscaleCacheCleanup(source = 'cache-maintenance'): void 
 	});
 	pendingCleanupJobId = snapshot.id;
 }
-
-
-
-
-

@@ -35,9 +35,9 @@
 </script>
 
 {#if expanded && bookStore.currentBook}
-	<div class="flex flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-1">
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-2 border-t pt-1">
 		<span class="text-muted-foreground mr-2 text-xs">幻灯片</span>
-		
+
 		<!-- 播放/暂停按钮 -->
 		<Button
 			variant={slideshowStore.isPlaying ? 'default' : 'outline'}
@@ -66,7 +66,7 @@
 				step="1"
 				bind:value={slideshowInterval}
 				oninput={handleSlideshowIntervalChange}
-				class="h-1 w-20 cursor-pointer appearance-none rounded-full bg-muted"
+				class="bg-muted h-1 w-20 cursor-pointer appearance-none rounded-full"
 			/>
 			<span class="w-8 text-center text-xs">{slideshowInterval}s</span>
 		</div>
@@ -99,7 +99,20 @@
 					class="h-7 w-7"
 					onclick={() => slideshowStore.setLoop(!slideshowStore.loop)}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path
+							d="m7 22-4-4 4-4"
+						></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg
+					>
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
@@ -116,7 +129,22 @@
 					class="h-7 w-7"
 					onclick={() => slideshowStore.setRandom(!slideshowStore.random)}
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"></path><path
+							d="m18 2 4 4-4 4"
+						></path><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"></path><path
+							d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"
+						></path><path d="m18 14 4 4-4 4"></path></svg
+					>
 				</Button>
 			</Tooltip.Trigger>
 			<Tooltip.Content>
@@ -138,7 +166,7 @@
 							stroke="currentColor"
 							stroke-opacity="0.2"
 							stroke-width="3"
-						/>
+						></circle>
 						<circle
 							cx="18"
 							cy="18"
@@ -150,7 +178,7 @@
 							stroke-dashoffset={94.2 - (slideshowStore.progress / 100) * 94.2}
 							stroke-linecap="round"
 							class="text-primary transition-all duration-200"
-						/>
+						></circle>
 					</svg>
 				</div>
 				<span class="text-xs">{Math.ceil(slideshowStore.remainingTime)}s</span>

@@ -4,7 +4,14 @@
  * 支持从 EMM 设置文件导入收藏标签
  */
 
-import { loadEMMCollectTags, findEMMSettingFile, loadEMMTranslationDict, findEMMTranslationFile, type EMMCollectTag, type EMMTranslationDict } from '$lib/api/emm';
+import {
+	loadEMMCollectTags,
+	findEMMSettingFile,
+	loadEMMTranslationDict,
+	findEMMTranslationFile,
+	type EMMCollectTag,
+	type EMMTranslationDict
+} from '$lib/api/emm';
 import { emmTranslationStore } from './translation';
 
 const STORAGE_KEY = 'neoview-emm-favorite-tags';
@@ -122,7 +129,9 @@ export function parseTagValue(value: string): { letter: string; tag: string } | 
 /**
  * 从搜索字符串中解析所有标签
  */
-export function parseSearchTags(searchString: string): Array<{ cat: string; tag: string; letter: string; prefix: string }> {
+export function parseSearchTags(
+	searchString: string
+): Array<{ cat: string; tag: string; letter: string; prefix: string }> {
 	const tags: Array<{ cat: string; tag: string; letter: string; prefix: string }> = [];
 	if (!searchString) return tags;
 
@@ -162,15 +171,15 @@ export function matchBookTags(
 	for (const searchTag of searchTags) {
 		const isExclude = searchTag.prefix === '-';
 		const isOptional = searchTag.prefix === '~';
-		
+
 		let matched = false;
-		
+
 		// 在目标类别中查找标签
 		const categoryTags = bookTags[searchTag.cat] || [];
 		if (categoryTags.includes(searchTag.tag)) {
 			matched = true;
 		}
-		
+
 		// 混合性别匹配：如果是性别类别，也在其他性别类别中查找
 		if (!matched && enableMixedGender && genderCategories.includes(searchTag.cat)) {
 			for (const altCat of genderCategories) {
@@ -182,7 +191,7 @@ export function matchBookTags(
 				}
 			}
 		}
-		
+
 		// 处理匹配结果
 		if (isExclude) {
 			// 排除标签：如果匹配了，返回 false
@@ -193,7 +202,7 @@ export function matchBookTags(
 		}
 		// 可选标签（~）：不影响结果
 	}
-	
+
 	return true;
 }
 
@@ -208,15 +217,15 @@ export function countMatchingFavoriteTags(
 	enableMixedGender: boolean = false
 ): number {
 	let count = 0;
-	
+
 	for (const fav of favoriteTags) {
 		const categoryTags = bookTags[fav.cat] || [];
-		
+
 		if (categoryTags.includes(fav.tag)) {
 			count++;
 			continue;
 		}
-		
+
 		// 混合性别匹配
 		if (enableMixedGender && genderCategories.includes(fav.cat)) {
 			for (const altCat of genderCategories) {
@@ -229,7 +238,7 @@ export function countMatchingFavoriteTags(
 			}
 		}
 	}
-	
+
 	return count;
 }
 
@@ -277,9 +286,9 @@ export const favoriteTagStore = {
 	// 添加收藏标签
 	add(cat: string, tag: string, displayCat?: string, displayTag?: string) {
 		const id = `${cat}:${tag}`;
-		
+
 		// 检查是否已存在
-		if (favoriteTags.some(t => t.id === id)) {
+		if (favoriteTags.some((t) => t.id === id)) {
 			return false;
 		}
 
@@ -305,9 +314,9 @@ export const favoriteTagStore = {
 
 	// 移除收藏标签
 	remove(id: string) {
-		const index = favoriteTags.findIndex(t => t.id === id);
+		const index = favoriteTags.findIndex((t) => t.id === id);
 		if (index >= 0) {
-			favoriteTags = favoriteTags.filter(t => t.id !== id);
+			favoriteTags = favoriteTags.filter((t) => t.id !== id);
 			saveTags(favoriteTags);
 			return true;
 		}
@@ -317,7 +326,7 @@ export const favoriteTagStore = {
 	// 检查是否已收藏
 	isFavorite(cat: string, tag: string): boolean {
 		const id = `${cat}:${tag}`;
-		return favoriteTags.some(t => t.id === id);
+		return favoriteTags.some((t) => t.id === id);
 	},
 
 	// 切换收藏状态
@@ -376,7 +385,10 @@ export const favoriteTagStore = {
 				console.log('[FavoriteTagStore] 翻译文件路径:', translationPath);
 				if (translationPath) {
 					translationDict = await loadEMMTranslationDict(translationPath);
-					console.log('[FavoriteTagStore] 已加载翻译字典, 命名空间:', Object.keys(translationDict || {}));
+					console.log(
+						'[FavoriteTagStore] 已加载翻译字典, 命名空间:',
+						Object.keys(translationDict || {})
+					);
 				} else {
 					console.log('[FavoriteTagStore] 未找到翻译文件');
 				}
@@ -387,11 +399,11 @@ export const favoriteTagStore = {
 			// 转换为 FavoriteTag 格式
 			const tags: FavoriteTag[] = collectTags.map((ct: EMMCollectTag) => {
 				const cat = letter2cat[ct.letter] || ct.letter;
-				
+
 				// 翻译标签名和类别名
 				let translatedTag = ct.tag;
 				let translatedCat = cat;
-				
+
 				if (translationDict) {
 					// 翻译标签名 - 在对应的类别命名空间中查找
 					const tagTranslation = emmTranslationStore.translateTag(ct.tag, cat, translationDict);
@@ -399,7 +411,7 @@ export const favoriteTagStore = {
 					if (tagTranslation && tagTranslation !== ct.tag) {
 						translatedTag = tagTranslation;
 					}
-					
+
 					// 翻译类别名 - 在 rows 命名空间中查找
 					// rows 命名空间包含类别的翻译
 					const rowsDict = translationDict['rows'];
@@ -409,14 +421,19 @@ export const favoriteTagStore = {
 							translatedCat = catRecord.name;
 						}
 					}
-					console.log(`[FavoriteTagStore] 翻译类别 ${cat}:`, translatedCat, 'rows 内容:', rowsDict ? Object.keys(rowsDict).slice(0, 5) : 'null');
+					console.log(
+						`[FavoriteTagStore] 翻译类别 ${cat}:`,
+						translatedCat,
+						'rows 内容:',
+						rowsDict ? Object.keys(rowsDict).slice(0, 5) : 'null'
+					);
 				}
-				
+
 				// 构建翻译后的显示文本
 				const display = `${translatedCat}:${translatedTag}`;
-				
+
 				console.log(`[FavoriteTagStore] 最终显示: ${display}`);
-				
+
 				return {
 					id: ct.id || `${cat}:${ct.tag}`,
 					cat,
@@ -429,9 +446,9 @@ export const favoriteTagStore = {
 			});
 
 			// 合并到现有收藏（避免重复）
-			const existingIds = new Set(favoriteTags.map(t => t.id));
-			const newTags = tags.filter(t => !existingIds.has(t.id));
-			
+			const existingIds = new Set(favoriteTags.map((t) => t.id));
+			const newTags = tags.filter((t) => !existingIds.has(t.id));
+
 			if (newTags.length > 0) {
 				favoriteTags = [...favoriteTags, ...newTags];
 				saveTags(favoriteTags);

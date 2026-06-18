@@ -11,7 +11,7 @@ import type { UpscaleConditionConfig } from '$lib/config/startupConfig';
  * 将前端条件格式转换为 config.json 格式
  */
 function toConfigFormat(conditions: UpscaleCondition[]): UpscaleConditionConfig[] {
-	return conditions.map(c => ({
+	return conditions.map((c) => ({
 		id: c.id,
 		name: c.name,
 		enabled: c.enabled,
@@ -29,7 +29,7 @@ function toConfigFormat(conditions: UpscaleCondition[]): UpscaleConditionConfig[
 		scale: c.action.scale,
 		tileSize: c.action.tileSize,
 		noiseLevel: c.action.noiseLevel,
-		skip: c.action.skip ?? false,
+		skip: c.action.skip ?? false
 	}));
 }
 
@@ -37,7 +37,7 @@ function toConfigFormat(conditions: UpscaleCondition[]): UpscaleConditionConfig[
  * 将前端条件格式转换为后端 invoke 格式
  */
 function toBackendFormat(conditions: UpscaleCondition[]) {
-	return conditions.map(c => ({
+	return conditions.map((c) => ({
 		id: c.id,
 		name: c.name,
 		enabled: c.enabled,
@@ -55,7 +55,7 @@ function toBackendFormat(conditions: UpscaleCondition[]) {
 		scale: c.action.scale,
 		tileSize: c.action.tileSize,
 		noiseLevel: c.action.noiseLevel,
-		skip: c.action.skip ?? false,
+		skip: c.action.skip ?? false
 	}));
 }
 
@@ -77,19 +77,18 @@ export async function syncUpscaleConditions(
 		syncToBackend?: boolean;
 	}
 ): Promise<void> {
-	const {
-		saveToLocalStorage = true,
-		saveToConfig = true,
-		syncToBackend = true,
-	} = options ?? {};
+	const { saveToLocalStorage = true, saveToConfig = true, syncToBackend = true } = options ?? {};
 
 	// 调试日志：检查 pixel 值
-	console.log('🔄 syncUpscaleConditions 收到的条件:', conditions.map(c => ({
-		id: c.id,
-		name: c.name,
-		minPixels: c.match.minPixels,
-		maxPixels: c.match.maxPixels,
-	})));
+	console.log(
+		'🔄 syncUpscaleConditions 收到的条件:',
+		conditions.map((c) => ({
+			id: c.id,
+			name: c.name,
+			minPixels: c.match.minPixels,
+			maxPixels: c.match.maxPixels
+		}))
+	);
 
 	// 1. 保存到 localStorage
 	if (saveToLocalStorage) {
@@ -108,11 +107,14 @@ export async function syncUpscaleConditions(
 			const config = await getStartupConfig();
 			config.upscaleConditionsEnabled = enabled;
 			config.upscaleConditions = toConfigFormat(conditions);
-			console.log('📝 保存到 config.json:', config.upscaleConditions?.map(c => ({
-				id: c.id,
-				minPixels: c.minPixels,
-				maxPixels: c.maxPixels,
-			})));
+			console.log(
+				'📝 保存到 config.json:',
+				config.upscaleConditions?.map((c) => ({
+					id: c.id,
+					minPixels: c.minPixels,
+					maxPixels: c.maxPixels
+				}))
+			);
 			await saveStartupConfig(config);
 		} catch (err) {
 			console.warn('⚠️ 保存到 config.json 失败:', err);
@@ -124,7 +126,7 @@ export async function syncUpscaleConditions(
 		try {
 			await invoke('upscale_service_sync_conditions', {
 				enabled,
-				conditions: toBackendFormat(conditions),
+				conditions: toBackendFormat(conditions)
 			});
 			console.log('✅ 条件设置同步完成, 条件数:', conditions.length);
 		} catch (err) {
@@ -148,6 +150,6 @@ export async function syncConditionsToBackend(
 	return syncUpscaleConditions(enabled, conditions, {
 		saveToLocalStorage: false,
 		saveToConfig: false,
-		syncToBackend: true,
+		syncToBackend: true
 	});
 }

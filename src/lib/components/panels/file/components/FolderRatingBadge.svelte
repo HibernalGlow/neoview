@@ -19,13 +19,7 @@
 		onSetRating?: (rating: number | null) => void;
 	}
 
-	let {
-		effectiveRating,
-		manualRating,
-		averageRating,
-		size = 'md',
-		onSetRating
-	}: Props = $props();
+	let { effectiveRating, manualRating, averageRating, size = 'md', onSetRating }: Props = $props();
 
 	const sizeClasses = {
 		sm: {
@@ -54,7 +48,9 @@
 
 <DropdownMenu.Root>
 	<DropdownMenu.Trigger onclick={(e: MouseEvent) => e.stopPropagation()}>
-		<span class="inline-flex items-center gap-0.5 rounded bg-accent {classes.badge} text-accent-foreground cursor-pointer hover:bg-accent/80 transition-colors">
+		<span
+			class="bg-accent inline-flex items-center gap-0.5 rounded {classes.badge} text-accent-foreground hover:bg-accent/80 cursor-pointer transition-colors"
+		>
 			<Star class="{classes.star} {effectiveRating !== null ? 'fill-current' : ''}" />
 			{#if effectiveRating !== null}
 				<span class="font-medium">{effectiveRating.toFixed(1)}</span>
@@ -68,14 +64,14 @@
 				min="0"
 				max="10"
 				step="0.1"
-				class="rounded border bg-background px-2 text-center {classes.input}"
+				class="bg-background rounded border px-2 text-center {classes.input}"
 				value={manualRating ?? ''}
 				onchange={handleRatingChange}
 				placeholder="评分"
 			/>
 			<button
 				type="button"
-				class="rounded hover:bg-accent transition-colors text-muted-foreground {classes.button}"
+				class="hover:bg-accent text-muted-foreground rounded transition-colors {classes.button}"
 				onclick={() => onSetRating?.(null)}
 			>
 				清除

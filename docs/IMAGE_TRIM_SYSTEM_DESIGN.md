@@ -7,6 +7,7 @@
 ### NeeView — ImageTrimConfig.cs
 
 NeeView 的图像裁剪方案（`Config/ImageTrimConfig.cs`）：
+
 - `IsEnabled` — 总开关
 - 四个方向独立百分比裁剪：`Top / Bottom / Left / Right`（0.0 ~ 0.9）
 - **互斥约束**：对向之和不超过 0.9（`Left + Right ≤ 0.9`, `Top + Bottom ≤ 0.9`），修改一侧自动压缩对侧
@@ -16,6 +17,7 @@ NeeView 的图像裁剪方案（`Config/ImageTrimConfig.cs`）：
 ### OpenComic — readingImageClip
 
 OpenComic 的裁剪方案（`scripts/reading.js` + `scripts/storage.js`）：
+
 - 默认配置 `{ top: 0, bottom: 0, left: 0, right: 0 }`（百分比 0-100）
 - `calculateImagesDataWithClip()` — 重算裁剪后的图片有效尺寸，用于布局计算
 - 布局时生成 CSS clip 值并应用到图片容器
@@ -26,6 +28,7 @@ OpenComic 的裁剪方案（`scripts/reading.js` + `scripts/storage.js`）：
 ## 二、NeoView 现状
 
 当前的裁剪能力仅限于 **页面分割（splitHalf）**：
+
 - `getClipPath('left')` → `inset(0 50% 0 0)` — 裁掉右半
 - `getClipPath('right')` → `inset(0 0 0 50%)` — 裁掉左半
 - 新 CropRect 系统通过 `getClipPathFromCropRect()` 支持归一化裁剪区域
@@ -37,14 +40,14 @@ OpenComic 的裁剪方案（`scripts/reading.js` + `scripts/storage.js`）：
 
 ```typescript
 interface ImageTrimSettings {
-  enabled: boolean;         // 总开关
-  top: number;              // 上裁剪 0-45%（对向之和 ≤ 90%）
-  bottom: number;           // 下裁剪 0-45%
-  left: number;             // 左裁剪 0-45%
-  right: number;            // 右裁剪 0-45%
-  autoTrim: boolean;        // 自动裁剪开关
-  autoTrimThreshold: number;// 自动裁剪边缘颜色容差 0-255（默认 30）
-  autoTrimTarget: 'black' | 'white' | 'auto'; // 裁剪目标颜色
+	enabled: boolean; // 总开关
+	top: number; // 上裁剪 0-45%（对向之和 ≤ 90%）
+	bottom: number; // 下裁剪 0-45%
+	left: number; // 左裁剪 0-45%
+	right: number; // 右裁剪 0-45%
+	autoTrim: boolean; // 自动裁剪开关
+	autoTrimThreshold: number; // 自动裁剪边缘颜色容差 0-255（默认 30）
+	autoTrimTarget: 'black' | 'white' | 'auto'; // 裁剪目标颜色
 }
 ```
 
@@ -64,6 +67,7 @@ FrameImage.svelte
 ### 3.3 自动裁剪
 
 通过 Canvas 采样检测图片边缘颜色，计算最佳裁剪范围：
+
 1. 加载图片到离屏 Canvas
 2. 从四边向内扫描，判断像素是否为「边框色」
 3. 返回 { top, right, bottom, left } 裁剪百分比
@@ -72,6 +76,7 @@ FrameImage.svelte
 ### 3.4 UI — ImageTrimCard
 
 新增 `ImageTrimCard.svelte`，放在 `control` 面板下（与 ColorFilterCard/PageTransitionCard 并列）：
+
 - 总开关
 - 四方向滑块（0-45%）+ 锁定联动选项
 - 自动裁剪按钮 + 目标颜色 + 容差
@@ -79,11 +84,11 @@ FrameImage.svelte
 
 ## 四、实现优先级
 
-| Priority | Item | Status |
-|----------|------|--------|
-| P0 | imageTrimStore + 持久化 | ✅ 本次实现 |
-| P0 | CSS inset 渲染集成 | ✅ 本次实现 |
-| P0 | ImageTrimCard UI | ✅ 本次实现 |
-| P1 | 自动裁剪（Canvas 检测） | ✅ 本次实现 |
-| P2 | per-book 裁剪记忆 | 后续 |
-| P2 | Rust 侧自动裁剪（更高性能） | 后续 |
+| Priority | Item                        | Status      |
+| -------- | --------------------------- | ----------- |
+| P0       | imageTrimStore + 持久化     | ✅ 本次实现 |
+| P0       | CSS inset 渲染集成          | ✅ 本次实现 |
+| P0       | ImageTrimCard UI            | ✅ 本次实现 |
+| P1       | 自动裁剪（Canvas 检测）     | ✅ 本次实现 |
+| P2       | per-book 裁剪记忆           | 后续        |
+| P2       | Rust 侧自动裁剪（更高性能） | 后续        |

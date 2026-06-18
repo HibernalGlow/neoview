@@ -147,9 +147,13 @@ export class FrameCacheManager {
 			};
 
 			this.tempVideoElement.addEventListener('seeked', handleSeeked, { once: true });
-			this.tempVideoElement.addEventListener('error', () => {
-				this.isGenerating = false;
-			}, { once: true });
+			this.tempVideoElement.addEventListener(
+				'error',
+				() => {
+					this.isGenerating = false;
+				},
+				{ once: true }
+			);
 
 			this.tempVideoElement.currentTime = time;
 		}, 30); // 30ms 防抖
@@ -205,9 +209,7 @@ export async function captureVideoScreenshot(
 
 	ctx.drawImage(videoElement, 0, 0);
 
-	return new Promise<Blob | null>((resolve) =>
-		canvas.toBlob(resolve, 'image/png')
-	);
+	return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
 /**

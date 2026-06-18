@@ -50,7 +50,9 @@ export function updateUpscaleSettings(partial: Partial<UpscaleSettings>): Upscal
 	return currentSettings;
 }
 
-export function subscribeUpscaleSettings(listener: (settings: UpscaleSettings) => void): () => void {
+export function subscribeUpscaleSettings(
+	listener: (settings: UpscaleSettings) => void
+): () => void {
 	listeners.add(listener);
 	listener(currentSettings);
 	return () => {

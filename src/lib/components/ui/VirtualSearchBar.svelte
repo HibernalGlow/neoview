@@ -36,9 +36,10 @@
 		}
 
 		const lowerKeyword = keyword.toLowerCase();
-		const results = items.filter((item) =>
-			item.name.toLowerCase().includes(lowerKeyword) ||
-			item.path.toLowerCase().includes(lowerKeyword)
+		const results = items.filter(
+			(item) =>
+				item.name.toLowerCase().includes(lowerKeyword) ||
+				item.path.toLowerCase().includes(lowerKeyword)
 		);
 
 		onSearch(results, keyword);
@@ -72,11 +73,13 @@
 	}
 </script>
 
-<div class="flex items-center gap-2 border-b border-border px-2 py-2">
+<div class="border-border flex items-center gap-2 border-b px-2 py-2">
 	<div class="relative flex-1">
 		<div class="flex gap-1">
-			<div class="relative flex-1 flex items-center gap-1 min-h-[36px] border rounded-md bg-transparent border-border px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-				<Search class="h-4 w-4 text-muted-foreground shrink-0" />
+			<div
+				class="border-border focus-within:ring-ring relative flex min-h-[36px] flex-1 items-center gap-1 rounded-md border bg-transparent px-2 py-1 focus-within:ring-2 focus-within:ring-offset-2"
+			>
+				<Search class="text-muted-foreground h-4 w-4 shrink-0" />
 
 				<input
 					type="text"
@@ -84,25 +87,25 @@
 					{value}
 					oninput={handleInput}
 					onkeydown={handleKeyDown}
-					class="flex-1 min-w-[100px] bg-transparent outline-none text-sm"
+					class="min-w-[100px] flex-1 bg-transparent text-sm outline-none"
 					{disabled}
 				/>
 
 				<!-- 清空按钮 -->
 				{#if value}
 					<button
-						class="p-1 hover:bg-accent rounded shrink-0"
+						class="hover:bg-accent shrink-0 rounded p-1"
 						onclick={handleClear}
 						title="清空搜索"
 					>
-						<X class="h-4 w-4 text-muted-foreground" />
+						<X class="text-muted-foreground h-4 w-4" />
 					</button>
 				{/if}
 			</div>
 
 			<!-- 搜索按钮 -->
 			<button
-				class="p-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 shrink-0"
+				class="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 rounded-md p-1.5 disabled:opacity-50"
 				onclick={handleSearchClick}
 				disabled={disabled || !value.trim()}
 				title="搜索"

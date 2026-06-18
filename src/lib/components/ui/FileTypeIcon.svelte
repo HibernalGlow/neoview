@@ -2,15 +2,7 @@
 	/**
 	 * FileTypeIcon - 根据文件类型显示对应图标
 	 */
-	import {
-		Folder,
-		File,
-		Image,
-		FileArchive,
-		Video,
-		Play,
-		FileText
-	} from '@lucide/svelte';
+	import { Folder, File, Image, FileArchive, Video, Play, FileText } from '@lucide/svelte';
 
 	interface Props {
 		/** 文件名（用于判断类型） */
@@ -30,9 +22,26 @@
 		// 压缩包
 		if (['zip', 'cbz', 'rar', 'cbr', '7z', 'cb7', 'tar', 'gz'].includes(ext)) return 'archive';
 		// 图片
-		if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'avif', 'heic', 'heif', 'jxl'].includes(ext)) return 'image';
+		if (
+			[
+				'jpg',
+				'jpeg',
+				'png',
+				'gif',
+				'webp',
+				'bmp',
+				'svg',
+				'ico',
+				'avif',
+				'heic',
+				'heif',
+				'jxl'
+			].includes(ext)
+		)
+			return 'image';
 		// 视频
-		if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'ts'].includes(ext)) return 'video';
+		if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'ts'].includes(ext))
+			return 'video';
 		// 音频
 		if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a'].includes(ext)) return 'audio';
 		// 文档
@@ -41,11 +50,13 @@
 	});
 
 	// 大小类名
-	const sizeClass = $derived({
-		xs: 'h-3 w-3',
-		sm: 'h-3.5 w-3.5',
-		md: 'h-4 w-4'
-	}[size]);
+	const sizeClass = $derived(
+		{
+			xs: 'h-3 w-3',
+			sm: 'h-3.5 w-3.5',
+			md: 'h-4 w-4'
+		}[size]
+	);
 </script>
 
 {#if fileType === 'folder'}
@@ -61,5 +72,5 @@
 {:else if fileType === 'document'}
 	<FileText class="{sizeClass} shrink-0 text-orange-500" />
 {:else}
-	<File class="{sizeClass} shrink-0 text-muted-foreground" />
+	<File class="{sizeClass} text-muted-foreground shrink-0" />
 {/if}

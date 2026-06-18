@@ -25,589 +25,580 @@ export interface CardDefinition {
 // 所有卡片注册表
 export const cardRegistry: Record<string, CardDefinition> = {
 	// ==================== Benchmark 面板卡片 ====================
-	'visibility': {
+	visibility: {
 		id: 'visibility',
 		title: '可见性监控',
 		icon: 'Eye',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'latency': {
+	latency: {
 		id: 'latency',
 		title: '延迟分析',
 		icon: 'Timer',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'renderer': {
+	renderer: {
 		id: 'renderer',
 		title: '渲染模式测试',
 		icon: 'Layers',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'files': {
+	files: {
 		id: 'files',
 		title: '文件选择',
 		icon: 'FolderOpen',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'detailed': {
+	detailed: {
 		id: 'detailed',
 		title: '详细结果',
 		icon: 'FileText',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'loadmode': {
+	loadmode: {
 		id: 'loadmode',
 		title: '加载模式',
 		icon: 'Cpu',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'archives': {
+	archives: {
 		id: 'archives',
 		title: '压缩包扫描',
 		icon: 'Archive',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'realworld': {
+	realworld: {
 		id: 'realworld',
 		title: '实际场景',
 		icon: 'Globe',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'imageSource': {
+	imageSource: {
 		id: 'imageSource',
 		title: '图像源对比',
 		icon: 'ScanSearch',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'protocolTest': {
+	protocolTest: {
 		id: 'protocolTest',
 		title: '协议测试',
 		icon: 'Network',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'results': {
+	results: {
 		id: 'results',
 		title: '测试结果',
 		icon: 'ListChecks',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'summary': {
+	summary: {
 		id: 'summary',
 		title: '总结',
 		icon: 'BarChart3',
 		defaultPanel: 'benchmark',
-		canHide: true,
-
+		canHide: true
 	},
-	'pipelineLatency': {
+	pipelineLatency: {
 		id: 'pipelineLatency',
 		title: '实时延迟监控',
 		icon: 'Gauge',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'transcodeBenchmark': {
+	transcodeBenchmark: {
 		id: 'transcodeBenchmark',
 		title: '超分预处理转码',
 		icon: 'Zap',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'thumbnailLatency': {
+	thumbnailLatency: {
 		id: 'thumbnailLatency',
 		title: '目录加载延迟',
 		icon: 'Clock',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'pageFlipMonitor': {
+	pageFlipMonitor: {
 		id: 'pageFlipMonitor',
 		title: '翻页性能监控',
 		icon: 'Activity',
 		defaultPanel: 'benchmark',
-		canHide: true,
+		canHide: true
 	},
-	'preloadStatus': {
+	preloadStatus: {
 		id: 'preloadStatus',
 		title: '预加载状态',
 		icon: 'Loader',
 		defaultPanel: 'info',
-		canHide: true,
+		canHide: true
 	},
-	'systemMonitor': {
+	systemMonitor: {
 		id: 'systemMonitor',
 		title: '系统资源监控',
 		icon: 'Monitor',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== Info 面板卡片 ====================
-	'bookInfo': {
+	bookInfo: {
 		id: 'bookInfo',
 		title: '书籍信息',
 		icon: 'BookOpen',
 		defaultPanel: 'info',
-		canHide: false,
+		canHide: false
 	},
-	'infoOverlay': {
+	infoOverlay: {
 		id: 'infoOverlay',
 		title: '信息悬浮窗',
 		icon: 'Info',
 		defaultPanel: 'info',
-		canHide: true,
+		canHide: true
 	},
-	'switchToast': {
+	switchToast: {
 		id: 'switchToast',
 		title: '切换提示',
 		icon: 'Bell',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'imageInfo': {
+	imageInfo: {
 		id: 'imageInfo',
 		title: '图像信息',
 		icon: 'Image',
 		defaultPanel: 'info',
-		canHide: true,
+		canHide: true
 	},
-	'storage': {
+	storage: {
 		id: 'storage',
 		title: '存储信息',
 		icon: 'HardDrive',
 		defaultPanel: 'info',
-		canHide: true,
+		canHide: true
 	},
-	'time': {
+	time: {
 		id: 'time',
 		title: '时间信息',
 		icon: 'Clock',
 		defaultPanel: 'info',
-		canHide: true,
+		canHide: true
 	},
-	'sidebarControl': {
+	sidebarControl: {
 		id: 'sidebarControl',
 		title: '边栏控制',
 		icon: 'PanelLeft',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'colorFilter': {
+	colorFilter: {
 		id: 'colorFilter',
 		title: '颜色滤镜',
 		icon: 'Palette',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'imageTrim': {
+	imageTrim: {
 		id: 'imageTrim',
 		title: '图像裁剪',
 		icon: 'Crop',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'pageTransition': {
+	pageTransition: {
 		id: 'pageTransition',
 		title: '翻页动画',
 		icon: 'Play',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'animatedVideoMode': {
+	animatedVideoMode: {
 		id: 'animatedVideoMode',
 		title: '动图视频模式',
 		icon: 'Play',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'ambientBackground': {
+	ambientBackground: {
 		id: 'ambientBackground',
 		title: '动态背景',
 		icon: 'Sparkles',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'sidebarHeight': {
+	sidebarHeight: {
 		id: 'sidebarHeight',
 		title: '侧边栏高度',
 		icon: 'PanelLeft',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== Properties 面板卡片 ====================
-	'emmTags': {
+	emmTags: {
 		id: 'emmTags',
 		title: 'EMM 标签',
 		icon: 'Tags',
 		defaultPanel: 'properties',
-		canHide: false,
+		canHide: false
 	},
-	'bookSettings': {
+	bookSettings: {
 		id: 'bookSettings',
 		title: '本书设置',
 		icon: 'Settings2',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'folderRatings': {
+	folderRatings: {
 		id: 'folderRatings',
 		title: '文件夹平均评分',
 		icon: 'Star',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'favoriteTags': {
+	favoriteTags: {
 		id: 'favoriteTags',
 		title: '收藏标签快选',
 		icon: 'Heart',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'emmSync': {
+	emmSync: {
 		id: 'emmSync',
 		title: 'EMM 同步',
 		icon: 'RefreshCw',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'thumbnailMaintenance': {
+	thumbnailMaintenance: {
 		id: 'thumbnailMaintenance',
 		title: '缩略图维护',
 		icon: 'Images',
 		defaultPanel: 'control',
-		canHide: true,
+		canHide: true
 	},
-	'thumbnailArchMetrics': {
+	thumbnailArchMetrics: {
 		id: 'thumbnailArchMetrics',
 		title: '缩略图架构指标',
 		icon: 'Gauge',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'emmRawData': {
+	emmRawData: {
 		id: 'emmRawData',
 		title: 'EMM 数据库记录',
 		icon: 'Database',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'emmConfig': {
+	emmConfig: {
 		id: 'emmConfig',
 		title: 'EMM 配置',
 		icon: 'Sliders',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
-	'fileListTagDisplay': {
+	fileListTagDisplay: {
 		id: 'fileListTagDisplay',
 		title: '文件列表标签',
 		icon: 'Tag',
 		defaultPanel: 'properties',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== Upscale 面板卡片 ====================
-	'upscaleControl': {
+	upscaleControl: {
 		id: 'upscaleControl',
 		title: '超分控制',
 		icon: 'Zap',
 		defaultPanel: 'upscale',
-		canHide: false,
+		canHide: false
 	},
-	'upscaleModel': {
+	upscaleModel: {
 		id: 'upscaleModel',
 		title: '模型选择',
 		icon: 'Boxes',
 		defaultPanel: 'upscale',
-		canHide: false,
+		canHide: false
 	},
-	'upscaleStatus': {
+	upscaleStatus: {
 		id: 'upscaleStatus',
 		title: '处理状态',
 		icon: 'Loader',
 		defaultPanel: 'upscale',
-		canHide: true,
+		canHide: true
 	},
-	'upscaleCache': {
+	upscaleCache: {
 		id: 'upscaleCache',
 		title: '缓存管理',
 		icon: 'Archive',
 		defaultPanel: 'upscale',
-		canHide: true,
+		canHide: true
 	},
-	'upscaleConditions': {
+	upscaleConditions: {
 		id: 'upscaleConditions',
 		title: '条件超分',
 		icon: 'Sparkles',
 		defaultPanel: 'upscale',
-		canHide: true,
+		canHide: true
 	},
-	'progressiveUpscale': {
+	progressiveUpscale: {
 		id: 'progressiveUpscale',
 		title: '预超分',
 		icon: 'FastForward',
 		defaultPanel: 'upscale',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== History 面板卡片 ====================
-	'historyList': {
+	historyList: {
 		id: 'historyList',
 		title: '历史记录',
 		icon: 'History',
 		defaultPanel: 'history',
 		canHide: false,
 		fullHeight: true,
-		hideHeader: true,
+		hideHeader: true
 	},
 
 	// ==================== Bookmark 面板卡片 ====================
-	'bookmarkList': {
+	bookmarkList: {
 		id: 'bookmarkList',
 		title: '书签列表',
 		icon: 'Bookmark',
 		defaultPanel: 'bookmark',
 		canHide: false,
 		fullHeight: true,
-		hideHeader: true,
+		hideHeader: true
 	},
 
 	// ==================== PageList 面板卡片 ====================
-	'pageListMain': {
+	pageListMain: {
 		id: 'pageListMain',
 		title: '页面列表',
 		icon: 'List',
 		defaultPanel: 'pageList',
 		canHide: false,
 		fullHeight: true,
-		hideHeader: true,
+		hideHeader: true
 	},
 
 	// ==================== Insights 面板卡片 ====================
-	'dailyTrend': {
+	dailyTrend: {
 		id: 'dailyTrend',
 		title: '最近 7 日阅读趋势',
 		icon: 'TrendingUp',
 		defaultPanel: 'insights',
-		canHide: false,
+		canHide: false
 	},
-	'readingStreak': {
+	readingStreak: {
 		id: 'readingStreak',
 		title: '连续阅读 Streak',
 		icon: 'Flame',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
-	'readingHeatmap': {
+	readingHeatmap: {
 		id: 'readingHeatmap',
 		title: '阅读时段热力图',
 		icon: 'Calendar',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
-	'bookmarkOverview': {
+	bookmarkOverview: {
 		id: 'bookmarkOverview',
 		title: '书签概览',
 		icon: 'Bookmark',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
-	'sourceBreakdown': {
+	sourceBreakdown: {
 		id: 'sourceBreakdown',
 		title: '来源拆分',
 		icon: 'PieChart',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
-	'emmTagsHot': {
+	emmTagsHot: {
 		id: 'emmTagsHot',
 		title: 'EMM 标签热度',
 		icon: 'Flame',
 		defaultPanel: 'insights',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== Folder 面板卡片 ====================
-	'folderMain': {
+	folderMain: {
 		id: 'folderMain',
 		title: '文件夹',
 		icon: 'FolderOpen',
 		defaultPanel: 'folder',
 		canHide: false,
 		fullHeight: true,
-		hideHeader: true, // 隐藏卡片头部，面板本身有完整 UI
+		hideHeader: true // 隐藏卡片头部，面板本身有完整 UI
 	},
 
 	// ==================== AI 面板卡片 ====================
-	'aiTags': {
+	aiTags: {
 		id: 'aiTags',
 		title: 'AI 标签推断',
 		icon: 'Bot',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'aiApiConfig': {
+	aiApiConfig: {
 		id: 'aiApiConfig',
 		title: 'AI API 配置',
 		icon: 'Settings',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'aiTitleTranslation': {
+	aiTitleTranslation: {
 		id: 'aiTitleTranslation',
 		title: '标题翻译',
 		icon: 'Languages',
 		defaultPanel: 'ai',
-		canHide: false,
+		canHide: false
 	},
-	'aiServiceConfig': {
+	aiServiceConfig: {
 		id: 'aiServiceConfig',
 		title: '翻译服务配置',
 		icon: 'Sliders',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'aiTranslationCache': {
+	aiTranslationCache: {
 		id: 'aiTranslationCache',
 		title: '翻译缓存',
 		icon: 'Database',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'aiTranslationTest': {
+	aiTranslationTest: {
 		id: 'aiTranslationTest',
 		title: '翻译测试',
 		icon: 'TestTube',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'translationOverlay': {
+	translationOverlay: {
 		id: 'translationOverlay',
 		title: '翻译叠加层',
 		icon: 'Languages',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
-	'voiceControl': {
+	voiceControl: {
 		id: 'voiceControl',
 		title: '语音控制',
 		icon: 'Mic',
 		defaultPanel: 'ai',
-		canHide: true,
+		canHide: true
 	},
 
 	// ==================== Settings 卡片 ====================
-	'settingsGeneral': {
+	settingsGeneral: {
 		id: 'settingsGeneral',
 		title: '通用设置',
 		icon: 'Settings',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsSystem': {
+	settingsSystem: {
 		id: 'settingsSystem',
 		title: '系统设置',
 		icon: 'Monitor',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsView': {
+	settingsView: {
 		id: 'settingsView',
 		title: '视图设置',
 		icon: 'Eye',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsImage': {
+	settingsImage: {
 		id: 'settingsImage',
 		title: '影像设置',
 		icon: 'Image',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsBook': {
+	settingsBook: {
 		id: 'settingsBook',
 		title: '书籍设置',
 		icon: 'BookOpen',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsPerformance': {
+	settingsPerformance: {
 		id: 'settingsPerformance',
 		title: '性能设置',
 		icon: 'Zap',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsTheme': {
+	settingsTheme: {
 		id: 'settingsTheme',
 		title: '外观设置',
 		icon: 'Palette',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsNotification': {
+	settingsNotification: {
 		id: 'settingsNotification',
 		title: '通知设置',
 		icon: 'Bell',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsPanels': {
+	settingsPanels: {
 		id: 'settingsPanels',
 		title: '边栏管理',
 		icon: 'PanelLeft',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsCards': {
+	settingsCards: {
 		id: 'settingsCards',
 		title: '卡片管理',
 		icon: 'LayoutGrid',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsBindings': {
+	settingsBindings: {
 		id: 'settingsBindings',
 		title: '操作绑定',
 		icon: 'Sliders',
 		defaultPanel: 'settings',
-		canHide: true,
+		canHide: true
 	},
-	'settingsData': {
+	settingsData: {
 		id: 'settingsData',
 		title: '数据设置',
 		icon: 'Database',
 		defaultPanel: 'settings',
-		canHide: true,
-	},
+		canHide: true
+	}
 };
 
 // 获取面板的默认卡片列表
 export function getDefaultCardsForPanel(panelId: PanelId): string[] {
 	return Object.values(cardRegistry)
-		.filter(card => card.defaultPanel === panelId)
-		.map(card => card.id);
+		.filter((card) => card.defaultPanel === panelId)
+		.map((card) => card.id);
 }
 
 // 获取卡片定义

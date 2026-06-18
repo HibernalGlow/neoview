@@ -16,8 +16,3 @@ export async function blobToDataURL(blob: Blob): Promise<string> {
 		reader.readAsDataURL(blob);
 	});
 }
-
-
-
-
-

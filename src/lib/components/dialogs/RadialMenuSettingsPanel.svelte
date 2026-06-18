@@ -55,8 +55,7 @@
 		keyBindingsStore.bindings
 			.filter(
 				(binding) =>
-					!binding.action.startsWith('openRadialMenu.') &&
-					!binding.action.startsWith('radialMenu.')
+					!binding.action.startsWith('openRadialMenu.') && !binding.action.startsWith('radialMenu.')
 			)
 			.map((binding) => ({
 				action: binding.action,
@@ -106,7 +105,10 @@
 	});
 
 	function getLayers(): RadialMenuItem[][] {
-		return [0, 1, 2].map((index) => radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : []));
+		return [0, 1, 2].map(
+			(index) =>
+				radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : [])
+		);
 	}
 
 	function getLayerItems(level: 1 | 2 | 3): RadialMenuItem[] {
@@ -171,7 +173,11 @@
 				labelX: labelPoint.x,
 				labelY: labelPoint.y,
 				label: item?.label || (hasParent ? '+' : getLevelName(level - 1)),
-				hint: item ? getLevelName(level) : hasParent ? `添加${getLevelName(level)}菜单` : `先选择${getLevelName(level - 1)}菜单`
+				hint: item
+					? getLevelName(level)
+					: hasParent
+						? `添加${getLevelName(level)}菜单`
+						: `先选择${getLevelName(level - 1)}菜单`
 			};
 		});
 	}
@@ -184,7 +190,12 @@
 		};
 	}
 
-	function sectorPath(innerRadius: number, outerRadius: number, startAngle: number, endAngle: number): string {
+	function sectorPath(
+		innerRadius: number,
+		outerRadius: number,
+		startAngle: number,
+		endAngle: number
+	): string {
 		const outerStart = polar(outerRadius, startAngle);
 		const outerEnd = polar(outerRadius, endAngle);
 		const innerEnd = polar(innerRadius, endAngle);
@@ -388,15 +399,17 @@
 	}
 </script>
 
-<div class="flex flex-col gap-4 p-6 text-foreground">
+<div class="text-foreground flex flex-col gap-4 p-6">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div class="space-y-1">
 			<h3 class="flex items-center gap-2 text-lg font-semibold">
-				<CircleDot class="h-5 w-5 text-primary" />
+				<CircleDot class="text-primary h-5 w-5" />
 				轮盘菜单
 			</h3>
 			<p class="text-muted-foreground text-sm">
-				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · 当前 {getLevelName(actualLayerCount)}菜单 · 移动鼠标确认路径，点击槽位管理
+				{radialMenuStore.config.enabled ? '已启用' : '已停用'} · 当前 {getLevelName(
+					actualLayerCount
+				)}菜单 · 移动鼠标确认路径，点击槽位管理
 			</p>
 		</div>
 		<div class="flex gap-2">
@@ -421,17 +434,19 @@
 	</div>
 
 	<div class="grid gap-4 xl:grid-cols-[minmax(28rem,1fr)_22rem]">
-		<section class="rounded-lg border bg-card/60 p-4">
+		<section class="bg-card/60 rounded-lg border p-4">
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 				<div>
 					<h4 class="text-sm font-medium">轮盘编辑预览</h4>
-					<p class="text-muted-foreground text-xs">多层同屏显示；鼠标经过扇区确认当前路径，点击空槽新增，点击已有槽编辑。</p>
+					<p class="text-muted-foreground text-xs">
+						多层同屏显示；鼠标经过扇区确认当前路径，点击空槽新增，点击已有槽编辑。
+					</p>
 				</div>
 				<label class="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
 					<span class="text-muted-foreground">启用</span>
 					<input
 						type="checkbox"
-						class="h-4 w-4 accent-primary"
+						class="accent-primary h-4 w-4"
 						checked={radialMenuStore.config.enabled}
 						onchange={(event) =>
 							radialMenuStore.updateConfig({
@@ -443,13 +458,14 @@
 
 			<div class="flex justify-center overflow-auto">
 				<svg viewBox="0 0 520 520" class="h-[min(68vh,36rem)] min-h-[28rem] w-full max-w-[36rem]">
-					<circle cx={CENTER} cy={CENTER} r="252" class="fill-background stroke-border" />
-					<circle cx={CENTER} cy={CENTER} r="180" class="fill-background stroke-border" />
-					<circle cx={CENTER} cy={CENTER} r="100" class="fill-background stroke-border" />
-					<circle cx={CENTER} cy={CENTER} r="34" class="fill-background stroke-border" />
+					<circle cx={CENTER} cy={CENTER} r="252" class="fill-background stroke-border"></circle>
+					<circle cx={CENTER} cy={CENTER} r="180" class="fill-background stroke-border"></circle>
+					<circle cx={CENTER} cy={CENTER} r="100" class="fill-background stroke-border"></circle>
+					<circle cx={CENTER} cy={CENTER} r="34" class="fill-background stroke-border"></circle>
 
 					{#each editorSlots as slot (slot.id)}
-						{@const isSelected = slot.item && selectedPath[selectedPath.length - 1] === slot.item.id}
+						{@const isSelected =
+							slot.item && selectedPath[selectedPath.length - 1] === slot.item.id}
 						{@const isInSelectedPath = slot.item && selectedPath.includes(slot.item.id)}
 						{@const SlotIcon = slot.item?.action ? getActionIcon(slot.item.action) : CircleDot}
 						<g
@@ -475,7 +491,7 @@
 											? 'fill-primary/15 stroke-primary/70'
 											: 'fill-muted/35 stroke-border hover:fill-primary/10'
 									: 'fill-muted/25 stroke-muted-foreground/35 stroke-dashed hover:fill-primary/15 hover:stroke-primary/70'}
-							/>
+							></path>
 							{#if slot.item}
 								<foreignObject
 									x={slot.labelX - 38}
@@ -487,8 +503,10 @@
 									<div
 										class="flex h-full w-full flex-col items-center justify-center gap-0.5 overflow-hidden text-center"
 									>
-										<SlotIcon class="h-4 w-4 shrink-0 text-foreground" />
-										<div class="max-w-full truncate px-1 text-[11px] font-medium leading-tight text-foreground">
+										<SlotIcon class="text-foreground h-4 w-4 shrink-0" />
+										<div
+											class="text-foreground max-w-full truncate px-1 text-[11px] leading-tight font-medium"
+										>
 											{getShortLabel(slot.label)}
 										</div>
 									</div>
@@ -499,7 +517,7 @@
 									y={slot.labelY}
 									text-anchor="middle"
 									dominant-baseline="middle"
-									class="pointer-events-none fill-muted-foreground text-[18px]"
+									class="fill-muted-foreground pointer-events-none text-[18px]"
 								>
 									+
 								</text>
@@ -507,12 +525,12 @@
 						</g>
 					{/each}
 
-					<circle cx={CENTER} cy={CENTER} r="24" class="fill-card stroke-border" />
+					<circle cx={CENTER} cy={CENTER} r="24" class="fill-card stroke-border"></circle>
 				</svg>
 			</div>
 		</section>
 
-		<aside class="flex flex-col gap-3 rounded-lg border bg-card/60 p-4">
+		<aside class="bg-card/60 flex flex-col gap-3 rounded-lg border p-4">
 			<div class="space-y-1">
 				<h4 class="text-sm font-medium">槽位管理</h4>
 				<p class="text-muted-foreground text-xs">
@@ -537,7 +555,7 @@
 					/>
 				</label>
 
-				<div class="flex items-center gap-2 rounded-lg border bg-background/70 p-3">
+				<div class="bg-background/70 flex items-center gap-2 rounded-lg border p-3">
 					<div class="bg-muted flex h-9 w-9 items-center justify-center rounded-md">
 						<SelectedActionIcon class="h-4 w-4" />
 					</div>
@@ -555,7 +573,9 @@
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						value={selectedItem.moveToMenuId ? 'moveTo' : 'action'}
 						onchange={(event) =>
-							updateSelectedMode((event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo')}
+							updateSelectedMode(
+								(event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo'
+							)}
 					>
 						<option value="action">执行动作</option>
 						<option value="moveTo">跳转轮盘</option>
@@ -568,7 +588,8 @@
 						<select
 							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 							value={selectedItem.moveToMenuId}
-							onchange={(event) => updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
+							onchange={(event) =>
+								updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
 						>
 							{#each otherMenus as menu (menu.id)}
 								<option value={menu.id}>{menu.name}</option>
@@ -578,20 +599,21 @@
 				{:else}
 					<label class="grid gap-1.5 text-sm">
 						<span class="text-muted-foreground text-xs font-medium">动作</span>
-					<select
-						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-						value={selectedItem.action ?? ''}
-						onchange={(event) => updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
-					>
-						<option value="">未绑定</option>
-						{#each actionsByCategory as group (group.category)}
-							<optgroup label={group.category}>
-								{#each group.actions as action (action.action)}
-									<option value={action.action}>{action.name}</option>
-								{/each}
-							</optgroup>
-						{/each}
-					</select>
+						<select
+							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
+							value={selectedItem.action ?? ''}
+							onchange={(event) =>
+								updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
+						>
+							<option value="">未绑定</option>
+							{#each actionsByCategory as group (group.category)}
+								<optgroup label={group.category}>
+									{#each group.actions as action (action.action)}
+										<option value={action.action}>{action.name}</option>
+									{/each}
+								</optgroup>
+							{/each}
+						</select>
 					</label>
 				{/if}
 
@@ -633,14 +655,16 @@
 				<Button
 					variant="ghost"
 					size="sm"
-					class="justify-start text-destructive hover:text-destructive"
+					class="text-destructive hover:text-destructive justify-start"
 					onclick={removeSelectedItem}
 				>
 					<Trash2 class="mr-2 h-4 w-4" />
 					删除这个槽位
 				</Button>
 			{:else}
-				<div class="text-muted-foreground flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center text-sm">
+				<div
+					class="text-muted-foreground flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center text-sm"
+				>
 					<MousePointer2 class="mb-3 h-7 w-7 opacity-50" />
 					点击轮盘上的任意空白扇区添加菜单项。
 				</div>
@@ -648,7 +672,7 @@
 		</aside>
 	</div>
 
-	<section class="grid gap-3 rounded-lg border bg-card/60 p-4 md:grid-cols-2 xl:grid-cols-5">
+	<section class="bg-card/60 grid gap-3 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-5">
 		<label class="grid gap-1.5 text-sm">
 			<span class="text-muted-foreground text-xs font-medium">样式</span>
 			<select
@@ -747,7 +771,7 @@
 				<Button variant="ghost" size="sm" onclick={() => (editorOpen = false)}>关闭</Button>
 			</div>
 
-			<div class="flex items-center gap-2 rounded-lg border bg-card/70 p-3">
+			<div class="bg-card/70 flex items-center gap-2 rounded-lg border p-3">
 				<div class="bg-muted flex h-9 w-9 items-center justify-center rounded-md">
 					<SelectedActionIcon class="h-4 w-4" />
 				</div>
@@ -765,7 +789,9 @@
 					class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 					value={selectedItem.moveToMenuId ? 'moveTo' : 'action'}
 					onchange={(event) =>
-						updateSelectedMode((event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo')}
+						updateSelectedMode(
+							(event.currentTarget as HTMLSelectElement).value as 'action' | 'moveTo'
+						)}
 				>
 					<option value="action">执行动作</option>
 					<option value="moveTo">跳转轮盘</option>
@@ -778,7 +804,8 @@
 					<select
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						value={selectedItem.moveToMenuId}
-						onchange={(event) => updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
+						onchange={(event) =>
+							updateSelectedMoveTo((event.currentTarget as HTMLSelectElement).value)}
 					>
 						{#each otherMenus as menu (menu.id)}
 							<option value={menu.id}>{menu.name}</option>
@@ -791,7 +818,8 @@
 					<select
 						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
 						value={selectedItem.action ?? ''}
-						onchange={(event) => updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
+						onchange={(event) =>
+							updateSelectedAction((event.currentTarget as HTMLSelectElement).value)}
 					>
 						<option value="">未绑定</option>
 						{#each actionsByCategory as group (group.category)}

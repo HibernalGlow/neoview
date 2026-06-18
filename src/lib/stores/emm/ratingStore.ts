@@ -55,7 +55,7 @@ export const ratingStore = {
 	 */
 	async getRating(path: string): Promise<RatingData | null> {
 		const normalizedPath = normalizePath(path);
-		
+
 		// 先检查缓存
 		const cache = get(ratingCache);
 		if (cache.has(normalizedPath)) {
@@ -65,13 +65,13 @@ export const ratingStore = {
 		try {
 			const json = await invoke<string | null>('get_rating_data', { path: normalizedPath });
 			const rating = parseRatingData(json);
-			
+
 			// 更新缓存
-			ratingCache.update(c => {
+			ratingCache.update((c) => {
 				c.set(normalizedPath, rating);
 				return c;
 			});
-			
+
 			return rating;
 		} catch (e) {
 			console.error('[RatingStore] 获取评分失败:', normalizedPath, e);
@@ -85,18 +85,18 @@ export const ratingStore = {
 	async batchGetRatings(paths: string[]): Promise<Map<string, RatingData | null>> {
 		const normalizedPaths = paths.map(normalizePath);
 		const result = new Map<string, RatingData | null>();
-		
+
 		try {
-			const data = await invoke<Record<string, string | null>>('batch_get_rating_data', { 
-				paths: normalizedPaths 
+			const data = await invoke<Record<string, string | null>>('batch_get_rating_data', {
+				paths: normalizedPaths
 			});
-			
+
 			for (const [path, json] of Object.entries(data)) {
 				const rating = parseRatingData(json);
 				result.set(path, rating);
-				
+
 				// 更新缓存
-				ratingCache.update(c => {
+				ratingCache.update((c) => {
 					c.set(path, rating);
 					return c;
 				});
@@ -104,7 +104,7 @@ export const ratingStore = {
 		} catch (e) {
 			console.error('[RatingStore] 批量获取评分失败:', e);
 		}
-		
+
 		return result;
 	},
 
@@ -113,25 +113,25 @@ export const ratingStore = {
 	 */
 	async setRating(path: string, value: number): Promise<boolean> {
 		const normalizedPath = normalizePath(path);
-		
+
 		const ratingData: RatingData = {
 			value,
 			source: 'manual',
 			timestamp: Date.now()
 		};
-		
+
 		try {
-			await invoke('update_rating_data', { 
-				path: normalizedPath, 
-				ratingData: stringifyRatingData(ratingData) 
+			await invoke('update_rating_data', {
+				path: normalizedPath,
+				ratingData: stringifyRatingData(ratingData)
 			});
-			
+
 			// 更新缓存
-			ratingCache.update(c => {
+			ratingCache.update((c) => {
 				c.set(normalizedPath, ratingData);
 				return c;
 			});
-			
+
 			console.debug('[RatingStore] 设置评分成功:', normalizedPath, value);
 			return true;
 		} catch (e) {
@@ -145,19 +145,19 @@ export const ratingStore = {
 	 */
 	async clearRating(path: string): Promise<boolean> {
 		const normalizedPath = normalizePath(path);
-		
+
 		try {
-			await invoke('update_rating_data', { 
-				path: normalizedPath, 
-				ratingData: null 
+			await invoke('update_rating_data', {
+				path: normalizedPath,
+				ratingData: null
 			});
-			
+
 			// 更新缓存
-			ratingCache.update(c => {
+			ratingCache.update((c) => {
 				c.set(normalizedPath, null);
 				return c;
 			});
-			
+
 			return true;
 		} catch (e) {
 			console.error('[RatingStore] 清除评分失败:', normalizedPath, e);
@@ -170,55 +170,60 @@ export const ratingStore = {
 	 */
 	async calculateFolderRating(folderPath: string): Promise<RatingData | null> {
 		const normalizedPath = normalizePath(folderPath);
-		
+
 		try {
 			// 获取该文件夹下所有条目的 rating_data
-			const entries = await invoke<Array<[string, string | null]>>('get_rating_data_by_prefix', { 
-				prefix: normalizedPath + '\\' 
+			const entries = await invoke<Array<[string, string | null]>>('get_rating_data_by_prefix', {
+				prefix: normalizedPath + '\\'
 			});
-			
+
 			if (!entries || entries.length === 0) {
 				return null;
 			}
-			
+
 			// 解析并计算平均值（只计算直接子项，不递归）
 			let sum = 0;
 			let count = 0;
-			
+
 			for (const [entryPath, json] of entries) {
 				// 只计算直接子项（不包含更深层的）
 				const relativePath = entryPath.substring(normalizedPath.length + 1);
 				if (relativePath.includes('\\')) continue; // 跳过更深层的
-				
+
 				const rating = parseRatingData(json);
 				if (rating && rating.value > 0) {
 					sum += rating.value;
 					count++;
 				}
 			}
-			
+
 			if (count === 0) return null;
-			
+
 			const avgRating: RatingData = {
 				value: sum / count,
 				source: 'calculated',
 				timestamp: Date.now(),
 				childCount: count
 			};
-			
+
 			// 保存到数据库
-			await invoke('update_rating_data', { 
-				path: normalizedPath, 
-				ratingData: stringifyRatingData(avgRating) 
+			await invoke('update_rating_data', {
+				path: normalizedPath,
+				ratingData: stringifyRatingData(avgRating)
 			});
-			
+
 			// 更新缓存
-			ratingCache.update(c => {
+			ratingCache.update((c) => {
 				c.set(normalizedPath, avgRating);
 				return c;
 			});
-			
-			console.debug('[RatingStore] 计算文件夹评分:', normalizedPath, avgRating.value, `(${count}个子项)`);
+
+			console.debug(
+				'[RatingStore] 计算文件夹评分:',
+				normalizedPath,
+				avgRating.value,
+				`(${count}个子项)`
+			);
 			return avgRating;
 		} catch (e) {
 			console.error('[RatingStore] 计算文件夹评分失败:', normalizedPath, e);

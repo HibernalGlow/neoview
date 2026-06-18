@@ -170,7 +170,11 @@ function generateTabId(): string {
 	return `tab-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-function createDefaultTabState(id: string, homePath: string = '', mode: TabMode = 'folder'): TabState {
+function createDefaultTabState(
+	id: string,
+	homePath: string = '',
+	mode: TabMode = 'folder'
+): TabState {
 	return {
 		id,
 		mode,
@@ -225,7 +229,7 @@ export class UniversalTabStore {
 	private pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingSaveState: TabsState | null = null;
 	private readonly saveDebounceMs = 180;
-	
+
 	// Derived stores
 	public allTabs;
 	public activeTabId;
@@ -261,51 +265,57 @@ export class UniversalTabStore {
 	public tabCanGoForwardTab;
 	public tabMode;
 
-	constructor(options: {
-		storageKey?: string;
-		initialPath?: string;
-		initialMode?: TabMode;
-	} = {}) {
+	constructor(
+		options: {
+			storageKey?: string;
+			initialPath?: string;
+			initialMode?: TabMode;
+		} = {}
+	) {
 		this.storageKey = options.storageKey || null;
-		
+
 		// Load or create initial state
 		const savedState = this.storageKey ? this.loadState() : null;
 		const firstTabId = generateTabId();
 		const initialMode = options.initialMode || 'folder';
 		const initialPath = options.initialPath || '';
-		
+
 		const initialState: TabsState = savedState || {
 			tabs: [createDefaultTabState(firstTabId, initialPath, initialMode)],
 			activeTabId: firstTabId,
 			tabNavHistory: [firstTabId],
 			tabNavHistoryIndex: 0
 		};
-		
+
 		// Ensure tabNavHistory exists
 		if (!initialState.tabNavHistory) {
 			initialState.tabNavHistory = [initialState.activeTabId];
 			initialState.tabNavHistoryIndex = 0;
 		}
-		
+
 		// Ensure at least one tab
 		if (initialState.tabs.length === 0) {
 			const newId = generateTabId();
 			initialState.tabs = [createDefaultTabState(newId, initialPath, initialMode)];
 			initialState.activeTabId = newId;
 		}
-		
+
 		this.store = writable<TabsState>(initialState);
-		
+
 		// Create derived stores
 		this.allTabs = derived(this.store, ($store) => $store.tabs);
 		this.activeTabId = derived(this.store, ($store) => $store.activeTabId);
-		this.activeTab = derived(this.store, ($store) => 
-			$store.tabs.find((tab) => tab.id === $store.activeTabId) || $store.tabs[0]
+		this.activeTab = derived(
+			this.store,
+			($store) => $store.tabs.find((tab) => tab.id === $store.activeTabId) || $store.tabs[0]
 		);
-		
+
 		this.tabCurrentPath = derived(this.activeTab, ($tab) => $tab?.currentPath || '');
 		this.tabItems = derived(this.activeTab, ($tab) => $tab?.items || []);
-		this.tabSelectedItems = derived(this.activeTab, ($tab) => $tab?.selectedItems || new SvelteSet());
+		this.tabSelectedItems = derived(
+			this.activeTab,
+			($tab) => $tab?.selectedItems || new SvelteSet()
+		);
 		this.tabLoading = derived(this.activeTab, ($tab) => $tab?.loading || false);
 		this.tabError = derived(this.activeTab, ($tab) => $tab?.error || null);
 		this.tabViewStyle = derived(this.activeTab, ($tab) => $tab?.viewStyle || 'list');
@@ -321,13 +331,20 @@ export class UniversalTabStore {
 		this.tabShowSearchBar = derived(this.activeTab, ($tab) => $tab?.showSearchBar || false);
 		this.tabShowMigrationBar = derived(this.activeTab, ($tab) => $tab?.showMigrationBar || false);
 		this.tabDeleteStrategy = derived(this.activeTab, ($tab) => $tab?.deleteStrategy || 'trash');
-		this.tabSearchSettings = derived(this.activeTab, ($tab) => $tab?.searchSettings || {
-			includeSubfolders: true,
-			showHistoryOnFocus: true,
-			searchInPath: false
-		});
+		this.tabSearchSettings = derived(
+			this.activeTab,
+			($tab) =>
+				$tab?.searchSettings || {
+					includeSubfolders: true,
+					showHistoryOnFocus: true,
+					searchInPath: false
+				}
+		);
 		this.tabInlineTreeMode = derived(this.activeTab, ($tab) => $tab?.inlineTreeMode || false);
-		this.tabExpandedFolders = derived(this.activeTab, ($tab) => $tab?.expandedFolders || new SvelteSet());
+		this.tabExpandedFolders = derived(
+			this.activeTab,
+			($tab) => $tab?.expandedFolders || new SvelteSet()
+		);
 		this.tabFolderTreeConfig = derived(this.activeTab, ($tab) => ({
 			visible: $tab?.folderTreeVisible || false,
 			layout: $tab?.folderTreeLayout || 'left',
@@ -347,10 +364,16 @@ export class UniversalTabStore {
 		this.tabItemCount = derived(this.activeTab, ($tab) => $tab?.items?.length || 0);
 		this.tabStackLayers = derived(this.activeTab, ($tab) => $tab?.stackLayers || []);
 		this.tabStackActiveIndex = derived(this.activeTab, ($tab) => $tab?.stackActiveIndex || 0);
-		this.tabThumbnailWidthPercent = derived(this.activeTab, ($tab) => $tab?.thumbnailWidthPercent || 20);
+		this.tabThumbnailWidthPercent = derived(
+			this.activeTab,
+			($tab) => $tab?.thumbnailWidthPercent || 20
+		);
 		this.tabBannerWidthPercent = derived(this.activeTab, ($tab) => $tab?.bannerWidthPercent || 50);
 		this.tabCanGoBackTab = derived(this.store, ($store) => $store.tabNavHistoryIndex > 0);
-		this.tabCanGoForwardTab = derived(this.store, ($store) => $store.tabNavHistoryIndex < $store.tabNavHistory.length - 1);
+		this.tabCanGoForwardTab = derived(
+			this.store,
+			($store) => $store.tabNavHistoryIndex < $store.tabNavHistory.length - 1
+		);
 		this.tabMode = derived(this.activeTab, ($tab) => $tab?.mode || 'folder');
 	}
 
@@ -435,7 +458,7 @@ export class UniversalTabStore {
 	createTab(path: string = '', mode?: TabMode): string {
 		const newId = generateTabId();
 		const actualMode = mode || getModeFromPath(path);
-		
+
 		this.store.update(($store) => {
 			const newTab = createDefaultTabState(newId, path, actualMode);
 			const newTabNavHistory = $store.tabNavHistory.slice(0, $store.tabNavHistoryIndex + 1);
@@ -458,16 +481,16 @@ export class UniversalTabStore {
 
 			const tabIndex = $store.tabs.findIndex((t) => t.id === tabId);
 			const newTabs = $store.tabs.filter((t) => t.id !== tabId);
-			
+
 			let newActiveId = $store.activeTabId;
 			if ($store.activeTabId === tabId) {
 				const newIndex = Math.min(tabIndex, newTabs.length - 1);
 				newActiveId = newTabs[newIndex].id;
 			}
 
-			const newTabNavHistory = $store.tabNavHistory.filter(id => id !== tabId);
+			const newTabNavHistory = $store.tabNavHistory.filter((id) => id !== tabId);
 			let newTabNavHistoryIndex = $store.tabNavHistoryIndex;
-			
+
 			if (newTabNavHistory.length === 0) {
 				newTabNavHistory.push(newActiveId);
 				newTabNavHistoryIndex = 0;
@@ -490,16 +513,16 @@ export class UniversalTabStore {
 	switchTab(tabId: string, addToHistory = true) {
 		this.store.update(($store) => {
 			if (!$store.tabs.some((t) => t.id === tabId)) return $store;
-			
+
 			let tabNavHistory = $store.tabNavHistory;
 			let tabNavHistoryIndex = $store.tabNavHistoryIndex;
-			
+
 			if (addToHistory && tabId !== $store.activeTabId) {
 				tabNavHistory = tabNavHistory.slice(0, tabNavHistoryIndex + 1);
 				tabNavHistory.push(tabId);
 				tabNavHistoryIndex = tabNavHistory.length - 1;
 			}
-			
+
 			const newState: TabsState = {
 				...$store,
 				activeTabId: tabId,
@@ -530,15 +553,15 @@ export class UniversalTabStore {
 		if (isVirtualPath(path)) {
 			const newMode = getModeFromPath(path);
 			this.updateActiveTab((tab) => {
-				const newTab = { 
-					...tab, 
-					currentPath: path, 
+				const newTab = {
+					...tab,
+					currentPath: path,
 					mode: newMode,
-					loading: true, 
+					loading: true,
 					error: null,
 					title: getDisplayName(path)
 				};
-				
+
 				if (addToHistory && path) {
 					const entry: HistoryEntry = {
 						path,
@@ -555,12 +578,12 @@ export class UniversalTabStore {
 					newTab.historyStack = newStack;
 					newTab.historyIndex = newStack.length - 1;
 				}
-				
+
 				return newTab;
 			});
 			return;
 		}
-		
+
 		// 普通路径
 		let normalizedPath = path.replace(/\//g, '\\');
 		if (/^[a-zA-Z]:$/.test(normalizedPath)) {
@@ -569,13 +592,13 @@ export class UniversalTabStore {
 		if (/^[a-zA-Z]:[^\\]/.test(normalizedPath)) {
 			normalizedPath = normalizedPath.slice(0, 2) + '\\' + normalizedPath.slice(2);
 		}
-		
+
 		this.updateActiveTab((tab) => {
-			const newTab = { 
-				...tab, 
-				currentPath: normalizedPath, 
+			const newTab = {
+				...tab,
+				currentPath: normalizedPath,
 				mode: 'folder' as TabMode,
-				loading: true, 
+				loading: true,
 				error: null,
 				title: getDisplayName(normalizedPath)
 			};
@@ -668,7 +691,7 @@ export class UniversalTabStore {
 		const newIndex = state.tabNavHistoryIndex - 1;
 		const targetTabId = state.tabNavHistory[newIndex];
 
-		if (!state.tabs.some(t => t.id === targetTabId)) return null;
+		if (!state.tabs.some((t) => t.id === targetTabId)) return null;
 
 		this.store.update(($store) => ({
 			...$store,
@@ -686,7 +709,7 @@ export class UniversalTabStore {
 		const newIndex = state.tabNavHistoryIndex + 1;
 		const targetTabId = state.tabNavHistory[newIndex];
 
-		if (!state.tabs.some(t => t.id === targetTabId)) return null;
+		if (!state.tabs.some((t) => t.id === targetTabId)) return null;
 
 		this.store.update(($store) => ({
 			...$store,
@@ -716,7 +739,8 @@ export class UniversalTabStore {
 
 	setSort(field: SortField, order?: SortOrder) {
 		this.updateActiveTab((tab) => {
-			const newOrder = order ?? (tab.sortField === field && tab.sortOrder === 'asc' ? 'desc' : 'asc');
+			const newOrder =
+				order ?? (tab.sortField === field && tab.sortOrder === 'asc' ? 'desc' : 'asc');
 			return { ...tab, sortField: field, sortOrder: newOrder };
 		});
 	}
@@ -803,14 +827,14 @@ export class UniversalTabStore {
 			const startIndex = tab.lastSelectedIndex >= 0 ? tab.lastSelectedIndex : 0;
 			const minIndex = Math.min(startIndex, endIndex);
 			const maxIndex = Math.max(startIndex, endIndex);
-			
+
 			const newSelected = new SvelteSet(tab.selectedItems);
 			for (let i = minIndex; i <= maxIndex; i++) {
 				if (i >= 0 && i < items.length) {
 					newSelected.add(items[i].path);
 				}
 			}
-			
+
 			return { ...tab, selectedItems: newSelected };
 		});
 	}

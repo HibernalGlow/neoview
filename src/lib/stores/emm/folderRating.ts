@@ -39,7 +39,11 @@ function loadFromStorage(): FolderRatingCache {
 			const parsed = JSON.parse(stored) as FolderRatingCache;
 			// 版本检查
 			if (parsed.version === CACHE_VERSION) {
-				console.debug('[FolderRating] 从 localStorage 加载评分缓存:', Object.keys(parsed.ratings).length, '个文件夹');
+				console.debug(
+					'[FolderRating] 从 localStorage 加载评分缓存:',
+					Object.keys(parsed.ratings).length,
+					'个文件夹'
+				);
 				return parsed;
 			}
 		}
@@ -119,9 +123,12 @@ export const folderRatingStore = {
 
 		try {
 			// 获取数据库中所有条目的评分和路径
-			const entries = await invoke<Array<{ filepath: string; rating: number | null }>>('get_emm_all_ratings', {
-				dbPath
-			});
+			const entries = await invoke<Array<{ filepath: string; rating: number | null }>>(
+				'get_emm_all_ratings',
+				{
+					dbPath
+				}
+			);
 
 			if (!entries || entries.length === 0) {
 				console.debug('[FolderRating] 数据库中没有条目');
@@ -230,7 +237,7 @@ export const folderRatingStore = {
 			}
 
 			// 更新缓存
-			update(cache => {
+			update((cache) => {
 				const newCache = {
 					...cache,
 					databaseEntryCount: {
@@ -296,7 +303,7 @@ export const folderRatingStore = {
 		const normalized = normalizePath(folderPath);
 		const now = Date.now();
 
-		update(cache => {
+		update((cache) => {
 			const existing = cache.ratings[normalized];
 			if (rating === null) {
 				// 清除手动评分
@@ -363,7 +370,9 @@ export const folderRatingStore = {
 			return;
 		}
 
-		console.debug(`[FolderRating] 开始补充 ${rootPath} 路径下的评分，已有 ${Object.keys(childRatings).length} 个文件夹有评分`);
+		console.debug(
+			`[FolderRating] 开始补充 ${rootPath} 路径下的评分，已有 ${Object.keys(childRatings).length} 个文件夹有评分`
+		);
 
 		// 收集所有需要计算的父文件夹路径
 		const allPaths = new Set<string>();
@@ -426,7 +435,7 @@ export const folderRatingStore = {
 		const newCount = Object.keys(newRatings).length - Object.keys(childRatings).length;
 
 		// 更新缓存
-		update(cache => {
+		update((cache) => {
 			const newCache = {
 				...cache,
 				ratings: {

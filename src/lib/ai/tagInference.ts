@@ -62,17 +62,12 @@ const DEFAULT_TAG_PROMPT = `请分析以下内容，推断相关的标签。
 
 /**
  * 从文本推断标签
- * 
+ *
  * @param options - 推断选项
  * @returns 推断结果
  */
 export async function inferTags(options: TagInferenceOptions): Promise<TagInferenceResult> {
-	const {
-		text,
-		maxTags = 10,
-		minConfidence = 0.5,
-		customPrompt,
-	} = options;
+	const { text, maxTags = 10, minConfidence = 0.5, customPrompt } = options;
 
 	if (!text) {
 		return { success: false, error: '没有提供要分析的内容' };
@@ -96,14 +91,14 @@ export async function inferTags(options: TagInferenceOptions): Promise<TagInfere
 					model: tanstackConfig.model,
 					prompt,
 					temperature: 0.3, // 使用较低温度以获得更一致的结果
-					maxOutputTokens: tanstackConfig.maxTokens,
+					maxOutputTokens: tanstackConfig.maxTokens
 				});
 
 				return response.text;
 			},
 			{
 				maxRetries: 2,
-				provider: provider.name,
+				provider: provider.name
 			}
 		);
 
@@ -112,33 +107,27 @@ export async function inferTags(options: TagInferenceOptions): Promise<TagInfere
 
 		return {
 			success: true,
-			tags,
+			tags
 		};
 	} catch (error) {
 		const aiError = normalizeError(error, provider.name);
 		return {
 			success: false,
-			error: getErrorMessage(aiError),
+			error: getErrorMessage(aiError)
 		};
 	}
 }
 
 /**
  * 使用流式响应推断标签
- * 
+ *
  * @param options - 推断选项
  * @returns 推断结果
  */
 export async function inferTagsWithStreaming(
 	options: TagInferenceOptions
 ): Promise<TagInferenceResult> {
-	const {
-		text,
-		maxTags = 10,
-		minConfidence = 0.5,
-		customPrompt,
-		onChunk,
-	} = options;
+	const { text, maxTags = 10, minConfidence = 0.5, customPrompt, onChunk } = options;
 
 	if (!text) {
 		return { success: false, error: '没有提供要分析的内容' };
@@ -157,7 +146,7 @@ export async function inferTagsWithStreaming(
 			model: tanstackConfig.model,
 			prompt,
 			temperature: 0.3,
-			maxOutputTokens: tanstackConfig.maxTokens,
+			maxOutputTokens: tanstackConfig.maxTokens
 		});
 
 		let fullText = '';
@@ -170,13 +159,13 @@ export async function inferTagsWithStreaming(
 
 		return {
 			success: true,
-			tags,
+			tags
 		};
 	} catch (error) {
 		const aiError = normalizeError(error, provider.name);
 		return {
 			success: false,
-			error: getErrorMessage(aiError),
+			error: getErrorMessage(aiError)
 		};
 	}
 }
@@ -184,11 +173,7 @@ export async function inferTagsWithStreaming(
 /**
  * 解析 AI 返回的标签响应
  */
-function parseTagResponse(
-	response: string,
-	maxTags: number,
-	minConfidence: number
-): InferredTag[] {
+function parseTagResponse(response: string, maxTags: number, minConfidence: number): InferredTag[] {
 	try {
 		// 尝试提取 JSON
 		const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -207,7 +192,7 @@ function parseTagResponse(
 						tags.push({
 							name: tag.name,
 							confidence: tag.confidence,
-							category: tag.category,
+							category: tag.category
 						});
 					}
 				}
@@ -232,7 +217,10 @@ function parseTextResponse(
 	const tags: InferredTag[] = [];
 
 	// 尝试按行或逗号分割
-	const lines = response.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+	const lines = response
+		.split(/[,\n]/)
+		.map((s) => s.trim())
+		.filter(Boolean);
 
 	for (const line of lines) {
 		// 移除常见的前缀
@@ -240,7 +228,7 @@ function parseTextResponse(
 		if (cleaned && cleaned.length > 0 && cleaned.length < 50) {
 			tags.push({
 				name: cleaned,
-				confidence: 0.7, // 文本解析给予默认置信度
+				confidence: 0.7 // 文本解析给予默认置信度
 			});
 		}
 	}

@@ -31,28 +31,26 @@
 <div class="space-y-3 text-xs">
 	<div class="flex items-center justify-between gap-2">
 		<div class="space-y-0.5">
-			<p class="font-medium text-foreground">动图按视频模式播放</p>
+			<p class="text-foreground font-medium">动图按视频模式播放</p>
 			<p class="text-muted-foreground text-[11px]">GIF/APNG 将走视频播放器，可使用倍速与循环。</p>
 		</div>
-		<Switch.Root
-			checked={enabled}
-			onCheckedChange={handleToggle}
-			class="scale-75"
-		/>
+		<Switch.Root checked={enabled} onCheckedChange={handleToggle} class="scale-75" />
 	</div>
 
-	<div class="rounded-md border border-border/50 bg-muted/20 p-2">
+	<div class="border-border/50 bg-muted/20 rounded-md border p-2">
 		<p class="text-muted-foreground mb-1 text-[11px]">关键词直判（优先于 WebP 探测）</p>
 		<textarea
-			class="min-h-16 w-full rounded border border-border bg-background px-2 py-1 text-[11px]"
+			class="border-border bg-background min-h-16 w-full rounded border px-2 py-1 text-[11px]"
 			value={keywordText}
 			oninput={(e) => handleKeywordInput((e.currentTarget as HTMLTextAreaElement).value)}
 			placeholder="例如: [#dyna], [#anim], __gif"
 		></textarea>
-		<p class="mt-1 text-[10px] text-muted-foreground">使用逗号或换行分隔。命中后直接按动图处理，跳过额外检测。</p>
+		<p class="text-muted-foreground mt-1 text-[10px]">
+			使用逗号或换行分隔。命中后直接按动图处理，跳过额外检测。
+		</p>
 	</div>
 
-	<div class="rounded-md border border-border/50 bg-muted/20 p-2">
+	<div class="border-border/50 bg-muted/20 rounded-md border p-2">
 		<div class="flex items-center justify-between gap-2">
 			<span class="text-muted-foreground">FFmpeg</span>
 			<span
@@ -77,11 +75,13 @@
 		</div>
 
 		{#if !ffmpegAvailable && ffmpegChecked}
-			<p class="mt-1 text-[10px] text-muted-foreground">未检测到 FFmpeg，将自动使用前端解码播放动图。</p>
+			<p class="text-muted-foreground mt-1 text-[10px]">
+				未检测到 FFmpeg，将自动使用前端解码播放动图。
+			</p>
 		{/if}
 
 		{#if lastError}
-			<p class="mt-1 text-[10px] text-muted-foreground">错误: {lastError}</p>
+			<p class="text-muted-foreground mt-1 text-[10px]">错误: {lastError}</p>
 		{/if}
 
 		<div class="mt-2">
@@ -89,7 +89,7 @@
 				type="button"
 				onclick={handleRefreshFfmpeg}
 				disabled={ffmpegChecking}
-				class="rounded border border-border bg-background px-2 py-1 text-[10px] transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+				class="border-border bg-background hover:bg-accent rounded border px-2 py-1 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{ffmpegChecking ? '检测中...' : '重新检测 FFmpeg'}
 			</button>
@@ -97,6 +97,8 @@
 	</div>
 
 	{#if enabled}
-		<p class="text-[10px] text-muted-foreground">已启用后，当前页若是 GIF/APNG/动画 WebP（或命中关键词），会自动进入视频模式。</p>
+		<p class="text-muted-foreground text-[10px]">
+			已启用后，当前页若是 GIF/APNG/动画 WebP（或命中关键词），会自动进入视频模式。
+		</p>
 	{/if}
 </div>

@@ -1,6 +1,6 @@
 /**
  * PageFrame 模块入口
- * 
+ *
  * 前端本地的页面帧布局计算系统
  * 完全翻译自 Rust 后端的 page_frame 模块
  * 消除 IPC 延迟，提升窗口缩放和翻页响应速度
@@ -42,7 +42,7 @@ export { defaultPageFrameContext, PageFrameContextUtils } from './context';
 export { PageFrameBuilder } from './builder';
 
 // 计算器
-export { 
+export {
 	ContentSizeCalculator,
 	calculateUniformScale,
 	calculateFillScale,

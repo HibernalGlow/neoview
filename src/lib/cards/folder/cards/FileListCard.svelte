@@ -6,16 +6,25 @@
 	 */
 	import { get } from 'svelte/store';
 	import type { FsItem } from '$lib/types';
-	
+
 	import FolderStack from '$lib/components/panels/folderPanel/components/FolderStack.svelte';
 	import FolderTree from '$lib/components/panels/folderPanel/components/FolderTree.svelte';
 	import FileTreeView from '$lib/components/panels/file/components/FileTreeView.svelte';
 	import InlineTreeList from '$lib/components/panels/folderPanel/components/InlineTreeList.svelte';
-	
+
 	import { getFolderContext } from '../context/FolderContext.svelte';
-	import { folderTabActions, tabSearchResults, tabCurrentPath, isVirtualPath, getVirtualPathType } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+	import {
+		folderTabActions,
+		tabSearchResults,
+		tabCurrentPath,
+		isVirtualPath,
+		getVirtualPathType
+	} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
-	import { loadVirtualPathData, subscribeVirtualPathData } from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
+	import {
+		loadVirtualPathData,
+		subscribeVirtualPathData
+	} from '$lib/components/panels/folderPanel/utils/virtualPathLoader';
 	import { virtualPanelSettingsStore } from '$lib/stores/virtualPanelSettings.svelte';
 
 	// ==================== Props ====================
@@ -27,17 +36,28 @@
 		onOpenInNewTab: (item: FsItem) => void;
 		onNavigate: (path: string) => void;
 	}
-	let { onItemOpen, onItemDelete, onItemContextMenu, onOpenFolderAsBook, onOpenInNewTab, onNavigate }: Props = $props();
+	let {
+		onItemOpen,
+		onItemDelete,
+		onItemContextMenu,
+		onOpenFolderAsBook,
+		onOpenInNewTab,
+		onNavigate
+	}: Props = $props();
 
 	// ==================== Context ====================
 	const ctx = getFolderContext();
-	
+
 	// Store 引用
 	const { folderTreeConfig } = ctx;
-	
+
 	// 全局 store 订阅的本地状态
-	let globalFolderTreeConfigValue = $state<{ visible: boolean; layout: string; size: number }>({ visible: false, layout: 'left', size: 200 });
-	
+	let globalFolderTreeConfigValue = $state<{ visible: boolean; layout: string; size: number }>({
+		visible: false,
+		layout: 'left',
+		size: 200
+	});
+
 	// 虚拟路径文件列表（用于树状视图）
 	let virtualItems = $state<FsItem[]>([]);
 	// 搜索结果（用于树状视图）
@@ -51,29 +71,29 @@
 				? virtualPanelSettingsStore.bookmarkItemTypeFilter
 				: 'all'
 	);
-	
+
 	// 订阅全局 store
 	$effect(() => {
-		const unsub = folderTreeConfig.subscribe(v => globalFolderTreeConfigValue = v);
+		const unsub = folderTreeConfig.subscribe((v) => (globalFolderTreeConfigValue = v));
 		return () => unsub();
 	});
-	
+
 	// 订阅搜索结果
 	$effect(() => {
-		const unsub = tabSearchResults.subscribe(results => {
+		const unsub = tabSearchResults.subscribe((results) => {
 			searchResultItems = results;
 		});
 		return unsub;
 	});
-	
+
 	// 订阅当前标签页路径
 	$effect(() => {
-		const unsub = tabCurrentPath.subscribe(path => {
+		const unsub = tabCurrentPath.subscribe((path) => {
 			currentPath = path;
 		});
 		return unsub;
 	});
-	
+
 	// 订阅虚拟路径数据（如果是虚拟实例）
 	$effect(() => {
 		if (!ctx.isVirtualInstance || !ctx.initialPath) return;
@@ -86,19 +106,19 @@
 		});
 		return unsub;
 	});
-	
+
 	// 判断当前标签页是否是搜索结果标签页
 	let isSearchTab = $derived(getVirtualPathType(currentPath) === 'search');
-	
+
 	// 判断是否应该使用局部树（虚拟路径实例 或 当前标签页是搜索结果标签页且有搜索结果）
-	let shouldUseLocalTree = $derived(ctx.isVirtualInstance || (isSearchTab && searchResultItems.length > 0));
+	let shouldUseLocalTree = $derived(
+		ctx.isVirtualInstance || (isSearchTab && searchResultItems.length > 0)
+	);
 	// 局部树的数据源
 	let localTreeItems = $derived(ctx.isVirtualInstance ? virtualItems : searchResultItems);
-	
+
 	// 有效的文件树配置（虚拟模式使用 effectiveFolderTreeConfig，否则使用全局 store）
-	let effectiveTreeConfig = $derived(
-		ctx.effectiveFolderTreeConfig ?? globalFolderTreeConfigValue
-	);
+	let effectiveTreeConfig = $derived(ctx.effectiveFolderTreeConfig ?? globalFolderTreeConfigValue);
 
 	// ==================== 树调整 ====================
 	function startTreeResize(e: MouseEvent) {
@@ -106,7 +126,7 @@
 		ctx.isResizingTree = true;
 		const layout = effectiveTreeConfig.layout;
 		// 水平布局（左/右）使用 X 坐标，垂直布局（上/下）使用 Y 坐标
-		ctx.resizeStartPos = (layout === 'left' || layout === 'right') ? e.clientX : e.clientY;
+		ctx.resizeStartPos = layout === 'left' || layout === 'right' ? e.clientX : e.clientY;
 		ctx.resizeStartSize = effectiveTreeConfig.size;
 		document.addEventListener('mousemove', onTreeResize);
 		document.addEventListener('mouseup', stopTreeResize);
@@ -116,7 +136,7 @@
 		if (!ctx.isResizingTree) return;
 		const layout = effectiveTreeConfig.layout;
 		let delta: number;
-		
+
 		switch (layout) {
 			case 'left':
 				delta = e.clientX - ctx.resizeStartPos;
@@ -133,9 +153,9 @@
 			default:
 				delta = 0;
 		}
-		
+
 		const newSize = Math.max(100, Math.min(500, ctx.resizeStartSize + delta));
-		
+
 		// 根据面板模式调用相应的设置方法
 		if (ctx.panelMode === 'history') {
 			virtualPanelSettingsStore.setHistoryFolderTreeSize(newSize);
@@ -230,13 +250,15 @@
 				/>
 			{:else}
 				<!-- 普通模式：显示完整的文件系统树 -->
-				<FolderTree onNavigate={onNavigate} onContextMenu={onItemContextMenu} />
+				<FolderTree {onNavigate} onContextMenu={onItemContextMenu} />
 			{/if}
 		</div>
 		<!-- 调整手柄 -->
 		<button
 			type="button"
-			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout(effectiveTreeConfig.layout)
+			class="hover:bg-primary/20 absolute z-20 transition-colors {isHorizontalLayout(
+				effectiveTreeConfig.layout
+			)
 				? 'top-0 bottom-0 w-2 cursor-ew-resize'
 				: 'right-0 left-0 h-2 cursor-ns-resize'}"
 			style={getResizeHandleStyle(effectiveTreeConfig.layout, effectiveTreeConfig.size)}
@@ -248,7 +270,11 @@
 	<!-- 文件列表区域 -->
 	<div
 		class="file-list-container bg-muted/10 absolute inset-0 overflow-hidden"
-		style={getFileListStyle(effectiveTreeConfig.visible, effectiveTreeConfig.layout, effectiveTreeConfig.size)}
+		style={getFileListStyle(
+			effectiveTreeConfig.visible,
+			effectiveTreeConfig.layout,
+			effectiveTreeConfig.size
+		)}
 	>
 		{#each ctx.displayTabs as tab (tab.id)}
 			<div
@@ -260,23 +286,25 @@
 					<InlineTreeList
 						onItemClick={onItemOpen}
 						onItemDoubleClick={onItemOpen}
-						onItemContextMenu={onItemContextMenu}
+						{onItemContextMenu}
 					/>
 				{:else}
 					<FolderStack
 						tabId={tab.id}
 						initialPath={tab.currentPath || tab.homePath}
 						navigationCommand={ctx.navigationCommand}
-						onItemOpen={onItemOpen}
-						onItemDelete={onItemDelete}
-						onItemContextMenu={onItemContextMenu}
-						onOpenFolderAsBook={onOpenFolderAsBook}
-						onOpenInNewTab={onOpenInNewTab}
+						{onItemOpen}
+						{onItemDelete}
+						{onItemContextMenu}
+						{onOpenFolderAsBook}
+						{onOpenInNewTab}
 						forceActive={ctx.isVirtualInstance}
 						skipGlobalStore={ctx.isVirtualInstance}
 						overrideMultiSelectMode={ctx.effectiveMultiSelectMode}
 						overrideDeleteMode={ctx.effectiveDeleteMode}
-						overrideViewStyle={ctx.isVirtualInstance ? ctx.effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' | undefined : undefined}
+						overrideViewStyle={ctx.isVirtualInstance
+							? (ctx.effectiveViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' | undefined)
+							: undefined}
 						overrideSortConfig={ctx.isVirtualInstance ? ctx.effectiveSortConfig : undefined}
 					/>
 				{/if}

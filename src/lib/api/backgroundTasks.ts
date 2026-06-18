@@ -79,5 +79,3 @@ export async function batchScanArchives(archivePaths: string[]): Promise<Archive
 	if (archivePaths.length === 0) return [];
 	return invoke<ArchiveScanResult[]>('batch_scan_archives', { archivePaths });
 }
-
-

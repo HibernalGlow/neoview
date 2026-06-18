@@ -1,205 +1,209 @@
 <script lang="ts">
-/**
- * ActionButtons - 功能按钮组
- * 多选、删除、文件树、搜索、迁移、标签、穿透、视图等按钮
- */
-import {
-	CheckSquare,
-	Trash2,
-	FolderTree,
-	Folder,
-	ListTree,
-	Search,
-	ClipboardPaste,
-	Tags,
-	CornerDownRight,
-	List,
-	Grid3x3,
-	LayoutGrid,
-	Image,
-	Settings2,
-	ArrowUp,
-	ArrowDown,
-	Pin,
-	ALargeSmall,
-	Calendar,
-	HardDrive,
-	FileType,
-	Shuffle,
-	Star,
-	Heart,
-	Filter,
-	Package,
-	Film
-} from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
-import * as Tooltip from '$lib/components/ui/tooltip';
-import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
-import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
-import type { VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
+	/**
+	 * ActionButtons - 功能按钮组
+	 * 多选、删除、文件树、搜索、迁移、标签、穿透、视图等按钮
+	 */
+	import {
+		CheckSquare,
+		Trash2,
+		FolderTree,
+		Folder,
+		ListTree,
+		Search,
+		ClipboardPaste,
+		Tags,
+		CornerDownRight,
+		List,
+		Grid3x3,
+		LayoutGrid,
+		Image,
+		Settings2,
+		ArrowUp,
+		ArrowDown,
+		Pin,
+		ALargeSmall,
+		Calendar,
+		HardDrive,
+		FileType,
+		Shuffle,
+		Star,
+		Heart,
+		Filter,
+		Package,
+		Film
+	} from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import type { FolderViewStyle, FolderSortField } from '../../stores/folderPanelStore';
+	import type { SortConfig, SortLockSettings, FolderTreeConfig, VirtualMode } from './types';
+	import type { VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
 
-interface Props {
-	/** 虚拟模式 */
-	virtualMode?: VirtualMode;
-	/** 是否垂直布局 */
-	vertical?: boolean;
-	/** 是否显示工具栏提示 */
-	showToolbarTooltip?: boolean;
-	/** 多选模式 */
-	multiSelectMode: boolean;
-	/** 删除模式 */
-	deleteMode: boolean;
-	/** 删除策略 */
-	deleteStrategy: 'trash' | 'permanent';
-	/** 文件树配置 */
-	folderTreeConfig: FolderTreeConfig;
-	/** 内联树模式 */
-	inlineTreeMode: boolean;
-	/** 显示搜索栏 */
-	showSearchBar: boolean;
-	/** 显示迁移栏 */
-	showMigrationBar: boolean;
-	/** 虚拟面板类型筛选 */
-	itemTypeFilter?: VirtualItemTypeFilter;
-	/** 类型筛选栏展开 */
-	typeFilterBarExpanded?: boolean;
-	/** 显示随机标签栏 */
-	showRandomTagBar?: boolean;
-	/** 穿透模式 */
-	penetrateMode: boolean;
-	/** 新标签页打开模式 */
-	openInNewTabMode: boolean;
-	/** 排序配置 */
-	sortConfig: SortConfig;
-	/** 排序锁定设置 */
-	sortLockSettings: SortLockSettings;
-	/** 视图样式 */
-	viewStyle: FolderViewStyle;
-	/** 排序面板展开 */
-	sortPanelExpanded: boolean;
-	/** 视图面板展开 */
-	viewPanelExpanded: boolean;
-	/** 文件树面板展开 */
-	treePanelExpanded: boolean;
-	/** 更多设置展开 */
-	showMoreSettings: boolean;
-	/** 回调函数 */
-	onToggleMultiSelectMode: () => void;
-	onToggleDeleteMode: () => void;
-	onToggleDeleteStrategy: (e: MouseEvent) => void;
-	onToggleFolderTree?: () => void;
-	onToggleTreePanel: () => void;
-	onToggleShowSearchBar: () => void;
-	onToggleShowMigrationBar: () => void;
-	onToggleTypeFilterBar?: () => void;
-	onToggleRandomTagBar?: () => void;
-	onTogglePenetrateMode: () => void;
-	onToggleShowPenetrateSettingsBar: () => void;
-	onToggleSortPanel: () => void;
-	onToggleSortLock: (e: MouseEvent) => void;
-	onToggleViewPanel: () => void;
-	onToggleMoreSettings: () => void;
-}
-
-let {
-	virtualMode = null,
-	vertical = false,
-	showToolbarTooltip = false,
-	multiSelectMode,
-	deleteMode,
-	deleteStrategy,
-	folderTreeConfig,
-	inlineTreeMode,
-	showSearchBar,
-	showMigrationBar,
-	itemTypeFilter = 'all',
-	typeFilterBarExpanded = false,
-	showRandomTagBar = false,
-	penetrateMode,
-	openInNewTabMode,
-	sortConfig,
-	sortLockSettings,
-	viewStyle,
-	sortPanelExpanded,
-	viewPanelExpanded,
-	treePanelExpanded,
-	showMoreSettings,
-	onToggleMultiSelectMode,
-	onToggleDeleteMode,
-	onToggleDeleteStrategy,
-	onToggleFolderTree,
-	onToggleTreePanel,
-	onToggleShowSearchBar,
-	onToggleShowMigrationBar,
-	onToggleTypeFilterBar,
-	onToggleRandomTagBar,
-	onTogglePenetrateMode,
-	onToggleShowPenetrateSettingsBar,
-	onToggleSortPanel,
-	onToggleSortLock,
-	onToggleViewPanel,
-	onToggleMoreSettings
-}: Props = $props();
-
-function getTypeFilterLabel(value: VirtualItemTypeFilter): string {
-	switch (value) {
-		case 'archive':
-			return '压缩包';
-		case 'folder':
-			return '文件夹';
-		case 'video':
-			return '视频';
-		default:
-			return '全部';
+	interface Props {
+		/** 虚拟模式 */
+		virtualMode?: VirtualMode;
+		/** 是否垂直布局 */
+		vertical?: boolean;
+		/** 是否显示工具栏提示 */
+		showToolbarTooltip?: boolean;
+		/** 多选模式 */
+		multiSelectMode: boolean;
+		/** 删除模式 */
+		deleteMode: boolean;
+		/** 删除策略 */
+		deleteStrategy: 'trash' | 'permanent';
+		/** 文件树配置 */
+		folderTreeConfig: FolderTreeConfig;
+		/** 内联树模式 */
+		inlineTreeMode: boolean;
+		/** 显示搜索栏 */
+		showSearchBar: boolean;
+		/** 显示迁移栏 */
+		showMigrationBar: boolean;
+		/** 虚拟面板类型筛选 */
+		itemTypeFilter?: VirtualItemTypeFilter;
+		/** 类型筛选栏展开 */
+		typeFilterBarExpanded?: boolean;
+		/** 显示随机标签栏 */
+		showRandomTagBar?: boolean;
+		/** 穿透模式 */
+		penetrateMode: boolean;
+		/** 新标签页打开模式 */
+		openInNewTabMode: boolean;
+		/** 排序配置 */
+		sortConfig: SortConfig;
+		/** 排序锁定设置 */
+		sortLockSettings: SortLockSettings;
+		/** 视图样式 */
+		viewStyle: FolderViewStyle;
+		/** 排序面板展开 */
+		sortPanelExpanded: boolean;
+		/** 视图面板展开 */
+		viewPanelExpanded: boolean;
+		/** 文件树面板展开 */
+		treePanelExpanded: boolean;
+		/** 更多设置展开 */
+		showMoreSettings: boolean;
+		/** 回调函数 */
+		onToggleMultiSelectMode: () => void;
+		onToggleDeleteMode: () => void;
+		onToggleDeleteStrategy: (e: MouseEvent) => void;
+		onToggleFolderTree?: () => void;
+		onToggleTreePanel: () => void;
+		onToggleShowSearchBar: () => void;
+		onToggleShowMigrationBar: () => void;
+		onToggleTypeFilterBar?: () => void;
+		onToggleRandomTagBar?: () => void;
+		onTogglePenetrateMode: () => void;
+		onToggleShowPenetrateSettingsBar: () => void;
+		onToggleSortPanel: () => void;
+		onToggleSortLock: (e: MouseEvent) => void;
+		onToggleViewPanel: () => void;
+		onToggleMoreSettings: () => void;
 	}
-}
 
-function getTypeFilterIcon() {
-	switch (itemTypeFilter) {
-		case 'archive':
-			return Package;
-		case 'folder':
-			return Folder;
-		case 'video':
-			return Film;
-		default:
-			return Filter;
+	let {
+		virtualMode = null,
+		vertical = false,
+		showToolbarTooltip = false,
+		multiSelectMode,
+		deleteMode,
+		deleteStrategy,
+		folderTreeConfig,
+		inlineTreeMode,
+		showSearchBar,
+		showMigrationBar,
+		itemTypeFilter = 'all',
+		typeFilterBarExpanded = false,
+		showRandomTagBar = false,
+		penetrateMode,
+		openInNewTabMode,
+		sortConfig,
+		sortLockSettings,
+		viewStyle,
+		sortPanelExpanded,
+		viewPanelExpanded,
+		treePanelExpanded,
+		showMoreSettings,
+		onToggleMultiSelectMode,
+		onToggleDeleteMode,
+		onToggleDeleteStrategy,
+		onToggleFolderTree,
+		onToggleTreePanel,
+		onToggleShowSearchBar,
+		onToggleShowMigrationBar,
+		onToggleTypeFilterBar,
+		onToggleRandomTagBar,
+		onTogglePenetrateMode,
+		onToggleShowPenetrateSettingsBar,
+		onToggleSortPanel,
+		onToggleSortLock,
+		onToggleViewPanel,
+		onToggleMoreSettings
+	}: Props = $props();
+
+	function getTypeFilterLabel(value: VirtualItemTypeFilter): string {
+		switch (value) {
+			case 'archive':
+				return '压缩包';
+			case 'folder':
+				return '文件夹';
+			case 'video':
+				return '视频';
+			default:
+				return '全部';
+		}
 	}
-}
 
-// 获取当前排序图标
-function getCurrentSortIcon() {
-	const icons: Record<FolderSortField, typeof ALargeSmall> = {
-		name: ALargeSmall,
-		path: FolderTree,
-		date: Calendar,
-		size: HardDrive,
-		type: FileType,
-		random: Shuffle,
-		rating: Star,
-		collectTagCount: Heart
-	};
-	return icons[sortConfig.field] ?? ALargeSmall;
-}
+	function getTypeFilterIcon() {
+		switch (itemTypeFilter) {
+			case 'archive':
+				return Package;
+			case 'folder':
+				return Folder;
+			case 'video':
+				return Film;
+			default:
+				return Filter;
+		}
+	}
 
-// 获取当前视图图标
-function getCurrentViewIcon() {
-	const icons: Record<FolderViewStyle, typeof List> = {
-		list: List,
-		content: LayoutGrid,
-		banner: Image,
-		thumbnail: Grid3x3
-	};
-	return icons[viewStyle] ?? List;
-}
+	// 获取当前排序图标
+	function getCurrentSortIcon() {
+		const icons: Record<FolderSortField, typeof ALargeSmall> = {
+			name: ALargeSmall,
+			path: FolderTree,
+			date: Calendar,
+			size: HardDrive,
+			type: FileType,
+			random: Shuffle,
+			rating: Star,
+			collectTagCount: Heart
+		};
+		return icons[sortConfig.field] ?? ALargeSmall;
+	}
+
+	// 获取当前视图图标
+	function getCurrentViewIcon() {
+		const icons: Record<FolderViewStyle, typeof List> = {
+			list: List,
+			content: LayoutGrid,
+			banner: Image,
+			thumbnail: Grid3x3
+		};
+		return icons[viewStyle] ?? List;
+	}
 </script>
 
 <!-- 排序按钮 -->
 <Tooltip.Root disabled={!showToolbarTooltip}>
 	<Tooltip.Trigger>
-		<Button 
-			variant={sortPanelExpanded ? 'default' : (sortLockSettings.hasTemporaryRule && !virtualMode ? 'secondary' : 'ghost')} 
-			size="sm" 
+		<Button
+			variant={sortPanelExpanded
+				? 'default'
+				: sortLockSettings.hasTemporaryRule && !virtualMode
+					? 'secondary'
+					: 'ghost'}
+			size="sm"
 			class="h-7 gap-0.5 px-1.5"
 			onclick={onToggleSortPanel}
 			oncontextmenu={onToggleSortLock}
@@ -219,18 +223,24 @@ function getCurrentViewIcon() {
 		</Button>
 	</Tooltip.Trigger>
 	<Tooltip.Content>
-		<p>排序 {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}</p>
+		<p>
+			排序 {sortConfig.field !== 'random' ? (sortConfig.order === 'asc' ? '升序' : '降序') : ''}
+		</p>
 		{#if !virtualMode}
-			<p class="text-muted-foreground text-xs">{sortLockSettings.hasTemporaryRule ? '📌 当前文件夹临时规则已启用（右键关闭）' : '右键：仅当前文件夹生效'}</p>
+			<p class="text-muted-foreground text-xs">
+				{sortLockSettings.hasTemporaryRule
+					? '📌 当前文件夹临时规则已启用（右键关闭）'
+					: '右键：仅当前文件夹生效'}
+			</p>
 		{/if}
 	</Tooltip.Content>
 </Tooltip.Root>
 
 <!-- 弹性空间 -->
-<div class={vertical ? "h-2" : "flex-1"}></div>
+<div class={vertical ? 'h-2' : 'flex-1'}></div>
 
 <!-- 功能按钮组 -->
-<div class={vertical ? "flex flex-col items-center gap-0.5" : "flex items-center gap-0.5"}>
+<div class={vertical ? 'flex flex-col items-center gap-0.5' : 'flex items-center gap-0.5'}>
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
 			<Button
@@ -252,7 +262,9 @@ function getCurrentViewIcon() {
 			<Button
 				variant={deleteMode ? 'default' : 'ghost'}
 				size="icon"
-				class="h-7 w-7 {deleteStrategy === 'permanent' && deleteMode ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}"
+				class="h-7 w-7 {deleteStrategy === 'permanent' && deleteMode
+					? 'ring-primary ring-offset-background ring-2 ring-offset-1'
+					: ''}"
 				onclick={onToggleDeleteMode}
 				oncontextmenu={onToggleDeleteStrategy}
 			>
@@ -267,12 +279,17 @@ function getCurrentViewIcon() {
 
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
-			<Button 
-				variant={folderTreeConfig.visible || inlineTreeMode || treePanelExpanded ? 'default' : 'ghost'} 
-				size="icon" 
-				class="h-7 w-7" 
+			<Button
+				variant={folderTreeConfig.visible || inlineTreeMode || treePanelExpanded
+					? 'default'
+					: 'ghost'}
+				size="icon"
+				class="h-7 w-7"
 				onclick={() => onToggleFolderTree?.()}
-				oncontextmenu={(e: MouseEvent) => { e.preventDefault(); onToggleTreePanel(); }}
+				oncontextmenu={(e: MouseEvent) => {
+					e.preventDefault();
+					onToggleTreePanel();
+				}}
 			>
 				{#if inlineTreeMode}
 					<ListTree class="h-4 w-4" />
@@ -282,7 +299,10 @@ function getCurrentViewIcon() {
 			</Button>
 		</Tooltip.Trigger>
 		<Tooltip.Content>
-			<p>文件夹树 {folderTreeConfig.visible ? '(已显示)' : ''} {inlineTreeMode ? '(主视图树模式)' : ''}</p>
+			<p>
+				文件夹树 {folderTreeConfig.visible ? '(已显示)' : ''}
+				{inlineTreeMode ? '(主视图树模式)' : ''}
+			</p>
 			<p class="text-muted-foreground text-xs">右键打开位置设置栏</p>
 		</Tooltip.Content>
 	</Tooltip.Root>
@@ -360,7 +380,9 @@ function getCurrentViewIcon() {
 			<Button
 				variant={penetrateMode ? 'default' : 'ghost'}
 				size="icon"
-				class="h-7 w-7 {openInNewTabMode && penetrateMode ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}"
+				class="h-7 w-7 {openInNewTabMode && penetrateMode
+					? 'ring-primary ring-offset-background ring-2 ring-offset-1'
+					: ''}"
 				onclick={onTogglePenetrateMode}
 				oncontextmenu={(e: MouseEvent) => {
 					e.preventDefault();
@@ -379,9 +401,9 @@ function getCurrentViewIcon() {
 	<!-- 视图样式按钮 -->
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
-			<Button 
-				variant={viewPanelExpanded ? 'default' : 'ghost'} 
-				size="icon" 
+			<Button
+				variant={viewPanelExpanded ? 'default' : 'ghost'}
+				size="icon"
 				class="h-7 w-7"
 				onclick={onToggleViewPanel}
 			>
@@ -397,9 +419,9 @@ function getCurrentViewIcon() {
 	<!-- 更多设置按钮 -->
 	<Tooltip.Root disabled={!showToolbarTooltip}>
 		<Tooltip.Trigger>
-			<Button 
-				variant={showMoreSettings ? 'secondary' : 'ghost'} 
-				size="icon" 
+			<Button
+				variant={showMoreSettings ? 'secondary' : 'ghost'}
+				size="icon"
 				class="h-7 w-7"
 				onclick={onToggleMoreSettings}
 			>

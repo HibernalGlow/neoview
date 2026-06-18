@@ -1,18 +1,18 @@
 <script lang="ts">
-/**
- * PenetrateSettingsBar - 穿透模式设置栏组件
- * 类似 MigrationBar 的展开栏风格
- */
-import { Package, Image, Layers, Settings, ChevronDown, ChevronRight } from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
-import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	/**
+	 * PenetrateSettingsBar - 穿透模式设置栏组件
+	 * 类似 MigrationBar 的展开栏风格
+	 */
+	import { Package, Image, Layers, Settings, ChevronDown, ChevronRight } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 
-// 是否展开详细设置
-let showDetails = $state(false);
+	// 是否展开详细设置
+	let showDetails = $state(false);
 
-function toggleDetails() {
-	showDetails = !showDetails;
-}
+	function toggleDetails() {
+		showDetails = !showDetails;
+	}
 </script>
 
 <div class="border-b px-2 py-1.5 text-xs">
@@ -20,7 +20,7 @@ function toggleDetails() {
 		<!-- 标题和展开按钮 -->
 		<button
 			type="button"
-			class="text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+			class="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
 			onclick={toggleDetails}
 		>
 			{#if showDetails}
@@ -33,12 +33,13 @@ function toggleDetails() {
 		</button>
 
 		<!-- 快捷设置：穿透层数 -->
-		<div class="flex items-center gap-1.5 ml-2">
+		<div class="ml-2 flex items-center gap-1.5">
 			<span class="text-muted-foreground">层数:</span>
 			<select
-				class="h-6 bg-background border rounded text-xs px-1"
+				class="bg-background h-6 rounded border px-1 text-xs"
 				value={String($fileBrowserStore.penetrateMaxDepth)}
-				onchange={(e) => fileBrowserStore.setPenetrateMaxDepth(parseInt((e.target as HTMLSelectElement).value))}
+				onchange={(e) =>
+					fileBrowserStore.setPenetrateMaxDepth(parseInt((e.target as HTMLSelectElement).value))}
 			>
 				<option value="1">1层</option>
 				<option value="2">2层</option>
@@ -51,11 +52,14 @@ function toggleDetails() {
 
 		<!-- 快捷设置：内部文件显示 -->
 		<div class="flex items-center gap-1.5">
-			<Package class="h-3.5 w-3.5 text-muted-foreground" />
+			<Package class="text-muted-foreground h-3.5 w-3.5" />
 			<select
-				class="h-6 bg-background border rounded text-xs px-1"
+				class="bg-background h-6 rounded border px-1 text-xs"
 				value={$fileBrowserStore.penetrateShowInnerFile}
-				onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always')}
+				onchange={(e) =>
+					fileBrowserStore.setPenetrateShowInnerFile(
+						(e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always'
+					)}
 			>
 				<option value="none">不显示</option>
 				<option value="penetrate">穿透时</option>
@@ -65,12 +69,15 @@ function toggleDetails() {
 
 		<!-- 快捷设置：媒体文件夹 -->
 		<div class="flex items-center gap-1.5">
-			<Image class="h-3.5 w-3.5 text-muted-foreground" />
+			<Image class="text-muted-foreground h-3.5 w-3.5" />
 			<Button
 				variant={$fileBrowserStore.penetratePureMediaFolderOpen ? 'default' : 'outline'}
 				size="sm"
-				class="h-6 text-[11px] px-2"
-				onclick={() => fileBrowserStore.setPenetratePureMediaFolderOpen(!$fileBrowserStore.penetratePureMediaFolderOpen)}
+				class="h-6 px-2 text-[11px]"
+				onclick={() =>
+					fileBrowserStore.setPenetratePureMediaFolderOpen(
+						!$fileBrowserStore.penetratePureMediaFolderOpen
+					)}
 			>
 				{$fileBrowserStore.penetratePureMediaFolderOpen ? '直接打开' : '进入文件夹'}
 			</Button>
@@ -95,14 +102,17 @@ function toggleDetails() {
 		<div class="mt-2 space-y-2 border-t pt-2">
 			<!-- 穿透层数说明 -->
 			<div class="flex items-start gap-2">
-				<Layers class="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+				<Layers class="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
 				<div class="flex-1">
 					<div class="flex items-center gap-2">
 						<span class="text-foreground font-medium">穿透层数</span>
 						<select
-							class="h-6 bg-background border rounded text-xs px-1"
+							class="bg-background h-6 rounded border px-1 text-xs"
 							value={String($fileBrowserStore.penetrateMaxDepth)}
-							onchange={(e) => fileBrowserStore.setPenetrateMaxDepth(parseInt((e.target as HTMLSelectElement).value))}
+							onchange={(e) =>
+								fileBrowserStore.setPenetrateMaxDepth(
+									parseInt((e.target as HTMLSelectElement).value)
+								)}
 						>
 							<option value="1">1层</option>
 							<option value="2">2层</option>
@@ -112,7 +122,7 @@ function toggleDetails() {
 							<option value="99">无限制</option>
 						</select>
 					</div>
-					<p class="text-muted-foreground text-[10px] mt-0.5">
+					<p class="text-muted-foreground mt-0.5 text-[10px]">
 						当文件夹只有一个子文件夹时，自动穿透进入的最大层数
 					</p>
 				</div>
@@ -120,29 +130,35 @@ function toggleDetails() {
 
 			<!-- 内部文件显示 -->
 			<div class="flex items-start gap-2">
-				<Package class="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+				<Package class="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
 				<div class="flex-1">
 					<div class="flex items-center gap-2">
 						<span class="text-foreground font-medium">内部文件显示</span>
 						<select
-							class="h-6 bg-background border rounded text-xs px-1"
+							class="bg-background h-6 rounded border px-1 text-xs"
 							value={$fileBrowserStore.penetrateShowInnerFile}
-							onchange={(e) => fileBrowserStore.setPenetrateShowInnerFile((e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always')}
+							onchange={(e) =>
+								fileBrowserStore.setPenetrateShowInnerFile(
+									(e.target as HTMLSelectElement).value as 'none' | 'penetrate' | 'always'
+								)}
 						>
 							<option value="none">不显示</option>
 							<option value="penetrate">仅穿透模式</option>
 							<option value="always">始终显示</option>
 						</select>
 						<select
-							class="h-6 bg-background border rounded text-xs px-1"
+							class="bg-background h-6 rounded border px-1 text-xs"
 							value={$fileBrowserStore.penetrateInnerFileCount}
-							onchange={(e) => fileBrowserStore.setPenetrateInnerFileCount((e.target as HTMLSelectElement).value as 'single' | 'all')}
+							onchange={(e) =>
+								fileBrowserStore.setPenetrateInnerFileCount(
+									(e.target as HTMLSelectElement).value as 'single' | 'all'
+								)}
 						>
 							<option value="single">单文件夹</option>
 							<option value="all">所有文件夹</option>
 						</select>
 					</div>
-					<p class="text-muted-foreground text-[10px] mt-0.5">
+					<p class="text-muted-foreground mt-0.5 text-[10px]">
 						在文件夹卡片上显示内部压缩包的名称和翻译
 					</p>
 				</div>
@@ -150,20 +166,23 @@ function toggleDetails() {
 
 			<!-- 纯媒体文件夹 -->
 			<div class="flex items-start gap-2">
-				<Image class="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+				<Image class="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
 				<div class="flex-1">
 					<div class="flex items-center gap-2">
 						<span class="text-foreground font-medium">纯媒体文件夹</span>
 						<Button
 							variant={$fileBrowserStore.penetratePureMediaFolderOpen ? 'default' : 'outline'}
 							size="sm"
-							class="h-6 text-[11px] px-2"
-							onclick={() => fileBrowserStore.setPenetratePureMediaFolderOpen(!$fileBrowserStore.penetratePureMediaFolderOpen)}
+							class="h-6 px-2 text-[11px]"
+							onclick={() =>
+								fileBrowserStore.setPenetratePureMediaFolderOpen(
+									!$fileBrowserStore.penetratePureMediaFolderOpen
+								)}
 						>
 							{$fileBrowserStore.penetratePureMediaFolderOpen ? '点击直接打开' : '点击进入文件夹'}
 						</Button>
 					</div>
-					<p class="text-muted-foreground text-[10px] mt-0.5">
+					<p class="text-muted-foreground mt-0.5 text-[10px]">
 						只包含图片/视频/文本的文件夹，点击时直接作为书籍打开
 					</p>
 				</div>

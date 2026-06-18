@@ -31,10 +31,10 @@ export async function startOllamaService(): Promise<boolean> {
 		});
 		await command.spawn();
 		toast.success('正在启动 Ollama 服务...');
-		
+
 		// 清除翻译服务中的状态缓存
 		clearOllamaStatusCache();
-		
+
 		return true;
 	} catch (e) {
 		console.error('启动 Ollama 失败:', e);
@@ -66,11 +66,11 @@ export async function checkLibreTranslateStatus(url: string): Promise<boolean> {
  * 应用清理规则到文本
  */
 export function applyCleanupRules(
-	text: string, 
+	text: string,
 	rules: Array<{ enabled: boolean; pattern: string }>
 ): string {
 	let result = text;
-	
+
 	for (const rule of rules) {
 		if (!rule.enabled || !rule.pattern) continue;
 		try {
@@ -80,7 +80,7 @@ export function applyCleanupRules(
 			// 忽略无效正则
 		}
 	}
-	
+
 	// 清理多余空格
 	return result.replace(/\s+/g, ' ').trim();
 }
@@ -109,7 +109,7 @@ export function exportConfigToFile(config: AiConfigExport['config']): void {
 	const exportData: AiConfigExport = {
 		version: 1,
 		exportedAt: new Date().toISOString(),
-		config,
+		config
 	};
 	const json = JSON.stringify(exportData, null, 2);
 	const blob = new Blob([json], { type: 'application/json' });

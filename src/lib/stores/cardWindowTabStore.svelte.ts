@@ -48,7 +48,7 @@ function createTabFromCardId(cardId: string, order: number): CardTab | null {
 		console.warn(`[CardWindowTabStore] Invalid card ID: ${cardId}`);
 		return null;
 	}
-	
+
 	return {
 		id: generateTabId(),
 		cardId,
@@ -78,14 +78,14 @@ export class CardWindowTabStore {
 	 * 获取当前活动标签页
 	 */
 	get activeTab(): CardTab | undefined {
-		return this.tabs.find(tab => tab.id === this.activeTabId);
+		return this.tabs.find((tab) => tab.id === this.activeTabId);
 	}
 
 	/**
 	 * 获取当前活动标签页索引
 	 */
 	get activeTabIndex(): number {
-		return this.sortedTabs.findIndex(tab => tab.id === this.activeTabId);
+		return this.sortedTabs.findIndex((tab) => tab.id === this.activeTabId);
 	}
 
 	/**
@@ -109,16 +109,14 @@ export class CardWindowTabStore {
 	 * Requirements: 3.3
 	 */
 	addTab(cardId: string): string | null {
-		const maxOrder = this.tabs.length > 0 
-			? Math.max(...this.tabs.map(t => t.order)) 
-			: -1;
-		
+		const maxOrder = this.tabs.length > 0 ? Math.max(...this.tabs.map((t) => t.order)) : -1;
+
 		const newTab = createTabFromCardId(cardId, maxOrder + 1);
 		if (!newTab) return null;
 
 		this.tabs = [...this.tabs, newTab];
 		this.activeTabId = newTab.id;
-		
+
 		return newTab.id;
 	}
 
@@ -127,15 +125,15 @@ export class CardWindowTabStore {
 	 * Requirements: 2.3
 	 */
 	removeTab(tabId: string): boolean {
-		const tabIndex = this.tabs.findIndex(t => t.id === tabId);
+		const tabIndex = this.tabs.findIndex((t) => t.id === tabId);
 		if (tabIndex === -1) return false;
 
 		const wasActive = this.activeTabId === tabId;
 		const sortedTabs = this.sortedTabs;
-		const sortedIndex = sortedTabs.findIndex(t => t.id === tabId);
+		const sortedIndex = sortedTabs.findIndex((t) => t.id === tabId);
 
 		// 移除标签页
-		this.tabs = this.tabs.filter(t => t.id !== tabId);
+		this.tabs = this.tabs.filter((t) => t.id !== tabId);
 
 		// 如果移除的是活动标签页，切换到相邻标签页
 		if (wasActive && this.tabs.length > 0) {
@@ -158,9 +156,9 @@ export class CardWindowTabStore {
 	 * Requirements: 2.2
 	 */
 	setActiveTab(tabId: string): boolean {
-		const tab = this.tabs.find(t => t.id === tabId);
+		const tab = this.tabs.find((t) => t.id === tabId);
 		if (!tab) return false;
-		
+
 		this.activeTabId = tabId;
 		return true;
 	}
@@ -170,14 +168,14 @@ export class CardWindowTabStore {
 	 * Requirements: 2.5
 	 */
 	moveTab(tabId: string, newOrder: number): boolean {
-		const tab = this.tabs.find(t => t.id === tabId);
+		const tab = this.tabs.find((t) => t.id === tabId);
 		if (!tab) return false;
 
 		const oldOrder = tab.order;
 		if (oldOrder === newOrder) return true;
 
 		// 更新所有标签页的顺序
-		this.tabs = this.tabs.map(t => {
+		this.tabs = this.tabs.map((t) => {
 			if (t.id === tabId) {
 				return { ...t, order: newOrder };
 			}
@@ -203,10 +201,10 @@ export class CardWindowTabStore {
 	 * Requirements: 8.2, 8.3
 	 */
 	duplicateTab(tabId: string): string | null {
-		const tab = this.tabs.find(t => t.id === tabId);
+		const tab = this.tabs.find((t) => t.id === tabId);
 		if (!tab) return null;
 
-		const maxOrder = Math.max(...this.tabs.map(t => t.order));
+		const maxOrder = Math.max(...this.tabs.map((t) => t.order));
 		const newTab: CardTab = {
 			id: generateTabId(),
 			cardId: tab.cardId,
@@ -229,9 +227,9 @@ export class CardWindowTabStore {
 	 */
 	nextTab(): void {
 		if (this.tabs.length <= 1) return;
-		
+
 		const sortedTabs = this.sortedTabs;
-		const currentIndex = sortedTabs.findIndex(t => t.id === this.activeTabId);
+		const currentIndex = sortedTabs.findIndex((t) => t.id === this.activeTabId);
 		const nextIndex = (currentIndex + 1) % sortedTabs.length;
 		this.activeTabId = sortedTabs[nextIndex].id;
 	}
@@ -242,9 +240,9 @@ export class CardWindowTabStore {
 	 */
 	previousTab(): void {
 		if (this.tabs.length <= 1) return;
-		
+
 		const sortedTabs = this.sortedTabs;
-		const currentIndex = sortedTabs.findIndex(t => t.id === this.activeTabId);
+		const currentIndex = sortedTabs.findIndex((t) => t.id === this.activeTabId);
 		const prevIndex = (currentIndex - 1 + sortedTabs.length) % sortedTabs.length;
 		this.activeTabId = sortedTabs[prevIndex].id;
 	}
@@ -255,7 +253,7 @@ export class CardWindowTabStore {
 	 * 关闭其他所有标签页
 	 */
 	closeOtherTabs(keepTabId: string): void {
-		const keepTab = this.tabs.find(t => t.id === keepTabId);
+		const keepTab = this.tabs.find((t) => t.id === keepTabId);
 		if (!keepTab) return;
 
 		this.tabs = [{ ...keepTab, order: 0 }];
@@ -266,13 +264,13 @@ export class CardWindowTabStore {
 	 * 关闭右侧所有标签页
 	 */
 	closeTabsToRight(tabId: string): void {
-		const tab = this.tabs.find(t => t.id === tabId);
+		const tab = this.tabs.find((t) => t.id === tabId);
 		if (!tab) return;
 
-		this.tabs = this.tabs.filter(t => t.order <= tab.order);
-		
+		this.tabs = this.tabs.filter((t) => t.order <= tab.order);
+
 		// 如果活动标签页被关闭，切换到指定标签页
-		if (!this.tabs.find(t => t.id === this.activeTabId)) {
+		if (!this.tabs.find((t) => t.id === this.activeTabId)) {
 			this.activeTabId = tabId;
 		}
 	}
@@ -283,7 +281,7 @@ export class CardWindowTabStore {
 	 * 转换为配置对象（用于持久化）
 	 */
 	toConfig(): CardTabConfig[] {
-		return this.sortedTabs.map(tab => ({
+		return this.sortedTabs.map((tab) => ({
 			tabId: tab.id,
 			cardId: tab.cardId,
 			title: tab.title,
@@ -296,8 +294,8 @@ export class CardWindowTabStore {
 	 */
 	static fromConfig(windowId: string, configs: CardTabConfig[]): CardWindowTabStore {
 		// 过滤无效的卡片 ID
-		const validConfigs = configs.filter(config => cardRegistry[config.cardId]);
-		
+		const validConfigs = configs.filter((config) => cardRegistry[config.cardId]);
+
 		const tabs: CardTab[] = validConfigs.map((config, index) => {
 			const cardDef = cardRegistry[config.cardId];
 			return {
@@ -340,7 +338,7 @@ const tabStoreRegistry = new Map<string, CardWindowTabStore>();
  */
 export function getOrCreateTabStore(windowId: string, initialCardId?: string): CardWindowTabStore {
 	let store = tabStoreRegistry.get(windowId);
-	
+
 	if (!store) {
 		store = new CardWindowTabStore(windowId);
 		if (initialCardId) {
@@ -348,7 +346,7 @@ export function getOrCreateTabStore(windowId: string, initialCardId?: string): C
 		}
 		tabStoreRegistry.set(windowId, store);
 	}
-	
+
 	return store;
 }
 

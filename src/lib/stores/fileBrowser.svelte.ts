@@ -11,7 +11,12 @@ import { isVideoFile } from '$lib/utils/videoUtils';
 import { ratingCache, getSortableRating } from '$lib/services/ratingCache';
 import { getDefaultRating } from '$lib/stores/emm/storage';
 import { getCachedFolderSizeForSort, requestFolderSizes } from '$lib/stores/folderSizeCache.svelte';
-import { unifiedThumbnailStore, generateThumbKey, type ThumbnailSource, type ThumbnailRequest } from '$lib/stores/unifiedThumbnailStore.svelte';
+import {
+	unifiedThumbnailStore,
+	generateThumbKey,
+	type ThumbnailSource,
+	type ThumbnailRequest
+} from '$lib/stores/unifiedThumbnailStore.svelte';
 
 export type SortField = 'name' | 'modified' | 'size' | 'type' | 'path' | 'random' | 'rating';
 export type SortOrder = 'asc' | 'desc';
@@ -19,75 +24,78 @@ export type DeleteStrategy = 'trash' | 'permanent';
 export type CheckModeClickBehavior = 'open' | 'select';
 
 interface FileBrowserState {
-  currentPath: string;
-  items: FsItem[];
-  loading: boolean;
-  error: string;
-  isArchiveView: boolean;
-  currentArchivePath: string;
-  selectedIndex: number;
-  thumbnails: Map<string, string>;
-  sortField: SortField;
-  sortOrder: SortOrder;
-  scrollToSelectedToken: number;
-  scrollTargetIndex: number;
-  isCheckMode: boolean;
-  isDeleteMode: boolean;
-  // 持久化的 UI 模式开关
-  isPenetrateMode: boolean;
-  // 穿透模式下显示内部压缩包信息: 'none' | 'penetrate' | 'always'
-  // none: 不显示, penetrate: 仅穿透模式显示, always: 始终显示
-  penetrateShowInnerFile: 'none' | 'penetrate' | 'always';
-  // 显示内部文件数量: 'single' | 'all'
-  // single: 仅显示单个文件夹内的单压缩包, all: 显示所有内部压缩包
-  penetrateInnerFileCount: 'single' | 'all';
-  // 穿透层数：自动穿透嵌套单子文件夹的最大层数（默认3层）
-  penetrateMaxDepth: number;
-  // 纯媒体文件夹点击直接打开
-  penetratePureMediaFolderOpen: boolean;
-  // 文件夹预览网格模式（显示前4张图片的2x2预览）
-  // [4图预览功能已禁用] folderPreviewGrid: boolean;
-  showSearchBar: boolean;
-  showMigrationBar: boolean;
-  showMigrationManager: boolean;
-  showFolderTree: boolean;
-  visibleItems: FsItem[];
-  useVisibleItemsOverride: boolean;
-  deleteStrategy: DeleteStrategy;
-  inlineTreeMode: boolean;
-  inlineTreeState: Record<string, {
-    expanded: boolean;
-    loading: boolean;
-    children: FsItem[];
-    error?: string;
-  }>;
-  inlineTreeRootPath: string;
-  inlineTreeScrollTops: Record<string, number>;
-  scrollPositions: Record<string, number>; // 保存文件列表的滚动位置
-  // 勾选模式下点击卡片的行为: 'open' = 打开项目, 'select' = 选中/取消选中
-  checkModeClickBehavior: CheckModeClickBehavior;
-  // 双击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
-  doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
-  // 单击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
-  singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
-  // 是否在空白区域显示返回按钮提示
-  showEmptyAreaBackButton: boolean;
+	currentPath: string;
+	items: FsItem[];
+	loading: boolean;
+	error: string;
+	isArchiveView: boolean;
+	currentArchivePath: string;
+	selectedIndex: number;
+	thumbnails: Map<string, string>;
+	sortField: SortField;
+	sortOrder: SortOrder;
+	scrollToSelectedToken: number;
+	scrollTargetIndex: number;
+	isCheckMode: boolean;
+	isDeleteMode: boolean;
+	// 持久化的 UI 模式开关
+	isPenetrateMode: boolean;
+	// 穿透模式下显示内部压缩包信息: 'none' | 'penetrate' | 'always'
+	// none: 不显示, penetrate: 仅穿透模式显示, always: 始终显示
+	penetrateShowInnerFile: 'none' | 'penetrate' | 'always';
+	// 显示内部文件数量: 'single' | 'all'
+	// single: 仅显示单个文件夹内的单压缩包, all: 显示所有内部压缩包
+	penetrateInnerFileCount: 'single' | 'all';
+	// 穿透层数：自动穿透嵌套单子文件夹的最大层数（默认3层）
+	penetrateMaxDepth: number;
+	// 纯媒体文件夹点击直接打开
+	penetratePureMediaFolderOpen: boolean;
+	// 文件夹预览网格模式（显示前4张图片的2x2预览）
+	// [4图预览功能已禁用] folderPreviewGrid: boolean;
+	showSearchBar: boolean;
+	showMigrationBar: boolean;
+	showMigrationManager: boolean;
+	showFolderTree: boolean;
+	visibleItems: FsItem[];
+	useVisibleItemsOverride: boolean;
+	deleteStrategy: DeleteStrategy;
+	inlineTreeMode: boolean;
+	inlineTreeState: Record<
+		string,
+		{
+			expanded: boolean;
+			loading: boolean;
+			children: FsItem[];
+			error?: string;
+		}
+	>;
+	inlineTreeRootPath: string;
+	inlineTreeScrollTops: Record<string, number>;
+	scrollPositions: Record<string, number>; // 保存文件列表的滚动位置
+	// 勾选模式下点击卡片的行为: 'open' = 打开项目, 'select' = 选中/取消选中
+	checkModeClickBehavior: CheckModeClickBehavior;
+	// 双击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
+	doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+	// 单击空白处的行为: 'none' = 无操作, 'goUp' = 返回上级, 'goBack' = 后退
+	singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+	// 是否在空白区域显示返回按钮提示
+	showEmptyAreaBackButton: boolean;
 }
 
 const archiveExtensions = ['.zip', '.cbz', '.rar', '.cbr', '.7z'];
 
 function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').toLowerCase();
+	return path.replace(/\\/g, '/').toLowerCase();
 }
 
 function isArchiveFile(path: string): boolean {
-  const lower = path.toLowerCase();
-  return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
+	const lower = path.toLowerCase();
+	return archiveExtensions.some((ext) => lower.endsWith(ext)) || lower.endsWith('.pdf');
 }
 
 function isBookCandidate(item: FsItem): boolean {
-  // 文件夹、压缩包和视频都可以作为书籍打开
-  return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path);
+	// 文件夹、压缩包和视频都可以作为书籍打开
+	return item.isDir || isArchiveFile(item.path) || isVideoFile(item.path);
 }
 
 // ============ 随机排序种子缓存 ============
@@ -99,80 +107,80 @@ const MAX_SEED_CACHE_SIZE = 100;
  * 获取或创建目录的随机种子
  */
 function getRandomSeedForPath(path: string): number {
-  const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-  
-  if (randomSeedCache.has(normalizedPath)) {
-    return randomSeedCache.get(normalizedPath)!;
-  }
-  
-  // 生成新种子
-  const seed = Math.random() * 2147483647 | 0;
-  
-  // 缓存大小限制，删除最早的
-  if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
-    const firstKey = randomSeedCache.keys().next().value;
-    if (firstKey) randomSeedCache.delete(firstKey);
-  }
-  
-  randomSeedCache.set(normalizedPath, seed);
-  return seed;
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+
+	if (randomSeedCache.has(normalizedPath)) {
+		return randomSeedCache.get(normalizedPath)!;
+	}
+
+	// 生成新种子
+	const seed = (Math.random() * 2147483647) | 0;
+
+	// 缓存大小限制，删除最早的
+	if (randomSeedCache.size >= MAX_SEED_CACHE_SIZE) {
+		const firstKey = randomSeedCache.keys().next().value;
+		if (firstKey) randomSeedCache.delete(firstKey);
+	}
+
+	randomSeedCache.set(normalizedPath, seed);
+	return seed;
 }
 
 /**
  * 清除目录的随机种子（用于强制重新随机）
  */
 export function clearRandomSeedForPath(path: string): void {
-  const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-  randomSeedCache.delete(normalizedPath);
+	const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+	randomSeedCache.delete(normalizedPath);
 }
 
 /**
  * 使用种子的伪随机数生成器 (Mulberry32)
  */
 function seededRandom(seed: number): () => number {
-  return function() {
-    let t = seed += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
+	return function () {
+		let t = (seed += 0x6d2b79f5);
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
 }
 
 /**
  * 使用种子的 Fisher-Yates 洗牌算法
  */
 function seededShuffle<T>(items: T[], seed: number): T[] {
-  const shuffled = [...items];
-  const random = seededRandom(seed);
-  
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  
-  return shuffled;
+	const shuffled = [...items];
+	const random = seededRandom(seed);
+
+	for (let i = shuffled.length - 1; i > 0; i--) {
+		const j = Math.floor(random() * (i + 1));
+		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+	}
+
+	return shuffled;
 }
 
 function shuffleItems<T>(input: T[]): T[] {
-  const list = [...input];
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [list[i], list[j]] = [list[j], list[i]];
-  }
-  return list;
+	const list = [...input];
+	for (let i = list.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[list[i], list[j]] = [list[j], list[i]];
+	}
+	return list;
 }
 
 function getParentDirectory(path: string): string | null {
-  if (!path) {
-    return null;
-  }
-  const lastBackslash = path.lastIndexOf('\\');
-  const lastSlash = path.lastIndexOf('/');
-  const separatorIndex = Math.max(lastBackslash, lastSlash);
-  if (separatorIndex <= 0) {
-    return null;
-  }
-  return path.slice(0, separatorIndex);
+	if (!path) {
+		return null;
+	}
+	const lastBackslash = path.lastIndexOf('\\');
+	const lastSlash = path.lastIndexOf('/');
+	const separatorIndex = Math.max(lastBackslash, lastSlash);
+	if (separatorIndex <= 0) {
+		return null;
+	}
+	return path.slice(0, separatorIndex);
 }
 
 // ============ 持久化设置 ============
@@ -180,575 +188,629 @@ const EMPTY_CLICK_SETTINGS_KEY = 'neoview-empty-click-settings';
 const PENETRATE_SETTINGS_KEY = 'neoview-penetrate-settings';
 
 interface EmptyClickSettings {
-  doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
-  singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
-  showEmptyAreaBackButton: boolean;
+	doubleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+	singleClickEmptyAction: 'none' | 'goUp' | 'goBack';
+	showEmptyAreaBackButton: boolean;
 }
 
 interface PenetrateSettings {
-  penetrateShowInnerFile: 'none' | 'penetrate' | 'always';
-  penetrateInnerFileCount: 'single' | 'all';
-  penetrateMaxDepth: number;
-  penetratePureMediaFolderOpen: boolean;
-  // [4图预览功能已禁用] folderPreviewGrid: boolean;
+	penetrateShowInnerFile: 'none' | 'penetrate' | 'always';
+	penetrateInnerFileCount: 'single' | 'all';
+	penetrateMaxDepth: number;
+	penetratePureMediaFolderOpen: boolean;
+	// [4图预览功能已禁用] folderPreviewGrid: boolean;
 }
 
 function loadEmptyClickSettings(): Partial<EmptyClickSettings> {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return {};
-    const saved = localStorage.getItem(EMPTY_CLICK_SETTINGS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (e) {
-    console.error('[FileBrowserStore] 加载空白点击设置失败:', e);
-  }
-  return {};
+	try {
+		if (typeof window === 'undefined' || !window.localStorage) return {};
+		const saved = localStorage.getItem(EMPTY_CLICK_SETTINGS_KEY);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error('[FileBrowserStore] 加载空白点击设置失败:', e);
+	}
+	return {};
 }
 
 function saveEmptyClickSettings(settings: EmptyClickSettings) {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    localStorage.setItem(EMPTY_CLICK_SETTINGS_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.error('[FileBrowserStore] 保存空白点击设置失败:', e);
-  }
+	try {
+		if (typeof window === 'undefined' || !window.localStorage) return;
+		localStorage.setItem(EMPTY_CLICK_SETTINGS_KEY, JSON.stringify(settings));
+	} catch (e) {
+		console.error('[FileBrowserStore] 保存空白点击设置失败:', e);
+	}
 }
 
 function loadPenetrateSettings(): Partial<PenetrateSettings> {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return {};
-    const saved = localStorage.getItem(PENETRATE_SETTINGS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (e) {
-    console.error('[FileBrowserStore] 加载穿透设置失败:', e);
-  }
-  return {};
+	try {
+		if (typeof window === 'undefined' || !window.localStorage) return {};
+		const saved = localStorage.getItem(PENETRATE_SETTINGS_KEY);
+		if (saved) {
+			return JSON.parse(saved);
+		}
+	} catch (e) {
+		console.error('[FileBrowserStore] 加载穿透设置失败:', e);
+	}
+	return {};
 }
 
 function savePenetrateSettings(settings: PenetrateSettings) {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    localStorage.setItem(PENETRATE_SETTINGS_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.error('[FileBrowserStore] 保存穿透设置失败:', e);
-  }
+	try {
+		if (typeof window === 'undefined' || !window.localStorage) return;
+		localStorage.setItem(PENETRATE_SETTINGS_KEY, JSON.stringify(settings));
+	} catch (e) {
+		console.error('[FileBrowserStore] 保存穿透设置失败:', e);
+	}
 }
 
 const savedEmptyClickSettings = loadEmptyClickSettings();
 const savedPenetrateSettings = loadPenetrateSettings();
 
 const initialState: FileBrowserState = {
-  currentPath: '',
-  items: [],
-  loading: false,
-  error: '',
-  isArchiveView: false,
-  currentArchivePath: '',
-  selectedIndex: -1,
-  thumbnails: new Map(),
-  sortField: 'name',
-  sortOrder: 'asc',
-  scrollToSelectedToken: 0,
-  scrollTargetIndex: -1,
-  isCheckMode: false,
-  isDeleteMode: false,
-  isPenetrateMode: false,
-  penetrateShowInnerFile: savedPenetrateSettings.penetrateShowInnerFile ?? 'penetrate',
-  penetrateInnerFileCount: savedPenetrateSettings.penetrateInnerFileCount ?? 'single',
-  penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
-  penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
-  // [4图预览功能已禁用] folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
-  showSearchBar: false,
-  showMigrationBar: false,
-  showMigrationManager: false,
-  showFolderTree: false,
-  visibleItems: [],
-  useVisibleItemsOverride: false,
-  deleteStrategy: 'trash',
-  inlineTreeMode: false,
-  inlineTreeState: {},
-  inlineTreeRootPath: '',
-  inlineTreeScrollTops: {},
-  scrollPositions: {},
-  checkModeClickBehavior: 'open',
-  doubleClickEmptyAction: savedEmptyClickSettings.doubleClickEmptyAction ?? 'goUp',
-  singleClickEmptyAction: savedEmptyClickSettings.singleClickEmptyAction ?? 'none',
-  showEmptyAreaBackButton: savedEmptyClickSettings.showEmptyAreaBackButton ?? false
+	currentPath: '',
+	items: [],
+	loading: false,
+	error: '',
+	isArchiveView: false,
+	currentArchivePath: '',
+	selectedIndex: -1,
+	thumbnails: new Map(),
+	sortField: 'name',
+	sortOrder: 'asc',
+	scrollToSelectedToken: 0,
+	scrollTargetIndex: -1,
+	isCheckMode: false,
+	isDeleteMode: false,
+	isPenetrateMode: false,
+	penetrateShowInnerFile: savedPenetrateSettings.penetrateShowInnerFile ?? 'penetrate',
+	penetrateInnerFileCount: savedPenetrateSettings.penetrateInnerFileCount ?? 'single',
+	penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
+	penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
+	// [4图预览功能已禁用] folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
+	showSearchBar: false,
+	showMigrationBar: false,
+	showMigrationManager: false,
+	showFolderTree: false,
+	visibleItems: [],
+	useVisibleItemsOverride: false,
+	deleteStrategy: 'trash',
+	inlineTreeMode: false,
+	inlineTreeState: {},
+	inlineTreeRootPath: '',
+	inlineTreeScrollTops: {},
+	scrollPositions: {},
+	checkModeClickBehavior: 'open',
+	doubleClickEmptyAction: savedEmptyClickSettings.doubleClickEmptyAction ?? 'goUp',
+	singleClickEmptyAction: savedEmptyClickSettings.singleClickEmptyAction ?? 'none',
+	showEmptyAreaBackButton: savedEmptyClickSettings.showEmptyAreaBackButton ?? false
 };
 
 /**
  * 获取文件类型用于排序
  */
 function getItemType(item: FsItem): string {
-  if (item.isDir) return '0_folder';
-  if (item.name.endsWith('.zip') || item.name.endsWith('.cbz') ||
-    item.name.endsWith('.rar') || item.name.endsWith('.cbr')) return '1_archive';
-  if (item.isImage) return '2_image';
-  return '3_file';
+	if (item.isDir) return '0_folder';
+	if (
+		item.name.endsWith('.zip') ||
+		item.name.endsWith('.cbz') ||
+		item.name.endsWith('.rar') ||
+		item.name.endsWith('.cbr')
+	)
+		return '1_archive';
+	if (item.isImage) return '2_image';
+	return '3_file';
 }
 
-export function sortItems(items: FsItem[], field: SortField, order: SortOrder, path?: string): FsItem[] {
-  // 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
-  if (field === 'random') {
-    const seed = path ? getRandomSeedForPath(path) : Math.random() * 2147483647 | 0;
-    const folders = items.filter(item => item.isDir);
-    const nonFolders = items.filter(item => !item.isDir);
-    const shuffledFolders = seededShuffle(folders, seed);
-    const shuffledFiles = seededShuffle(nonFolders, seed + 1); // 文件用不同种子
-    const result = [...shuffledFolders, ...shuffledFiles];
-    return order === 'asc' ? result : result.reverse();
-  }
+export function sortItems(
+	items: FsItem[],
+	field: SortField,
+	order: SortOrder,
+	path?: string
+): FsItem[] {
+	// 随机排序特殊处理 - 使用基于路径的种子确保结果可重复
+	if (field === 'random') {
+		const seed = path ? getRandomSeedForPath(path) : (Math.random() * 2147483647) | 0;
+		const folders = items.filter((item) => item.isDir);
+		const nonFolders = items.filter((item) => !item.isDir);
+		const shuffledFolders = seededShuffle(folders, seed);
+		const shuffledFiles = seededShuffle(nonFolders, seed + 1); // 文件用不同种子
+		const result = [...shuffledFolders, ...shuffledFiles];
+		return order === 'asc' ? result : result.reverse();
+	}
 
-  // 评分排序：O(N) 预先构建评分 Map，避免 comparator 内 O(N log N) 次缓存查找
-  if (field === 'rating') {
-    const defRating = getDefaultRating();
-    const ratingMap = new Map<string, number>();
-    for (const item of items) {
-      const rInfo = ratingCache.getRatingSync(item.path);
-      ratingMap.set(item.path, getSortableRating(rInfo ?? {}, defRating));
-    }
-    return [...items].sort((a, b) => {
-      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-      const diff = (ratingMap.get(a.path) ?? 0) - (ratingMap.get(b.path) ?? 0);
-      return order === 'asc' ? diff : -diff;
-    });
-  }
+	// 评分排序：O(N) 预先构建评分 Map，避免 comparator 内 O(N log N) 次缓存查找
+	if (field === 'rating') {
+		const defRating = getDefaultRating();
+		const ratingMap = new Map<string, number>();
+		for (const item of items) {
+			const rInfo = ratingCache.getRatingSync(item.path);
+			ratingMap.set(item.path, getSortableRating(rInfo ?? {}, defRating));
+		}
+		return [...items].sort((a, b) => {
+			if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+			const diff = (ratingMap.get(a.path) ?? 0) - (ratingMap.get(b.path) ?? 0);
+			return order === 'asc' ? diff : -diff;
+		});
+	}
 
-  return [...items].sort((a, b) => {
-    // 文件夹始终在前面
-    if (a.isDir !== b.isDir) {
-      return a.isDir ? -1 : 1;
-    }
+	return [...items].sort((a, b) => {
+		// 文件夹始终在前面
+		if (a.isDir !== b.isDir) {
+			return a.isDir ? -1 : 1;
+		}
 
-    let comparison = 0;
+		let comparison = 0;
 
-    switch (field) {
-      case 'path':
-        comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
-        break;
-      case 'name':
-        comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
-        break;
-      case 'modified':
-        comparison = (a.modified || 0) - (b.modified || 0);
-        break;
-      case 'size': {
-        let sizeA = a.size;
-        let sizeB = b.size;
-        if (a.isDir && sizeA === 0) sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
-        if (b.isDir && sizeB === 0) sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
-        comparison = sizeA - sizeB;
-        break;
-      }
-      case 'type':
-        comparison = getItemType(a).localeCompare(getItemType(b));
-        if (comparison === 0) {
-          comparison = a.name.localeCompare(b.name);
-        }
-        break;
-    }
+		switch (field) {
+			case 'path':
+				comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
+				break;
+			case 'name':
+				comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+				break;
+			case 'modified':
+				comparison = (a.modified || 0) - (b.modified || 0);
+				break;
+			case 'size': {
+				let sizeA = a.size;
+				let sizeB = b.size;
+				if (a.isDir && sizeA === 0) sizeA = getCachedFolderSizeForSort(a.path) ?? 0;
+				if (b.isDir && sizeB === 0) sizeB = getCachedFolderSizeForSort(b.path) ?? 0;
+				comparison = sizeA - sizeB;
+				break;
+			}
+			case 'type':
+				comparison = getItemType(a).localeCompare(getItemType(b));
+				if (comparison === 0) {
+					comparison = a.name.localeCompare(b.name);
+				}
+				break;
+		}
 
-    return order === 'asc' ? comparison : -comparison;
-  });
+		return order === 'asc' ? comparison : -comparison;
+	});
 
-  // 按 size 排序时，异步触发文件夹大小加载（缓存为空时）
-  if (field === 'size') {
-    const foldersNeedingSize = items.filter(item => item.isDir && item.size === 0 && getCachedFolderSizeForSort(item.path) === null);
-    if (foldersNeedingSize.length > 0) {
-      requestFolderSizes(foldersNeedingSize.map(item => item.path));
-    }
-  }
+	// 按 size 排序时，异步触发文件夹大小加载（缓存为空时）
+	if (field === 'size') {
+		const foldersNeedingSize = items.filter(
+			(item) => item.isDir && item.size === 0 && getCachedFolderSizeForSort(item.path) === null
+		);
+		if (foldersNeedingSize.length > 0) {
+			requestFolderSizes(foldersNeedingSize.map((item) => item.path));
+		}
+	}
 }
 
 function createFileBrowserStore() {
-  const { subscribe, set, update } = writable<FileBrowserState>(initialState);
-  let currentState = initialState;
-  let activeStream: StreamHandle | null = null;
-  let streamVersion = 0;
+	const { subscribe, set, update } = writable<FileBrowserState>(initialState);
+	let currentState = initialState;
+	let activeStream: StreamHandle | null = null;
+	let streamVersion = 0;
 
-  subscribe(state => {
-    currentState = state;
-  });
+	subscribe((state) => {
+		currentState = state;
+	});
 
-  let pendingNavigation: Promise<void> | null = null;
+	let pendingNavigation: Promise<void> | null = null;
 
-  return {
-    subscribe,
-    getState: () => currentState,
-    setCurrentPath: (path: string) => update(state => ({ ...state, currentPath: path })),
-    setItems: (items: FsItem[]) => update(state => ({
-      ...state,
-      items,
-      visibleItems: state.useVisibleItemsOverride ? state.visibleItems : items
-    })),
-    setLoading: (loading: boolean) => update(state => ({ ...state, loading })),
-    setError: (error: string) => update(state => ({ ...state, error })),
-    setArchiveView: (isArchive: boolean, archivePath: string = '') =>
-      update(state => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
-    setSelectedIndex: (index: number) => update(state => ({ ...state, selectedIndex: index })),
-    setCheckMode: (value: boolean) => update(state => ({ ...state, isCheckMode: value })),
-    setDeleteMode: (value: boolean) => update(state => ({ ...state, isDeleteMode: value })),
-    setDeleteStrategy: (value: DeleteStrategy) => update(state => ({ ...state, deleteStrategy: value })),
-    setPenetrateMode: (value: boolean) => update(state => ({ ...state, isPenetrateMode: value })),
-    setPenetrateShowInnerFile: (value: 'none' | 'penetrate' | 'always') => update(state => {
-      const newState = { ...state, penetrateShowInnerFile: value };
-      savePenetrateSettings({
-        penetrateShowInnerFile: value,
-        penetrateInnerFileCount: state.penetrateInnerFileCount,
-        penetrateMaxDepth: state.penetrateMaxDepth,
-        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
-      });
-      return newState;
-    }),
-    setPenetrateInnerFileCount: (value: 'single' | 'all') => update(state => {
-      const newState = { ...state, penetrateInnerFileCount: value };
-      savePenetrateSettings({
-        penetrateShowInnerFile: state.penetrateShowInnerFile,
-        penetrateInnerFileCount: value,
-        penetrateMaxDepth: state.penetrateMaxDepth,
-        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
-      });
-      return newState;
-    }),
-    setPenetrateMaxDepth: (value: number) => update(state => {
-      const newState = { ...state, penetrateMaxDepth: value };
-      savePenetrateSettings({
-        penetrateShowInnerFile: state.penetrateShowInnerFile,
-        penetrateInnerFileCount: state.penetrateInnerFileCount,
-        penetrateMaxDepth: value,
-        penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
-      });
-      return newState;
-    }),
-    setPenetratePureMediaFolderOpen: (value: boolean) => update(state => {
-      const newState = { ...state, penetratePureMediaFolderOpen: value };
-      savePenetrateSettings({
-        penetrateShowInnerFile: state.penetrateShowInnerFile,
-        penetrateInnerFileCount: state.penetrateInnerFileCount,
-        penetrateMaxDepth: state.penetrateMaxDepth,
-        penetratePureMediaFolderOpen: value,
-        // [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
-      });
-      return newState;
-    }),
-    // [4图预览功能已禁用]
-    // setFolderPreviewGrid: (value: boolean) => update(state => {
-    //   const newState = { ...state, folderPreviewGrid: value };
-    //   savePenetrateSettings({
-    //     penetrateShowInnerFile: state.penetrateShowInnerFile,
-    //     penetrateInnerFileCount: state.penetrateInnerFileCount,
-    //     penetrateMaxDepth: state.penetrateMaxDepth,
-    //     penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-    //     folderPreviewGrid: value
-    //   });
-    //   return newState;
-    // }),
-    setShowSearchBar: (value: boolean) => update(state => ({ ...state, showSearchBar: value })),
-    setShowMigrationBar: (value: boolean) => update(state => ({ ...state, showMigrationBar: value })),
-    setShowMigrationManager: (value: boolean) => update(state => ({ ...state, showMigrationManager: value })),
-    setShowFolderTree: (value: boolean) => update(state => ({ ...state, showFolderTree: value })),
-    setInlineTreeMode: (value: boolean) => update(state => ({ ...state, inlineTreeMode: value })),
-    setInlineTreeState: (value: FileBrowserState['inlineTreeState']) =>
-      update(state => ({ ...state, inlineTreeState: value })),
-    setInlineTreeRootPath: (value: string) =>
-      update(state => ({ ...state, inlineTreeRootPath: value })),
-    setInlineTreeScrollTops: (value: FileBrowserState['inlineTreeScrollTops']) =>
-      update(state => ({ ...state, inlineTreeScrollTops: value })),
-    setSort: (field: SortField, order: SortOrder) => update(state => ({ ...state, sortField: field, sortOrder: order })),
-    setCheckModeClickBehavior: (value: CheckModeClickBehavior) => update(state => ({ ...state, checkModeClickBehavior: value })),
-    setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => {
-      const newState = { ...state, doubleClickEmptyAction: value };
-      saveEmptyClickSettings({
-        doubleClickEmptyAction: value,
-        singleClickEmptyAction: state.singleClickEmptyAction,
-        showEmptyAreaBackButton: state.showEmptyAreaBackButton
-      });
-      return newState;
-    }),
-    setSingleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') => update(state => {
-      const newState = { ...state, singleClickEmptyAction: value };
-      saveEmptyClickSettings({
-        doubleClickEmptyAction: state.doubleClickEmptyAction,
-        singleClickEmptyAction: value,
-        showEmptyAreaBackButton: state.showEmptyAreaBackButton
-      });
-      return newState;
-    }),
-    setShowEmptyAreaBackButton: (value: boolean) => update(state => {
-      const newState = { ...state, showEmptyAreaBackButton: value };
-      saveEmptyClickSettings({
-        doubleClickEmptyAction: state.doubleClickEmptyAction,
-        singleClickEmptyAction: state.singleClickEmptyAction,
-        showEmptyAreaBackButton: value
-      });
-      return newState;
-    }),
-    setVisibleItems: (items: FsItem[]) => update(state => ({
-      ...state,
-      visibleItems: items,
-      useVisibleItemsOverride: true
-    })),
-    clearVisibleItemsOverride: () => update(state => ({
-      ...state,
-      useVisibleItemsOverride: false,
-      visibleItems: state.items
-    })),
-    requestScrollToSelected: (indexOverride?: number) =>
-      update(state => ({
-        ...state,
-        scrollTargetIndex: typeof indexOverride === 'number' ? indexOverride : state.selectedIndex,
-        scrollToSelectedToken: state.scrollToSelectedToken + 1
-      })),
-    navigateToPath: async (targetPath: string | null | undefined, selectIndex?: number) => {
-      if (!targetPath) return;
+	return {
+		subscribe,
+		getState: () => currentState,
+		setCurrentPath: (path: string) => update((state) => ({ ...state, currentPath: path })),
+		setItems: (items: FsItem[]) =>
+			update((state) => ({
+				...state,
+				items,
+				visibleItems: state.useVisibleItemsOverride ? state.visibleItems : items
+			})),
+		setLoading: (loading: boolean) => update((state) => ({ ...state, loading })),
+		setError: (error: string) => update((state) => ({ ...state, error })),
+		setArchiveView: (isArchive: boolean, archivePath: string = '') =>
+			update((state) => ({ ...state, isArchiveView: isArchive, currentArchivePath: archivePath })),
+		setSelectedIndex: (index: number) => update((state) => ({ ...state, selectedIndex: index })),
+		setCheckMode: (value: boolean) => update((state) => ({ ...state, isCheckMode: value })),
+		setDeleteMode: (value: boolean) => update((state) => ({ ...state, isDeleteMode: value })),
+		setDeleteStrategy: (value: DeleteStrategy) =>
+			update((state) => ({ ...state, deleteStrategy: value })),
+		setPenetrateMode: (value: boolean) => update((state) => ({ ...state, isPenetrateMode: value })),
+		setPenetrateShowInnerFile: (value: 'none' | 'penetrate' | 'always') =>
+			update((state) => {
+				const newState = { ...state, penetrateShowInnerFile: value };
+				savePenetrateSettings({
+					penetrateShowInnerFile: value,
+					penetrateInnerFileCount: state.penetrateInnerFileCount,
+					penetrateMaxDepth: state.penetrateMaxDepth,
+					penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen
+					// [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
+				});
+				return newState;
+			}),
+		setPenetrateInnerFileCount: (value: 'single' | 'all') =>
+			update((state) => {
+				const newState = { ...state, penetrateInnerFileCount: value };
+				savePenetrateSettings({
+					penetrateShowInnerFile: state.penetrateShowInnerFile,
+					penetrateInnerFileCount: value,
+					penetrateMaxDepth: state.penetrateMaxDepth,
+					penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen
+					// [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
+				});
+				return newState;
+			}),
+		setPenetrateMaxDepth: (value: number) =>
+			update((state) => {
+				const newState = { ...state, penetrateMaxDepth: value };
+				savePenetrateSettings({
+					penetrateShowInnerFile: state.penetrateShowInnerFile,
+					penetrateInnerFileCount: state.penetrateInnerFileCount,
+					penetrateMaxDepth: value,
+					penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen
+					// [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
+				});
+				return newState;
+			}),
+		setPenetratePureMediaFolderOpen: (value: boolean) =>
+			update((state) => {
+				const newState = { ...state, penetratePureMediaFolderOpen: value };
+				savePenetrateSettings({
+					penetrateShowInnerFile: state.penetrateShowInnerFile,
+					penetrateInnerFileCount: state.penetrateInnerFileCount,
+					penetrateMaxDepth: state.penetrateMaxDepth,
+					penetratePureMediaFolderOpen: value
+					// [4图预览功能已禁用] folderPreviewGrid: state.folderPreviewGrid
+				});
+				return newState;
+			}),
+		// [4图预览功能已禁用]
+		// setFolderPreviewGrid: (value: boolean) => update(state => {
+		//   const newState = { ...state, folderPreviewGrid: value };
+		//   savePenetrateSettings({
+		//     penetrateShowInnerFile: state.penetrateShowInnerFile,
+		//     penetrateInnerFileCount: state.penetrateInnerFileCount,
+		//     penetrateMaxDepth: state.penetrateMaxDepth,
+		//     penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
+		//     folderPreviewGrid: value
+		//   });
+		//   return newState;
+		// }),
+		setShowSearchBar: (value: boolean) => update((state) => ({ ...state, showSearchBar: value })),
+		setShowMigrationBar: (value: boolean) =>
+			update((state) => ({ ...state, showMigrationBar: value })),
+		setShowMigrationManager: (value: boolean) =>
+			update((state) => ({ ...state, showMigrationManager: value })),
+		setShowFolderTree: (value: boolean) => update((state) => ({ ...state, showFolderTree: value })),
+		setInlineTreeMode: (value: boolean) => update((state) => ({ ...state, inlineTreeMode: value })),
+		setInlineTreeState: (value: FileBrowserState['inlineTreeState']) =>
+			update((state) => ({ ...state, inlineTreeState: value })),
+		setInlineTreeRootPath: (value: string) =>
+			update((state) => ({ ...state, inlineTreeRootPath: value })),
+		setInlineTreeScrollTops: (value: FileBrowserState['inlineTreeScrollTops']) =>
+			update((state) => ({ ...state, inlineTreeScrollTops: value })),
+		setSort: (field: SortField, order: SortOrder) =>
+			update((state) => ({ ...state, sortField: field, sortOrder: order })),
+		setCheckModeClickBehavior: (value: CheckModeClickBehavior) =>
+			update((state) => ({ ...state, checkModeClickBehavior: value })),
+		setDoubleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') =>
+			update((state) => {
+				const newState = { ...state, doubleClickEmptyAction: value };
+				saveEmptyClickSettings({
+					doubleClickEmptyAction: value,
+					singleClickEmptyAction: state.singleClickEmptyAction,
+					showEmptyAreaBackButton: state.showEmptyAreaBackButton
+				});
+				return newState;
+			}),
+		setSingleClickEmptyAction: (value: 'none' | 'goUp' | 'goBack') =>
+			update((state) => {
+				const newState = { ...state, singleClickEmptyAction: value };
+				saveEmptyClickSettings({
+					doubleClickEmptyAction: state.doubleClickEmptyAction,
+					singleClickEmptyAction: value,
+					showEmptyAreaBackButton: state.showEmptyAreaBackButton
+				});
+				return newState;
+			}),
+		setShowEmptyAreaBackButton: (value: boolean) =>
+			update((state) => {
+				const newState = { ...state, showEmptyAreaBackButton: value };
+				saveEmptyClickSettings({
+					doubleClickEmptyAction: state.doubleClickEmptyAction,
+					singleClickEmptyAction: state.singleClickEmptyAction,
+					showEmptyAreaBackButton: value
+				});
+				return newState;
+			}),
+		setVisibleItems: (items: FsItem[]) =>
+			update((state) => ({
+				...state,
+				visibleItems: items,
+				useVisibleItemsOverride: true
+			})),
+		clearVisibleItemsOverride: () =>
+			update((state) => ({
+				...state,
+				useVisibleItemsOverride: false,
+				visibleItems: state.items
+			})),
+		requestScrollToSelected: (indexOverride?: number) =>
+			update((state) => ({
+				...state,
+				scrollTargetIndex: typeof indexOverride === 'number' ? indexOverride : state.selectedIndex,
+				scrollToSelectedToken: state.scrollToSelectedToken + 1
+			})),
+		navigateToPath: async (targetPath: string | null | undefined, selectIndex?: number) => {
+			if (!targetPath) return;
 
-      if (pendingNavigation) {
-        try {
-          await pendingNavigation;
-        } catch (err) {
-          console.debug('Previous navigation failed:', err);
-        } finally {
-          pendingNavigation = null;
-        }
-      }
+			if (pendingNavigation) {
+				try {
+					await pendingNavigation;
+				} catch (err) {
+					console.debug('Previous navigation failed:', err);
+				} finally {
+					pendingNavigation = null;
+				}
+			}
 
-      const task = (async () => {
-        const parentPath = getParentDirectory(targetPath) ?? targetPath;
+			const task = (async () => {
+				const parentPath = getParentDirectory(targetPath) ?? targetPath;
 
-        // 取消旧流，重置状态
-        if (activeStream) {
-          try {
-            await activeStream.cancel();
-          } catch (err) {
-            console.warn('cancel stream failed:', err);
-          }
-          activeStream = null;
-        }
+				// 取消旧流，重置状态
+				if (activeStream) {
+					try {
+						await activeStream.cancel();
+					} catch (err) {
+						console.warn('cancel stream failed:', err);
+					}
+					activeStream = null;
+				}
 
-        const version = ++streamVersion;
-        let collected: FsItem[] = [];
+				const version = ++streamVersion;
+				let collected: FsItem[] = [];
 
-        update(state => ({
-          ...state,
-          loading: true,
-          error: '',
-          isArchiveView: false,
-          currentArchivePath: '',
-          currentPath: parentPath,
-          selectedIndex: -1,
-          items: [],
-          visibleItems: [],
-          useVisibleItemsOverride: false
-        }));
+				update((state) => ({
+					...state,
+					loading: true,
+					error: '',
+					isArchiveView: false,
+					currentArchivePath: '',
+					currentPath: parentPath,
+					selectedIndex: -1,
+					items: [],
+					visibleItems: [],
+					useVisibleItemsOverride: false
+				}));
 
-        const STREAM_APPLY_DEBOUNCE_MS = 48;
-        const STREAM_PROGRESSIVE_SORT_MAX_ITEMS = 1200;
-        const STREAM_LARGE_DIR_DEBOUNCE_MS = 120;
-        let applyTimer: ReturnType<typeof setTimeout> | null = null;
-        let hasPendingApply = false;
+				const STREAM_APPLY_DEBOUNCE_MS = 48;
+				const STREAM_PROGRESSIVE_SORT_MAX_ITEMS = 1200;
+				const STREAM_LARGE_DIR_DEBOUNCE_MS = 120;
+				let applyTimer: ReturnType<typeof setTimeout> | null = null;
+				let hasPendingApply = false;
 
-        const clearApplyTimer = () => {
-          if (applyTimer) {
-            clearTimeout(applyTimer);
-            applyTimer = null;
-          }
-          hasPendingApply = false;
-        };
+				const clearApplyTimer = () => {
+					if (applyTimer) {
+						clearTimeout(applyTimer);
+						applyTimer = null;
+					}
+					hasPendingApply = false;
+				};
 
-        const applyItems = (items: FsItem[], forceSort = false) => {
-          if (version !== streamVersion) return;
+				const applyItems = (items: FsItem[], forceSort = false) => {
+					if (version !== streamVersion) return;
 
-          // 大目录流式阶段避免每批次全量排序，改为完成时再做一次最终排序。
-          const shouldSortNow = forceSort || items.length <= STREAM_PROGRESSIVE_SORT_MAX_ITEMS;
-          const viewItems = shouldSortNow
-            ? sortItems(items, currentState.sortField, currentState.sortOrder, parentPath)
-            : items;
+					// 大目录流式阶段避免每批次全量排序，改为完成时再做一次最终排序。
+					const shouldSortNow = forceSort || items.length <= STREAM_PROGRESSIVE_SORT_MAX_ITEMS;
+					const viewItems = shouldSortNow
+						? sortItems(items, currentState.sortField, currentState.sortOrder, parentPath)
+						: items;
 
-          update(state => ({
-            ...state,
-            items: viewItems,
-            visibleItems: state.useVisibleItemsOverride ? state.visibleItems : viewItems,
-            thumbnails: version === streamVersion ? state.thumbnails : new Map(),
-            loading: false
-          }));
+					update((state) => ({
+						...state,
+						items: viewItems,
+						visibleItems: state.useVisibleItemsOverride ? state.visibleItems : viewItems,
+						thumbnails: version === streamVersion ? state.thumbnails : new Map(),
+						loading: false
+					}));
 
-          const normalizedTarget = normalizePath(targetPath);
-          const targetIndex = viewItems.findIndex((item) => normalizePath(item.path) === normalizedTarget);
-          const finalSelectIndex = targetIndex >= 0 ? targetIndex : selectIndex;
-          if (finalSelectIndex !== undefined && finalSelectIndex >= 0 && finalSelectIndex < viewItems.length) {
-            update(state => ({
-              ...state,
-              selectedIndex: finalSelectIndex,
-              scrollTargetIndex: finalSelectIndex,
-              scrollToSelectedToken: state.scrollToSelectedToken + 1
-            }));
-          }
-        };
+					const normalizedTarget = normalizePath(targetPath);
+					const targetIndex = viewItems.findIndex(
+						(item) => normalizePath(item.path) === normalizedTarget
+					);
+					const finalSelectIndex = targetIndex >= 0 ? targetIndex : selectIndex;
+					if (
+						finalSelectIndex !== undefined &&
+						finalSelectIndex >= 0 &&
+						finalSelectIndex < viewItems.length
+					) {
+						update((state) => ({
+							...state,
+							selectedIndex: finalSelectIndex,
+							scrollTargetIndex: finalSelectIndex,
+							scrollToSelectedToken: state.scrollToSelectedToken + 1
+						}));
+					}
+				};
 
-        const scheduleApplyItems = (immediate = false) => {
-          if (immediate) {
-            clearApplyTimer();
-            applyItems(collected, true);
-            return;
-          }
+				const scheduleApplyItems = (immediate = false) => {
+					if (immediate) {
+						clearApplyTimer();
+						applyItems(collected, true);
+						return;
+					}
 
-          hasPendingApply = true;
-          if (applyTimer) return;
+					hasPendingApply = true;
+					if (applyTimer) return;
 
-          const debounceMs =
-            collected.length > STREAM_PROGRESSIVE_SORT_MAX_ITEMS
-              ? STREAM_LARGE_DIR_DEBOUNCE_MS
-              : STREAM_APPLY_DEBOUNCE_MS;
+					const debounceMs =
+						collected.length > STREAM_PROGRESSIVE_SORT_MAX_ITEMS
+							? STREAM_LARGE_DIR_DEBOUNCE_MS
+							: STREAM_APPLY_DEBOUNCE_MS;
 
-          applyTimer = setTimeout(() => {
-            applyTimer = null;
-            if (!hasPendingApply) return;
-            hasPendingApply = false;
-            applyItems(collected, false);
-          }, debounceMs);
-        };
+					applyTimer = setTimeout(() => {
+						applyTimer = null;
+						if (!hasPendingApply) return;
+						hasPendingApply = false;
+						applyItems(collected, false);
+					}, debounceMs);
+				};
 
-        try {
-          activeStream = await FileSystemAPI.streamDirectory(
-            parentPath,
-            {
-              onBatch: (batch) => {
-                if (version !== streamVersion) return;
-                collected.push(...batch.items);
-                scheduleApplyItems(false);
-              },
-              onError: (err) => {
-                if (version !== streamVersion) return;
-                clearApplyTimer();
-                update(state => ({ ...state, error: err.message, loading: false }));
-              },
-              onComplete: () => {
-                if (version !== streamVersion) return;
-                scheduleApplyItems(true);
-              }
-            },
-            {
-              // 引入后端流队列控并发后，实测 skip_hidden=true 下 50 批次吞吐最佳。
-              batchSize: 50,
-              sortBy: currentState.sortField,
-              sortOrder: currentState.sortOrder
-            }
-          );
-        } catch (err) {
-          clearApplyTimer();
-          console.error('navigateToPath failed:', err);
-          update(state => ({ ...state, error: String(err), loading: false }));
-          throw err;
-        } finally {
-          clearApplyTimer();
-        }
-      })();
+				try {
+					activeStream = await FileSystemAPI.streamDirectory(
+						parentPath,
+						{
+							onBatch: (batch) => {
+								if (version !== streamVersion) return;
+								collected.push(...batch.items);
+								scheduleApplyItems(false);
+							},
+							onError: (err) => {
+								if (version !== streamVersion) return;
+								clearApplyTimer();
+								update((state) => ({ ...state, error: err.message, loading: false }));
+							},
+							onComplete: () => {
+								if (version !== streamVersion) return;
+								scheduleApplyItems(true);
+							}
+						},
+						{
+							// 引入后端流队列控并发后，实测 skip_hidden=true 下 50 批次吞吐最佳。
+							batchSize: 50,
+							sortBy: currentState.sortField,
+							sortOrder: currentState.sortOrder
+						}
+					);
+				} catch (err) {
+					clearApplyTimer();
+					console.error('navigateToPath failed:', err);
+					update((state) => ({ ...state, error: String(err), loading: false }));
+					throw err;
+				} finally {
+					clearApplyTimer();
+				}
+			})();
 
-      pendingNavigation = task;
-      try {
-        await task;
-      } finally {
-        if (pendingNavigation === task) {
-          pendingNavigation = null;
-        }
-      }
-    },
-    selectPath: (path: string | null | undefined) => update(state => {
-      if (!path) return state;
-      const normalized = normalizePath(path);
-      const index = state.items.findIndex(item => normalizePath(item.path) === normalized);
-      if (index === -1 || index === state.selectedIndex) {
-        return state;
-      }
-      return { ...state, selectedIndex: index };
-    }),
-    findAdjacentBookPath: (currentBookPath: string | null, direction: 'next' | 'previous'): string | null => {
-      // 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
-      // 如果是，fileBrowserStore 无法处理（需要异步加载父目录），返回 null
-      const normalizedCurrentPath = currentState.currentPath ? normalizePath(currentState.currentPath) : null;
-      const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
-      if (normalizedCurrentPath && normalizedBookPath && normalizedCurrentPath === normalizedBookPath) {
-        // 当前目录就是 book 本身，这种情况需要在父目录中查找
-        // fileBrowserStore 没有父目录缓存，返回 null
-        return null;
-      }
+			pendingNavigation = task;
+			try {
+				await task;
+			} finally {
+				if (pendingNavigation === task) {
+					pendingNavigation = null;
+				}
+			}
+		},
+		selectPath: (path: string | null | undefined) =>
+			update((state) => {
+				if (!path) return state;
+				const normalized = normalizePath(path);
+				const index = state.items.findIndex((item) => normalizePath(item.path) === normalized);
+				if (index === -1 || index === state.selectedIndex) {
+					return state;
+				}
+				return { ...state, selectedIndex: index };
+			}),
+		findAdjacentBookPath: (
+			currentBookPath: string | null,
+			direction: 'next' | 'previous'
+		): string | null => {
+			// 检查当前目录是否就是 book 本身（文件夹作为 book 打开的情况）
+			// 如果是，fileBrowserStore 无法处理（需要异步加载父目录），返回 null
+			const normalizedCurrentPath = currentState.currentPath
+				? normalizePath(currentState.currentPath)
+				: null;
+			const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
+			if (
+				normalizedCurrentPath &&
+				normalizedBookPath &&
+				normalizedCurrentPath === normalizedBookPath
+			) {
+				// 当前目录就是 book 本身，这种情况需要在父目录中查找
+				// fileBrowserStore 没有父目录缓存，返回 null
+				return null;
+			}
 
-      const sourceItems = currentState.useVisibleItemsOverride ? currentState.visibleItems : currentState.items;
-      // 应用当前排序设置，确保按用户设置的排序顺序查找相邻书籍
-      const sortedItems = sortItems(sourceItems, currentState.sortField, currentState.sortOrder, currentState.currentPath);
-      const bookItems = sortedItems.filter(isBookCandidate);
-      if (bookItems.length === 0) return null;
+			const sourceItems = currentState.useVisibleItemsOverride
+				? currentState.visibleItems
+				: currentState.items;
+			// 应用当前排序设置，确保按用户设置的排序顺序查找相邻书籍
+			const sortedItems = sortItems(
+				sourceItems,
+				currentState.sortField,
+				currentState.sortOrder,
+				currentState.currentPath
+			);
+			const bookItems = sortedItems.filter(isBookCandidate);
+			if (bookItems.length === 0) return null;
 
-      const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
-      const findIndexByPath = (path: string | null) => {
-        if (!path) return -1;
-        return bookItems.findIndex(item => normalizePath(item.path) === path);
-      };
+			const normalizedCurrent = currentBookPath ? normalizePath(currentBookPath) : null;
+			const findIndexByPath = (path: string | null) => {
+				if (!path) return -1;
+				return bookItems.findIndex((item) => normalizePath(item.path) === path);
+			};
 
-      let currentIndex = findIndexByPath(normalizedCurrent);
+			let currentIndex = findIndexByPath(normalizedCurrent);
 
-      if (currentIndex === -1 && currentState.selectedIndex >= 0) {
-        const selectedItem = currentState.items[currentState.selectedIndex];
-        if (selectedItem) {
-          currentIndex = findIndexByPath(normalizePath(selectedItem.path));
-        }
-      }
+			if (currentIndex === -1 && currentState.selectedIndex >= 0) {
+				const selectedItem = currentState.items[currentState.selectedIndex];
+				if (selectedItem) {
+					currentIndex = findIndexByPath(normalizePath(selectedItem.path));
+				}
+			}
 
-      if (currentIndex === -1) {
-        currentIndex = direction === 'next' ? -1 : bookItems.length;
-      }
+			if (currentIndex === -1) {
+				currentIndex = direction === 'next' ? -1 : bookItems.length;
+			}
 
-      const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-      if (targetIndex < 0 || targetIndex >= bookItems.length) {
-        return null;
-      }
-      return bookItems[targetIndex].path;
-    },
-    addThumbnail: (path: string, thumbnail: string) => {
-      // Thumbnails are managed by unifiedThumbnailStore
-      // This method is kept for compatibility but no longer needs to do anything
-      // since the UI reads directly from unifiedThumbnailStore
-    },
-    addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) => {
-      // Thumbnails are already in unifiedThumbnailStore cache
-      // This method is kept for compatibility but no longer needs to do anything
-      // since the UI reads directly from unifiedThumbnailStore
-    },
-    removeThumbnail: (path: string) => {
-      // Thumbnails are managed by unifiedThumbnailStore
-    },
-    removeThumbnailsBatch: (paths: string[]) => {
-      // Thumbnails are managed by unifiedThumbnailStore
-    },
-    setThumbnails: (thumbnails: Map<string, string>) => {
-      // Thumbnails are managed by unifiedThumbnailStore
-    },
-    clearThumbnails: () => {
-      // Thumbnails are managed by unifiedThumbnailStore
-    },
-    /**
-     * Get thumbnail URL for a file entry from the unified thumbnail store.
-     * Generates a thumb key from the file source and looks up the URL.
-     */
-    getThumbnailUrlForEntry: (path: string, fileSize: number, modified: number): string | null => {
-      const source: ThumbnailSource = { kind: 'file', path, fileSize, modified };
-      const key = generateThumbKey(source, 256);
-      return unifiedThumbnailStore.getThumbnailUrl(key);
-    },
-    /**
-     * Request thumbnails for visible items using the unified thumbnail store.
-     */
-    requestVisibleThumbnails: (items: ThumbnailRequest[], contextId: string, centerIndex?: number): Promise<void> => {
-      return unifiedThumbnailStore.requestThumbnails(items, contextId, 'visible', centerIndex);
-    },
-    reset: () => set(initialState)
-  };
+			const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+			if (targetIndex < 0 || targetIndex >= bookItems.length) {
+				return null;
+			}
+			return bookItems[targetIndex].path;
+		},
+		addThumbnail: (path: string, thumbnail: string) => {
+			// Thumbnails are managed by unifiedThumbnailStore
+			// This method is kept for compatibility but no longer needs to do anything
+			// since the UI reads directly from unifiedThumbnailStore
+		},
+		addThumbnailsBatch: (thumbnailsBatch: Map<string, string>) => {
+			// Thumbnails are already in unifiedThumbnailStore cache
+			// This method is kept for compatibility but no longer needs to do anything
+			// since the UI reads directly from unifiedThumbnailStore
+		},
+		removeThumbnail: (path: string) => {
+			// Thumbnails are managed by unifiedThumbnailStore
+		},
+		removeThumbnailsBatch: (paths: string[]) => {
+			// Thumbnails are managed by unifiedThumbnailStore
+		},
+		setThumbnails: (thumbnails: Map<string, string>) => {
+			// Thumbnails are managed by unifiedThumbnailStore
+		},
+		clearThumbnails: () => {
+			// Thumbnails are managed by unifiedThumbnailStore
+		},
+		/**
+		 * Get thumbnail URL for a file entry from the unified thumbnail store.
+		 * Generates a thumb key from the file source and looks up the URL.
+		 */
+		getThumbnailUrlForEntry: (path: string, fileSize: number, modified: number): string | null => {
+			const source: ThumbnailSource = { kind: 'file', path, fileSize, modified };
+			const key = generateThumbKey(source, 256);
+			return unifiedThumbnailStore.getThumbnailUrl(key);
+		},
+		/**
+		 * Request thumbnails for visible items using the unified thumbnail store.
+		 */
+		requestVisibleThumbnails: (
+			items: ThumbnailRequest[],
+			contextId: string,
+			centerIndex?: number
+		): Promise<void> => {
+			return unifiedThumbnailStore.requestThumbnails(items, contextId, 'visible', centerIndex);
+		},
+		reset: () => set(initialState)
+	};
 }
 
 export const fileBrowserStore = createFileBrowserStore();

@@ -28,7 +28,8 @@ function normalizeItem(raw: any, index = 0): RadialMenuItem {
 		id: String(raw?.id ?? `item-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 		action: typeof raw?.action === 'string' ? raw.action : null,
 		label: typeof raw?.label === 'string' ? raw.label : '',
-		slotIndex: Number.isFinite(rawSlotIndex) && rawSlotIndex >= 0 ? Math.floor(rawSlotIndex) : index,
+		slotIndex:
+			Number.isFinite(rawSlotIndex) && rawSlotIndex >= 0 ? Math.floor(rawSlotIndex) : index,
 		moveToMenuId:
 			typeof raw?.moveToMenuId === 'string' && raw.moveToMenuId ? raw.moveToMenuId : undefined,
 		icon: typeof raw?.icon === 'string' && raw.icon ? raw.icon : undefined,
@@ -53,7 +54,9 @@ function normalizeLayers(
 		return [0, 1, 2].map((layerIndex) => {
 			const layer = rawLayers[layerIndex];
 			return Array.isArray(layer)
-				? layer.map((item: unknown, itemIndex: number) => normalizeItem(item, itemIndex)).map(withoutChildren)
+				? layer
+						.map((item: unknown, itemIndex: number) => normalizeItem(item, itemIndex))
+						.map(withoutChildren)
 				: [];
 		});
 	}
@@ -73,15 +76,17 @@ function normalizeLayers(
 
 function normalizeOldItems(rawItems: unknown, layerCount: 1 | 2 | 3): RadialMenuItem[] {
 	return Array.isArray(rawItems)
-		? rawItems.map((item: unknown, index: number) => normalizeItem(item, index)).map((item) => {
-				if (!item.children?.length || layerCount <= 1) {
-					return withoutChildren(item);
-				}
-				return {
-					...item,
-					children: item.children.map(withoutChildren)
-				};
-			})
+		? rawItems
+				.map((item: unknown, index: number) => normalizeItem(item, index))
+				.map((item) => {
+					if (!item.children?.length || layerCount <= 1) {
+						return withoutChildren(item);
+					}
+					return {
+						...item,
+						children: item.children.map(withoutChildren)
+					};
+				})
 		: [];
 }
 
@@ -128,7 +133,7 @@ export function migrateRadialMenuConfig(raw: any): RadialMenuConfig {
 	const activeMenuId =
 		typeof raw.activeMenuId === 'string' && menus.some((menu) => menu.id === raw.activeMenuId)
 			? raw.activeMenuId
-			: menus[0]?.id ?? defaults.id;
+			: (menus[0]?.id ?? defaults.id);
 	const activeMenu = menus.find((menu) => menu.id === activeMenuId) ?? menus[0];
 	const activeLayers = activeMenu?.layers ?? rootLayers;
 

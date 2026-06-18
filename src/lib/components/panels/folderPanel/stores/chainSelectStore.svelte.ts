@@ -57,7 +57,14 @@ export function toggleChainSelectMode(tabId: string) {
 export function getChainSelectMode(tabId: string): boolean {
 	const modes = get(chainSelectModeByTab);
 	const result = modes[tabId] || false;
-	console.log('[ChainSelectStore] getChainSelectMode tabId:', tabId, 'modes:', modes, 'result:', result);
+	console.log(
+		'[ChainSelectStore] getChainSelectMode tabId:',
+		tabId,
+		'modes:',
+		modes,
+		'result:',
+		result
+	);
 	return result;
 }
 

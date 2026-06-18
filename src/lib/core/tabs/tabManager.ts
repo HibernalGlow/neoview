@@ -99,7 +99,10 @@ class TabManager {
 	/**
 	 * 更新标签信息
 	 */
-	updateTab(tabId: string, updates: Partial<Pick<TabInfo, 'title' | 'bookPath' | 'bookInfo'>>): boolean {
+	updateTab(
+		tabId: string,
+		updates: Partial<Pick<TabInfo, 'title' | 'bookPath' | 'bookInfo'>>
+	): boolean {
 		const tab = this.tabs.get(tabId);
 		if (!tab) {
 			return false;
@@ -137,9 +140,3 @@ class TabManager {
 
 // 单例
 export const tabManager = new TabManager();
-
-
-
-
-
-

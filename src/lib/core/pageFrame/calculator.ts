@@ -1,6 +1,6 @@
 /**
  * ContentSizeCalculator - 内容尺寸计算器
- * 
+ *
  * 翻译自 Rust 后端的 calculator.rs
  * 计算页面显示尺寸和缩放比例
  */
@@ -10,7 +10,7 @@ import { Size as SizeUtils } from './types';
 
 /**
  * 内容尺寸计算器
- * 
+ *
  * 根据拉伸模式计算图片的显示尺寸和缩放比例
  */
 export class ContentSizeCalculator {
@@ -20,58 +20,54 @@ export class ContentSizeCalculator {
 	private stretchMode: StretchMode;
 	/** 自动旋转类型 */
 	private autoRotate: AutoRotateType;
-	
+
 	constructor(viewport: Size, stretchMode: StretchMode, autoRotate: AutoRotateType) {
 		this.viewport = viewport;
 		this.stretchMode = stretchMode;
 		this.autoRotate = autoRotate;
 	}
-	
+
 	/** 更新视口尺寸 */
 	setViewport(viewport: Size): void {
 		this.viewport = viewport;
 	}
-	
+
 	/** 更新拉伸模式 */
 	setStretchMode(mode: StretchMode): void {
 		this.stretchMode = mode;
 	}
-	
+
 	/** 更新自动旋转类型 */
 	setAutoRotate(type: AutoRotateType): void {
 		this.autoRotate = type;
 	}
-	
+
 	/**
 	 * 计算显示尺寸和缩放比例
-	 * 
+	 *
 	 * @returns [显示尺寸, 缩放比例, 旋转角度]
 	 */
 	calculate(contentSize: Size): { size: Size; scale: number; rotation: number } {
 		if (contentSize.width <= 0 || contentSize.height <= 0) {
 			return { size: SizeUtils.zero(), scale: 1, rotation: 0 };
 		}
-		
+
 		// 计算旋转角度
 		const rotation = this.calculateRotation(contentSize);
-		
+
 		// 如果需要旋转，交换宽高
-		const effectiveSize = Math.abs(rotation) > 45
-			? SizeUtils.new(contentSize.height, contentSize.width)
-			: contentSize;
-		
+		const effectiveSize =
+			Math.abs(rotation) > 45 ? SizeUtils.new(contentSize.height, contentSize.width) : contentSize;
+
 		// 计算缩放
 		const scale = this.calculateScale(effectiveSize);
-		
+
 		// 计算显示尺寸
-		const displaySize = SizeUtils.new(
-			effectiveSize.width * scale,
-			effectiveSize.height * scale
-		);
-		
+		const displaySize = SizeUtils.new(effectiveSize.width * scale, effectiveSize.height * scale);
+
 		return { size: displaySize, scale, rotation };
 	}
-	
+
 	/**
 	 * 计算缩放比例
 	 */
@@ -79,10 +75,10 @@ export class ContentSizeCalculator {
 		if (contentSize.width <= 0 || contentSize.height <= 0) {
 			return 1;
 		}
-		
+
 		const scaleX = this.viewport.width / contentSize.width;
 		const scaleY = this.viewport.height / contentSize.height;
-		
+
 		switch (this.stretchMode) {
 			case 'none':
 				return 1;
@@ -101,7 +97,7 @@ export class ContentSizeCalculator {
 				return 1;
 		}
 	}
-	
+
 	/**
 	 * 计算旋转角度
 	 */
@@ -117,7 +113,7 @@ export class ContentSizeCalculator {
 				// 自动旋转：当图片方向与视口方向不匹配时旋转
 				const contentLandscape = SizeUtils.isLandscape(contentSize);
 				const viewportLandscape = SizeUtils.isLandscape(this.viewport);
-				
+
 				if (contentLandscape !== viewportLandscape) {
 					return 90;
 				}
@@ -127,7 +123,7 @@ export class ContentSizeCalculator {
 				return 0;
 		}
 	}
-	
+
 	/**
 	 * 计算适应视口的尺寸（Uniform 模式）
 	 */
@@ -135,7 +131,7 @@ export class ContentSizeCalculator {
 		const scale = this.calculateScaleUniform(contentSize);
 		return SizeUtils.new(contentSize.width * scale, contentSize.height * scale);
 	}
-	
+
 	/**
 	 * 计算填充视口的尺寸（UniformToFill 模式）
 	 */
@@ -143,7 +139,7 @@ export class ContentSizeCalculator {
 		const scale = this.calculateScaleFill(contentSize);
 		return SizeUtils.new(contentSize.width * scale, contentSize.height * scale);
 	}
-	
+
 	/**
 	 * 计算 Uniform 模式的缩放比例
 	 */
@@ -155,7 +151,7 @@ export class ContentSizeCalculator {
 		const scaleY = this.viewport.height / contentSize.height;
 		return Math.min(scaleX, scaleY);
 	}
-	
+
 	/**
 	 * 计算 UniformToFill 模式的缩放比例
 	 */

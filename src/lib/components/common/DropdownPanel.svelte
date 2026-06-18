@@ -190,8 +190,8 @@
 			aria-orientation="vertical"
 		>
 			<div
-				class="bg-popover/95 backdrop-blur-sm border rounded-lg shadow-lg overflow-hidden
-					   animate-in fade-in-0 zoom-in-95 duration-200"
+				class="bg-popover/95 animate-in fade-in-0 zoom-in-95 overflow-hidden rounded-lg
+					   border shadow-lg backdrop-blur-sm duration-200"
 			>
 				{#if children}
 					{@render children()}

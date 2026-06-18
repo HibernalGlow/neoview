@@ -17,7 +17,7 @@ export interface ValidationResult {
 
 /**
  * 验证 AiProvider 配置是否有效
- * 
+ *
  * @param config - 要验证的配置
  * @returns 验证结果，包含错误和警告信息
  */
@@ -39,7 +39,8 @@ export function validateConfig(config: AiProvider): ValidationResult {
 	}
 
 	// 检查 API Key（本地服务除外）
-	const isLocalService = config.baseUrl.includes('localhost') || config.baseUrl.includes('127.0.0.1');
+	const isLocalService =
+		config.baseUrl.includes('localhost') || config.baseUrl.includes('127.0.0.1');
 	if (!config.apiKey && !isLocalService) {
 		errors.push('非本地服务需要提供 API Key');
 	}
@@ -72,13 +73,13 @@ export function validateConfig(config: AiProvider): ValidationResult {
 	return {
 		valid: errors.length === 0,
 		errors,
-		warnings,
+		warnings
 	};
 }
 
 /**
  * 将 AiProvider 配置转换为 TanStack AI 配置
- * 
+ *
  * @param config - 现有的 AiProvider 配置
  * @returns TanStack AI 配置，如果转换失败返回 null
  */
@@ -101,7 +102,7 @@ export function convertToTanStack(config: AiProvider): TanStackAIConfig | null {
  * 从 TanStack AI 配置提取基本信息（用于保存）
  * 注意：TanStack AI 配置不包含完整的原始信息，
  * 所以这个函数主要用于验证 round-trip
- * 
+ *
  * @param tanstackConfig - TanStack AI 配置
  * @param originalConfig - 原始 AiProvider 配置（用于补充信息）
  * @returns 重建的 AiProvider 配置
@@ -119,13 +120,13 @@ export function convertFromTanStack(
 		apiKey: originalConfig.apiKey,
 		model: originalConfig.model,
 		temperature: tanstackConfig.temperature,
-		maxTokens: tanstackConfig.maxTokens,
+		maxTokens: tanstackConfig.maxTokens
 	};
 }
 
 /**
  * 批量转换配置
- * 
+ *
  * @param configs - AiProvider 配置数组
  * @returns 成功转换的 TanStack AI 配置数组
  */
@@ -137,7 +138,7 @@ export function convertAllToTanStack(configs: AiProvider[]): TanStackAIConfig[] 
 
 /**
  * 导出配置为 EMM 兼容的 JSON 格式
- * 
+ *
  * @param providers - AiProvider 配置数组
  * @param activeIndex - 当前活动的提供商索引
  * @returns EMM 兼容的配置 JSON
@@ -146,13 +147,14 @@ export function exportToEMMFormat(providers: AiProvider[], activeIndex: number):
 	return {
 		providers,
 		activeIndex,
-		comment: '翻译和 AI 标签推断的 API 配置。请填写正确的 API Key 并设置 activeIndex 选择要使用的提供商。',
+		comment:
+			'翻译和 AI 标签推断的 API 配置。请填写正确的 API Key 并设置 activeIndex 选择要使用的提供商。'
 	};
 }
 
 /**
  * 从 EMM 格式导入配置
- * 
+ *
  * @param json - EMM 格式的配置 JSON
  * @returns 解析后的配置，包含验证结果
  */
@@ -168,6 +170,6 @@ export function importFromEMMFormat(json: AiApiConfigJson): {
 	return {
 		providers,
 		activeIndex,
-		validationResults,
+		validationResults
 	};
 }

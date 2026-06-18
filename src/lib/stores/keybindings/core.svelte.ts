@@ -7,7 +7,7 @@ import type {
 	BindingContext,
 	ActionBinding,
 	BindingConflict,
-	ViewArea,
+	ViewArea
 } from './types';
 import { STORAGE_KEY, getContextPriority, CONTEXT_PRIORITY } from './constants';
 import { createDefaultBindings } from './keyMappings.svelte';
@@ -20,7 +20,7 @@ import {
 	findActionByTouchGestureInContext,
 	findActionByTouchGesture,
 	findActionByAreaClickInContext,
-	calculateClickArea,
+	calculateClickArea
 } from './keyHandlers.svelte';
 import {
 	getCategories,
@@ -29,7 +29,7 @@ import {
 	formatContext,
 	getAvailableContexts,
 	getAllBindingsForAction,
-	getBindingsForContext,
+	getBindingsForContext
 } from './keyCategories.svelte';
 
 class KeyBindingsStore {
@@ -93,7 +93,7 @@ class KeyBindingsStore {
 				merged.push({
 					...def,
 					bindings: storedBinding.bindings ?? def.bindings,
-					contextBindings: storedBinding.contextBindings ?? def.contextBindings,
+					contextBindings: storedBinding.contextBindings ?? def.contextBindings
 				});
 				storedMap.delete(def.action);
 			} else {
@@ -114,7 +114,9 @@ class KeyBindingsStore {
 		const actionBinding = this.bindings.find((b) => b.action === action);
 		if (!actionBinding) return;
 		if (!actionBinding.bindings) actionBinding.bindings = [];
-		const exists = actionBinding.bindings.some((b) => JSON.stringify(b) === JSON.stringify(binding));
+		const exists = actionBinding.bindings.some(
+			(b) => JSON.stringify(b) === JSON.stringify(binding)
+		);
 		if (!exists) {
 			actionBinding.bindings.push(binding);
 			this.saveToStorage();
@@ -135,7 +137,9 @@ class KeyBindingsStore {
 
 		if (context === 'global') {
 			if (!actionBinding.bindings) actionBinding.bindings = [];
-			const exists = actionBinding.bindings.some((b) => JSON.stringify(b) === JSON.stringify(binding));
+			const exists = actionBinding.bindings.some(
+				(b) => JSON.stringify(b) === JSON.stringify(binding)
+			);
 			if (!exists) {
 				actionBinding.bindings.push(binding);
 				this.saveToStorage();
@@ -193,7 +197,9 @@ class KeyBindingsStore {
 	clearContextBindings(action: string, context: BindingContext) {
 		const actionBinding = this.bindings.find((b) => b.action === action);
 		if (!actionBinding?.contextBindings) return;
-		actionBinding.contextBindings = actionBinding.contextBindings.filter((cb) => cb.context !== context);
+		actionBinding.contextBindings = actionBinding.contextBindings.filter(
+			(cb) => cb.context !== context
+		);
 		this.saveToStorage();
 	}
 
@@ -212,7 +218,7 @@ class KeyBindingsStore {
 							input: binding,
 							context,
 							existingAction: ab.action,
-							newAction: excludeAction ?? '',
+							newAction: excludeAction ?? ''
 						};
 					}
 				}
@@ -224,7 +230,7 @@ class KeyBindingsStore {
 							input: binding,
 							context,
 							existingAction: ab.action,
-							newAction: excludeAction ?? '',
+							newAction: excludeAction ?? ''
 						};
 					}
 				}
@@ -254,9 +260,7 @@ class KeyBindingsStore {
 			);
 		}
 		if (context === 'global' && actionBinding.bindings) {
-			actionBinding.bindings = actionBinding.bindings.filter(
-				(b) => JSON.stringify(b) !== inputStr
-			);
+			actionBinding.bindings = actionBinding.bindings.filter((b) => JSON.stringify(b) !== inputStr);
 		}
 		this.saveToStorage();
 	}
@@ -319,7 +323,13 @@ class KeyBindingsStore {
 		button: 'left' | 'right' | 'middle' = 'left',
 		action: 'click' | 'double-click' | 'press' = 'click'
 	): string | null {
-		return findActionByAreaClickInContext(this.bindings, this._activeContexts, area, button, action);
+		return findActionByAreaClickInContext(
+			this.bindings,
+			this._activeContexts,
+			area,
+			button,
+			action
+		);
 	}
 
 	findActionByMouseWheelInContext(direction: 'up' | 'down'): string | null {

@@ -39,9 +39,21 @@ export interface TranslationServiceConfig {
 // 文件类型分类
 export const FILE_TYPE_GROUPS = {
 	folder: { label: '文件夹', extensions: ['folder'], icon: '📁' },
-	archive: { label: '压缩包', extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'cbz', 'cbr', 'cb7'], icon: '📦' },
-	image: { label: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'jxl', 'avif'], icon: '🖼️' },
-	video: { label: '视频', extensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'], icon: '🎬' },
+	archive: {
+		label: '压缩包',
+		extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'cbz', 'cbr', 'cb7'],
+		icon: '📦'
+	},
+	image: {
+		label: '图片',
+		extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'jxl', 'avif'],
+		icon: '🖼️'
+	},
+	video: {
+		label: '视频',
+		extensions: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'],
+		icon: '🎬'
+	}
 } as const;
 
 export type FileTypeKey = keyof typeof FILE_TYPE_GROUPS | 'all';
@@ -82,17 +94,18 @@ export const BUILTIN_PRESETS: TranslationPreset[] = [
 		type: 'ollama',
 		ollamaUrl: 'http://localhost:11434',
 		ollamaModel: 'qwen2.5:7b',
-		ollamaPromptTemplate: '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
+		ollamaPromptTemplate:
+			'请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
 		sourceLanguage: 'auto',
 		targetLanguage: 'zh',
-		titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)'],
+		titleCleanupPatterns: ['\\[.*?\\]', '\\(.*?\\)']
 	},
 	{
 		id: 'ollama-concise',
 		name: 'Ollama 简洁',
 		description: '简洁翻译模式',
 		type: 'ollama',
-		ollamaPromptTemplate: '翻译成{target_lang}：{text}',
+		ollamaPromptTemplate: '翻译成{target_lang}：{text}'
 	},
 	{
 		id: 'default-libretranslate',
@@ -101,8 +114,8 @@ export const BUILTIN_PRESETS: TranslationPreset[] = [
 		type: 'libretranslate',
 		libreTranslateUrl: 'http://localhost:5000',
 		sourceLanguage: 'auto',
-		targetLanguage: 'zh',
-	},
+		targetLanguage: 'zh'
+	}
 ];
 
 // 翻译缓存条目
@@ -136,7 +149,8 @@ const defaultConfig: TranslationServiceConfig = {
 	libreTranslateApiKey: '',
 	ollamaUrl: 'http://localhost:11434',
 	ollamaModel: 'qwen2.5:7b',
-	ollamaPromptTemplate: '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
+	ollamaPromptTemplate:
+		'请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}',
 	ollamaAutoStart: false,
 	sourceLanguage: 'auto',
 	targetLanguage: 'zh',
@@ -153,10 +167,10 @@ const defaultConfig: TranslationServiceConfig = {
 			pattern: '\\s*(\\[[^\\]]*\\]|\\([^\\)]*\\)|【[^】]*】|（[^）]*）)\\s*',
 			enabled: true,
 			applyTo: ['archive'], // 只对压缩包生效（文件夹保留画师名）
-			description: '去除各类括号内容（中英文）',
-		},
+			description: '去除各类括号内容（中英文）'
+		}
 	],
-	activePreset: 'custom',
+	activePreset: 'custom'
 };
 
 // 从 localStorage 加载配置
@@ -218,8 +232,8 @@ function createAITranslationStore() {
 		stats: {
 			totalTranslations: 0,
 			cacheHits: 0,
-			apiCalls: 0,
-		},
+			apiCalls: 0
+		}
 	};
 
 	const { subscribe, update } = writable<AITranslationState>(initialState);
@@ -264,7 +278,7 @@ function createAITranslationStore() {
 			if (entry) {
 				update((s) => ({
 					...s,
-					stats: { ...s.stats, cacheHits: s.stats.cacheHits + 1 },
+					stats: { ...s.stats, cacheHits: s.stats.cacheHits + 1 }
 				}));
 				return entry.translated;
 			}
@@ -279,13 +293,13 @@ function createAITranslationStore() {
 					original,
 					translated,
 					timestamp: Date.now(),
-					service,
+					service
 				});
 				saveCache(newCache);
 				return {
 					...state,
 					cache: newCache,
-					stats: { ...state.stats, totalTranslations: state.stats.totalTranslations + 1 },
+					stats: { ...state.stats, totalTranslations: state.stats.totalTranslations + 1 }
 				};
 			});
 		},
@@ -313,7 +327,7 @@ function createAITranslationStore() {
 		incrementApiCalls() {
 			update((state) => ({
 				...state,
-				stats: { ...state.stats, apiCalls: state.stats.apiCalls + 1 },
+				stats: { ...state.stats, apiCalls: state.stats.apiCalls + 1 }
 			}));
 		},
 
@@ -327,7 +341,7 @@ function createAITranslationStore() {
 			const state = get({ subscribe });
 			return {
 				size: state.cache.size,
-				...state.stats,
+				...state.stats
 			};
 		},
 
@@ -347,7 +361,7 @@ function createAITranslationStore() {
 				saveCache(newCache);
 				return { ...state, cache: newCache };
 			});
-		},
+		}
 	};
 }
 

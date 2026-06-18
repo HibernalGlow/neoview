@@ -30,14 +30,16 @@
 </script>
 
 <div
-	class="absolute bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+	class="absolute right-0 bottom-0 left-0 z-50 transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: 'translate-y-full'}"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 	role="status"
 >
-	<div class="h-6 bg-secondary/85 backdrop-blur-md flex items-center justify-between px-3 text-xs border-t">
+	<div
+		class="bg-secondary/85 flex h-6 items-center justify-between border-t px-3 text-xs backdrop-blur-md"
+	>
 		<!-- 左侧：书籍信息 -->
 		<div class="flex items-center gap-4">
 			{#if bookStore.currentBook}
@@ -59,7 +61,7 @@
 
 <!-- 触发区域（独立于状态栏，始终存在） -->
 <div
-	class="fixed bottom-0 left-0 right-0 h-4 z-49"
+	class="fixed right-0 bottom-0 left-0 z-49 h-4"
 	onmouseenter={handleMouseEnter}
 	role="presentation"
 	aria-label="底部状态栏触发区域"

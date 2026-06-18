@@ -53,27 +53,27 @@ store.subscribe((settings) => {
 // 导出 store 和操作函数
 export const hoverPreviewSettings = {
 	subscribe: store.subscribe,
-	
+
 	/** 获取当前设置 */
 	get(): HoverPreviewSettings {
 		return get(store);
 	},
-	
+
 	/** 设置是否启用 */
 	setEnabled(enabled: boolean) {
 		store.update((s) => ({ ...s, enabled }));
 	},
-	
+
 	/** 设置延迟时间 */
 	setDelayMs(delayMs: number) {
 		store.update((s) => ({ ...s, delayMs: Math.max(0, Math.min(2000, delayMs)) }));
 	},
-	
+
 	/** 切换启用状态 */
 	toggle() {
 		store.update((s) => ({ ...s, enabled: !s.enabled }));
 	},
-	
+
 	/** 重置为默认设置 */
 	reset() {
 		store.set(defaultSettings);

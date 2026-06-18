@@ -53,7 +53,7 @@ export class MouseGestureEngine {
 		// 只有移动距离超过阈值才记录
 		if (distance >= this.state.minDistance) {
 			const direction = this.getDirection(this.state.lastPoint, point);
-			
+
 			// 避免连续重复的方向
 			if (
 				this.state.pattern.length === 0 ||
@@ -214,9 +214,7 @@ export class TouchGestureEngine {
 	private readonly LONG_PRESS_DURATION = 500; // 长按时长
 	private readonly DOUBLE_TAP_DELAY = 300; // 双击延迟
 
-	constructor(
-		private onGesture: (gesture: string) => void
-	) {}
+	constructor(private onGesture: (gesture: string) => void) {}
 
 	/**
 	 * 处理触摸开始
@@ -277,10 +275,12 @@ export class TouchGestureEngine {
 			}
 		} else if (touches.length === 2 && this.startTouches.length === 2) {
 			// 双指滑动
-			const dx = (touches[0].clientX + touches[1].clientX) / 2 - 
-			           (this.startTouches[0].clientX + this.startTouches[1].clientX) / 2;
-			const dy = (touches[0].clientY + touches[1].clientY) / 2 - 
-			           (this.startTouches[0].clientY + this.startTouches[1].clientY) / 2;
+			const dx =
+				(touches[0].clientX + touches[1].clientX) / 2 -
+				(this.startTouches[0].clientX + this.startTouches[1].clientX) / 2;
+			const dy =
+				(touches[0].clientY + touches[1].clientY) / 2 -
+				(this.startTouches[0].clientY + this.startTouches[1].clientY) / 2;
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
 			if (distance > this.SWIPE_THRESHOLD) {
@@ -292,8 +292,10 @@ export class TouchGestureEngine {
 			}
 		} else if (touches.length === 3 && this.startTouches.length === 3) {
 			// 三指滑动
-			const dx = touches.reduce((sum, t, i) => sum + t.clientX - this.startTouches[i].clientX, 0) / 3;
-			const dy = touches.reduce((sum, t, i) => sum + t.clientY - this.startTouches[i].clientY, 0) / 3;
+			const dx =
+				touches.reduce((sum, t, i) => sum + t.clientX - this.startTouches[i].clientX, 0) / 3;
+			const dy =
+				touches.reduce((sum, t, i) => sum + t.clientY - this.startTouches[i].clientY, 0) / 3;
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
 			if (distance > this.SWIPE_THRESHOLD) {
@@ -319,7 +321,7 @@ export class TouchGestureEngine {
 	 */
 	private getSwipeGesture(dx: number, dy: number, fingers: number): string | null {
 		const prefix = fingers === 1 ? '' : fingers === 2 ? 'two-finger-' : 'three-finger-';
-		
+
 		if (Math.abs(dx) > Math.abs(dy)) {
 			return prefix + (dx > 0 ? 'swipe-right' : 'swipe-left');
 		} else {

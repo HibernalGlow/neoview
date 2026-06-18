@@ -30,16 +30,16 @@
 
 	// 更新放大镜设置
 	function updateMagnifierSettings(changes: Partial<{ zoom: number; size: number }>) {
-        const current = settings.view.magnifier ?? { zoom: 2.0, size: 200 };
-        const newMagnifier = {
-            zoom: current.zoom ?? 2.0,
-            size: current.size ?? 200,
-            ...changes
-        };
-        console.log('🔍 [Magnifier] Updating settings:', newMagnifier);
-        settingsManager.updateNestedSettings('view', {
-            magnifier: newMagnifier
-        });
+		const current = settings.view.magnifier ?? { zoom: 2.0, size: 200 };
+		const newMagnifier = {
+			zoom: current.zoom ?? 2.0,
+			size: current.size ?? 200,
+			...changes
+		};
+		console.log('🔍 [Magnifier] Updating settings:', newMagnifier);
+		settingsManager.updateNestedSettings('view', {
+			magnifier: newMagnifier
+		});
 	}
 
 	function handleZoomChange(value: number[]) {
@@ -52,38 +52,42 @@
 </script>
 
 {#if expanded}
-	<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
-		<span class="text-muted-foreground mr-2 text-xs flex items-center gap-1">
-            <ScanSearch class="h-3 w-3" />
-            放大倍率
-        </span>
-		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-37.5">
-            <span class="text-xs w-8 text-right">{zoom.toFixed(1)}x</span>
-            <Slider
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-1 border-t pt-1">
+		<span class="text-muted-foreground mr-2 flex items-center gap-1 text-xs">
+			<ScanSearch class="h-3 w-3" />
+			放大倍率
+		</span>
+		<div
+			class="bg-muted/60 inline-flex min-w-37.5 items-center gap-2 rounded-full px-3 py-1 shadow-inner"
+		>
+			<span class="w-8 text-right text-xs">{zoom.toFixed(1)}x</span>
+			<Slider
 				type="single"
-                value={[zoom]}
-                min={1.0}
-                max={5.0}
-                step={0.1}
-                class="w-24"
-                onValueChange={handleZoomChange}
-            />
+				value={[zoom]}
+				min={1.0}
+				max={5.0}
+				step={0.1}
+				class="w-24"
+				onValueChange={handleZoomChange}
+			/>
 		</div>
 
 		<Separator.Root orientation="vertical" class="mx-2 h-5" />
 
 		<span class="text-muted-foreground mr-2 text-xs">镜片大小</span>
-		<div class="bg-muted/60 inline-flex items-center gap-2 rounded-full px-3 py-1 shadow-inner min-w-37.5">
-             <span class="text-xs w-8 text-right">{size}px</span>
-             <Slider
-					 type="single"
-                value={[size]}
-                min={100}
-                max={500}
-                step={10}
-                class="w-24"
-                onValueChange={handleSizeChange}
-            />
+		<div
+			class="bg-muted/60 inline-flex min-w-37.5 items-center gap-2 rounded-full px-3 py-1 shadow-inner"
+		>
+			<span class="w-8 text-right text-xs">{size}px</span>
+			<Slider
+				type="single"
+				value={[size]}
+				min={100}
+				max={500}
+				step={10}
+				class="w-24"
+				onValueChange={handleSizeChange}
+			/>
 		</div>
 	</div>
 {/if}

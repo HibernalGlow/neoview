@@ -386,13 +386,13 @@
 														variant="ghost"
 														size="sm"
 														onclick={cancelEditKey}
-														class="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
+														class="absolute top-1/2 right-1 h-7 w-7 -translate-y-1/2 p-0"
 													>
 														×
 													</Button>
 												</div>
 											{:else}
-											<Button
+												<Button
 													variant="outline"
 													size="sm"
 													onclick={() => startEditKey(globalIndex)}

@@ -29,8 +29,8 @@
 		position?: 'trigger' | 'mouse';
 	} = $props();
 
-	let quickActions = $derived(items.filter(item => item.quickAction && !item.separator));
-	let regularItems = $derived(items.filter(item => !item.quickAction));
+	let quickActions = $derived(items.filter((item) => item.quickAction && !item.separator));
+	let regularItems = $derived(items.filter((item) => !item.quickAction));
 
 	let open = $state(false);
 	let contextMenuElement: HTMLElement | null = $state(null);
@@ -77,7 +77,7 @@
 
 <div
 	oncontextmenu={handleContextMenu}
-	class="w-full h-full"
+	class="h-full w-full"
 	style="pointer-events: auto;"
 	role="region"
 	aria-label="面板内容区域"
@@ -87,12 +87,14 @@
 	{/if}
 </div>
 
-<ContextMenu.Root open={open} onOpenChange={handleOpenChange}>
+<ContextMenu.Root {open} onOpenChange={handleOpenChange}>
 	<ContextMenu.Trigger />
 	<ContextMenu.Content
 		bind:ref={contextMenuElement}
 		class="min-w-45"
-		style="z-index: {zIndex}; {position === 'mouse' && mousePosition ? `position: fixed; left: ${mousePosition.x}px; top: ${mousePosition.y}px;` : ''}"
+		style="z-index: {zIndex}; {position === 'mouse' && mousePosition
+			? `position: fixed; left: ${mousePosition.x}px; top: ${mousePosition.y}px;`
+			: ''}"
 	>
 		{#if quickActions.length > 0}
 			<ContextMenu.ItemRow>
@@ -123,7 +125,7 @@
 				>
 					{#if item.icon}
 						{@const IconComponent = item.icon}
-						<IconComponent class="w-4 h-4 mr-2" />
+						<IconComponent class="mr-2 h-4 w-4" />
 					{/if}
 					{item.label}
 				</ContextMenu.Item>
@@ -134,4 +136,3 @@
 		{/if}
 	</ContextMenu.Content>
 </ContextMenu.Root>
-

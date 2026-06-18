@@ -71,7 +71,7 @@ export const defaultImageTrimSettings: ImageTrimSettings = {
 	linkVertical: false,
 	autoTrim: false,
 	autoTrimThreshold: 30,
-	autoTrimTarget: 'auto',
+	autoTrimTarget: 'auto'
 };
 
 // ─── 工具函数 ───────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export function mergeClipPaths(trimClipPath: string, splitClipPath: string): str
 		Math.max(t[0], s[0]),
 		Math.max(t[1], s[1]),
 		Math.max(t[2], s[2]),
-		Math.max(t[3], s[3]),
+		Math.max(t[3], s[3])
 	];
 
 	return `inset(${merged[0]}% ${merged[1]}% ${merged[2]}% ${merged[3]}%)`;
@@ -158,7 +158,7 @@ export function getEffectiveDimensions(
 		return {
 			width: originalWidth,
 			height: originalHeight,
-			aspectRatio: originalWidth / originalHeight,
+			aspectRatio: originalWidth / originalHeight
 		};
 	}
 
@@ -171,7 +171,7 @@ export function getEffectiveDimensions(
 	return {
 		width,
 		height,
-		aspectRatio: height > 0 ? width / height : 1,
+		aspectRatio: height > 0 ? width / height : 1
 	};
 }
 
@@ -260,7 +260,7 @@ function analyzeEdges(
 			getPixel(data, 0, 0, w),
 			getPixel(data, w - 1, 0, w),
 			getPixel(data, 0, h - 1, w),
-			getPixel(data, w - 1, h - 1, w),
+			getPixel(data, w - 1, h - 1, w)
 		];
 		const avgR = corners.reduce((s, c) => s + c[0], 0) / 4;
 		const avgG = corners.reduce((s, c) => s + c[1], 0) / 4;
@@ -321,11 +321,16 @@ function analyzeEdges(
 		top: Math.round((topRows / h) * 1000) / 10,
 		bottom: Math.round((bottomRows / h) * 1000) / 10,
 		left: Math.round((leftCols / w) * 1000) / 10,
-		right: Math.round((rightCols / w) * 1000) / 10,
+		right: Math.round((rightCols / w) * 1000) / 10
 	};
 }
 
-function getPixel(data: Uint8ClampedArray, x: number, y: number, w: number): [number, number, number] {
+function getPixel(
+	data: Uint8ClampedArray,
+	x: number,
+	y: number,
+	w: number
+): [number, number, number] {
 	const i = (y * w + x) * 4;
 	return [data[i], data[i + 1], data[i + 2]];
 }
@@ -463,9 +468,7 @@ export const imageTrimStore = {
 		update((s) => {
 			const top = clampTrim(value);
 			const bottom = constrainOpposite(top, s.bottom);
-			const newSettings = s.linkVertical
-				? { ...s, top, bottom: top }
-				: { ...s, top, bottom };
+			const newSettings = s.linkVertical ? { ...s, top, bottom: top } : { ...s, top, bottom };
 			saveSettings(newSettings);
 			return newSettings;
 		});
@@ -476,9 +479,7 @@ export const imageTrimStore = {
 		update((s) => {
 			const bottom = clampTrim(value);
 			const top = constrainOpposite(bottom, s.top);
-			const newSettings = s.linkVertical
-				? { ...s, bottom, top: bottom }
-				: { ...s, top, bottom };
+			const newSettings = s.linkVertical ? { ...s, bottom, top: bottom } : { ...s, top, bottom };
 			saveSettings(newSettings);
 			return newSettings;
 		});
@@ -489,9 +490,7 @@ export const imageTrimStore = {
 		update((s) => {
 			const left = clampTrim(value);
 			const right = constrainOpposite(left, s.right);
-			const newSettings = s.linkHorizontal
-				? { ...s, left, right: left }
-				: { ...s, left, right };
+			const newSettings = s.linkHorizontal ? { ...s, left, right: left } : { ...s, left, right };
 			saveSettings(newSettings);
 			return newSettings;
 		});
@@ -502,9 +501,7 @@ export const imageTrimStore = {
 		update((s) => {
 			const right = clampTrim(value);
 			const left = constrainOpposite(right, s.left);
-			const newSettings = s.linkHorizontal
-				? { ...s, right, left: right }
-				: { ...s, left, right };
+			const newSettings = s.linkHorizontal ? { ...s, right, left: right } : { ...s, left, right };
 			saveSettings(newSettings);
 			return newSettings;
 		});
@@ -519,7 +516,7 @@ export const imageTrimStore = {
 			const newSettings = {
 				...s,
 				linkHorizontal,
-				...(synced !== undefined ? { left: synced, right: synced } : {}),
+				...(synced !== undefined ? { left: synced, right: synced } : {})
 			};
 			saveSettings(newSettings);
 			return newSettings;
@@ -534,7 +531,7 @@ export const imageTrimStore = {
 			const newSettings = {
 				...s,
 				linkVertical,
-				...(synced !== undefined ? { top: synced, bottom: synced } : {}),
+				...(synced !== undefined ? { top: synced, bottom: synced } : {})
 			};
 			saveSettings(newSettings);
 			return newSettings;
@@ -550,7 +547,7 @@ export const imageTrimStore = {
 				bottom: clampTrim(values.bottom),
 				left: clampTrim(values.left),
 				right: clampTrim(values.right),
-				enabled: true,
+				enabled: true
 			};
 			saveSettings(newSettings);
 			return newSettings;
@@ -611,7 +608,7 @@ export const imageTrimStore = {
 		const newSettings = { ...defaultImageTrimSettings };
 		set(newSettings);
 		saveSettings(newSettings);
-	},
+	}
 };
 
 export type { ImageTrimSettings as TrimSettings };

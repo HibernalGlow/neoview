@@ -20,8 +20,11 @@ export function isCollectTag(tag: string, collectTags: EMMCollectTag[]): EMMColl
 /**
  * 检查标签是否为收藏标签（详细匹配）
  */
-export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): EMMCollectTag | null {
-	const normalize = (value?: string | null) => value ? value.trim().toLowerCase() : '';
+export function isCollectTagHelper(
+	tag: string,
+	collectTags: EMMCollectTag[]
+): EMMCollectTag | null {
+	const normalize = (value?: string | null) => (value ? value.trim().toLowerCase() : '');
 	const inputNormalized = normalize(tag);
 	const hasCategory = tag.includes(':');
 	const [inputCategoryRaw, inputTagRaw] = hasCategory ? tag.split(':', 2) : ['', tag];
@@ -36,8 +39,8 @@ export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): E
 
 		// Parse category from display if possible (e.g. "female:stirrup legwear")
 		const displayHasCategory = ct.display?.includes(':');
-		const [displayCategoryRaw, displayTagRaw] = displayHasCategory 
-			? ct.display.split(':', 2) 
+		const [displayCategoryRaw, displayTagRaw] = displayHasCategory
+			? ct.display.split(':', 2)
 			: ['', ct.display];
 		const displayCategoryNormalized = normalize(displayCategoryRaw);
 		const displayTagNormalized = normalize(displayTagRaw);
@@ -52,14 +55,20 @@ export function isCollectTagHelper(tag: string, collectTags: EMMCollectTag[]): E
 		// 3. Category:Tag Match
 		if (hasCategory) {
 			// Match against Display (category:tag)
-			if (displayHasCategory && 
-				displayCategoryNormalized === inputCategoryNormalized && 
-				displayTagNormalized === inputTagOnlyNormalized) return ct;
+			if (
+				displayHasCategory &&
+				displayCategoryNormalized === inputCategoryNormalized &&
+				displayTagNormalized === inputTagOnlyNormalized
+			)
+				return ct;
 
 			// Match against Letter:Tag (e.g. "f:stirrup legwear")
-			if (letterNormalized && 
-				letterNormalized === inputCategoryNormalized && 
-				tagNormalized === inputTagOnlyNormalized) return ct;
+			if (
+				letterNormalized &&
+				letterNormalized === inputCategoryNormalized &&
+				tagNormalized === inputTagOnlyNormalized
+			)
+				return ct;
 
 			// Match against Tag only
 			if (tagNormalized === inputTagOnlyNormalized) return ct;

@@ -150,19 +150,19 @@
 
 ```ts
 type FrameSnapshot = {
-  frameId: string;
-  bookId: string;
-  pageMode: 'single' | 'double' | 'panorama';
-  primaryPageIndices: number[];
-  displayItems: Array<{
-    pageIndex: number;
-    src: string;
-    width: number;
-    height: number;
-    backgroundColor?: string | null;
-  }>;
-  ready: boolean;
-  transitionKey: string;
+	frameId: string;
+	bookId: string;
+	pageMode: 'single' | 'double' | 'panorama';
+	primaryPageIndices: number[];
+	displayItems: Array<{
+		pageIndex: number;
+		src: string;
+		width: number;
+		height: number;
+		backgroundColor?: string | null;
+	}>;
+	ready: boolean;
+	transitionKey: string;
 };
 ```
 

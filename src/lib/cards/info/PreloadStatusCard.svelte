@@ -93,12 +93,12 @@
 
 <div class="space-y-3 text-xs">
 	<div class="grid grid-cols-2 gap-2">
-		<div class="rounded border border-border/60 bg-muted/20 p-2">
-			<div class="text-[10px] text-muted-foreground">当前页</div>
+		<div class="border-border/60 bg-muted/20 rounded border p-2">
+			<div class="text-muted-foreground text-[10px]">当前页</div>
 			<div class="mt-1 font-medium">{totalPages > 0 ? currentPageIndex + 1 : 0} / {totalPages}</div>
 		</div>
-		<div class="rounded border border-border/60 bg-muted/20 p-2">
-			<div class="text-[10px] text-muted-foreground">内存池</div>
+		<div class="border-border/60 bg-muted/20 rounded border p-2">
+			<div class="text-muted-foreground text-[10px]">内存池</div>
 			<div class="mt-1 font-medium">
 				{#if memoryStats}
 					{memoryStats.entryCount} 项
@@ -111,13 +111,15 @@
 
 	{#if memoryStats}
 		<div class="space-y-1.5">
-			<div class="flex items-center justify-between text-[10px] text-muted-foreground">
-				<span>{formatMemorySize(memoryStats.totalSize)} / {formatMemorySize(memoryStats.maxSize)}</span>
+			<div class="text-muted-foreground flex items-center justify-between text-[10px]">
+				<span
+					>{formatMemorySize(memoryStats.totalSize)} / {formatMemorySize(memoryStats.maxSize)}</span
+				>
 				<span>{memoryStats.usagePercent.toFixed(1)}%</span>
 			</div>
-			<div class="h-1.5 overflow-hidden rounded bg-muted">
+			<div class="bg-muted h-1.5 overflow-hidden rounded">
 				<div
-					class="h-full rounded bg-primary transition-[width]"
+					class="bg-primary h-full rounded transition-[width]"
 					style={`width: ${Math.min(100, Math.max(0, memoryStats.usagePercent))}%`}
 				></div>
 			</div>
@@ -126,8 +128,8 @@
 
 	<div class="space-y-1.5">
 		<div class="flex items-center justify-between">
-			<span class="text-[10px] text-muted-foreground">附近页缓存</span>
-			<span class="text-[10px] text-muted-foreground">{isRefreshing ? '刷新中' : '已同步'}</span>
+			<span class="text-muted-foreground text-[10px]">附近页缓存</span>
+			<span class="text-muted-foreground text-[10px]">{isRefreshing ? '刷新中' : '已同步'}</span>
 		</div>
 		<div class="grid grid-cols-3 gap-1.5">
 			{#each nearbyPages as item (item.page)}
@@ -149,7 +151,9 @@
 	</div>
 
 	{#if errorMessage}
-		<div class="rounded border border-destructive/40 bg-destructive/10 p-2 text-[10px] text-destructive">
+		<div
+			class="border-destructive/40 bg-destructive/10 text-destructive rounded border p-2 text-[10px]"
+		>
 			{errorMessage}
 		</div>
 	{/if}

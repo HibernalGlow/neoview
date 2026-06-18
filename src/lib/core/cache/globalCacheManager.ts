@@ -1,6 +1,6 @@
 /**
  * 全局缓存管理器
- * 
+ *
  * 提供统一的缓存管理，支持：
  * - TTL（时间过期）
  * - LRU（最近最少使用淘汰）
@@ -77,7 +77,7 @@ class CacheNamespace<T> {
 			maxItems: config.maxItems ?? 1000,
 			ttl: config.ttl ?? 0,
 			persistent: config.persistent ?? false,
-			storeName: config.storeName,
+			storeName: config.storeName
 		};
 
 		if (this.config.persistent) {
@@ -90,7 +90,7 @@ class CacheNamespace<T> {
 			this.persistentCache = createPersistentCache<T>({
 				dbName: 'neoview-cache',
 				storeName: this.config.storeName || this.config.name,
-				maxAge: this.config.ttl || undefined,
+				maxAge: this.config.ttl || undefined
 			});
 			await this.persistentCache.init();
 		} catch (e) {
@@ -155,7 +155,7 @@ class CacheNamespace<T> {
 
 	async set(key: string, value: T, size?: number): Promise<void> {
 		const actualSize = size ?? this.estimateSize(value);
-		
+
 		// 设置内存缓存
 		this.setMemory(key, value, actualSize);
 
@@ -185,7 +185,7 @@ class CacheNamespace<T> {
 			createdAt: Date.now(),
 			lastAccessed: Date.now(),
 			accessCount: 1,
-			expiresAt: this.config.ttl > 0 ? Date.now() + this.config.ttl : undefined,
+			expiresAt: this.config.ttl > 0 ? Date.now() + this.config.ttl : undefined
 		};
 
 		this.memoryCache.set(key, { value, meta });
@@ -194,7 +194,7 @@ class CacheNamespace<T> {
 
 	delete(key: string): boolean {
 		const deleted = this.deleteMemory(key);
-		
+
 		// 也从持久化存储删除
 		if (this.persistentCache) {
 			this.persistentCache.delete(key).catch(() => {});
@@ -261,7 +261,7 @@ class CacheNamespace<T> {
 			maxItems: this.config.maxItems,
 			ttl: this.config.ttl || undefined,
 			hitRate: totalRequests > 0 ? this.hits / totalRequests : 0,
-			persistent: this.config.persistent,
+			persistent: this.config.persistent
 		};
 	}
 
@@ -277,7 +277,7 @@ class CacheNamespace<T> {
 		let loaded = 0;
 
 		try {
-			const allKeys = keys || await this.persistentCache.keys();
+			const allKeys = keys || (await this.persistentCache.keys());
 			for (const key of allKeys) {
 				if (this.memoryCache.has(key)) continue;
 				const value = await this.persistentCache.get(key);
@@ -415,7 +415,7 @@ class GlobalCacheManager {
 			namespaces: new Map(),
 			totalSize: 0,
 			totalItems: 0,
-			persistentNamespaces: 0,
+			persistentNamespaces: 0
 		};
 
 		for (const [name, ns] of this.namespaces) {
@@ -498,25 +498,32 @@ export function createMemoryCache<T>(name: string, options?: Partial<CacheNamesp
 	return globalCacheManager.getNamespace<T>({
 		name,
 		persistent: false,
-		...options,
+		...options
 	});
 }
 
 /** 创建持久化缓存 */
-export function createPersistentNamespace<T>(name: string, options?: Partial<CacheNamespaceConfig>) {
+export function createPersistentNamespace<T>(
+	name: string,
+	options?: Partial<CacheNamespaceConfig>
+) {
 	return globalCacheManager.getNamespace<T>({
 		name,
 		persistent: true,
-		...options,
+		...options
 	});
 }
 
 /** 创建带TTL的缓存 */
-export function createTTLCache<T>(name: string, ttlMs: number, options?: Partial<CacheNamespaceConfig>) {
+export function createTTLCache<T>(
+	name: string,
+	ttlMs: number,
+	options?: Partial<CacheNamespaceConfig>
+) {
 	return globalCacheManager.getNamespace<T>({
 		name,
 		ttl: ttlMs,
-		...options,
+		...options
 	});
 }
 
@@ -530,7 +537,7 @@ export const thumbnailCache = globalCacheManager.getNamespace<string>({
 	maxSize: 100 * 1024 * 1024, // 100MB
 	maxItems: 2000,
 	ttl: 24 * 60 * 60 * 1000, // 24小时
-	persistent: true,
+	persistent: true
 });
 
 /** 文件夹元数据缓存 - 持久化，TTL 1小时 */
@@ -539,7 +546,7 @@ export const folderMetaCache = globalCacheManager.getNamespace<unknown>({
 	maxSize: 10 * 1024 * 1024, // 10MB
 	maxItems: 1000,
 	ttl: 60 * 60 * 1000, // 1小时
-	persistent: true,
+	persistent: true
 });
 
 /** 评分缓存 - 持久化，TTL 5分钟 */
@@ -548,7 +555,7 @@ export const ratingCacheNs = globalCacheManager.getNamespace<unknown>({
 	maxSize: 5 * 1024 * 1024, // 5MB
 	maxItems: 5000,
 	ttl: 5 * 60 * 1000, // 5分钟
-	persistent: true,
+	persistent: true
 });
 
 /** 图片Blob缓存 - 仅内存，500MB */
@@ -556,7 +563,7 @@ export const imageBlobCache = globalCacheManager.getNamespace<Blob>({
 	name: 'image-blobs',
 	maxSize: 500 * 1024 * 1024, // 500MB
 	maxItems: 200,
-	persistent: false, // Blob不持久化
+	persistent: false // Blob不持久化
 });
 
 /** 目录树缓存 - 持久化，TTL 30分钟 */
@@ -565,5 +572,5 @@ export const directoryTreeCacheNs = globalCacheManager.getNamespace<unknown>({
 	maxSize: 20 * 1024 * 1024, // 20MB
 	maxItems: 500,
 	ttl: 30 * 60 * 1000, // 30分钟
-	persistent: true,
+	persistent: true
 });

@@ -38,11 +38,11 @@ export class TaskCancelledError extends Error {
 
 /** 优先级常量 */
 export const LoadPriority = {
-	CRITICAL: 100,   // 当前页
-	HIGH: 80,        // 双页模式的第二页
-	NORMAL: 50,      // 普通预加载
-	LOW: 20,         // 缩略图
-	BACKGROUND: 10   // 后台任务
+	CRITICAL: 100, // 当前页
+	HIGH: 80, // 双页模式的第二页
+	NORMAL: 50, // 普通预加载
+	LOW: 20, // 缩略图
+	BACKGROUND: 10 // 后台任务
 } as const;
 
 /**
@@ -64,11 +64,7 @@ export class LoadQueueManager {
 	 * 添加加载任务到队列
 	 * 【优化】使用二分查找插入，保持有序，O(log n) 查找 + O(n) 插入
 	 */
-	enqueue(
-		pageIndex: number,
-		priority: number,
-		executor: () => Promise<void>
-	): Promise<void> {
+	enqueue(pageIndex: number, priority: number, executor: () => Promise<void>): Promise<void> {
 		return new Promise((resolve, reject) => {
 			const controller = new AbortController();
 			const queueId = `page-${pageIndex}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -197,4 +193,3 @@ export function resetLoadQueue(): void {
 		instance = null;
 	}
 }
-

@@ -119,7 +119,11 @@ export function calculatePreloadPlan(
 	// 4. 普通优先级：继续加载前进方向
 	let forwardLoaded = plan.nextHigh.length;
 	if (nextDir === 1) {
-		for (let i = nextStart + (isDoublePage ? 2 : 1); i < totalPages && forwardLoaded < forwardCount; i++) {
+		for (
+			let i = nextStart + (isDoublePage ? 2 : 1);
+			i < totalPages && forwardLoaded < forwardCount;
+			i++
+		) {
 			if (!assigned.has(i)) {
 				plan.normal.push(i);
 				assigned.add(i);
@@ -139,7 +143,11 @@ export function calculatePreloadPlan(
 	// 5. 填充反方向
 	let backwardLoaded = plan.prevHigh.length;
 	if (prevDir === 1) {
-		for (let i = currentIndex + (isDoublePage ? 2 : 1); i < totalPages && backwardLoaded < backwardCount; i++) {
+		for (
+			let i = currentIndex + (isDoublePage ? 2 : 1);
+			i < totalPages && backwardLoaded < backwardCount;
+			i++
+		) {
 			if (!assigned.has(i)) {
 				plan.normal.push(i);
 				assigned.add(i);
@@ -168,11 +176,7 @@ export function getCurrentPreloadPlan(config: Partial<PreloadConfig> = {}): Prel
 		return { immediate: [], nextHigh: [], prevHigh: [], normal: [] };
 	}
 
-	return calculatePreloadPlan(
-		bookStore.currentPageIndex,
-		currentBook.pages.length,
-		config
-	);
+	return calculatePreloadPlan(bookStore.currentPageIndex, currentBook.pages.length, config);
 }
 
 /**

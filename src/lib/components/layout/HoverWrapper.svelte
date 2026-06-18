@@ -43,16 +43,24 @@
 	function isFloatingElement(element: Element | null): boolean {
 		if (!element) return false;
 		if (element.parentElement === document.body) return true;
-		
+
 		const style = window.getComputedStyle(element);
 		if (style.position === 'fixed' && parseInt(style.zIndex) >= 50) return true;
 
 		const floatingSelectors = [
-			'[role="tooltip"]', '[role="popover"]', '[role="menu"]',
-			'[data-radix-popper-content-wrapper]', '.tooltip', '.popover'
+			'[role="tooltip"]',
+			'[role="popover"]',
+			'[role="menu"]',
+			'[data-radix-popper-content-wrapper]',
+			'.tooltip',
+			'.popover'
 		];
-		return floatingSelectors.some(selector => {
-			try { return element.matches(selector) || element.closest(selector); } catch { return false; }
+		return floatingSelectors.some((selector) => {
+			try {
+				return element.matches(selector) || element.closest(selector);
+			} catch {
+				return false;
+			}
 		});
 	}
 
@@ -61,11 +69,11 @@
 		if (isVisible && !pinned && !isContextMenuOpen) {
 			const checkMousePosition = (e: MouseEvent) => {
 				if (!wrapperContainer) return;
-				
+
 				const { clientX, clientY } = e;
 				const dx = clientX - lastX;
 				lastX = clientX;
-				
+
 				const rect = wrapperContainer.getBoundingClientRect();
 				// 优先使用显式指定的 side，否则回退到基于位置的猜测（仅作兼容）
 				const isLeftSide = side ? side === 'left' : rect.left < window.innerWidth / 2;
@@ -73,8 +81,8 @@
 				// 1. 如果鼠标在容器内，或正在输入，或在 Tooltip 上，绝对保持开启
 				const elementAtMouse = document.elementFromPoint(clientX, clientY);
 				if (
-					(wrapperContainer && wrapperContainer.contains(elementAtMouse)) || 
-					isInputting() || 
+					(wrapperContainer && wrapperContainer.contains(elementAtMouse)) ||
+					isInputting() ||
 					isFloatingElement(elementAtMouse)
 				) {
 					resetHideTimer();
@@ -150,7 +158,9 @@
 		}
 	}
 
-	function handleMouseLeave() { /* 由物理判定取代 */ }
+	function handleMouseLeave() {
+		/* 由物理判定取代 */
+	}
 
 	function handleContextMenu(e: MouseEvent) {
 		if (!pinned) {

@@ -8,14 +8,17 @@
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { Button } from '$lib/components/ui/button';
 	import { X, Maximize, Minus } from '@lucide/svelte';
-	import { getOrCreateTabStore, type CardWindowTabStore } from '$lib/stores/cardWindowTabStore.svelte';
+	import {
+		getOrCreateTabStore,
+		type CardWindowTabStore
+	} from '$lib/stores/cardWindowTabStore.svelte';
 	import { cardWindowManager } from '$lib/core/windows/cardWindowManager';
 	import TabBar from '$lib/components/cardwindow/TabBar.svelte';
 	import CardWindowContent from '$lib/components/cardwindow/CardWindowContent.svelte';
 
 	// 标签页 store
 	let tabStore = $state<CardWindowTabStore | null>(null);
-	
+
 	// 响应式状态
 	let activeCardId = $state<string>('');
 	let windowTitle = $state('卡片窗口');
@@ -42,20 +45,20 @@
 		// 从 URL 解析窗口 ID 和初始卡片 ID
 		windowId = getWindowIdFromUrl();
 		const initialCardId = getInitialCardIdFromUrl();
-		
+
 		if (!windowId) {
 			console.error('[CardWindow] 无法从 URL 解析窗口 ID');
 			return;
 		}
-		
+
 		console.log('[CardWindow] 初始化窗口:', windowId, '初始卡片:', initialCardId);
-		
+
 		// 获取当前窗口
 		appWindow = getCurrentWebviewWindow();
-		
+
 		// 初始化标签页 store
 		tabStore = getOrCreateTabStore(windowId, initialCardId || undefined);
-		
+
 		// 更新响应式状态
 		updateState();
 
@@ -125,7 +128,7 @@
 
 	function handleTabClose(tabId: string) {
 		if (!tabStore) return;
-		
+
 		// 如果只有一个标签页，关闭整个窗口
 		if (tabCount === 1) {
 			closeWindow();
@@ -191,42 +194,42 @@
 	<title>{windowTitle} - NeoView</title>
 </svelte:head>
 
-<div class="h-screen w-screen flex flex-col bg-background select-none">
+<div class="bg-background flex h-screen w-screen flex-col select-none">
 	<!-- 标题栏 -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div 
-		class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 border-b cursor-default"
+	<div
+		class="bg-secondary/95 flex h-8 cursor-default items-center justify-between border-b px-2 backdrop-blur-sm"
 		role="banner"
 		aria-label="窗口标题栏"
 		onmousedown={handleTitleBarMouseDown}
 		ondblclick={maximizeWindow}
 	>
-		<div class="flex items-center gap-2 flex-1 min-w-0">
-			<span class="text-sm font-medium truncate">{windowTitle}</span>
+		<div class="flex min-w-0 flex-1 items-center gap-2">
+			<span class="truncate text-sm font-medium">{windowTitle}</span>
 		</div>
 		<div class="flex items-center gap-0.5" aria-label="窗口操作">
-			<Button 
-				variant="ghost" 
-				size="icon" 
-				class="h-6 w-6 hover:bg-muted" 
+			<Button
+				variant="ghost"
+				size="icon"
+				class="hover:bg-muted h-6 w-6"
 				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={minimizeWindow}
 			>
 				<Minus class="h-3 w-3" />
 			</Button>
-			<Button 
-				variant="ghost" 
-				size="icon" 
-				class="h-6 w-6 hover:bg-muted" 
+			<Button
+				variant="ghost"
+				size="icon"
+				class="hover:bg-muted h-6 w-6"
 				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={maximizeWindow}
 			>
 				<Maximize class="h-3 w-3" />
 			</Button>
-			<Button 
-				variant="ghost" 
-				size="icon" 
-				class="h-6 w-6 hover:bg-destructive hover:text-destructive-foreground" 
+			<Button
+				variant="ghost"
+				size="icon"
+				class="hover:bg-destructive hover:text-destructive-foreground h-6 w-6"
 				onmousedown={(e: MouseEvent) => e.stopPropagation()}
 				onclick={closeWindow}
 			>
@@ -256,7 +259,7 @@
 				<CardWindowContent cardId={activeCardId} />
 			</div>
 		{:else}
-			<div class="h-full flex items-center justify-center text-muted-foreground">
+			<div class="text-muted-foreground flex h-full items-center justify-center">
 				<p>没有打开的标签页</p>
 			</div>
 		{/if}

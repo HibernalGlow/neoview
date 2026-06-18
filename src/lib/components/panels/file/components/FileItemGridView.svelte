@@ -25,7 +25,13 @@
 	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
 	// [4图预览功能已禁用] import FolderPreviewGrid from './FolderPreviewGrid.svelte';
-	import { formatDuration, formatRelativeTime, formatBytes, formatSize, getFolderSizeDisplay } from '$lib/utils/formatters';
+	import {
+		formatDuration,
+		formatRelativeTime,
+		formatBytes,
+		formatSize,
+		getFolderSizeDisplay
+	} from '$lib/utils/formatters';
 
 	interface Props {
 		item: FsItem;
@@ -47,12 +53,23 @@
 		isBookmarked: boolean;
 		isArchive: boolean;
 		isReadCompleted: boolean;
-		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
+		emmMetadata: {
+			translatedTitle?: string;
+			tags?: Record<string, string[]>;
+			rating?: number;
+		} | null;
 		// 穿透模式：纯媒体文件夹（只包含图片/视频/文本，点击直接作为 book 打开）
 		isPureMediaFolder?: boolean;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
-		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean; isManual?: boolean }[];
+		displayTags: () => {
+			tag: string;
+			display: string;
+			isCollect: boolean;
+			color?: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}[];
 		getEffectiveRating: () => number | null;
 		// 事件
 		onClick?: () => void;
@@ -113,7 +130,6 @@
 		onDoubleClick?.();
 	}}
 	oncontextmenu={onContextMenu}
-
 	role="button"
 	tabindex="0"
 	onkeydown={(e) => {
@@ -124,8 +140,8 @@
 	}}
 >
 	<!-- 缩略图区域 - 自动扩展填充可用空间 -->
-	<div class="bg-secondary relative w-full flex-1 min-h-20 overflow-hidden">
-		{#if false /* [4图预览功能已禁用] showFolderPreviewGrid */}
+	<div class="bg-secondary relative min-h-20 w-full flex-1 overflow-hidden">
+		{#if false}
 			<!-- 文件夹 4 图预览模式 -->
 			<!-- <FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} /> -->
 		{:else if thumbnail}
@@ -138,7 +154,7 @@
 			/>
 		{:else}
 			<!-- 骨架屏占位：缩略图加载中显示动画 -->
-			<div class="absolute inset-0 bg-accent animate-pulse"></div>
+			<div class="bg-accent absolute inset-0 animate-pulse"></div>
 			<!-- 图标叠加在骨架屏上 -->
 			{#if item.isDir}
 				<div class="relative flex h-full w-full items-center justify-center">
@@ -154,7 +170,7 @@
 				</div>
 			{:else}
 				<div class="relative flex h-full w-full items-center justify-center">
-					<File class="h-16 w-16 text-muted-foreground/50" />
+					<File class="text-muted-foreground/50 h-16 w-16" />
 				</div>
 			{/if}
 		{/if}
@@ -162,11 +178,13 @@
 		<!-- 阅读标记 -->
 		{#if showReadMark}
 			{#if isReadCompleted}
-				<div class="bg-primary absolute right-2 top-2 rounded-full p-1">
+				<div class="bg-primary absolute top-2 right-2 rounded-full p-1">
 					<Check class="h-4 w-4 text-white" />
 				</div>
 			{:else}
-				<div class="border-primary bg-background/80 absolute right-2 top-2 rounded-full border border-dashed p-1">
+				<div
+					class="border-primary bg-background/80 absolute top-2 right-2 rounded-full border border-dashed p-1"
+				>
 					<Check class="text-primary h-4 w-4" />
 				</div>
 			{/if}
@@ -174,15 +192,18 @@
 
 		<!-- 收藏标记 -->
 		{#if isBookmarked}
-			<div class="bg-primary absolute left-2 top-2 rounded-full p-1">
+			<div class="bg-primary absolute top-2 left-2 rounded-full p-1">
 				<Star class="h-4 w-4 fill-white text-white" />
 			</div>
 		{/if}
 
 		<!-- 进度条 -->
 		{#if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
-			<div class="absolute bottom-0 left-0 right-0 h-1 bg-black/20">
-				<div class="bg-primary h-full transition-all" style="width: {(currentPage / totalPages) * 100}%"></div>
+			<div class="absolute right-0 bottom-0 left-0 h-1 bg-black/20">
+				<div
+					class="bg-primary h-full transition-all"
+					style="width: {(currentPage / totalPages) * 100}%"
+				></div>
 			</div>
 		{/if}
 	</div>
@@ -190,7 +211,7 @@
 	<!-- 信息区域 -->
 	<div class="bg-background p-2">
 		<!-- 原文件名 -->
-		<div class="wrap-break-word text-sm font-medium" title={item.name}>
+		<div class="text-sm font-medium wrap-break-word" title={item.name}>
 			<span class="truncate">{item.name}</span>
 		</div>
 
@@ -200,7 +221,9 @@
 				{#if item.imageCount !== undefined && item.imageCount > 0}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]">
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+							>
 								<Images class="h-2.5 w-2.5" />
 								<span class="font-medium">{item.imageCount}</span>
 							</span>
@@ -211,7 +234,9 @@
 				{#if item.folderCount !== undefined && item.folderCount > 0}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]">
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+							>
 								<FolderOpen class="h-2.5 w-2.5" />
 								<span class="font-medium">{item.folderCount}</span>
 							</span>
@@ -222,7 +247,9 @@
 				{#if item.archiveCount !== undefined && item.archiveCount > 0}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]">
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+							>
 								<Package class="h-2.5 w-2.5" />
 								<span class="font-medium">{item.archiveCount}</span>
 							</span>
@@ -233,7 +260,9 @@
 				{#if item.videoCount !== undefined && item.videoCount > 0}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]">
+							<span
+								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+							>
 								<Video class="h-2.5 w-2.5" />
 								<span class="font-medium">{item.videoCount}</span>
 							</span>
@@ -245,7 +274,9 @@
 				{#if isPureMediaFolder}
 					<Tooltip.Root>
 						<Tooltip.Trigger>
-							<span class="bg-primary/20 text-primary inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] border border-primary/30">
+							<span
+								class="bg-primary/20 text-primary border-primary/30 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px]"
+							>
 								<Image class="h-2.5 w-2.5" />
 								<span class="font-medium">媒体</span>
 							</span>
@@ -259,7 +290,7 @@
 						manualRating={folderManualRating}
 						averageRating={folderAverageRating}
 						size="sm"
-						onSetRating={onSetRating}
+						{onSetRating}
 					/>
 				{/if}
 				{#if onOpenAsBook}
@@ -286,7 +317,7 @@
 			<div class="mt-1 flex flex-wrap items-center gap-1">
 				{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
 					<span
-						class="border-primary/20 bg-primary/10 text-primary wrap-break-word rounded border px-1 py-0.5 text-[10px]"
+						class="border-primary/20 bg-primary/10 text-primary rounded border px-1 py-0.5 text-[10px] wrap-break-word"
 						title={emmMetadata.translatedTitle}
 					>
 						{emmMetadata.translatedTitle}
@@ -327,7 +358,9 @@
 			{/if}
 			{#if showSizeAndModified}
 				<MetadataBadge
-					text={item.isDir ? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size) : formatSize(item.size || 0, false)}
+					text={item.isDir
+						? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+						: formatSize(item.size || 0, false)}
 					icon={HardDrive}
 					tooltip="文件大小"
 					size="xs"
@@ -352,7 +385,9 @@
 				/>
 			{:else if !(currentPage !== undefined && totalPages !== undefined && totalPages > 0)}
 				<MetadataBadge
-					text={item.isDir ? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size) : formatSize(item.size || 0, false)}
+					text={item.isDir
+						? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+						: formatSize(item.size || 0, false)}
 					icon={HardDrive}
 					tooltip="文件大小"
 					size="xs"

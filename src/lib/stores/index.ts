@@ -65,7 +65,18 @@ export type { PanelId as PanelTabType } from './sidebarConfig.svelte';
 export { pageStore, type PageState } from './pageStore.svelte';
 
 // 加载模式
-export { loadModeStore, type LoadModeConfig, type DataSource, type RenderMode } from './loadModeStore.svelte';
+export {
+	loadModeStore,
+	type LoadModeConfig,
+	type DataSource,
+	type RenderMode
+} from './loadModeStore.svelte';
 
 // 颜色滤镜
-export { filterStore, type FilterSettings, type ColorPoint, colorPresets, defaultFilterSettings } from './filterStore.svelte';
+export {
+	filterStore,
+	type FilterSettings,
+	type ColorPoint,
+	colorPresets,
+	defaultFilterSettings
+} from './filterStore.svelte';

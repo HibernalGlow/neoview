@@ -40,7 +40,7 @@
 	}
 
 	function handleLocalDuplicateTab(tabId: string) {
-		const tab = ctx.localTabs.find(t => t.id === tabId);
+		const tab = ctx.localTabs.find((t) => t.id === tabId);
 		if (tab) {
 			ctx.createLocalTab(tab.currentPath);
 		}
@@ -49,7 +49,7 @@
 
 <!-- 面包屑导航 -->
 <BreadcrumbBar
-	onNavigate={onNavigate}
+	{onNavigate}
 	onCreateTab={ctx.isVirtualInstance ? () => ctx.createLocalTab() : undefined}
 	homePath={ctx.homePath}
 	externalPath={ctx.isVirtualInstance ? ctx.initialPath : undefined}
@@ -103,7 +103,10 @@
 							</ContextMenu.Item>
 							{#if ctx.localTabs.length > 1}
 								<ContextMenu.Separator />
-								<ContextMenu.Item onclick={() => handleLocalCloseTab(tab.id)} class="text-destructive">
+								<ContextMenu.Item
+									onclick={() => handleLocalCloseTab(tab.id)}
+									class="text-destructive"
+								>
 									<X class="mr-2 h-4 w-4" />
 									关闭页签
 								</ContextMenu.Item>
@@ -116,7 +119,12 @@
 			<!-- 新建页签按钮 -->
 			<Tooltip.Root>
 				<Tooltip.Trigger>
-					<Button variant="ghost" size="icon" class="h-7 w-7 shrink-0" onclick={() => ctx.createLocalTab()}>
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-7 w-7 shrink-0"
+						onclick={() => ctx.createLocalTab()}
+					>
 						<Plus class="h-4 w-4" />
 					</Button>
 				</Tooltip.Trigger>

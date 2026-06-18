@@ -33,7 +33,10 @@
 	const pathData = $derived.by(() => {
 		if (!points.length) return '';
 		return points
-			.map((point: StreakPoint, index: number) => `${index === 0 ? 'M' : 'L'} ${getX(index)} ${getY(point.value)}`)
+			.map(
+				(point: StreakPoint, index: number) =>
+					`${index === 0 ? 'M' : 'L'} ${getX(index)} ${getY(point.value)}`
+			)
 			.join(' ');
 	});
 
@@ -46,15 +49,18 @@
 	const lastPoint = $derived(points.length ? points[points.length - 1] : null);
 	const peakPoint = $derived.by(() => {
 		if (!points.length) return null;
-		return points.reduce((best: StreakPoint | null, point: StreakPoint) => {
-			if (!best || point.value >= best.value) return point;
-			return best;
-		}, null as StreakPoint | null);
+		return points.reduce(
+			(best: StreakPoint | null, point: StreakPoint) => {
+				if (!best || point.value >= best.value) return point;
+				return best;
+			},
+			null as StreakPoint | null
+		);
 	});
 </script>
 
 {#if !points.length}
-	<p class="py-4 text-center text-xs text-muted-foreground">暂无连续阅读记录</p>
+	<p class="text-muted-foreground py-4 text-center text-xs">暂无连续阅读记录</p>
 {:else}
 	<ChartContainer
 		config={{
@@ -65,8 +71,8 @@
 		<svg viewBox={`0 0 ${viewWidth} ${viewHeight}`} class="h-full w-full">
 			<defs>
 				<linearGradient id="streak-fill" x1="0%" x2="0%" y1="0%" y2="100%">
-					<stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0.25" />
-					<stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0" />
+					<stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0.25"></stop>
+					<stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0"></stop>
 				</linearGradient>
 			</defs>
 
@@ -77,10 +83,10 @@
 				y2={viewHeight - paddingY}
 				stroke="hsl(220 14% 25%)"
 				stroke-width="1"
-			/>
+			></line>
 
 			{#if areaPath}
-				<path d={areaPath} fill="url(#streak-fill)" class="transition-all duration-300" />
+				<path d={areaPath} fill="url(#streak-fill)" class="transition-all duration-300"></path>
 			{/if}
 
 			{#if pathData}
@@ -91,7 +97,7 @@
 					stroke-width="2"
 					stroke-linecap="round"
 					stroke-linejoin="round"
-				/>
+				></path>
 			{/if}
 
 			{#each points as point, index}
@@ -135,8 +141,14 @@
 			{/if}
 
 			{#if maxValue > 0}
-				<text x="0" y={getY(maxValue) + 4} class="fill-muted-foreground text-[10px]">{maxValue} 天</text>
-				<text x="0" y={getY(Math.max(1, Math.ceil(maxValue / 2))) + 4} class="fill-muted-foreground text-[10px]">
+				<text x="0" y={getY(maxValue) + 4} class="fill-muted-foreground text-[10px]"
+					>{maxValue} 天</text
+				>
+				<text
+					x="0"
+					y={getY(Math.max(1, Math.ceil(maxValue / 2))) + 4}
+					class="fill-muted-foreground text-[10px]"
+				>
 					{Math.max(1, Math.ceil(maxValue / 2))} 天
 				</text>
 			{/if}

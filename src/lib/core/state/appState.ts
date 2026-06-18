@@ -34,7 +34,14 @@ export interface TaskCursorState {
 	updatedAt: number;
 }
 
-export type ZoomMode = 'fit' | 'fill' | 'fitWidth' | 'fitHeight' | 'original' | 'fitLeftAlign' | 'fitRightAlign';
+export type ZoomMode =
+	| 'fit'
+	| 'fill'
+	| 'fitWidth'
+	| 'fitHeight'
+	| 'original'
+	| 'fitLeftAlign'
+	| 'fitRightAlign';
 
 export interface ViewerSlice {
 	viewMode: 'single' | 'double' | 'panorama';
@@ -49,9 +56,9 @@ export interface ViewerSlice {
 	pageWindow: PageWindowState;
 	jumpHistory: JumpHistoryEntry[];
 	taskCursor: TaskCursorState;
-    magnifier: {
-        enabled: boolean;
-    };
+	magnifier: {
+		enabled: boolean;
+	};
 }
 
 export interface AppStateSnapshot {
@@ -114,11 +121,25 @@ export function createDefaultAppState(): AppStateSnapshot {
 				autoPlayAnimatedImages: true,
 				longImageScrollMode: 'continuous',
 				hoverScrollEnabled: true,
-                hoverScrollSpeed: 1.0,
+				hoverScrollSpeed: 1.0,
 				videoMinPlaybackRate: 0.25,
 				videoMaxPlaybackRate: 16,
 				videoPlaybackRateStep: 0.25,
-				videoFormats: ['mp4', 'm4v', 'mov', 'nov', 'webm', 'ogg', 'ogv', '3gp', '3g2', 'mkv', 'avi', 'flv', 'wmv']
+				videoFormats: [
+					'mp4',
+					'm4v',
+					'mov',
+					'nov',
+					'webm',
+					'ogg',
+					'ogv',
+					'3gp',
+					'3g2',
+					'mkv',
+					'avi',
+					'flv',
+					'wmv'
+				]
 			},
 			view: {
 				defaultZoomMode: 'fit',
@@ -144,7 +165,7 @@ export function createDefaultAppState(): AppStateSnapshot {
 					treatHorizontalAsDoublePage: false,
 					singleFirstPageMode: 'restoreOrDefault',
 					singleLastPageMode: 'restoreOrDefault',
-                    widePageStretch: 'none'
+					widePageStretch: 'none'
 				},
 				autoRotate: {
 					mode: 'none'
@@ -162,22 +183,23 @@ export function createDefaultAppState(): AppStateSnapshot {
 				switchToast: {
 					enableBook: false,
 					enablePage: false,
-                    enableBoundaryToast: true,
+					enableBoundaryToast: true,
 					showBookPath: true,
 					showBookPageProgress: true,
 					showBookType: false,
 					showPageIndex: true,
 					showPageSize: false,
 					showPageDimensions: true,
-					bookTitleTemplate: '已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
+					bookTitleTemplate:
+						'已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
 					bookDescriptionTemplate: '路径：{{book.path}}',
 					pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
 					pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
 				},
-                magnifier: {
-                    zoom: 2.0,
-                    size: 200
-                }
+				magnifier: {
+					zoom: 2.0,
+					size: 200
+				}
 			},
 			book: {
 				autoPageTurnInterval: 3,
@@ -191,28 +213,28 @@ export function createDefaultAppState(): AppStateSnapshot {
 				theme: 'system',
 				fontSize: 'medium',
 				uiScale: 1.0,
-                customFont: {
-                    enabled: false,
-                    fontFamilies: [],
-                    uiFontFamilies: [],
-                    monoFontFamilies: []
-                }
+				customFont: {
+					enabled: false,
+					fontFamilies: [],
+					uiFontFamilies: [],
+					monoFontFamilies: []
+				}
 			},
 			panels: {
 				leftSidebarVisible: true,
 				rightSidebarVisible: false,
 				bottomPanelVisible: false,
 				autoHideToolbar: true,
-                sidebarOpacity: 90,
-                topToolbarOpacity: 90,
-                bottomBarOpacity: 90,
-                sidebarBlur: 10,
-                topToolbarBlur: 10,
-                bottomBarBlur: 10,
-                progressBarGlow: true,
-                settingsOpacity: 95,
-                settingsBlur: 10,
-                pageListFollowProgress: true,
+				sidebarOpacity: 90,
+				topToolbarOpacity: 90,
+				bottomBarOpacity: 90,
+				sidebarBlur: 10,
+				topToolbarBlur: 10,
+				bottomBarBlur: 10,
+				progressBarGlow: true,
+				settingsOpacity: 95,
+				settingsBlur: 10,
+				pageListFollowProgress: true,
 				hoverAreas: {
 					topTriggerHeight: 32,
 					bottomTriggerHeight: 32,
@@ -282,9 +304,9 @@ export function createDefaultAppState(): AppStateSnapshot {
 				concurrency: 2,
 				updatedAt: Date.now()
 			},
-            magnifier: {
-                enabled: false
-            }
+			magnifier: {
+				enabled: false
+			}
 		},
 		lastUpdated: Date.now()
 	};
@@ -355,5 +377,3 @@ export class AppState {
 }
 
 export const appState = new AppState();
-
-

@@ -19,13 +19,26 @@ import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
  */
 const AUXILIARY_EXTENSIONS = [
 	// 字幕文件
-	'srt', 'ass', 'ssa', 'vtt', 'sub', 'idx',
+	'srt',
+	'ass',
+	'ssa',
+	'vtt',
+	'sub',
+	'idx',
 	// 信息文件
-	'nfo', 'txt', 'log', 'url',
+	'nfo',
+	'txt',
+	'log',
+	'url',
 	// 元数据
-	'xml', 'json',
+	'xml',
+	'json',
 	// 封面图（通常是附属的）
-	'jpg', 'jpeg', 'png', 'gif', 'webp'
+	'jpg',
+	'jpeg',
+	'png',
+	'gif',
+	'webp'
 ];
 
 /**
@@ -75,7 +88,15 @@ export async function handleItemSelection(
 	setChainAnchor: (tabId: string, index: number) => void
 ): Promise<{ handled: boolean; navigated?: boolean }> {
 	const { item, index, multiSelect, shiftKey } = payload;
-	const { tabId, multiSelectMode, penetrateMode, openInNewTabMode, skipGlobalStore, displayItems, selectedItems } = context;
+	const {
+		tabId,
+		multiSelectMode,
+		penetrateMode,
+		openInNewTabMode,
+		skipGlobalStore,
+		displayItems,
+		selectedItems
+	} = context;
 
 	// 构建链选上下文
 	const chainCtx: SelectionContext = {
@@ -84,10 +105,10 @@ export async function handleItemSelection(
 		displayItems,
 		selectedItems
 	};
-	
+
 	// 尝试链选处理
 	const chainResult = chainSelect(chainCtx, index, item.path);
-	
+
 	if (chainResult.handled) {
 		applyChainSelectResult(chainResult, callbacks, setChainAnchor, tabId, index);
 		return { handled: true };
@@ -98,7 +119,7 @@ export async function handleItemSelection(
 		callbacks.selectRange(index, displayItems);
 		return { handled: true };
 	}
-	
+
 	// 多选模式：切换选中状态
 	if (multiSelect || multiSelectMode) {
 		callbacks.selectItem(item.path, true, index);
@@ -107,11 +128,15 @@ export async function handleItemSelection(
 
 	// 单选模式
 	if (item.isDir) {
-		return await handleDirectoryClick(item, {
-			skipGlobalStore,
-			penetrateMode,
-			openInNewTabMode
-		}, callbacks);
+		return await handleDirectoryClick(
+			item,
+			{
+				skipGlobalStore,
+				penetrateMode,
+				openInNewTabMode
+			},
+			callbacks
+		);
 	} else {
 		// 文件：选中并打开
 		callbacks.selectItem(item.path);
@@ -153,13 +178,13 @@ async function handleDirectoryClick(
 	callbacks: ItemOpenCallbacks & { deselectAll: () => void }
 ): Promise<{ handled: boolean; navigated?: boolean }> {
 	const { skipGlobalStore, penetrateMode, openInNewTabMode } = options;
-	
+
 	// 虚拟实例：通过回调处理
 	if (skipGlobalStore) {
 		callbacks.onItemOpen?.(item);
 		return { handled: true };
 	}
-	
+
 	// 穿透模式
 	if (penetrateMode) {
 		const penetrated = await tryPenetrateFolder(item.path);
@@ -177,7 +202,7 @@ async function handleDirectoryClick(
 			return { handled: true };
 		}
 	}
-	
+
 	// 正常进入目录
 	callbacks.deselectAll();
 	callbacks.onNavigate(item.path);
@@ -210,30 +235,30 @@ async function tryPenetrateFolderRecursive(
 	if (currentDepth >= maxDepth) {
 		return null;
 	}
-	
+
 	try {
 		const children = await FileSystemAPI.browseDirectory(folderPath);
-		
+
 		// 没有子项，无法穿透
 		if (children.length === 0) {
 			return null;
 		}
-		
+
 		// 只有一个子项
 		if (children.length === 1) {
 			const child = children[0];
-			
+
 			// 子项是文件 -> 穿透成功，返回这个文件
 			if (!child.isDir) {
 				return child;
 			}
-			
+
 			// 子项是文件夹 -> 递归穿透
 			const result = await tryPenetrateFolderRecursive(child.path, currentDepth + 1, maxDepth);
 			// 如果递归穿透成功，返回结果；否则返回这个子文件夹本身
 			return result ?? child;
 		}
-		
+
 		// 多个子项，无法自动穿透
 		return null;
 	} catch {

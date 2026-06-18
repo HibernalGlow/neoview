@@ -9,17 +9,32 @@ import { bookContextManager } from './bookContext.svelte';
 import { settingsManager, type ZoomMode } from '$lib/settings/settingsManager';
 import { windowManager } from '$lib/core/windows/windowManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
-import { createPersistedState, createState, type PersistedState } from './utils/createPersistedState.svelte';
+import {
+	createPersistedState,
+	createState,
+	type PersistedState
+} from './utils/createPersistedState.svelte';
 import { readerStore } from './readerStore.svelte';
 import { showInfoToast } from '$lib/utils/toast';
-import { getPanoramaStore, type PanoramaLoadOptions } from '$lib/stackview/stores/panoramaStore.svelte';
+import {
+	getPanoramaStore,
+	type PanoramaLoadOptions
+} from '$lib/stackview/stores/panoramaStore.svelte';
 
 // ============================================================================
 // 类型定义
 // ============================================================================
 
 export type RightPanelType = 'info' | 'properties' | 'upscale' | 'insights' | null;
-export type PanelType = 'folder' | 'history' | 'bookmark' | 'info' | 'thumbnails' | 'playlist' | 'thumbnail' | null;
+export type PanelType =
+	| 'folder'
+	| 'history'
+	| 'bookmark'
+	| 'info'
+	| 'thumbnails'
+	| 'playlist'
+	| 'thumbnail'
+	| null;
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type ViewMode = 'single' | 'double' | 'panorama';
 export type ReadingDirection = 'left-to-right' | 'right-to-left';
@@ -33,22 +48,43 @@ export type LayoutSwitchMode = 'seamless' | 'cold';
 // ============================================================================
 
 // 左侧边栏状态
-export const leftSidebarOpen = createPersistedState({ key: 'leftSidebarOpen', defaultValue: false });
-export const leftSidebarWidth = createPersistedState({ key: 'leftSidebarWidth', defaultValue: 250 });
+export const leftSidebarOpen = createPersistedState({
+	key: 'leftSidebarOpen',
+	defaultValue: false
+});
+export const leftSidebarWidth = createPersistedState({
+	key: 'leftSidebarWidth',
+	defaultValue: 250
+});
 
 // 右侧边栏状态
-export const rightSidebarOpen = createPersistedState({ key: 'rightSidebarOpen', defaultValue: false });
-export const rightSidebarWidth = createPersistedState({ key: 'rightSidebarWidth', defaultValue: 250 });
-export const activeRightPanel = createPersistedState<RightPanelType>({ key: 'activeRightPanel', defaultValue: null });
+export const rightSidebarOpen = createPersistedState({
+	key: 'rightSidebarOpen',
+	defaultValue: false
+});
+export const rightSidebarWidth = createPersistedState({
+	key: 'rightSidebarWidth',
+	defaultValue: 250
+});
+export const activeRightPanel = createPersistedState<RightPanelType>({
+	key: 'activeRightPanel',
+	defaultValue: null
+});
 
 // 全屏状态
 export const isFullscreen = createPersistedState({ key: 'isFullscreen', defaultValue: false });
 
 // 当前激活的面板
-export const activeUIPanel = createPersistedState<PanelType>({ key: 'activeUIPanel', defaultValue: 'folder' });
+export const activeUIPanel = createPersistedState<PanelType>({
+	key: 'activeUIPanel',
+	defaultValue: 'folder'
+});
 
 // 主题模式
-export const themeMode = createPersistedState<ThemeMode>({ key: 'themeMode', defaultValue: 'system' });
+export const themeMode = createPersistedState<ThemeMode>({
+	key: 'themeMode',
+	defaultValue: 'system'
+});
 
 // 缩放级别
 export const zoomLevel = createPersistedState({
@@ -74,8 +110,12 @@ export const viewMode = createPersistedState<ViewMode>({
 });
 
 // 锁定的视图模式
-const _lockedViewModeRaw = createPersistedState<ViewMode | null>({ key: 'lockedViewMode', defaultValue: null });
-const initialLockedViewMode = _lockedViewModeRaw.value === 'panorama' ? null : _lockedViewModeRaw.value;
+const _lockedViewModeRaw = createPersistedState<ViewMode | null>({
+	key: 'lockedViewMode',
+	defaultValue: null
+});
+const initialLockedViewMode =
+	_lockedViewModeRaw.value === 'panorama' ? null : _lockedViewModeRaw.value;
 export const lockedViewMode = createPersistedState<ViewMode | null>({
 	key: 'lockedViewMode',
 	defaultValue: initialLockedViewMode,
@@ -126,16 +166,40 @@ export const orientation = createPersistedState<ViewOrientation>({
 });
 
 // 边栏钉住状态
-export const topToolbarPinned = createPersistedState({ key: 'topToolbarPinned', defaultValue: false });
-export const bottomThumbnailBarPinned = createPersistedState({ key: 'bottomThumbnailBarPinned', defaultValue: false });
-export const leftSidebarPinned = createPersistedState({ key: 'leftSidebarPinned', defaultValue: false });
-export const rightSidebarPinned = createPersistedState({ key: 'rightSidebarPinned', defaultValue: false });
+export const topToolbarPinned = createPersistedState({
+	key: 'topToolbarPinned',
+	defaultValue: false
+});
+export const bottomThumbnailBarPinned = createPersistedState({
+	key: 'bottomThumbnailBarPinned',
+	defaultValue: false
+});
+export const leftSidebarPinned = createPersistedState({
+	key: 'leftSidebarPinned',
+	defaultValue: false
+});
+export const rightSidebarPinned = createPersistedState({
+	key: 'rightSidebarPinned',
+	defaultValue: false
+});
 
 // 边栏锁定状态
-export const topToolbarLockState = createPersistedState<SidebarLockState>({ key: 'topToolbarLockState', defaultValue: null });
-export const bottomBarLockState = createPersistedState<SidebarLockState>({ key: 'bottomBarLockState', defaultValue: null });
-export const leftSidebarLockState = createPersistedState<SidebarLockState>({ key: 'leftSidebarLockState', defaultValue: null });
-export const rightSidebarLockState = createPersistedState<SidebarLockState>({ key: 'rightSidebarLockState', defaultValue: null });
+export const topToolbarLockState = createPersistedState<SidebarLockState>({
+	key: 'topToolbarLockState',
+	defaultValue: null
+});
+export const bottomBarLockState = createPersistedState<SidebarLockState>({
+	key: 'bottomBarLockState',
+	defaultValue: null
+});
+export const leftSidebarLockState = createPersistedState<SidebarLockState>({
+	key: 'leftSidebarLockState',
+	defaultValue: null
+});
+export const rightSidebarLockState = createPersistedState<SidebarLockState>({
+	key: 'rightSidebarLockState',
+	defaultValue: null
+});
 
 // 上下边栏打开状态
 export const topToolbarOpen = createPersistedState({ key: 'topToolbarOpen', defaultValue: false });
@@ -143,15 +207,30 @@ export const bottomBarOpen = createPersistedState({ key: 'bottomBarOpen', defaul
 
 // 边栏高度
 export const topToolbarHeight = createPersistedState({ key: 'topToolbarHeight', defaultValue: 60 });
-export const bottomThumbnailBarHeight = createPersistedState({ key: 'bottomThumbnailBarHeight', defaultValue: 120 });
+export const bottomThumbnailBarHeight = createPersistedState({
+	key: 'bottomThumbnailBarHeight',
+	defaultValue: 120
+});
 
 // 布局模式
-export const layoutMode = createPersistedState<LayoutMode>({ key: 'layoutMode', defaultValue: 'classic' });
-export const layoutSwitchMode = createPersistedState<LayoutSwitchMode>({ key: 'layoutSwitchMode', defaultValue: 'cold' });
+export const layoutMode = createPersistedState<LayoutMode>({
+	key: 'layoutMode',
+	defaultValue: 'classic'
+});
+export const layoutSwitchMode = createPersistedState<LayoutSwitchMode>({
+	key: 'layoutSwitchMode',
+	defaultValue: 'cold'
+});
 
 // Viewer 页码信息显示
-export const viewerPageInfoVisible = createPersistedState({ key: 'viewerPageInfoVisible', defaultValue: true });
-export const viewerProgressVisible = createPersistedState({ key: 'viewerProgressVisible', defaultValue: true });
+export const viewerPageInfoVisible = createPersistedState({
+	key: 'viewerPageInfoVisible',
+	defaultValue: true
+});
+export const viewerProgressVisible = createPersistedState({
+	key: 'viewerProgressVisible',
+	defaultValue: true
+});
 
 // ============================================================================
 // 非持久化状态（使用 createState）
@@ -219,21 +298,24 @@ function shouldSplitPage(index: number): boolean {
 	return w > 0 && h > 0 && w > h;
 }
 
-function getPageDimensions(book: typeof bookStore.currentBook, pageIndex: number): { width: number; height: number } | null {
+function getPageDimensions(
+	book: typeof bookStore.currentBook,
+	pageIndex: number
+): { width: number; height: number } | null {
 	if (!book || !book.pages || pageIndex < 0 || pageIndex >= book.pages.length) {
 		return null;
 	}
-	
+
 	const page = book.pages[pageIndex];
 	if (!page) return null;
-	
+
 	const width = page.width ?? 0;
 	const height = page.height ?? 0;
-	
+
 	if (width > 0 && height > 0) {
 		return { width, height };
 	}
-	
+
 	return null;
 }
 
@@ -246,7 +328,7 @@ function getPageDimensions(book: typeof bookStore.currentBook, pageIndex: number
 function getPageStep(): number {
 	const snapshot = appState.getSnapshot();
 	const currentViewMode = snapshot.viewer.viewMode;
-	
+
 	let pageMode: 'single' | 'double' = 'single';
 	if (currentViewMode === 'panorama') {
 		const ctx = bookContextManager.current;
@@ -254,70 +336,71 @@ function getPageStep(): number {
 	} else {
 		pageMode = currentViewMode === 'double' ? 'double' : 'single';
 	}
-	
+
 	// 单页模式固定步进 1
 	if (pageMode !== 'double') {
 		return 1;
 	}
-	
+
 	const currentIndex = bookStore.currentPageIndex;
-	
+
 	// 首选：从后端 snapshot 获取步长（只读，无副作用）
 	const step = readerStore.state.currentFrame?.step;
 	if (step && step > 0) {
 		return step;
 	}
-	
+
 	// 降级：使用原有的实时计算逻辑
 	const settings = settingsManager.getSettings();
-	const treatHorizontalAsDoublePage = settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false;
+	const treatHorizontalAsDoublePage =
+		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false;
 	const singleFirstPageMode = settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault';
 	const singleLastPageMode = settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault';
-	
-	const singleFirstPage = singleFirstPageMode === 'default' ? true :
-		singleFirstPageMode === 'continue' ? false : true;
-	const singleLastPage = singleLastPageMode === 'default' ? false :
-		singleLastPageMode === 'continue' ? true : false;
-	
+
+	const singleFirstPage =
+		singleFirstPageMode === 'default' ? true : singleFirstPageMode === 'continue' ? false : true;
+	const singleLastPage =
+		singleLastPageMode === 'default' ? false : singleLastPageMode === 'continue' ? true : false;
+
 	if (!bookStore.hasBook) return 2;
 	const book = bookStore.currentBook;
 	if (!book || !book.pages) return 2;
-	
+
 	const currentPage = book.pages[currentIndex];
 	if (!currentPage) return 1;
-	
+
 	const currentDims = getPageDimensions(book, currentIndex);
 	const isCurrentLandscape = currentDims ? currentDims.width > currentDims.height : false;
-	
+
 	if (treatHorizontalAsDoublePage && isCurrentLandscape) {
 		return 1;
 	}
-	
+
 	const nextIndex = currentIndex + 1;
 	if (nextIndex >= book.pages.length) {
 		return 1;
 	}
-	
+
 	const nextPage = book.pages[nextIndex];
 	if (!nextPage) {
 		return 1;
 	}
-	
+
 	const nextDims = getPageDimensions(book, nextIndex);
 	const isNextLandscape = nextDims ? nextDims.width > nextDims.height : false;
-	
+
 	if (treatHorizontalAsDoublePage && isNextLandscape) {
 		return 1;
 	}
-	
+
 	const totalPages = book.pages.length;
 	const isFirst = currentIndex === 0 || nextIndex === 0;
 	const isLast = currentIndex === totalPages - 1 || nextIndex === totalPages - 1;
-	
+
 	if ((singleFirstPage && isFirst) || (singleLastPage && isLast)) {
 		return 1;
 	}
-	
+
 	return 2;
 }
 
@@ -364,15 +447,15 @@ export async function initFullscreenState(): Promise<void> {
 export async function toggleFullscreen(): Promise<void> {
 	const previousState = isFullscreen.value;
 	const newState = !previousState;
-	
+
 	isFullscreen.set(newState);
-	
+
 	try {
 		await windowManager.setFullscreen(newState);
 	} catch (error) {
 		console.error('切换全屏状态失败:', error);
 		isFullscreen.set(previousState);
-		
+
 		try {
 			const actualState = await windowManager.isFullscreen();
 			isFullscreen.set(actualState);
@@ -527,7 +610,8 @@ export function toggleReadingDirection() {
 		return;
 	}
 
-	const newDirection = settings.book.readingDirection === 'left-to-right' ? 'right-to-left' : 'left-to-right';
+	const newDirection =
+		settings.book.readingDirection === 'left-to-right' ? 'right-to-left' : 'left-to-right';
 	settingsManager.updateSettings({
 		book: {
 			...settings.book,
@@ -672,18 +756,20 @@ function buildPanoramaLoadOptions(): PanoramaLoadOptions {
 		readOrder: settings.book.readingDirection === 'right-to-left' ? 'rtl' : 'ltr',
 		splitHorizontal: pageLayout?.splitHorizontalPages ?? false,
 		widePage: pageLayout?.treatHorizontalAsDoublePage ?? false,
-		singleFirst: pageLayout?.singleFirstPageMode === 'default'
-			? true
-			: pageLayout?.singleFirstPageMode === 'continue'
-				? false
-				: true,
-		singleLast: pageLayout?.singleLastPageMode === 'default'
-			? false
-			: pageLayout?.singleLastPageMode === 'continue'
+		singleFirst:
+			pageLayout?.singleFirstPageMode === 'default'
 				? true
-				: false,
+				: pageLayout?.singleFirstPageMode === 'continue'
+					? false
+					: true,
+		singleLast:
+			pageLayout?.singleLastPageMode === 'default'
+				? false
+				: pageLayout?.singleLastPageMode === 'continue'
+					? true
+					: false,
 		divideRate: 1.0,
-		widePageStretch: pageLayout?.widePageStretch ?? 'uniformHeight',
+		widePageStretch: pageLayout?.widePageStretch ?? 'uniformHeight'
 	};
 }
 
@@ -702,9 +788,8 @@ async function navigatePanoramaGlobal(dir: 'prev' | 'next') {
 
 	const units = panoramaStore.state.units;
 	if (units.length === 0) {
-		const fallbackIndex = dir === 'next'
-			? Math.min(currentIndex + 1, maxIndex)
-			: Math.max(currentIndex - 1, 0);
+		const fallbackIndex =
+			dir === 'next' ? Math.min(currentIndex + 1, maxIndex) : Math.max(currentIndex - 1, 0);
 		if (fallbackIndex === currentIndex) {
 			showInfoToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
 			return;
@@ -741,13 +826,14 @@ function findPanoramaUnitIndex(
 	pageIndex: number,
 	part: number
 ): number {
-	const exactPosition = units.findIndex((unit) =>
-		unit.position.index === pageIndex && unit.position.part === part
+	const exactPosition = units.findIndex(
+		(unit) => unit.position.index === pageIndex && unit.position.part === part
 	);
 	if (exactPosition >= 0) return exactPosition;
 
-	const exactPage = units.findIndex((unit) =>
-		unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
+	const exactPage = units.findIndex(
+		(unit) =>
+			unit.startIndex === pageIndex || unit.images.some((image) => image.pageIndex === pageIndex)
 	);
 	if (exactPage >= 0) return exactPage;
 

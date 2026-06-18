@@ -1,47 +1,47 @@
 <script lang="ts">
-/**
- * 条件超分 - 执行参数编辑器
- */
-import { createEventDispatcher } from 'svelte';
-import { Label } from '$lib/components/ui/label';
-import { Switch } from '$lib/components/ui/switch';
-import type { UpscaleCondition } from '$lib/components/panels/UpscalePanel';
+	/**
+	 * 条件超分 - 执行参数编辑器
+	 */
+	import { createEventDispatcher } from 'svelte';
+	import { Label } from '$lib/components/ui/label';
+	import { Switch } from '$lib/components/ui/switch';
+	import type { UpscaleCondition } from '$lib/components/panels/UpscalePanel';
 
-interface Props {
-	condition: UpscaleCondition;
-	availableModels: string[];
-	modelLabels: Record<string, string>;
-	gpuOptions: { value: number; label: string }[];
-	tileSizeOptions: { value: number; label: string }[];
-	noiseLevelOptions: { value: number; label: string }[];
-}
+	interface Props {
+		condition: UpscaleCondition;
+		availableModels: string[];
+		modelLabels: Record<string, string>;
+		gpuOptions: { value: number; label: string }[];
+		tileSizeOptions: { value: number; label: string }[];
+		noiseLevelOptions: { value: number; label: string }[];
+	}
 
-let {
-	condition,
-	availableModels = [],
-	modelLabels = {},
-	gpuOptions = [],
-	tileSizeOptions = [],
-	noiseLevelOptions = []
-}: Props = $props();
+	let {
+		condition,
+		availableModels = [],
+		modelLabels = {},
+		gpuOptions = [],
+		tileSizeOptions = [],
+		noiseLevelOptions = []
+	}: Props = $props();
 
-const dispatch = createEventDispatcher<{
-	update: { action: Partial<UpscaleCondition['action']> };
-}>();
+	const dispatch = createEventDispatcher<{
+		update: { action: Partial<UpscaleCondition['action']> };
+	}>();
 
-function updateAction(updates: Partial<UpscaleCondition['action']>) {
-	dispatch('update', { action: updates });
-}
+	function updateAction(updates: Partial<UpscaleCondition['action']>) {
+		dispatch('update', { action: updates });
+	}
 </script>
 
 <div class="space-y-3">
-	<h4 class="text-xs font-semibold text-muted-foreground">执行参数</h4>
-	
-	<div class="grid grid-cols-2 md:grid-cols-3 gap-2" class:opacity-50={condition.action.skip}>
+	<h4 class="text-muted-foreground text-xs font-semibold">执行参数</h4>
+
+	<div class="grid grid-cols-2 gap-2 md:grid-cols-3" class:opacity-50={condition.action.skip}>
 		<div class="space-y-1">
 			<Label class="text-[10px]">模型</Label>
 			<select
-				class="w-full h-7 px-2 text-xs bg-muted rounded border-0"
+				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.model}
 				disabled={condition.action.skip}
 				onchange={(e) => updateAction({ model: e.currentTarget.value })}
@@ -54,7 +54,7 @@ function updateAction(updates: Partial<UpscaleCondition['action']>) {
 		<div class="space-y-1">
 			<Label class="text-[10px]">倍数</Label>
 			<select
-				class="w-full h-7 px-2 text-xs bg-muted rounded border-0"
+				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.scale}
 				disabled={condition.action.skip}
 				onchange={(e) => updateAction({ scale: parseInt(e.currentTarget.value) })}
@@ -68,7 +68,7 @@ function updateAction(updates: Partial<UpscaleCondition['action']>) {
 		<div class="space-y-1">
 			<Label class="text-[10px]">Tile</Label>
 			<select
-				class="w-full h-7 px-2 text-xs bg-muted rounded border-0"
+				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.tileSize}
 				disabled={condition.action.skip}
 				onchange={(e) => updateAction({ tileSize: parseInt(e.currentTarget.value) })}
@@ -81,7 +81,7 @@ function updateAction(updates: Partial<UpscaleCondition['action']>) {
 		<div class="space-y-1">
 			<Label class="text-[10px]">降噪</Label>
 			<select
-				class="w-full h-7 px-2 text-xs bg-muted rounded border-0"
+				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.noiseLevel}
 				disabled={condition.action.skip}
 				onchange={(e) => updateAction({ noiseLevel: parseInt(e.currentTarget.value) })}
@@ -94,7 +94,7 @@ function updateAction(updates: Partial<UpscaleCondition['action']>) {
 		<div class="space-y-1">
 			<Label class="text-[10px]">GPU</Label>
 			<select
-				class="w-full h-7 px-2 text-xs bg-muted rounded border-0"
+				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.gpuId}
 				disabled={condition.action.skip}
 				onchange={(e) => updateAction({ gpuId: parseInt(e.currentTarget.value) })}

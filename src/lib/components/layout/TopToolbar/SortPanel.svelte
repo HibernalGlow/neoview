@@ -5,9 +5,18 @@
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { 
-		FileText, HardDrive, Clock, List, Shuffle, 
-		ArrowUp, ArrowDown, Video, Image, Lock, LockOpen 
+	import {
+		FileText,
+		HardDrive,
+		Clock,
+		List,
+		Shuffle,
+		ArrowUp,
+		ArrowDown,
+		Video,
+		Image,
+		Lock,
+		LockOpen
 	} from '@lucide/svelte';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import type { PageSortMode, MediaPriorityMode } from '$lib/types/book';
@@ -73,13 +82,13 @@
 	function toggleSortDirection(categoryValue: string) {
 		const currentMode = bookStore.currentBook?.sortMode;
 		if (!currentMode) return;
-		
+
 		if (!currentMode.startsWith(categoryValue)) {
 			handleSortModeChange(categoryValue as PageSortMode);
 		} else {
 			const isDescending = currentMode.includes('Descending');
-			const newMode = isDescending 
-				? (categoryValue as PageSortMode) 
+			const newMode = isDescending
+				? (categoryValue as PageSortMode)
 				: (`${categoryValue}Descending` as PageSortMode);
 			handleSortModeChange(newMode);
 		}
@@ -89,15 +98,15 @@
 	function toggleSortLock() {
 		if (lockedSortMode) {
 			// 解锁
-			settingsManager.updateNestedSettings('book', { 
+			settingsManager.updateNestedSettings('book', {
 				lockedSortMode: null,
-				lockedMediaPriority: null 
+				lockedMediaPriority: null
 			});
 		} else {
 			// 锁定当前设置
 			const currentMode = bookStore.currentBook?.sortMode ?? 'fileName';
 			const currentPriority = bookStore.currentBook?.mediaPriorityMode ?? 'none';
-			settingsManager.updateNestedSettings('book', { 
+			settingsManager.updateNestedSettings('book', {
 				lockedSortMode: currentMode,
 				lockedMediaPriority: currentPriority === 'none' ? null : currentPriority
 			});
@@ -115,8 +124,8 @@
 			settingsManager.updateNestedSettings('book', { lockedSortMode: null });
 		} else {
 			// 锁定当前排序模式
-			const modeToLock = currentMode.startsWith(categoryValue) 
-				? currentMode 
+			const modeToLock = currentMode.startsWith(categoryValue)
+				? currentMode
 				: (categoryValue as PageSortMode);
 			settingsManager.updateNestedSettings('book', { lockedSortMode: modeToLock });
 		}
@@ -154,7 +163,7 @@
 </script>
 
 {#if expanded && bookStore.currentBook}
-	<div class="flex flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-1">
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-2 border-t pt-1">
 		<!-- 锁定按钮 -->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
@@ -174,13 +183,13 @@
 			<Tooltip.Content>
 				<p>{isAnyLocked ? '点击解锁排序设置' : '点击锁定当前排序设置'}</p>
 				{#if isAnyLocked}
-					<p class="text-xs text-muted-foreground">打开新书时将自动应用</p>
+					<p class="text-muted-foreground text-xs">打开新书时将自动应用</p>
 				{/if}
 			</Tooltip.Content>
 		</Tooltip.Root>
 
 		<!-- 分隔符 -->
-		<div class="w-px h-5 bg-border/50"></div>
+		<div class="bg-border/50 h-5 w-px"></div>
 
 		<!-- 媒体类型优先 -->
 		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
@@ -191,7 +200,9 @@
 						<Button
 							variant={currentMediaPriority === option.value ? 'default' : 'ghost'}
 							size="sm"
-							class="h-7 w-7 rounded-full p-0 {lockedMediaPriority === option.value ? 'ring-2 ring-primary ring-offset-1' : ''}"
+							class="h-7 w-7 rounded-full p-0 {lockedMediaPriority === option.value
+								? 'ring-primary ring-2 ring-offset-1'
+								: ''}"
 							onclick={() => handleMediaPriorityChange(option.value)}
 							oncontextmenu={(e: MouseEvent) => handleMediaPriorityRightClick(e, option.value)}
 						>
@@ -200,10 +211,10 @@
 					</Tooltip.Trigger>
 					<Tooltip.Content>
 						<p class="font-medium">{option.label}</p>
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">
 							{currentMediaPriority === option.value ? '点击取消' : '点击启用'}
 						</p>
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">
 							{lockedMediaPriority === option.value ? '右键解锁' : '右键锁定'}
 						</p>
 					</Tooltip.Content>
@@ -212,7 +223,7 @@
 		</div>
 
 		<!-- 分隔符 -->
-		<div class="w-px h-5 bg-border/50"></div>
+		<div class="bg-border/50 h-5 w-px"></div>
 
 		<!-- 排序方式 -->
 		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
@@ -223,16 +234,18 @@
 						<Button
 							variant={getCurrentSortCategory() === category.value ? 'default' : 'ghost'}
 							size="sm"
-							class="h-7 w-7 rounded-full p-0 relative {isCategoryLocked(category.value) ? 'ring-2 ring-primary ring-offset-1' : ''}"
+							class="relative h-7 w-7 rounded-full p-0 {isCategoryLocked(category.value)
+								? 'ring-primary ring-2 ring-offset-1'
+								: ''}"
 							onclick={() => toggleSortDirection(category.value)}
 							oncontextmenu={(e: MouseEvent) => handleSortRightClick(e, category.value)}
 						>
 							<CategoryIcon class="h-3 w-3" />
 							{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
 								{#if isCurrentSortDescending()}
-									<ArrowDown class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />
+									<ArrowDown class="text-primary absolute -right-0.5 -bottom-0.5 h-2 w-2" />
 								{:else}
-									<ArrowUp class="h-2 w-2 absolute -bottom-0.5 -right-0.5 text-primary" />
+									<ArrowUp class="text-primary absolute -right-0.5 -bottom-0.5 h-2 w-2" />
 								{/if}
 							{/if}
 						</Button>
@@ -240,22 +253,22 @@
 					<Tooltip.Content>
 						<p class="font-medium">{category.label}</p>
 						{#if getCurrentSortCategory() === category.value && category.value !== 'random'}
-							<p class="text-xs text-muted-foreground">
+							<p class="text-muted-foreground text-xs">
 								{isCurrentSortDescending() ? '降序' : '升序'} - 点击切换
 							</p>
 						{:else}
-							<p class="text-xs text-muted-foreground">点击切换排序</p>
+							<p class="text-muted-foreground text-xs">点击切换排序</p>
 						{/if}
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">
 							{isCategoryLocked(category.value) ? '右键解锁' : '右键锁定'}
 						</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			{/each}
-			
+
 			<!-- 分隔符 -->
-			<div class="w-px h-4 bg-border/50 mx-1"></div>
-			
+			<div class="bg-border/50 mx-1 h-4 w-px"></div>
+
 			<!-- 独立的升序降序按钮 -->
 			{#if getCurrentSortCategory() !== 'random'}
 				<Tooltip.Root>
@@ -271,14 +284,15 @@
 					</Tooltip.Trigger>
 					<Tooltip.Content><p>升序</p></Tooltip.Content>
 				</Tooltip.Root>
-				
+
 				<Tooltip.Root>
 					<Tooltip.Trigger>
 						<Button
 							variant={isCurrentSortDescending() ? 'default' : 'ghost'}
 							size="sm"
 							class="h-6 w-6 rounded-full p-0"
-							onclick={() => handleSortModeChange(`${getCurrentSortCategory()}Descending` as PageSortMode)}
+							onclick={() =>
+								handleSortModeChange(`${getCurrentSortCategory()}Descending` as PageSortMode)}
 						>
 							<ArrowDown class="h-3 w-3" />
 						</Button>

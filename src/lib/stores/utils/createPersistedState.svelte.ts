@@ -1,7 +1,7 @@
 /**
  * NeoView - Persisted State Utility
  * 持久化状态工具函数 (Svelte 5 Runes)
- * 
+ *
  * 提供与 Svelte 4 writable store 兼容的 API，同时使用 Svelte 5 Runes 实现
  */
 
@@ -41,11 +41,7 @@ export interface PersistedState<T> {
 /**
  * 从 localStorage 加载状态
  */
-function loadFromStorage<T>(
-	fullKey: string,
-	defaultValue: T,
-	deserialize: (raw: string) => T
-): T {
+function loadFromStorage<T>(fullKey: string, defaultValue: T, deserialize: (raw: string) => T): T {
 	try {
 		const saved = localStorage.getItem(fullKey);
 		if (saved !== null) {
@@ -60,11 +56,7 @@ function loadFromStorage<T>(
 /**
  * 保存状态到 localStorage
  */
-function saveToStorage<T>(
-	fullKey: string,
-	value: T,
-	serialize: (value: T) => string
-): void {
+function saveToStorage<T>(fullKey: string, value: T, serialize: (value: T) => string): void {
 	try {
 		localStorage.setItem(fullKey, serialize(value));
 	} catch (e) {
@@ -74,23 +66,23 @@ function saveToStorage<T>(
 
 /**
  * 创建持久化状态
- * 
+ *
  * @example
  * ```ts
  * const isOpen = createPersistedState({
  *   key: 'sidebarOpen',
  *   defaultValue: false
  * });
- * 
+ *
  * // 读取值
  * console.log(isOpen.value);
- * 
+ *
  * // 设置值
  * isOpen.set(true);
- * 
+ *
  * // 更新值
  * isOpen.update(v => !v);
- * 
+ *
  * // 订阅（兼容 Svelte 4）
  * const unsubscribe = isOpen.subscribe(v => console.log(v));
  * ```
@@ -106,17 +98,17 @@ export function createPersistedState<T>(options: PersistedStateOptions<T>): Pers
 	} = options;
 
 	const fullKey = `${prefix}${key}`;
-	
+
 	// 从 localStorage 加载初始值
 	const initialValue = loadFromStorage(fullKey, defaultValue, deserialize);
-	
+
 	// 使用包装对象来确保响应式更新能被 Svelte 检测到
 	// 这是因为 $state 在 .svelte.ts 文件中的行为与 .svelte 文件中略有不同
 	const state = $state({ current: initialValue });
-	
+
 	// 订阅者列表
 	const subscribers = new Set<(value: T) => void>();
-	
+
 	// 通知所有订阅者
 	function notifySubscribers(value: T) {
 		for (const callback of subscribers) {
@@ -132,7 +124,7 @@ export function createPersistedState<T>(options: PersistedStateOptions<T>): Pers
 		get value() {
 			return state.current;
 		},
-		
+
 		set(newValue: T) {
 			state.current = newValue;
 			saveToStorage(fullKey, newValue, serialize);
@@ -140,24 +132,24 @@ export function createPersistedState<T>(options: PersistedStateOptions<T>): Pers
 			// 使用 queueMicrotask 确保在当前执行栈完成后通知订阅者
 			queueMicrotask(() => notifySubscribers(newValue));
 		},
-		
+
 		update(updater: (current: T) => T) {
 			const newValue = updater(state.current);
 			store.set(newValue);
 		},
-		
+
 		subscribe(callback: (value: T) => void): () => void {
 			// 立即调用一次（Svelte store 约定）
 			callback(state.current);
 			subscribers.add(callback);
-			
+
 			// 返回取消订阅函数
 			return () => {
 				subscribers.delete(callback);
 			};
 		}
 	};
-	
+
 	return store;
 }
 
@@ -168,7 +160,7 @@ export function createPersistedState<T>(options: PersistedStateOptions<T>): Pers
 export function createState<T>(initialValue: T): PersistedState<T> {
 	const state = $state({ current: initialValue });
 	const subscribers = new Set<(value: T) => void>();
-	
+
 	function notifySubscribers(value: T) {
 		for (const callback of subscribers) {
 			try {
@@ -183,17 +175,17 @@ export function createState<T>(initialValue: T): PersistedState<T> {
 		get value() {
 			return state.current;
 		},
-		
+
 		set(newValue: T) {
 			state.current = newValue;
 			queueMicrotask(() => notifySubscribers(newValue));
 		},
-		
+
 		update(updater: (current: T) => T) {
 			const newValue = updater(state.current);
 			store.set(newValue);
 		},
-		
+
 		subscribe(callback: (value: T) => void): () => void {
 			callback(state.current);
 			subscribers.add(callback);
@@ -202,6 +194,6 @@ export function createState<T>(initialValue: T): PersistedState<T> {
 			};
 		}
 	};
-	
+
 	return store;
 }

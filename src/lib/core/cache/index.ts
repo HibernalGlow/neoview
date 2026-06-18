@@ -18,7 +18,7 @@ export {
 	type CacheNamespaceConfig,
 	type GlobalCacheStats,
 	type NamespaceStats,
-	type CacheEntryMeta,
+	type CacheEntryMeta
 } from './globalCacheManager';
 
 // 持久化缓存
@@ -27,7 +27,7 @@ export {
 	createPersistentCache,
 	deleteCacheDatabase,
 	estimateStorageUsage,
-	type PersistentCacheConfig,
+	type PersistentCacheConfig
 } from './persistentCache';
 
 // 旧的缓存服务（保持兼容）
@@ -39,7 +39,7 @@ export {
 	teardownCacheSystem,
 	getCacheStatsSummary,
 	clearAllCaches,
-	triggerCleanup,
+	triggerCleanup
 } from './cacheLifecycle';
 
 // 缩略图持久化
@@ -49,5 +49,5 @@ export {
 	getPersistedThumbnailUrl,
 	hasPersistedThumbnail,
 	makeThumbnailKey,
-	type PersistedThumbnail,
+	type PersistedThumbnail
 } from './thumbnailPersistence';

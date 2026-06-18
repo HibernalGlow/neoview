@@ -4,7 +4,14 @@
 	 * 右侧边栏组件 - 使用 sidebarConfig 动态管理面板显示、顺序和位置
 	 * 支持 MagicCard 鼠标跟随光效
 	 */
-	import { Pin, PinOff, GripVertical, GripHorizontal, MousePointer2, ArrowDownLeft } from '@lucide/svelte';
+	import {
+		Pin,
+		PinOff,
+		GripVertical,
+		GripHorizontal,
+		MousePointer2,
+		ArrowDownLeft
+	} from '@lucide/svelte';
 	import MagicCard from '$lib/components/ui/MagicCard.svelte';
 	import {
 		activeRightPanel,
@@ -29,7 +36,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import HoverWrapper from './HoverWrapper.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-    import Icon from '$lib/components/ui/Icon.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 
 	interface Props {
 		onResize?: (width: number) => void;
@@ -108,17 +115,17 @@
 
 	function handleDragMove(e: PointerEvent) {
 		if (!isDragging) return;
-		
+
 		const deltaX = e.clientX - dragStartX;
 		const deltaY = e.clientY - dragStartY;
-		
+
 		// 转换为百分比 (右侧边栏 X 轴反向)
 		const xDeltaPercent = (deltaX / window.innerWidth) * -200; // 负号因为右侧边栏左移=增加偏移
 		const yDeltaPercent = (deltaY / window.innerHeight) * 200;
-		
+
 		const newXPos = Math.max(0, Math.min(100, initialXPos + xDeltaPercent));
 		const newYPos = Math.max(0, Math.min(100, initialYPos + yDeltaPercent));
-		
+
 		sidebarConfigStore.setRightSidebarHorizontalPos(newXPos);
 		sidebarConfigStore.setRightSidebarVerticalAlign(newYPos);
 	}
@@ -143,13 +150,13 @@
 		cornerStartY = e.clientY;
 		cornerStartWidth = $rightSidebarWidth;
 		cornerStartHeight = $rightSidebarHeight === 'full' ? 100 : $rightSidebarCustomHeight;
-		
+
 		// 如果是全高模式开始缩放，先切换到自定义模式
 		if ($rightSidebarHeight === 'full') {
 			sidebarConfigStore.setRightSidebarHeight('custom');
 			sidebarConfigStore.setRightSidebarCustomHeight(100);
 		}
-		
+
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		e.preventDefault();
 		e.stopPropagation();
@@ -168,7 +175,7 @@
 		const deltaY = e.clientY - cornerStartY;
 		const deltaHeightPercent = (deltaY / window.innerHeight) * 100;
 		const newHeight = Math.max(10, Math.min(100, cornerStartHeight + deltaHeightPercent));
-		
+
 		if (newHeight >= 99.5) {
 			sidebarConfigStore.setRightSidebarHeight('full');
 			sidebarConfigStore.setRightSidebarCustomHeight(100);
@@ -297,156 +304,158 @@
 		class="relative flex h-full"
 		style="--sidebar-width: {$rightSidebarWidth}px; width: {$rightSidebarWidth}px;"
 	>
-		<div class="flex-1 flex min-h-0">
-		<Sidebar.Provider
-			bind:open={localRightSidebarOpen}
-			onOpenChange={(v) => {
-				localRightSidebarOpen = v;
-				rightSidebarOpen.set(v);
-			}}
-			style="--sidebar-width: {$rightSidebarWidth}px;"
-		>
-			<Sidebar.Root
-				side="right"
-				collapsible="offcanvas"
-				class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row-reverse"
+		<div class="flex min-h-0 flex-1">
+			<Sidebar.Provider
+				bind:open={localRightSidebarOpen}
+				onOpenChange={(v) => {
+					localRightSidebarOpen = v;
+					rightSidebarOpen.set(v);
+				}}
+				style="--sidebar-width: {$rightSidebarWidth}px;"
 			>
-				<!-- 一级菜单 - 图标模式 -->
-				<MagicCard
-					class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
-					gradientSize={80}
-					gradientOpacity={0.4}
+				<Sidebar.Root
+					side="right"
+					collapsible="offcanvas"
+					class="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row-reverse"
 				>
+					<!-- 一级菜单 - 图标模式 -->
+					<MagicCard
+						class="h-full !w-[calc(var(--sidebar-width-icon)_+_1px)]"
+						gradientSize={80}
+						gradientOpacity={0.4}
+					>
+						<Sidebar.Root
+							collapsible="none"
+							class="h-full !w-[calc(var(--sidebar-width-icon)_+_1px)]"
+							style="width: calc(var(--sidebar-width-icon) + 1px);"
+						>
+							<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
+								<div class="flex flex-col gap-1">
+									<Button
+										variant={$rightSidebarPinned ? 'default' : 'ghost'}
+										size="icon"
+										class="h-9 w-9"
+										onclick={togglePin}
+										oncontextmenu={handlePinContextMenu}
+									>
+										{#if $rightSidebarPinned}
+											<PinOff class="h-4 w-4" />
+										{:else}
+											<Pin class="h-4 w-4" />
+										{/if}
+									</Button>
+									<!-- 拖拽移动按钮 -->
+									{#if $showDragHandle && $rightSidebarHeight !== 'full'}
+										<button
+											type="button"
+											class="flex h-9 w-9 cursor-move items-center justify-center rounded-md transition-colors
+											{isDragging
+												? 'bg-primary text-primary-foreground'
+												: 'hover:bg-accent text-muted-foreground hover:text-foreground'}"
+											onpointerdown={handleDragStart}
+											onpointermove={handleDragMove}
+											onpointerup={handleDragEnd}
+											onpointercancel={handleDragEnd}
+											title="拖拽移动侧边栏"
+										>
+											<MousePointer2 class="h-4 w-4" />
+										</button>
+									{/if}
+								</div>
+							</Sidebar.Header>
+
+							<Sidebar.Content>
+								<Sidebar.Group>
+									<Sidebar.GroupContent class="flex h-full min-h-0 flex-col px-0">
+										<Sidebar.Menu>
+											{#each rightPanels as panel (panel.id)}
+												<Sidebar.MenuItem>
+													<Sidebar.MenuButton
+														tooltipContentProps={{
+															hidden: false
+														}}
+														onclick={() => handleTabChange(panel.id)}
+														isActive={activePanelId === panel.id}
+														class="px-2"
+													>
+														{#snippet tooltipContent()}
+															{panel.title}
+														{/snippet}
+														<Icon name={panel.id} fallback={panel.icon} class="h-4 w-4" />
+														<span>{panel.title}</span>
+													</Sidebar.MenuButton>
+												</Sidebar.MenuItem>
+											{/each}
+										</Sidebar.Menu>
+										<button
+											type="button"
+											class="min-h-0 w-full flex-1 bg-transparent"
+											data-blank-collapse="true"
+											onclick={handleBlankAreaClick}
+											ondblclick={handleBlankAreaDoubleClick}
+											aria-label="收回右侧边栏"
+										></button>
+									</Sidebar.GroupContent>
+								</Sidebar.Group>
+							</Sidebar.Content>
+						</Sidebar.Root>
+					</MagicCard>
+
+					<!-- 二级菜单 - 内容面板 -->
 					<Sidebar.Root
 						collapsible="none"
-						class="!w-[calc(var(--sidebar-width-icon)_+_1px)] h-full"
-						style="width: calc(var(--sidebar-width-icon) + 1px);"
+						class="flex flex-1"
+						style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
 					>
-						<Sidebar.Header class="flex flex-col gap-2 px-1.5 py-2">
-							<div class="flex flex-col gap-1">
-								<Button
-									variant={$rightSidebarPinned ? 'default' : 'ghost'}
-									size="icon"
-									class="h-9 w-9"
-									onclick={togglePin}
-									oncontextmenu={handlePinContextMenu}
-								>
-									{#if $rightSidebarPinned}
-										<PinOff class="h-4 w-4" />
-									{:else}
-										<Pin class="h-4 w-4" />
-									{/if}
-								</Button>
-								<!-- 拖拽移动按钮 -->
-								{#if $showDragHandle && $rightSidebarHeight !== 'full'}
-									<button
-										type="button"
-										class="h-9 w-9 flex items-center justify-center rounded-md cursor-move transition-colors
-											{isDragging ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground hover:text-foreground'}"
-										onpointerdown={handleDragStart}
-										onpointermove={handleDragMove}
-										onpointerup={handleDragEnd}
-										onpointercancel={handleDragEnd}
-										title="拖拽移动侧边栏"
-									>
-										<MousePointer2 class="h-4 w-4" />
-									</button>
-								{/if}
-							</div>
-						</Sidebar.Header>
-
-						<Sidebar.Content>
-							<Sidebar.Group>
-								<Sidebar.GroupContent class="px-0 h-full min-h-0 flex flex-col">
-									<Sidebar.Menu>
-										{#each rightPanels as panel (panel.id)}
-											<Sidebar.MenuItem>
-												<Sidebar.MenuButton
-													tooltipContentProps={{
-														hidden: false
-													}}
-													onclick={() => handleTabChange(panel.id)}
-													isActive={activePanelId === panel.id}
-													class="px-2"
-												>
-													{#snippet tooltipContent()}
-														{panel.title}
-													{/snippet}
-													<Icon name={panel.id} fallback={panel.icon} class="h-4 w-4" />
-													<span>{panel.title}</span>
-												</Sidebar.MenuButton>
-											</Sidebar.MenuItem>
-										{/each}
-									</Sidebar.Menu>
-									<button
-										type="button"
-										class="w-full flex-1 min-h-0 bg-transparent"
-										data-blank-collapse="true"
-										onclick={handleBlankAreaClick}
-										ondblclick={handleBlankAreaDoubleClick}
-										aria-label="收回右侧边栏"
-									></button>
+						<Sidebar.Content class="h-full">
+							<Sidebar.Group class="h-full flex-1 p-0">
+								<Sidebar.GroupContent class="h-full">
+									<!-- 使用 content-visibility: hidden 保持布局信息，避免切换时重新计算尺寸 -->
+									{#each rightPanels as panel (panel.id)}
+										{@const PanelComponent = panelComponents[panel.id]}
+										{#if PanelComponent}
+											<div
+												class="panel-content-wrapper"
+												class:panel-content-hidden={activePanelId !== panel.id}
+											>
+												<PanelComponent />
+											</div>
+										{/if}
+									{/each}
 								</Sidebar.GroupContent>
 							</Sidebar.Group>
 						</Sidebar.Content>
 					</Sidebar.Root>
-				</MagicCard>
 
-				<!-- 二级菜单 - 内容面板 -->
-				<Sidebar.Root
-					collapsible="none"
-					class="flex flex-1"
-					style="width: calc(var(--sidebar-width) - var(--sidebar-width-icon) - 1px);"
-				>
-					<Sidebar.Content class="h-full">
-						<Sidebar.Group class="h-full flex-1 p-0">
-							<Sidebar.GroupContent class="h-full">
-								<!-- 使用 content-visibility: hidden 保持布局信息，避免切换时重新计算尺寸 -->
-								{#each rightPanels as panel (panel.id)}
-									{@const PanelComponent = panelComponents[panel.id]}
-									{#if PanelComponent}
-										<div 
-											class="panel-content-wrapper"
-											class:panel-content-hidden={activePanelId !== panel.id}
-										>
-											<PanelComponent />
-										</div>
-									{/if}
-								{/each}
-							</Sidebar.GroupContent>
-						</Sidebar.Group>
-					</Sidebar.Content>
-				</Sidebar.Root>
-
-				<!-- 拖拽手柄 -->
-				<button
-					type="button"
-					class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-60 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 opacity-0 transition-all hover:opacity-100"
-					onmousedown={handleMouseDown}
-					oncontextmenu={handlePinContextMenu}
-					aria-label="调整右侧边栏宽度"
-				>
-					<GripVertical class="h-4 w-4" />
-				</button>
-
-				<!-- 边角缩放手柄 (左下角) -->
-				{#if $rightSidebarHeight !== 'full'}
+					<!-- 拖拽手柄 -->
 					<button
 						type="button"
-						class="absolute bottom-0 left-0 z-[60] p-1 cursor-nesw-resize text-muted-foreground/30 hover:text-primary transition-colors
-							{isCornerResizing ? 'text-primary' : ''}"
-						onpointerdown={handleCornerResizeStart}
-						onpointermove={handleCornerResizeMove}
-						onpointerup={handleCornerResizeEnd}
-						onpointercancel={handleCornerResizeEnd}
-						aria-label="同时调整侧边栏宽高"
+						class="hover:bg-accent text-muted-foreground absolute top-1/2 left-0 z-60 -translate-y-1/2 cursor-ew-resize rounded-r-md p-1 opacity-0 transition-all hover:opacity-100"
+						onmousedown={handleMouseDown}
+						oncontextmenu={handlePinContextMenu}
+						aria-label="调整右侧边栏宽度"
 					>
-						<ArrowDownLeft class="h-4 w-4" />
+						<GripVertical class="h-4 w-4" />
 					</button>
-				{/if}
-			</Sidebar.Root>
-		</Sidebar.Provider>
-	</div>
+
+					<!-- 边角缩放手柄 (左下角) -->
+					{#if $rightSidebarHeight !== 'full'}
+						<button
+							type="button"
+							class="text-muted-foreground/30 hover:text-primary absolute bottom-0 left-0 z-[60] cursor-nesw-resize p-1 transition-colors
+							{isCornerResizing ? 'text-primary' : ''}"
+							onpointerdown={handleCornerResizeStart}
+							onpointermove={handleCornerResizeMove}
+							onpointerup={handleCornerResizeEnd}
+							onpointercancel={handleCornerResizeEnd}
+							aria-label="同时调整侧边栏宽高"
+						>
+							<ArrowDownLeft class="h-4 w-4" />
+						</button>
+					{/if}
+				</Sidebar.Root>
+			</Sidebar.Provider>
+		</div>
 	</div>
 </HoverWrapper>
 

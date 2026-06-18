@@ -9,7 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
  * 查询是否已在资源管理器右键菜单中注册 "Open in NeoView"
  */
 export async function getExplorerContextMenuEnabled(): Promise<boolean> {
-  return await invoke<boolean>('get_explorer_context_menu_enabled');
+	return await invoke<boolean>('get_explorer_context_menu_enabled');
 }
 
 /**
@@ -17,7 +17,7 @@ export async function getExplorerContextMenuEnabled(): Promise<boolean> {
  * Windows 下通过写入 HKCU\Software\Classes，便携版也可使用
  */
 export async function setExplorerContextMenuEnabled(enabled: boolean): Promise<boolean> {
-  return await invoke<boolean>('set_explorer_context_menu_enabled', { enabled });
+	return await invoke<boolean>('set_explorer_context_menu_enabled', { enabled });
 }
 
 /**
@@ -25,5 +25,5 @@ export async function setExplorerContextMenuEnabled(enabled: boolean): Promise<b
  * 基于当前 exe 路径，返回完整文本，前端可触发下载
  */
 export async function generateExplorerContextMenuReg(): Promise<string> {
-  return await invoke<string>('generate_explorer_context_menu_reg');
+	return await invoke<string>('generate_explorer_context_menu_reg');
 }

@@ -1,55 +1,51 @@
 <script lang="ts">
-/**
- * 实时延迟监控卡片
- * 监控 PageManager 加载流水线各环节延迟
- */
-import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
-import { Activity, RefreshCw } from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
+	/**
+	 * 实时延迟监控卡片
+	 * 监控 PageManager 加载流水线各环节延迟
+	 */
+	import { pipelineLatencyStore } from '$lib/stores/pipelineLatency.svelte';
+	import { Activity, RefreshCw } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 
-// 从 store 获取数据
-let records = $derived(pipelineLatencyStore.records);
-let stats = $derived(pipelineLatencyStore.getStats());
-let isMonitoring = $derived(pipelineLatencyStore.enabled);
+	// 从 store 获取数据
+	let records = $derived(pipelineLatencyStore.records);
+	let stats = $derived(pipelineLatencyStore.getStats());
+	let isMonitoring = $derived(pipelineLatencyStore.enabled);
 
-function toggleMonitoring() {
-	pipelineLatencyStore.setEnabled(!pipelineLatencyStore.enabled);
-}
+	function toggleMonitoring() {
+		pipelineLatencyStore.setEnabled(!pipelineLatencyStore.enabled);
+	}
 
-function clearRecords() {
-	pipelineLatencyStore.clear();
-}
+	function clearRecords() {
+		pipelineLatencyStore.clear();
+	}
 
-function formatSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+	function formatSize(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	}
 
-function formatMs(ms: number): string {
-	if (ms < 1) return '<1ms';
-	if (ms < 1000) return `${Math.round(ms)}ms`;
-	return `${(ms / 1000).toFixed(2)}s`;
-}
+	function formatMs(ms: number): string {
+		if (ms < 1) return '<1ms';
+		if (ms < 1000) return `${Math.round(ms)}ms`;
+		return `${(ms / 1000).toFixed(2)}s`;
+	}
 </script>
 
 <div class="space-y-3">
 	<!-- 控制按钮 -->
 	<div class="flex gap-2">
-		<Button 
-			variant={isMonitoring ? 'destructive' : 'default'} 
-			size="sm"
-			onclick={toggleMonitoring}
-		>
-			<Activity class="w-4 h-4 mr-1" />
+		<Button variant={isMonitoring ? 'destructive' : 'default'} size="sm" onclick={toggleMonitoring}>
+			<Activity class="mr-1 h-4 w-4" />
 			{isMonitoring ? '停止监控' : '开始监控'}
 		</Button>
 		<Button variant="outline" size="sm" onclick={clearRecords}>
-			<RefreshCw class="w-4 h-4 mr-1" />
+			<RefreshCw class="mr-1 h-4 w-4" />
 			清空
 		</Button>
 	</div>
-	
+
 	<!-- 统计摘要 -->
 	{#if stats.count > 0}
 		<div class="grid grid-cols-3 gap-2 text-sm">
@@ -67,39 +63,53 @@ function formatMs(ms: number): string {
 			</div>
 		</div>
 	{/if}
-	
+
 	<!-- 延迟记录列表 -->
 	<div class="max-h-64 overflow-auto">
 		{#if records.length === 0}
-			<div class="text-center text-muted-foreground py-4">
+			<div class="text-muted-foreground py-4 text-center">
 				{isMonitoring ? '翻页后显示延迟数据' : '点击"开始监控"后翻页'}
 			</div>
 		{:else}
 			<!-- 表头 -->
-			<div class="flex items-center gap-2 text-[10px] text-muted-foreground px-2 py-1 border-b mb-1">
+			<div
+				class="text-muted-foreground mb-1 flex items-center gap-2 border-b px-2 py-1 text-[10px]"
+			>
 				<span class="w-6">页</span>
 				<span class="flex-1">IPC + Blob = 总</span>
 				<span>大小</span>
 			</div>
 			<div class="space-y-1">
 				{#each records.toReversed() as record (record.timestamp)}
-					<div class="flex items-center gap-2 text-xs rounded px-2 py-1 {record.isCurrentPage ? 'bg-primary/20' : 'bg-muted/30'}">
-						<span class="w-6 {record.isCurrentPage ? 'text-primary font-medium' : 'text-muted-foreground'}">
+					<div
+						class="flex items-center gap-2 rounded px-2 py-1 text-xs {record.isCurrentPage
+							? 'bg-primary/20'
+							: 'bg-muted/30'}"
+					>
+						<span
+							class="w-6 {record.isCurrentPage
+								? 'text-primary font-medium'
+								: 'text-muted-foreground'}"
+						>
 							P{record.pageIndex}
 						</span>
-						<span class="font-mono flex-1 text-[11px]">
+						<span class="flex-1 font-mono text-[11px]">
 							<!-- IPC 时间 -->
-							<span class:text-green-500={record.ipcTransferMs < 50} 
-								  class:text-yellow-500={record.ipcTransferMs >= 50 && record.ipcTransferMs < 200}
-								  class:text-red-500={record.ipcTransferMs >= 200}
-								  title="IPC传输">
+							<span
+								class:text-green-500={record.ipcTransferMs < 50}
+								class:text-yellow-500={record.ipcTransferMs >= 50 && record.ipcTransferMs < 200}
+								class:text-red-500={record.ipcTransferMs >= 200}
+								title="IPC传输"
+							>
 								{formatMs(record.ipcTransferMs)}
 							</span>
 							<span class="text-muted-foreground mx-0.5">+</span>
 							<!-- Blob 创建时间 -->
-							<span class:text-green-500={record.blobCreateMs < 5} 
-								  class:text-yellow-500={record.blobCreateMs >= 5}
-								  title="Blob创建">
+							<span
+								class:text-green-500={record.blobCreateMs < 5}
+								class:text-yellow-500={record.blobCreateMs >= 5}
+								title="Blob创建"
+							>
 								{formatMs(record.blobCreateMs)}
 							</span>
 							<span class="text-muted-foreground mx-0.5">=</span>
@@ -109,15 +119,21 @@ function formatMs(ms: number): string {
 						<span class="text-muted-foreground text-[10px]">{formatSize(record.dataSize)}</span>
 						<!-- 槽位标识 -->
 						{#if record.slot}
-							<span class="text-[10px] px-1 rounded {record.slot === 'current' ? 'bg-green-500/20 text-green-500' : record.slot === 'next' ? 'bg-blue-500/20 text-blue-500' : 'bg-orange-500/20 text-orange-500'}">
+							<span
+								class="rounded px-1 text-[10px] {record.slot === 'current'
+									? 'bg-green-500/20 text-green-500'
+									: record.slot === 'next'
+										? 'bg-blue-500/20 text-blue-500'
+										: 'bg-orange-500/20 text-orange-500'}"
+							>
 								{record.slot === 'current' ? '当' : record.slot === 'next' ? '后' : '前'}
 							</span>
 						{/if}
 						<!-- 状态标识 -->
 						{#if record.cacheHit}
-							<span class="text-green-500 text-[10px] font-medium">缓存</span>
+							<span class="text-[10px] font-medium text-green-500">缓存</span>
 						{:else if record.source === 'preload'}
-							<span class="text-blue-500 text-[10px]">预</span>
+							<span class="text-[10px] text-blue-500">预</span>
 						{/if}
 					</div>
 				{/each}

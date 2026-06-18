@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 性能设置卡片
- */
-import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
+	/**
+	 * 性能设置卡片
+	 */
+	import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -27,7 +27,7 @@ import PerformanceSettingsPanel from '$lib/components/panels/PerformanceSettings
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

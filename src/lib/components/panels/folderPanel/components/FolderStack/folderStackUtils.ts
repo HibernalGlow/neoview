@@ -109,7 +109,7 @@ export const VIDEO_EXTENSIONS = [
  */
 export function isArchiveFile(name: string): boolean {
 	const nameLower = name.toLowerCase();
-	return ARCHIVE_EXTENSIONS.some(ext => nameLower.endsWith(ext));
+	return ARCHIVE_EXTENSIONS.some((ext) => nameLower.endsWith(ext));
 }
 
 /**
@@ -117,7 +117,7 @@ export function isArchiveFile(name: string): boolean {
  */
 export function needsThumbnail(name: string, isDir: boolean): boolean {
 	if (isDir) return true;
-	
+
 	const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
 	return (
 		IMAGE_EXTENSIONS.includes(ext) ||

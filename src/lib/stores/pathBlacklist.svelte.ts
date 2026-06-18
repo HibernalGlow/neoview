@@ -46,7 +46,10 @@ export function isPathBlacklisted(path: string): boolean {
 	const excludedPaths = settings.system.excludedPaths ?? [];
 	for (const excluded of excludedPaths) {
 		const normalizedExcluded = normalizePath(excluded);
-		if (normalizedPath === normalizedExcluded || normalizedPath.startsWith(normalizedExcluded + '/')) {
+		if (
+			normalizedPath === normalizedExcluded ||
+			normalizedPath.startsWith(normalizedExcluded + '/')
+		) {
 			return true;
 		}
 	}
@@ -54,7 +57,7 @@ export function isPathBlacklisted(path: string): boolean {
 	// 检查系统保护文件夹（路径中包含这些文件夹名）
 	const pathParts = normalizedPath.split('/');
 	for (const part of pathParts) {
-		if (SYSTEM_PROTECTED_FOLDERS.some(folder => part.toLowerCase() === folder.toLowerCase())) {
+		if (SYSTEM_PROTECTED_FOLDERS.some((folder) => part.toLowerCase() === folder.toLowerCase())) {
 			return true;
 		}
 	}
@@ -112,9 +115,9 @@ export function addExcludedPath(path: string): void {
 	const settings = settingsManager.getSettings();
 	const excludedPaths = settings.system.excludedPaths ?? [];
 	const normalizedPath = normalizePath(path);
-	
+
 	// 避免重复添加
-	if (!excludedPaths.some(p => normalizePath(p) === normalizedPath)) {
+	if (!excludedPaths.some((p) => normalizePath(p) === normalizedPath)) {
 		settingsManager.updateNestedSettings('system', {
 			excludedPaths: [...excludedPaths, path]
 		});
@@ -129,9 +132,9 @@ export function removeExcludedPath(path: string): void {
 	const settings = settingsManager.getSettings();
 	const excludedPaths = settings.system.excludedPaths ?? [];
 	const normalizedPath = normalizePath(path);
-	
+
 	settingsManager.updateNestedSettings('system', {
-		excludedPaths: excludedPaths.filter(p => normalizePath(p) !== normalizedPath)
+		excludedPaths: excludedPaths.filter((p) => normalizePath(p) !== normalizedPath)
 	});
 }
 

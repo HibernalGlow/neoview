@@ -24,43 +24,40 @@ export async function scheduleComparisonPreview(
 	cancelComparisonPreviewTask('comparison task superseded');
 	const generation = activeGeneration;
 
-	return comparisonQueue.add<string>(async () => {
-		assertNotCancelled(generation);
+	return comparisonQueue
+		.add<string>(async () => {
+			assertNotCancelled(generation);
 
-		// 获取 blob
-		const blob = await blobSupplier();
-		assertNotCancelled(generation);
-		if (!blob) {
-			throw new Error('无法获取当前页 Blob');
-		}
+			// 获取 blob
+			const blob = await blobSupplier();
+			assertNotCancelled(generation);
+			if (!blob) {
+				throw new Error('无法获取当前页 Blob');
+			}
 
-		// 将 blob 转换为 ArrayBuffer，然后转为 number[]
-		const arrayBuffer = await blob.arrayBuffer();
-		assertNotCancelled(generation);
-		const imageData = Array.from(new Uint8Array(arrayBuffer));
+			// 将 blob 转换为 ArrayBuffer，然后转为 number[]
+			const arrayBuffer = await blob.arrayBuffer();
+			assertNotCancelled(generation);
+			const imageData = Array.from(new Uint8Array(arrayBuffer));
 
-		// 推断 MIME 类型
-		const mimeType = blob.type || 'image/jpeg';
+			// 推断 MIME 类型
+			const mimeType = blob.type || 'image/jpeg';
 
-		// 调用 Rust 调度器
-		const request: ComparisonPrepareRequest = {
-			imageData,
-			mimeType,
-			pageIndex
-		};
+			// 调用 Rust 调度器
+			const request: ComparisonPrepareRequest = {
+				imageData,
+				mimeType,
+				pageIndex
+			};
 
-		const response = await prepareComparisonPreview(request);
-		assertNotCancelled(generation);
-		return response.dataUrl;
-	}).then((result) => {
-		if (result === undefined) {
-			throw new Error('comparison task cancelled');
-		}
-		return result;
-	});
+			const response = await prepareComparisonPreview(request);
+			assertNotCancelled(generation);
+			return response.dataUrl;
+		})
+		.then((result) => {
+			if (result === undefined) {
+				throw new Error('comparison task cancelled');
+			}
+			return result;
+		});
 }
-
-
-
-
-

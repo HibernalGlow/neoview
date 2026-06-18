@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 系统设置卡片
- */
-import SystemSettingsPanel from '$lib/components/panels/SystemSettingsPanel.svelte';
+	/**
+	 * 系统设置卡片
+	 */
+	import SystemSettingsPanel from '$lib/components/panels/SystemSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -27,7 +27,7 @@ import SystemSettingsPanel from '$lib/components/panels/SystemSettingsPanel.svel
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

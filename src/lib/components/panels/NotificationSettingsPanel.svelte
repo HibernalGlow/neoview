@@ -48,7 +48,9 @@
 		loadFromSettings();
 	});
 
-	function saveNotification(partial?: Partial<{ messageStyle: MessageStyle; durationMs: number; maxVisible: number }>) {
+	function saveNotification(
+		partial?: Partial<{ messageStyle: MessageStyle; durationMs: number; maxVisible: number }>
+	) {
 		const next: { messageStyle: MessageStyle; durationMs: number; maxVisible: number } = {
 			messageStyle: style,
 			durationMs,
@@ -115,130 +117,128 @@
 
 	<Tabs.Root bind:value={activeTab} class="w-full">
 		<Tabs.List class="grid h-8 w-full grid-cols-3 p-1">
-			<Tabs.Trigger value="basic" class="gap-1.5 text-[10px] py-1">
+			<Tabs.Trigger value="basic" class="gap-1.5 py-1 text-[10px]">
 				<Settings2 class="h-3 w-3" />
 				基本
 			</Tabs.Trigger>
-			<Tabs.Trigger value="display" class="gap-1.5 text-[10px] py-1">
+			<Tabs.Trigger value="display" class="gap-1.5 py-1 text-[10px]">
 				<Clock class="h-3 w-3" />
 				显示
 			</Tabs.Trigger>
-			<Tabs.Trigger value="types" class="gap-1.5 text-[10px] py-1">
+			<Tabs.Trigger value="types" class="gap-1.5 py-1 text-[10px]">
 				<Filter class="h-3 w-3" />
 				类型
 			</Tabs.Trigger>
 		</Tabs.List>
 
 		<Tabs.Content value="basic" class="mt-3 space-y-3">
-		<!-- 显示通知 -->
-		<div class="space-y-1.5">
-			<h4 class="text-xs font-bold">显示通知</h4>
-			<div class="flex items-center justify-between gap-2">
-				<Label class="text-xs">启用通知显示</Label>
-				<Switch checked={enabled} onCheckedChange={handleToggleEnabled} class="scale-75" />
+			<!-- 显示通知 -->
+			<div class="space-y-1.5">
+				<h4 class="text-xs font-bold">显示通知</h4>
+				<div class="flex items-center justify-between gap-2">
+					<Label class="text-xs">启用通知显示</Label>
+					<Switch checked={enabled} onCheckedChange={handleToggleEnabled} class="scale-75" />
+				</div>
 			</div>
-		</div>
 
-		<!-- 通知样式 -->
-		<div class="space-y-1.5">
-			<h4 class="text-xs font-bold">通知样式</h4>
-			<NativeSelect
-				class="w-full max-w-xs h-8 text-xs"
-				bind:value={style}
-				disabled={!enabled}
-				onchange={() => handleStyleChange(style)}
-			>
-				<NativeSelectOption value="normal">普通</NativeSelectOption>
-				<NativeSelectOption value="normalIconOnly">仅图标</NativeSelectOption>
-				<NativeSelectOption value="tiny">缩小</NativeSelectOption>
-				<NativeSelectOption value="tinyIconOnly">缩小 (仅图标)</NativeSelectOption>
-				<NativeSelectOption value="none">不显示</NativeSelectOption>
-			</NativeSelect>
-		</div>
-
+			<!-- 通知样式 -->
+			<div class="space-y-1.5">
+				<h4 class="text-xs font-bold">通知样式</h4>
+				<NativeSelect
+					class="h-8 w-full max-w-xs text-xs"
+					bind:value={style}
+					disabled={!enabled}
+					onchange={() => handleStyleChange(style)}
+				>
+					<NativeSelectOption value="normal">普通</NativeSelectOption>
+					<NativeSelectOption value="normalIconOnly">仅图标</NativeSelectOption>
+					<NativeSelectOption value="tiny">缩小</NativeSelectOption>
+					<NativeSelectOption value="tinyIconOnly">缩小 (仅图标)</NativeSelectOption>
+					<NativeSelectOption value="none">不显示</NativeSelectOption>
+				</NativeSelect>
+			</div>
 		</Tabs.Content>
 
 		<Tabs.Content value="display" class="mt-3 space-y-3">
-		<!-- 显示时间 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">显示时间 (秒)</Label>
-			<div class="flex items-center gap-2">
-				<Input
-					type="number"
-					min="1"
-					max="10"
-					step="0.5"
-					class="h-7 w-20 text-xs"
-					value={(durationMs / 1000).toFixed(1)}
-					oninput={(e) => {
-						const v = parseFloat((e.currentTarget as HTMLInputElement).value);
-						if (!Number.isNaN(v)) handleDurationChange(v);
-					}}
-				/>
+			<!-- 显示时间 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">显示时间 (秒)</Label>
+				<div class="flex items-center gap-2">
+					<Input
+						type="number"
+						min="1"
+						max="10"
+						step="0.5"
+						class="h-7 w-20 text-xs"
+						value={(durationMs / 1000).toFixed(1)}
+						oninput={(e) => {
+							const v = parseFloat((e.currentTarget as HTMLInputElement).value);
+							if (!Number.isNaN(v)) handleDurationChange(v);
+						}}
+					/>
+				</div>
 			</div>
-		</div>
 
-		<!-- 同时显示数量 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">最大并显数</Label>
-			<div class="flex items-center gap-2">
-				<Input
-					type="number"
-					min="1"
-					max="5"
-					step="1"
-					class="h-7 w-20 text-xs"
-					value={maxVisible}
-					oninput={(e) => {
-						const v = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-						if (!Number.isNaN(v)) handleMaxVisibleChange(v);
-					}}
-				/>
+			<!-- 同时显示数量 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">最大并显数</Label>
+				<div class="flex items-center gap-2">
+					<Input
+						type="number"
+						min="1"
+						max="5"
+						step="1"
+						class="h-7 w-20 text-xs"
+						value={maxVisible}
+						oninput={(e) => {
+							const v = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+							if (!Number.isNaN(v)) handleMaxVisibleChange(v);
+						}}
+					/>
+				</div>
 			</div>
-		</div>
-
 		</Tabs.Content>
 
 		<Tabs.Content value="types" class="mt-3 space-y-3">
-		<!-- 通知类型 -->
-		<div class="space-y-1.5">
-			<Label class="text-xs font-bold">启用通知类型</Label>
-			<div class="space-y-1 text-xs text-muted-foreground">
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-xs text-foreground">文件操作结果</span>
-					<Switch
-						checked={placeholderFileOps}
-						onCheckedChange={(v) => {
-							placeholderFileOps = v;
-							saveNotification();
-						}}
-						class="scale-75"
-					/>
-				</div>
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-xs text-foreground">任务进度</span>
-					<Switch
-						checked={placeholderTaskProgress}
-						onCheckedChange={(v) => {
-							placeholderTaskProgress = v;
-							saveNotification();
-						}}
-						class="scale-75"
-					/>
-				</div>
-				<div class="flex items-center justify-between gap-2">
-					<span class="text-xs text-foreground">系统与性能提示</span>
-					<Switch
-						checked={placeholderSystemMessages}
-						onCheckedChange={(v) => {
-							placeholderSystemMessages = v;
-							saveNotification();
-						}}
-						class="scale-75"
-					/>
+			<!-- 通知类型 -->
+			<div class="space-y-1.5">
+				<Label class="text-xs font-bold">启用通知类型</Label>
+				<div class="text-muted-foreground space-y-1 text-xs">
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-foreground text-xs">文件操作结果</span>
+						<Switch
+							checked={placeholderFileOps}
+							onCheckedChange={(v) => {
+								placeholderFileOps = v;
+								saveNotification();
+							}}
+							class="scale-75"
+						/>
+					</div>
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-foreground text-xs">任务进度</span>
+						<Switch
+							checked={placeholderTaskProgress}
+							onCheckedChange={(v) => {
+								placeholderTaskProgress = v;
+								saveNotification();
+							}}
+							class="scale-75"
+						/>
+					</div>
+					<div class="flex items-center justify-between gap-2">
+						<span class="text-foreground text-xs">系统与性能提示</span>
+						<Switch
+							checked={placeholderSystemMessages}
+							onCheckedChange={(v) => {
+								placeholderSystemMessages = v;
+								saveNotification();
+							}}
+							class="scale-75"
+						/>
+					</div>
 				</div>
 			</div>
-		</div>
 		</Tabs.Content>
 	</Tabs.Root>
 </div>

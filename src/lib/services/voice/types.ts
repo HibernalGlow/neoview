@@ -7,10 +7,10 @@ export type VoiceRecognitionStatus = 'idle' | 'listening' | 'processing' | 'erro
 
 // 语音命令匹配结果
 export interface VoiceCommandMatch {
-	action: string;           // 匹配到的操作ID
-	transcript: string;       // 原始语音识别文本
-	confidence: number;       // 置信度 (0-1)
-	matchedPhrase: string;    // 匹配到的命令短语
+	action: string; // 匹配到的操作ID
+	transcript: string; // 原始语音识别文本
+	confidence: number; // 置信度 (0-1)
+	matchedPhrase: string; // 匹配到的命令短语
 }
 
 // 语音识别结果
@@ -63,7 +63,7 @@ export const DEFAULT_VOICE_CONFIG: VoiceControlConfig = {
 	continuous: false,
 	showFeedback: true,
 	playSound: true,
-	customCommands: {},
+	customCommands: {}
 };
 
 // 默认统计
@@ -72,5 +72,5 @@ export const DEFAULT_VOICE_STATS: VoiceControlStats = {
 	successfulCommands: 0,
 	failedCommands: 0,
 	lastCommand: null,
-	lastCommandTime: null,
+	lastCommandTime: null
 };

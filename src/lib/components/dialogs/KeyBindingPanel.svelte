@@ -19,12 +19,13 @@
 	const allBindings = $derived(keyBindingsStore.bindings);
 	const categories = $derived(keyBindingsStore.getCategories());
 	const filteredBindings = $derived(
-		searchQuery 
-			? allBindings.filter(b => 
-				b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				b.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				b.action.toLowerCase().includes(searchQuery.toLowerCase())
-			)
+		searchQuery
+			? allBindings.filter(
+					(b) =>
+						b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+						b.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+						b.action.toLowerCase().includes(searchQuery.toLowerCase())
+				)
 			: allBindings
 	);
 
@@ -58,9 +59,7 @@
 		if (event.altKey) modifiers.push('Alt');
 		if (event.metaKey) modifiers.push('Meta');
 
-		const keyCombo = modifiers.length > 0 
-			? `${modifiers.join('+')}+${event.key}`
-			: event.key;
+		const keyCombo = modifiers.length > 0 ? `${modifiers.join('+')}+${event.key}` : event.key;
 
 		keyBindingsStore.addBinding(selectedAction, {
 			type: 'keyboard',
@@ -102,7 +101,7 @@
 		if (!mouseStartPos || recordingType !== 'mouse' || !selectedAction) return;
 
 		const button = event.button === 0 ? 'left' : event.button === 1 ? 'middle' : 'right';
-		
+
 		if (mouseGesture) {
 			keyBindingsStore.addBinding(selectedAction, {
 				type: 'mouse',
@@ -196,7 +195,7 @@
 	}
 </script>
 
-<svelte:window 
+<svelte:window
 	onkeydown={handleKeyDown}
 	onmousedown={handleMouseDown}
 	onmousemove={handleMouseMove}
@@ -210,45 +209,40 @@
 	<div class="flex items-center justify-between">
 		<h3 class="text-lg font-semibold">操作绑定设置</h3>
 		<Button variant="outline" size="sm" onclick={resetToDefault}>
-			<RotateCcw class="h-4 w-4 mr-2" />
+			<RotateCcw class="mr-2 h-4 w-4" />
 			重置为默认
 		</Button>
 	</div>
 
 	<!-- 搜索框 -->
-	<Input 
-		type="text" 
-		placeholder="搜索操作..." 
-		bind:value={searchQuery} 
-		class="mb-4"
-	/>
+	<Input type="text" placeholder="搜索操作..." bind:value={searchQuery} class="mb-4" />
 
 	<!-- 操作绑定列表 -->
 	<div class="space-y-6">
 		{#each categories as category}
 			<div class="space-y-2">
-				<h4 class="text-sm font-medium text-muted-foreground uppercase">{category}</h4>
+				<h4 class="text-muted-foreground text-sm font-medium uppercase">{category}</h4>
 				<div class="space-y-3">
-					{#each filteredBindings.filter(b => b.category === category) as binding}
-						<div class="border rounded-lg p-4">
-							<div class="flex items-start justify-between mb-3">
+					{#each filteredBindings.filter((b) => b.category === category) as binding}
+						<div class="rounded-lg border p-4">
+							<div class="mb-3 flex items-start justify-between">
 								<div class="flex-1">
 									<div class="text-sm font-medium">{binding.name}</div>
-									<div class="text-xs text-muted-foreground">{binding.description}</div>
-									<div class="text-xs text-muted-foreground mt-1">ID: {binding.action}</div>
+									<div class="text-muted-foreground text-xs">{binding.description}</div>
+									<div class="text-muted-foreground mt-1 text-xs">ID: {binding.action}</div>
 								</div>
 							</div>
 
 							<!-- 当前绑定列表 -->
-							<div class="space-y-2 mb-3">
+							<div class="mb-3 space-y-2">
 								{#each binding.bindings as bind, i}
 									<div class="flex items-center gap-2">
 										{#if bind.type === 'keyboard'}
-											<Keyboard class="h-3 w-3 text-muted-foreground" />
+											<Keyboard class="text-muted-foreground h-3 w-3" />
 										{:else if bind.type === 'mouse'}
-											<Mouse class="h-3 w-3 text-muted-foreground" />
+											<Mouse class="text-muted-foreground h-3 w-3" />
 										{:else}
-											<Hand class="h-3 w-3 text-muted-foreground" />
+											<Hand class="text-muted-foreground h-3 w-3" />
 										{/if}
 										<Badge variant="secondary" class="text-xs">
 											{formatBinding(bind)}
@@ -270,34 +264,40 @@
 								<Button
 									variant="outline"
 									size="sm"
-									class={recordingType === 'keyboard' && selectedAction === binding.action ? 'animate-pulse' : ''}
+									class={recordingType === 'keyboard' && selectedAction === binding.action
+										? 'animate-pulse'
+										: ''}
 									onclick={() => startRecording(binding.action, 'keyboard')}
 								>
-									<Keyboard class="h-3 w-3 mr-1" />
-									{recordingType === 'keyboard' && selectedAction === binding.action 
-										? '按下按键...' 
+									<Keyboard class="mr-1 h-3 w-3" />
+									{recordingType === 'keyboard' && selectedAction === binding.action
+										? '按下按键...'
 										: '添加键盘'}
 								</Button>
 								<Button
 									variant="outline"
 									size="sm"
-									class={recordingType === 'mouse' && selectedAction === binding.action ? 'animate-pulse' : ''}
+									class={recordingType === 'mouse' && selectedAction === binding.action
+										? 'animate-pulse'
+										: ''}
 									onclick={() => startRecording(binding.action, 'mouse')}
 								>
-									<Mouse class="h-3 w-3 mr-1" />
-									{recordingType === 'mouse' && selectedAction === binding.action 
-										? '拖动手势...' 
+									<Mouse class="mr-1 h-3 w-3" />
+									{recordingType === 'mouse' && selectedAction === binding.action
+										? '拖动手势...'
 										: '添加鼠标'}
 								</Button>
 								<Button
 									variant="outline"
 									size="sm"
-									class={recordingType === 'touch' && selectedAction === binding.action ? 'animate-pulse' : ''}
+									class={recordingType === 'touch' && selectedAction === binding.action
+										? 'animate-pulse'
+										: ''}
 									onclick={() => startRecording(binding.action, 'touch')}
 								>
-									<Hand class="h-3 w-3 mr-1" />
-									{recordingType === 'touch' && selectedAction === binding.action 
-										? '触摸手势...' 
+									<Hand class="mr-1 h-3 w-3" />
+									{recordingType === 'touch' && selectedAction === binding.action
+										? '触摸手势...'
 										: '添加触控'}
 								</Button>
 							</div>
@@ -310,8 +310,8 @@
 
 	<!-- 录制状态提示 -->
 	{#if recordingType && selectedAction}
-		<div class="fixed bottom-4 right-4 p-4 bg-card border rounded-lg shadow-lg max-w-sm">
-			<p class="text-sm mb-2">
+		<div class="bg-card fixed right-4 bottom-4 max-w-sm rounded-lg border p-4 shadow-lg">
+			<p class="mb-2 text-sm">
 				{#if recordingType === 'keyboard'}
 					正在录制键盘快捷键，按下任意组合键...
 				{:else if recordingType === 'mouse'}

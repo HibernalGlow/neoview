@@ -15,7 +15,11 @@ export function calculateZoomIn(currentScale: number, step: number = 0.1, max: n
 /**
  * 减小缩放比例
  */
-export function calculateZoomOut(currentScale: number, step: number = 0.1, min: number = 0.1): number {
+export function calculateZoomOut(
+	currentScale: number,
+	step: number = 0.1,
+	min: number = 0.1
+): number {
 	return Math.max(min, currentScale - step);
 }
 
@@ -128,13 +132,21 @@ export function cycleZoomMode(current: ZoomMode): ZoomMode {
  */
 export function getZoomModeName(mode: ZoomMode): string {
 	switch (mode) {
-		case 'fit': return '适应';
-		case 'fitWidth': return '适宽';
-		case 'fitHeight': return '适高';
-		case 'fill': return '填充';
-		case 'fitLeftAlign': return '左对齐适应';
-		case 'fitRightAlign': return '右对齐适应';
-		case 'original': return '原始';
-		default: return mode;
+		case 'fit':
+			return '适应';
+		case 'fitWidth':
+			return '适宽';
+		case 'fitHeight':
+			return '适高';
+		case 'fill':
+			return '填充';
+		case 'fitLeftAlign':
+			return '左对齐适应';
+		case 'fitRightAlign':
+			return '右对齐适应';
+		case 'original':
+			return '原始';
+		default:
+			return mode;
 	}
 }

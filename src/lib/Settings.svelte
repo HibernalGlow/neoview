@@ -9,7 +9,10 @@
 	import SettingsContent from '$lib/components/SettingsContent.svelte';
 
 	function isTauriRuntime(): boolean {
-		return typeof window !== 'undefined' && Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+		return (
+			typeof window !== 'undefined' &&
+			Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
+		);
 	}
 
 	const appWindow = isTauriRuntime() ? getCurrentWebviewWindow() : null;
@@ -27,11 +30,11 @@
 	}
 </script>
 
-<div class="fixed inset-0 flex flex-col bg-background">
+<div class="bg-background fixed inset-0 flex flex-col">
 	<!-- 自定义标题栏 -->
 	<div
 		data-tauri-drag-region
-		class="flex h-10 shrink-0 select-none items-center justify-between border-b bg-secondary/50 px-4"
+		class="bg-secondary/50 flex h-10 shrink-0 items-center justify-between border-b px-4 select-none"
 	>
 		<div class="flex items-center gap-2">
 			<Settings class="h-4 w-4" />

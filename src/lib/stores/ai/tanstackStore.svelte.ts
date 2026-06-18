@@ -47,7 +47,7 @@ export function createAIStore() {
 		isLoading: false,
 		error: null,
 		streamingContent: '',
-		isStreaming: false,
+		isStreaming: false
 	};
 
 	const { subscribe, update, set } = writable<AIStoreState>(initialState);
@@ -75,7 +75,7 @@ export function createAIStore() {
 		appendStreamChunk(chunk: string) {
 			update((s) => ({
 				...s,
-				streamingContent: s.streamingContent + chunk,
+				streamingContent: s.streamingContent + chunk
 			}));
 		},
 
@@ -100,11 +100,11 @@ export function createAIStore() {
 			const newMessage: AIMessage = {
 				...message,
 				id: generateId(),
-				createdAt: new Date(),
+				createdAt: new Date()
 			};
 			update((s) => ({
 				...s,
-				messages: [...s.messages, newMessage],
+				messages: [...s.messages, newMessage]
 			}));
 			return newMessage;
 		},
@@ -136,7 +136,7 @@ export function createAIStore() {
 		updateMessage(id: string, content: string) {
 			update((s) => ({
 				...s,
-				messages: s.messages.map((m) => (m.id === id ? { ...m, content } : m)),
+				messages: s.messages.map((m) => (m.id === id ? { ...m, content } : m))
 			}));
 		},
 
@@ -146,7 +146,7 @@ export function createAIStore() {
 		removeMessage(id: string) {
 			update((s) => ({
 				...s,
-				messages: s.messages.filter((m) => m.id !== id),
+				messages: s.messages.filter((m) => m.id !== id)
 			}));
 		},
 
@@ -194,7 +194,7 @@ export function createAIStore() {
 				this.addAssistantMessage(state.streamingContent);
 				this.clearStream();
 			}
-		},
+		}
 	};
 }
 

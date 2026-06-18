@@ -38,9 +38,9 @@
 </script>
 
 {#if expanded && bookStore.currentBook}
-	<div class="flex flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-1">
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-2 border-t pt-1">
 		<span class="text-muted-foreground mr-2 text-xs">悬停滚动</span>
-		
+
 		<!-- 开关按钮 -->
 		<Button
 			variant={hoverScrollEnabled ? 'default' : 'outline'}
@@ -62,8 +62,9 @@
 				max="10"
 				step="0.5"
 				value={hoverScrollSpeed}
-				oninput={(e) => handleHoverScrollSpeedChange(parseFloat((e.target as HTMLInputElement).value))}
-				class="h-1 w-20 cursor-pointer appearance-none rounded-full bg-muted"
+				oninput={(e) =>
+					handleHoverScrollSpeedChange(parseFloat((e.target as HTMLInputElement).value))}
+				class="bg-muted h-1 w-20 cursor-pointer appearance-none rounded-full"
 			/>
 			<span class="w-10 text-center text-xs">{hoverScrollSpeed.toFixed(1)}x</span>
 		</div>

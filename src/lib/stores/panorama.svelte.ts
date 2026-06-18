@@ -13,15 +13,15 @@ export const panoramaPageMode = writable<'single' | 'double'>('single');
 
 // 切换全景模式
 export function togglePanorama() {
-  panoramaEnabled.update(v => !v);
+	panoramaEnabled.update((v) => !v);
 }
 
 // 设置全景页面模式
 export function setPanoramaPageMode(mode: 'single' | 'double') {
-  panoramaPageMode.set(mode);
+	panoramaPageMode.set(mode);
 }
 
 // 切换全景页面模式
 export function togglePanoramaPageMode() {
-  panoramaPageMode.update(v => v === 'single' ? 'double' : 'single');
+	panoramaPageMode.update((v) => (v === 'single' ? 'double' : 'single'));
 }

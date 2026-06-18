@@ -102,22 +102,3 @@ export const infoPanelStore = {
 };
 
 export type { InfoPanelState };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

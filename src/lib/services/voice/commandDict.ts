@@ -53,11 +53,13 @@ export const DEFAULT_VOICE_COMMANDS: Record<string, string[]> = {
 	videoSeekModeToggle: ['快进模式', '快进模式切换'],
 
 	// === 超分操作 ===
-	toggleAutoUpscale: ['自动超分', '超分开关', '开启超分', '关闭超分'],
+	toggleAutoUpscale: ['自动超分', '超分开关', '开启超分', '关闭超分']
 };
 
 // 当前生效的命令词典
-let activeVoiceCommands: Record<string, string[]> = JSON.parse(JSON.stringify(DEFAULT_VOICE_COMMANDS));
+let activeVoiceCommands: Record<string, string[]> = JSON.parse(
+	JSON.stringify(DEFAULT_VOICE_COMMANDS)
+);
 
 // 反向映射：命令短语 -> action
 let phraseToActionMap = new Map<string, string>();
@@ -80,14 +82,14 @@ rebuildMap();
 export function updateCommandDict(customCommands: Record<string, string[]>) {
 	// 深拷贝默认配置
 	activeVoiceCommands = JSON.parse(JSON.stringify(DEFAULT_VOICE_COMMANDS));
-	
+
 	// 合并自定义配置
 	for (const [action, phrases] of Object.entries(customCommands)) {
 		if (phrases && phrases.length > 0) {
 			activeVoiceCommands[action] = phrases;
 		}
 	}
-	
+
 	// 重建索引
 	rebuildMap();
 	console.log('[VoiceControl] 命令词典已更新', activeVoiceCommands);
@@ -105,25 +107,30 @@ export function getActiveCommands(): Record<string, string[]> {
  * @param transcript 语音识别的文本
  * @returns 匹配结果或null
  */
-export function findMatchingAction(transcript: string): { action: string; matchedPhrase: string } | null {
+export function findMatchingAction(
+	transcript: string
+): { action: string; matchedPhrase: string } | null {
 	// 归一化：转小写，移除首尾空白，移除常见标点符号
-	const normalizedTranscript = transcript.toLowerCase().trim().replace(/[。，、！？.?!,\s]/g, '');
-	
+	const normalizedTranscript = transcript
+		.toLowerCase()
+		.trim()
+		.replace(/[。，、！？.?!,\s]/g, '');
+
 	// 1. 精确匹配
 	if (phraseToActionMap.has(normalizedTranscript)) {
 		return {
 			action: phraseToActionMap.get(normalizedTranscript)!,
-			matchedPhrase: transcript,
+			matchedPhrase: transcript
 		};
 	}
-	
+
 	// 2. 包含匹配（检查识别文本中是否包含命令短语）
 	for (const [phrase, action] of phraseToActionMap) {
 		if (normalizedTranscript.includes(phrase)) {
 			return { action, matchedPhrase: phrase };
 		}
 	}
-	
+
 	// 3. 模糊匹配（检查命令短语是否包含在识别文本中）
 	for (const [phrase, action] of phraseToActionMap) {
 		// 去除标点和空格后比较
@@ -133,7 +140,7 @@ export function findMatchingAction(transcript: string): { action: string; matche
 			return { action, matchedPhrase: phrase };
 		}
 	}
-	
+
 	return null;
 }
 

@@ -25,10 +25,7 @@
 <div class="space-y-2">
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch 
-				bind:checked={autoUpscaleEnabled} 
-				onchange={handleSettingChange} 
-			/>
+			<Switch bind:checked={autoUpscaleEnabled} onchange={handleSettingChange} />
 			<Label>自动超分</Label>
 		</div>
 	</div>
@@ -36,13 +33,10 @@
 	<div class="setting-row items-start">
 		<div class="flex flex-col gap-2">
 			<div class="flex items-center gap-2">
-				<Switch 
-					bind:checked={preUpscaleEnabled} 
-					onchange={handleSettingChange} 
-				/>
+				<Switch bind:checked={preUpscaleEnabled} onchange={handleSettingChange} />
 				<Label>开启预超分</Label>
 			</div>
-			<div class="flex gap-4 pl-6 text-sm text-muted-foreground">
+			<div class="text-muted-foreground flex gap-4 pl-6 text-sm">
 				<label class="flex items-center gap-2">
 					<span>预超分页数</span>
 					<input
@@ -74,13 +68,10 @@
 	<div class="setting-row items-start">
 		<div class="flex flex-col gap-2">
 			<div class="flex items-center gap-2">
-				<Switch 
-					bind:checked={conditionalUpscaleEnabled} 
-					onchange={handleSettingChange} 
-				/>
+				<Switch bind:checked={conditionalUpscaleEnabled} onchange={handleSettingChange} />
 				<Label>满足条件才自动超分</Label>
 			</div>
-			<div class="flex gap-4 pl-6 text-sm text-muted-foreground">
+			<div class="text-muted-foreground flex gap-4 pl-6 text-sm">
 				<label class="flex items-center gap-2">
 					<span>最小宽度</span>
 					<input
@@ -111,10 +102,7 @@
 
 	<div class="setting-row">
 		<div class="flex items-center gap-2">
-			<Switch 
-				bind:checked={currentImageUpscaleEnabled} 
-				onchange={handleSettingChange} 
-			/>
+			<Switch bind:checked={currentImageUpscaleEnabled} onchange={handleSettingChange} />
 			<Label>切换当前图原图/缓存</Label>
 		</div>
 	</div>

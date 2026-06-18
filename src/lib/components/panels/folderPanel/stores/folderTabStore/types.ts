@@ -5,37 +5,42 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import type { FsItem } from '$lib/types';
-import type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore';
+import type {
+	FolderViewStyle,
+	FolderSortField,
+	FolderSortOrder,
+	DeleteStrategy
+} from '../folderPanelStore';
 
 // ============ 历史记录类型 ============
 
 /** 文件夹历史记录条目 */
 export interface FolderHistoryEntry {
-path: string;
-displayName: string;
-timestamp: number;
-scrollTop: number;
-selectedItemPath: string | null;
-sortField: FolderSortField;
-sortOrder: FolderSortOrder;
+	path: string;
+	displayName: string;
+	timestamp: number;
+	scrollTop: number;
+	selectedItemPath: string | null;
+	sortField: FolderSortField;
+	sortOrder: FolderSortOrder;
 }
 
 /** 层叠栈中的单个层 */
 export interface FolderStackLayer {
-id: string;
-path: string;
-items: FsItem[];
-selectedIndex: number;
-scrollTop: number;
+	id: string;
+	path: string;
+	items: FsItem[];
+	selectedIndex: number;
+	scrollTop: number;
 }
 
 // ============ 最近关闭标签页类型 ============
 
 /** 最近关闭的标签页 */
 export interface RecentlyClosedTab {
-path: string;
-title: string;
-closedAt: number;
+	path: string;
+	title: string;
+	closedAt: number;
 }
 
 // ============ 布局设置类型 ============
@@ -54,17 +59,17 @@ export type PanelMode = 'folder' | 'bookmark' | 'history';
 
 /** 面板布局设置 */
 export interface PanelLayoutSettings {
-tabBarLayout: TabBarLayout;
-tabBarWidth: number;
-breadcrumbPosition: BreadcrumbPosition;
-toolbarPosition: ToolbarPosition;
+	tabBarLayout: TabBarLayout;
+	tabBarWidth: number;
+	breadcrumbPosition: BreadcrumbPosition;
+	toolbarPosition: ToolbarPosition;
 }
 
 /** 按面板类型存储的布局设置 */
 export interface PerPanelLayoutSettings {
-folder: PanelLayoutSettings;
-bookmark: PanelLayoutSettings;
-history: PanelLayoutSettings;
+	folder: PanelLayoutSettings;
+	bookmark: PanelLayoutSettings;
+	history: PanelLayoutSettings;
 }
 
 // ============ 排序设置类型 ============
@@ -80,98 +85,98 @@ export type SortInheritStrategy = 'default' | 'inherit';
 
 /** 当前标签页临时排序规则（仅某个文件夹生效） */
 export interface TemporarySortRule {
-path: string;
-sortField: FolderSortField;
-sortOrder: FolderSortOrder;
+	path: string;
+	sortField: FolderSortField;
+	sortOrder: FolderSortOrder;
 }
 
 /** 文件夹排序记忆条目 */
 export interface FolderSortMemoryEntry {
-sortField: FolderSortField;
-sortOrder: FolderSortOrder;
-updatedAt: number;
+	sortField: FolderSortField;
+	sortOrder: FolderSortOrder;
+	updatedAt: number;
 }
 
 /** 共享排序设置 */
 export interface SharedSortSettings {
-globalDefaultSortField: FolderSortField;
-globalDefaultSortOrder: FolderSortOrder;
-defaultScope: SortDefaultScope;
-folderSortMemory: Record<string, FolderSortMemoryEntry>;
+	globalDefaultSortField: FolderSortField;
+	globalDefaultSortOrder: FolderSortOrder;
+	defaultScope: SortDefaultScope;
+	folderSortMemory: Record<string, FolderSortMemoryEntry>;
 }
 
 /** 共享文件夹树设置 */
 export interface SharedFolderTreeSettings {
-folderTreeVisible: boolean;
-folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
-folderTreeSize: number;
+	folderTreeVisible: boolean;
+	folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
+	folderTreeSize: number;
 }
 
 /** 共享显示设置 */
 export interface SharedDisplaySettings {
-thumbnailWidthPercent: number;
+	thumbnailWidthPercent: number;
 }
 
 // ============ 标签页状态类型 ============
 
 /** 单个标签页的完整状态 */
 export interface FolderTabState {
-id: string;
-title: string;
-pinned: boolean;
-currentPath: string;
-items: FsItem[];
-selectedItems: SvelteSet<string>;
-focusedItem: FsItem | null;
-lastSelectedIndex: number;
-loading: boolean;
-error: string | null;
-viewStyle: FolderViewStyle;
-sortField: FolderSortField;
-sortOrder: FolderSortOrder;
-tabDefaultSortField: FolderSortField;
-tabDefaultSortOrder: FolderSortOrder;
-temporarySortRule: TemporarySortRule | null;
-sortSource: SortSource;
-ratingVersion: number;
-multiSelectMode: boolean;
-deleteMode: boolean;
-recursiveMode: boolean;
-searchKeyword: string;
-searchResults: FsItem[];
-isSearching: boolean;
-showSearchBar: boolean;
-showMigrationBar: boolean;
-showPenetrateSettingsBar: boolean;
-penetrateMode: boolean;
-openInNewTabMode: boolean;
-deleteStrategy: DeleteStrategy;
-searchSettings: {
-includeSubfolders: boolean;
-showHistoryOnFocus: boolean;
-searchInPath: boolean;
-};
-inlineTreeMode: boolean;
-expandedFolders: SvelteSet<string>;
-folderTreeVisible: boolean;
-folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
-folderTreeSize: number;
-historyStack: FolderHistoryEntry[];
-historyIndex: number;
-homePath: string;
-stackLayers: FolderStackLayer[];
-stackActiveIndex: number;
-thumbnailWidthPercent: number;
-bannerWidthPercent: number;
-pendingFocusPath: string | null;
+	id: string;
+	title: string;
+	pinned: boolean;
+	currentPath: string;
+	items: FsItem[];
+	selectedItems: SvelteSet<string>;
+	focusedItem: FsItem | null;
+	lastSelectedIndex: number;
+	loading: boolean;
+	error: string | null;
+	viewStyle: FolderViewStyle;
+	sortField: FolderSortField;
+	sortOrder: FolderSortOrder;
+	tabDefaultSortField: FolderSortField;
+	tabDefaultSortOrder: FolderSortOrder;
+	temporarySortRule: TemporarySortRule | null;
+	sortSource: SortSource;
+	ratingVersion: number;
+	multiSelectMode: boolean;
+	deleteMode: boolean;
+	recursiveMode: boolean;
+	searchKeyword: string;
+	searchResults: FsItem[];
+	isSearching: boolean;
+	showSearchBar: boolean;
+	showMigrationBar: boolean;
+	showPenetrateSettingsBar: boolean;
+	penetrateMode: boolean;
+	openInNewTabMode: boolean;
+	deleteStrategy: DeleteStrategy;
+	searchSettings: {
+		includeSubfolders: boolean;
+		showHistoryOnFocus: boolean;
+		searchInPath: boolean;
+	};
+	inlineTreeMode: boolean;
+	expandedFolders: SvelteSet<string>;
+	folderTreeVisible: boolean;
+	folderTreeLayout: 'top' | 'left' | 'right' | 'bottom';
+	folderTreeSize: number;
+	historyStack: FolderHistoryEntry[];
+	historyIndex: number;
+	homePath: string;
+	stackLayers: FolderStackLayer[];
+	stackActiveIndex: number;
+	thumbnailWidthPercent: number;
+	bannerWidthPercent: number;
+	pendingFocusPath: string | null;
 }
 
 /** 标签页集合状态 */
 export interface FolderTabsState {
-tabs: FolderTabState[];
-activeTabId: string;
-tabNavHistory: string[];
-tabNavHistoryIndex: number;
+	tabs: FolderTabState[];
+	activeTabId: string;
+	tabNavHistory: string[];
+	tabNavHistoryIndex: number;
 }
 
 // ============ 常量定义 ============
@@ -179,30 +184,35 @@ tabNavHistoryIndex: number;
 export const MAX_RECENTLY_CLOSED = 10;
 
 export const STORAGE_KEYS = {
-TABS: 'neoview-folder-tabs',
-RECENTLY_CLOSED: 'neoview-recently-closed-tabs',
-SHARED_TREE: 'neoview-folder-tree-shared',
-SHARED_SORT: 'neoview-folder-sort-shared',
-SHARED_TAB_BAR: 'neoview-tab-bar-shared',
-SHARED_DISPLAY: 'neoview-display-shared'
+	TABS: 'neoview-folder-tabs',
+	RECENTLY_CLOSED: 'neoview-recently-closed-tabs',
+	SHARED_TREE: 'neoview-folder-tree-shared',
+	SHARED_SORT: 'neoview-folder-sort-shared',
+	SHARED_TAB_BAR: 'neoview-tab-bar-shared',
+	SHARED_DISPLAY: 'neoview-display-shared'
 } as const;
 
 export const VIRTUAL_PATHS = {
-BOOKMARK: 'virtual://bookmark',
-HISTORY: 'virtual://history',
-SEARCH: 'virtual://search'
+	BOOKMARK: 'virtual://bookmark',
+	HISTORY: 'virtual://history',
+	SEARCH: 'virtual://search'
 } as const;
 
 export type VirtualPathType = 'bookmark' | 'history' | 'search' | null;
 
 export const DEFAULT_PANEL_LAYOUT_SETTINGS: PanelLayoutSettings = {
-tabBarLayout: 'none',
-tabBarWidth: 160,
-breadcrumbPosition: 'none',
-toolbarPosition: 'top'
+	tabBarLayout: 'none',
+	tabBarWidth: 160,
+	breadcrumbPosition: 'none',
+	toolbarPosition: 'top'
 };
 
 // ============ 重新导出依赖类型 ============
 
 export type { FsItem } from '$lib/types';
-export type { FolderViewStyle, FolderSortField, FolderSortOrder, DeleteStrategy } from '../folderPanelStore';
+export type {
+	FolderViewStyle,
+	FolderSortField,
+	FolderSortOrder,
+	DeleteStrategy
+} from '../folderPanelStore';

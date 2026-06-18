@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 操作绑定设置卡片
- */
-import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
+	/**
+	 * 操作绑定设置卡片
+	 */
+	import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import UnifiedBindingPanel from '$lib/components/dialogs/UnifiedBindingPanel.sve
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

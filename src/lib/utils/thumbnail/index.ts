@@ -6,12 +6,12 @@ export { FolderThumbnailLoader, folderThumbnailLoader } from './FolderThumbnailL
 export type { FolderThumbnailConfig, WarmupProgress } from './FolderThumbnailLoader';
 
 // IPC 超时工具
-export { 
-	invokeWithTimeout, 
-	IpcTimeoutError, 
-	isTimeoutError, 
+export {
+	invokeWithTimeout,
+	IpcTimeoutError,
+	isTimeoutError,
 	isIpcError,
-	DEFAULT_IPC_TIMEOUT 
+	DEFAULT_IPC_TIMEOUT
 } from './ipcTimeout';
 
 // 占位图支持

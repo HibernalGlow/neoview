@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 书籍设置卡片
- */
-import BookSettingsPanel from '$lib/components/panels/BookSettingsPanel.svelte';
+	/**
+	 * 书籍设置卡片
+	 */
+	import BookSettingsPanel from '$lib/components/panels/BookSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -27,7 +27,7 @@ import BookSettingsPanel from '$lib/components/panels/BookSettingsPanel.svelte';
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

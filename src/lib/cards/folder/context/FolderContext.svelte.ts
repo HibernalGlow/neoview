@@ -36,12 +36,12 @@ export interface FolderContextValue {
 	readonly isVirtualInstance: boolean;
 	readonly panelMode: PanelMode;
 	readonly initialPath: string | undefined;
-	
+
 	// ============ 导航相关 ============
 	readonly navigationCommand: ReturnType<typeof writable<NavigationCommand | null>>;
 	homePath: string;
 	localTabState: LocalTabState | null;
-	
+
 	// ============ 全局 Store 引用 ============
 	readonly currentPath: typeof tabCurrentPath;
 	readonly folderTreeConfig: typeof tabFolderTreeConfig;
@@ -57,14 +57,14 @@ export interface FolderContextValue {
 	readonly isSearching: typeof tabIsSearching;
 	readonly searchSettings: typeof tabSearchSettings;
 	readonly items: typeof tabItems;
-	
+
 	// ============ 本地搜索状态（虚拟路径独立）============
 	readonly localSearchStore: {
 		keyword: ReturnType<typeof writable<string>>;
 		results: ReturnType<typeof writable<FsItem[]>>;
 		isSearching: ReturnType<typeof writable<boolean>>;
 	};
-	
+
 	// ============ 页签相关 ============
 	readonly activeTabId: typeof activeTabId;
 	readonly allTabs: typeof allTabs;
@@ -80,7 +80,7 @@ export interface FolderContextValue {
 	readonly closeLocalTab: (tabId: string) => void;
 	/** 切换标签页 */
 	readonly switchLocalTab: (tabId: string) => void;
-	
+
 	// ============ 有效状态（响应式派生值）============
 	readonly effectiveShowSearchBar: boolean;
 	readonly effectiveShowMigrationBar: boolean;
@@ -90,14 +90,14 @@ export interface FolderContextValue {
 	readonly effectiveViewStyle: 'list' | 'content' | 'banner' | 'thumbnail' | undefined;
 	readonly effectiveSortConfig: { field: string; order: 'asc' | 'desc' } | undefined;
 	readonly effectiveFolderTreeConfig: { visible: boolean; layout: string; size: number } | null;
-	
+
 	// ============ UI 状态 ============
 	contextMenu: ContextMenuState;
 	clipboardItem: ClipboardState | null;
 	showFavoriteTagPanel: boolean;
 	showMigrationManager: boolean;
 	showRandomTagBar: boolean;
-	
+
 	// ============ 对话框状态 ============
 	confirmDialogOpen: boolean;
 	confirmDialogTitle: string;
@@ -107,12 +107,12 @@ export interface FolderContextValue {
 	confirmDialogOnConfirm: () => void;
 	renameDialogOpen: boolean;
 	renameDialogItem: FsItem | null;
-	
+
 	// ============ 树调整状态 ============
 	isResizingTree: boolean;
 	resizeStartPos: number;
 	resizeStartSize: number;
-	
+
 	// ============ 计算属性 ============
 	readonly displayTabs: Array<{ id: string; title: string; currentPath: string; homePath: string }>;
 	readonly displayActiveTabId: string;
@@ -124,40 +124,47 @@ export interface FolderContextValue {
 export function createFolderContext(initialPath?: string): FolderContextValue {
 	const isVirtual = !!(initialPath && isVirtualPath(initialPath));
 	const panelMode: PanelMode = isVirtual
-		? (initialPath?.includes('bookmark') ? 'bookmark' : initialPath?.includes('search') ? 'folder' : 'history')
+		? initialPath?.includes('bookmark')
+			? 'bookmark'
+			: initialPath?.includes('search')
+				? 'folder'
+				: 'history'
 		: 'folder';
-	
+
 	// 导航命令
 	const navigationCommand = writable<NavigationCommand | null>(null);
-	
+
 	// 本地搜索状态（虚拟路径独立使用）
 	const localSearchKeyword = writable<string>('');
 	const localSearchResults = writable<FsItem[]>([]);
 	const localIsSearching = writable<boolean>(false);
-	
+
 	// 实例状态
 	let homePath = $state('');
 	let localTabState = $state<LocalTabState | null>(null);
 	let currentActiveTabId = $state(get(activeTabId));
 	let currentAllTabs = $state(get(allTabs));
-	
+
 	// 本地标签页管理（用于虚拟面板独立多标签）
 	// 为虚拟实例创建初始标签页
 	const initialTabId = isVirtual ? `local-init-${Date.now()}` : '';
-	const initialTab: LocalTabState | null = isVirtual && initialPath ? {
-		id: initialTabId,
-		title: panelMode === 'bookmark' ? '书签' : panelMode === 'history' ? '历史' : 'Tab',
-		currentPath: initialPath,
-		homePath: initialPath
-	} : null;
+	const initialTab: LocalTabState | null =
+		isVirtual && initialPath
+			? {
+					id: initialTabId,
+					title: panelMode === 'bookmark' ? '书签' : panelMode === 'history' ? '历史' : 'Tab',
+					currentPath: initialPath,
+					homePath: initialPath
+				}
+			: null;
 	let localTabs = $state<LocalTabState[]>(initialTab ? [initialTab] : []);
 	let localActiveTabId = $state<string>(initialTabId);
-	
+
 	// 生成标签页 ID
 	function generateTabId(): string {
 		return `local-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 	}
-	
+
 	// 创建新标签页
 	function createLocalTab(path?: string) {
 		const tabPath = path || initialPath || '';
@@ -173,17 +180,17 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		// 触发导航到新标签页
 		navigationCommand.set({ type: 'init', path: tabPath });
 	}
-	
+
 	// 关闭标签页
 	function closeLocalTab(tabId: string) {
-		const idx = localTabs.findIndex(t => t.id === tabId);
+		const idx = localTabs.findIndex((t) => t.id === tabId);
 		if (idx === -1) return;
-		
+
 		// 至少保留一个标签页
 		if (localTabs.length <= 1) return;
-		
-		localTabs = localTabs.filter(t => t.id !== tabId);
-		
+
+		localTabs = localTabs.filter((t) => t.id !== tabId);
+
 		// 如果关闭的是当前活动标签，切换到相邻标签
 		if (localActiveTabId === tabId) {
 			const newIdx = Math.min(idx, localTabs.length - 1);
@@ -194,98 +201,127 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 			}
 		}
 	}
-	
+
 	// 切换标签页
 	function switchLocalTab(tabId: string) {
-		const tab = localTabs.find(t => t.id === tabId);
+		const tab = localTabs.find((t) => t.id === tabId);
 		if (!tab) return;
 		localActiveTabId = tabId;
 		navigationCommand.set({ type: 'init', path: tab.currentPath });
 	}
-	
+
 	// 全局 store 订阅的本地值
 	let globalShowSearchBarValue = $state(false);
 	let globalShowMigrationBarValue = $state(false);
 	let globalMultiSelectModeValue = $state(false);
 	let globalDeleteModeValue = $state(false);
 	let globalInlineTreeModeValue = $state(false);
-	
+
 	// 订阅全局 store
 	$effect(() => {
 		const unsubs = [
-			tabShowSearchBar.subscribe(v => globalShowSearchBarValue = v),
-			tabShowMigrationBar.subscribe(v => globalShowMigrationBarValue = v),
-			tabMultiSelectMode.subscribe(v => globalMultiSelectModeValue = v),
-			tabDeleteMode.subscribe(v => globalDeleteModeValue = v),
-			tabInlineTreeMode.subscribe(v => globalInlineTreeModeValue = v)
+			tabShowSearchBar.subscribe((v) => (globalShowSearchBarValue = v)),
+			tabShowMigrationBar.subscribe((v) => (globalShowMigrationBarValue = v)),
+			tabMultiSelectMode.subscribe((v) => (globalMultiSelectModeValue = v)),
+			tabDeleteMode.subscribe((v) => (globalDeleteModeValue = v)),
+			tabInlineTreeMode.subscribe((v) => (globalInlineTreeModeValue = v))
 		];
-		return () => unsubs.forEach(u => u());
+		return () => unsubs.forEach((u) => u());
 	});
-	
+
 	// 订阅页签状态（非虚拟实例）
 	$effect(() => {
 		if (isVirtual) return;
-		const unsub1 = activeTabId.subscribe(v => currentActiveTabId = v);
-		const unsub2 = allTabs.subscribe(v => currentAllTabs = v);
-		return () => { unsub1(); unsub2(); };
+		const unsub1 = activeTabId.subscribe((v) => (currentActiveTabId = v));
+		const unsub2 = allTabs.subscribe((v) => (currentAllTabs = v));
+		return () => {
+			unsub1();
+			unsub2();
+		};
 	});
-	
+
 	// 有效状态（响应式派生值）
 	const effectiveShowSearchBar = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyShowSearchBar :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkShowSearchBar :
-		globalShowSearchBarValue
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyShowSearchBar
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkShowSearchBar
+				: globalShowSearchBarValue
 	);
-	
+
 	const effectiveShowMigrationBar = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyShowMigrationBar :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkShowMigrationBar :
-		globalShowMigrationBarValue
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyShowMigrationBar
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkShowMigrationBar
+				: globalShowMigrationBarValue
 	);
-	
+
 	const effectiveMultiSelectMode = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyMultiSelectMode :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkMultiSelectMode :
-		globalMultiSelectModeValue
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyMultiSelectMode
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkMultiSelectMode
+				: globalMultiSelectModeValue
 	);
-	
+
 	const effectiveDeleteMode = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyDeleteMode :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkDeleteMode :
-		globalDeleteModeValue
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyDeleteMode
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkDeleteMode
+				: globalDeleteModeValue
 	);
-	
+
 	const effectiveInlineTreeMode = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyInlineTreeMode :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkInlineTreeMode :
-		globalInlineTreeModeValue
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyInlineTreeMode
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkInlineTreeMode
+				: globalInlineTreeModeValue
 	);
-	
+
 	const effectiveViewStyle = $derived<'list' | 'content' | 'banner' | 'thumbnail' | undefined>(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkViewStyle as 'list' | 'content' | 'banner' | 'thumbnail' :
-		undefined
+		panelMode === 'history'
+			? (virtualPanelSettingsStore.historyViewStyle as 'list' | 'content' | 'banner' | 'thumbnail')
+			: panelMode === 'bookmark'
+				? (virtualPanelSettingsStore.bookmarkViewStyle as
+						| 'list'
+						| 'content'
+						| 'banner'
+						| 'thumbnail')
+				: undefined
 	);
-	
+
 	const effectiveSortConfig = $derived<{ field: string; order: 'asc' | 'desc' } | undefined>(
-		panelMode === 'history' ? { field: virtualPanelSettingsStore.historySortField, order: virtualPanelSettingsStore.historySortOrder as 'asc' | 'desc' } :
-		panelMode === 'bookmark' ? { field: virtualPanelSettingsStore.bookmarkSortField, order: virtualPanelSettingsStore.bookmarkSortOrder as 'asc' | 'desc' } :
-		undefined
+		panelMode === 'history'
+			? {
+					field: virtualPanelSettingsStore.historySortField,
+					order: virtualPanelSettingsStore.historySortOrder as 'asc' | 'desc'
+				}
+			: panelMode === 'bookmark'
+				? {
+						field: virtualPanelSettingsStore.bookmarkSortField,
+						order: virtualPanelSettingsStore.bookmarkSortOrder as 'asc' | 'desc'
+					}
+				: undefined
 	);
-	
+
 	const effectiveFolderTreeConfig = $derived(
-		panelMode === 'history' ? virtualPanelSettingsStore.historyFolderTreeConfig :
-		panelMode === 'bookmark' ? virtualPanelSettingsStore.bookmarkFolderTreeConfig :
-		null // null 表示使用全局 store
+		panelMode === 'history'
+			? virtualPanelSettingsStore.historyFolderTreeConfig
+			: panelMode === 'bookmark'
+				? virtualPanelSettingsStore.bookmarkFolderTreeConfig
+				: null // null 表示使用全局 store
 	);
-	
+
 	// UI 状态
 	let contextMenu = $state<ContextMenuState>({ x: 0, y: 0, item: null, visible: false });
 	let clipboardItem = $state<ClipboardState | null>(null);
 	let showFavoriteTagPanel = $state(false);
 	let showMigrationManager = $state(false);
 	let showRandomTagBar = $state(false);
-	
+
 	// 对话框状态
 	let confirmDialogOpen = $state(false);
 	let confirmDialogTitle = $state('');
@@ -295,38 +331,48 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 	let confirmDialogOnConfirm = $state<() => void>(() => {});
 	let renameDialogOpen = $state(false);
 	let renameDialogItem = $state<FsItem | null>(null);
-	
+
 	// 树调整状态
 	let isResizingTree = $state(false);
 	let resizeStartPos = $state(0);
 	let resizeStartSize = $state(0);
-	
+
 	// 计算属性
 	// 虚拟实例使用本地标签页数组，非虚拟实例使用全局 store
 	const displayTabs = $derived(
 		isVirtual
-			? (localTabs.length > 0 ? localTabs : (localTabState ? [localTabState] : []))
+			? localTabs.length > 0
+				? localTabs
+				: localTabState
+					? [localTabState]
+					: []
 			: currentAllTabs
 	);
 	const displayActiveTabId = $derived(
-		isVirtual
-			? (localActiveTabId || localTabState?.id || '')
-			: currentActiveTabId
+		isVirtual ? localActiveTabId || localTabState?.id || '' : currentActiveTabId
 	);
-	
+
 	const context: FolderContextValue = {
 		// 实例信息
 		isVirtualInstance: isVirtual,
 		panelMode,
 		initialPath,
-		
+
 		// 导航
 		navigationCommand,
-		get homePath() { return homePath; },
-		set homePath(v) { homePath = v; },
-		get localTabState() { return localTabState; },
-		set localTabState(v) { localTabState = v; },
-		
+		get homePath() {
+			return homePath;
+		},
+		set homePath(v) {
+			homePath = v;
+		},
+		get localTabState() {
+			return localTabState;
+		},
+		set localTabState(v) {
+			localTabState = v;
+		},
+
 		// 全局 Store 引用（虚拟路径使用本地 store）
 		currentPath: tabCurrentPath,
 		folderTreeConfig: tabFolderTreeConfig,
@@ -342,84 +388,184 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 		isSearching: isVirtual ? localIsSearching : tabIsSearching,
 		searchSettings: tabSearchSettings,
 		items: tabItems,
-		
+
 		// 本地搜索状态
 		localSearchStore: {
 			keyword: localSearchKeyword,
 			results: localSearchResults,
 			isSearching: localIsSearching
 		},
-		
+
 		// 页签
 		activeTabId,
 		allTabs,
-		get currentActiveTabId() { return currentActiveTabId; },
-		set currentActiveTabId(v) { currentActiveTabId = v; },
-		get currentAllTabs() { return currentAllTabs; },
-		set currentAllTabs(v) { currentAllTabs = v; },
-		
+		get currentActiveTabId() {
+			return currentActiveTabId;
+		},
+		set currentActiveTabId(v) {
+			currentActiveTabId = v;
+		},
+		get currentAllTabs() {
+			return currentAllTabs;
+		},
+		set currentAllTabs(v) {
+			currentAllTabs = v;
+		},
+
 		// 本地标签页管理
-		get localTabs() { return localTabs; },
-		set localTabs(v) { localTabs = v; },
-		get localActiveTabId() { return localActiveTabId; },
-		set localActiveTabId(v) { localActiveTabId = v; },
+		get localTabs() {
+			return localTabs;
+		},
+		set localTabs(v) {
+			localTabs = v;
+		},
+		get localActiveTabId() {
+			return localActiveTabId;
+		},
+		set localActiveTabId(v) {
+			localActiveTabId = v;
+		},
 		createLocalTab,
 		closeLocalTab,
 		switchLocalTab,
-		
+
 		// 有效状态
-		get effectiveShowSearchBar() { return effectiveShowSearchBar; },
-		get effectiveShowMigrationBar() { return effectiveShowMigrationBar; },
-		get effectiveMultiSelectMode() { return effectiveMultiSelectMode; },
-		get effectiveDeleteMode() { return effectiveDeleteMode; },
-		get effectiveInlineTreeMode() { return effectiveInlineTreeMode; },
-		get effectiveViewStyle() { return effectiveViewStyle; },
-		get effectiveSortConfig() { return effectiveSortConfig; },
-		get effectiveFolderTreeConfig() { return effectiveFolderTreeConfig; },
-		
+		get effectiveShowSearchBar() {
+			return effectiveShowSearchBar;
+		},
+		get effectiveShowMigrationBar() {
+			return effectiveShowMigrationBar;
+		},
+		get effectiveMultiSelectMode() {
+			return effectiveMultiSelectMode;
+		},
+		get effectiveDeleteMode() {
+			return effectiveDeleteMode;
+		},
+		get effectiveInlineTreeMode() {
+			return effectiveInlineTreeMode;
+		},
+		get effectiveViewStyle() {
+			return effectiveViewStyle;
+		},
+		get effectiveSortConfig() {
+			return effectiveSortConfig;
+		},
+		get effectiveFolderTreeConfig() {
+			return effectiveFolderTreeConfig;
+		},
+
 		// UI 状态
-		get contextMenu() { return contextMenu; },
-		set contextMenu(v) { contextMenu = v; },
-		get clipboardItem() { return clipboardItem; },
-		set clipboardItem(v) { clipboardItem = v; },
-		get showFavoriteTagPanel() { return showFavoriteTagPanel; },
-		set showFavoriteTagPanel(v) { showFavoriteTagPanel = v; },
-		get showMigrationManager() { return showMigrationManager; },
-		set showMigrationManager(v) { showMigrationManager = v; },
-		get showRandomTagBar() { return showRandomTagBar; },
-		set showRandomTagBar(v) { showRandomTagBar = v; },
-		
+		get contextMenu() {
+			return contextMenu;
+		},
+		set contextMenu(v) {
+			contextMenu = v;
+		},
+		get clipboardItem() {
+			return clipboardItem;
+		},
+		set clipboardItem(v) {
+			clipboardItem = v;
+		},
+		get showFavoriteTagPanel() {
+			return showFavoriteTagPanel;
+		},
+		set showFavoriteTagPanel(v) {
+			showFavoriteTagPanel = v;
+		},
+		get showMigrationManager() {
+			return showMigrationManager;
+		},
+		set showMigrationManager(v) {
+			showMigrationManager = v;
+		},
+		get showRandomTagBar() {
+			return showRandomTagBar;
+		},
+		set showRandomTagBar(v) {
+			showRandomTagBar = v;
+		},
+
 		// 对话框
-		get confirmDialogOpen() { return confirmDialogOpen; },
-		set confirmDialogOpen(v) { confirmDialogOpen = v; },
-		get confirmDialogTitle() { return confirmDialogTitle; },
-		set confirmDialogTitle(v) { confirmDialogTitle = v; },
-		get confirmDialogDescription() { return confirmDialogDescription; },
-		set confirmDialogDescription(v) { confirmDialogDescription = v; },
-		get confirmDialogConfirmText() { return confirmDialogConfirmText; },
-		set confirmDialogConfirmText(v) { confirmDialogConfirmText = v; },
-		get confirmDialogVariant() { return confirmDialogVariant; },
-		set confirmDialogVariant(v) { confirmDialogVariant = v; },
-		get confirmDialogOnConfirm() { return confirmDialogOnConfirm; },
-		set confirmDialogOnConfirm(v) { confirmDialogOnConfirm = v; },
-		get renameDialogOpen() { return renameDialogOpen; },
-		set renameDialogOpen(v) { renameDialogOpen = v; },
-		get renameDialogItem() { return renameDialogItem; },
-		set renameDialogItem(v) { renameDialogItem = v; },
-		
+		get confirmDialogOpen() {
+			return confirmDialogOpen;
+		},
+		set confirmDialogOpen(v) {
+			confirmDialogOpen = v;
+		},
+		get confirmDialogTitle() {
+			return confirmDialogTitle;
+		},
+		set confirmDialogTitle(v) {
+			confirmDialogTitle = v;
+		},
+		get confirmDialogDescription() {
+			return confirmDialogDescription;
+		},
+		set confirmDialogDescription(v) {
+			confirmDialogDescription = v;
+		},
+		get confirmDialogConfirmText() {
+			return confirmDialogConfirmText;
+		},
+		set confirmDialogConfirmText(v) {
+			confirmDialogConfirmText = v;
+		},
+		get confirmDialogVariant() {
+			return confirmDialogVariant;
+		},
+		set confirmDialogVariant(v) {
+			confirmDialogVariant = v;
+		},
+		get confirmDialogOnConfirm() {
+			return confirmDialogOnConfirm;
+		},
+		set confirmDialogOnConfirm(v) {
+			confirmDialogOnConfirm = v;
+		},
+		get renameDialogOpen() {
+			return renameDialogOpen;
+		},
+		set renameDialogOpen(v) {
+			renameDialogOpen = v;
+		},
+		get renameDialogItem() {
+			return renameDialogItem;
+		},
+		set renameDialogItem(v) {
+			renameDialogItem = v;
+		},
+
 		// 树调整
-		get isResizingTree() { return isResizingTree; },
-		set isResizingTree(v) { isResizingTree = v; },
-		get resizeStartPos() { return resizeStartPos; },
-		set resizeStartPos(v) { resizeStartPos = v; },
-		get resizeStartSize() { return resizeStartSize; },
-		set resizeStartSize(v) { resizeStartSize = v; },
-		
+		get isResizingTree() {
+			return isResizingTree;
+		},
+		set isResizingTree(v) {
+			isResizingTree = v;
+		},
+		get resizeStartPos() {
+			return resizeStartPos;
+		},
+		set resizeStartPos(v) {
+			resizeStartPos = v;
+		},
+		get resizeStartSize() {
+			return resizeStartSize;
+		},
+		set resizeStartSize(v) {
+			resizeStartSize = v;
+		},
+
 		// 计算属性
-		get displayTabs() { return displayTabs; },
-		get displayActiveTabId() { return displayActiveTabId; }
+		get displayTabs() {
+			return displayTabs;
+		},
+		get displayActiveTabId() {
+			return displayActiveTabId;
+		}
 	};
-	
+
 	setContext(FOLDER_CONTEXT_KEY, context);
 	return context;
 }
@@ -430,7 +576,9 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 export function getFolderContext(): FolderContextValue {
 	const ctx = getContext<FolderContextValue>(FOLDER_CONTEXT_KEY);
 	if (!ctx) {
-		throw new Error('FolderContext not found. Make sure to call createFolderContext in a parent component.');
+		throw new Error(
+			'FolderContext not found. Make sure to call createFolderContext in a parent component.'
+		);
 	}
 	return ctx;
 }

@@ -37,19 +37,19 @@ let direction = $state<Direction>('ltr');
 // ============================================================================
 
 export function getPageMode(): PageMode {
-  return pageMode;
+	return pageMode;
 }
 
 export function isPanoramaEnabled(): boolean {
-  return panoramaEnabled;
+	return panoramaEnabled;
 }
 
 export function getOrientation(): Orientation {
-  return orientation;
+	return orientation;
 }
 
 export function getDirection(): Direction {
-  return direction;
+	return direction;
 }
 
 // ============================================================================
@@ -57,19 +57,19 @@ export function getDirection(): Direction {
 // ============================================================================
 
 export function setPageMode(mode: PageMode) {
-  pageMode = mode;
+	pageMode = mode;
 }
 
 export function setPanoramaEnabled(enabled: boolean) {
-  panoramaEnabled = enabled;
+	panoramaEnabled = enabled;
 }
 
 export function setOrientation(o: Orientation) {
-  orientation = o;
+	orientation = o;
 }
 
 export function setDirection(d: Direction) {
-  direction = d;
+	direction = d;
 }
 
 // ============================================================================
@@ -77,15 +77,15 @@ export function setDirection(d: Direction) {
 // ============================================================================
 
 export function togglePageMode() {
-  pageMode = pageMode === 'single' ? 'double' : 'single';
+	pageMode = pageMode === 'single' ? 'double' : 'single';
 }
 
 export function togglePanorama() {
-  panoramaEnabled = !panoramaEnabled;
+	panoramaEnabled = !panoramaEnabled;
 }
 
 export function toggleOrientation() {
-  orientation = orientation === 'horizontal' ? 'vertical' : 'horizontal';
+	orientation = orientation === 'horizontal' ? 'vertical' : 'horizontal';
 }
 
 // ============================================================================
@@ -94,7 +94,7 @@ export function toggleOrientation() {
 
 /** 每次翻页的步进 */
 export function getPageStep(): number {
-  return pageMode === 'double' ? 2 : 1;
+	return pageMode === 'double' ? 2 : 1;
 }
 
 // ============================================================================
@@ -102,17 +102,27 @@ export function getPageStep(): number {
 // ============================================================================
 
 export const viewState = {
-  get pageMode() { return pageMode; },
-  get panoramaEnabled() { return panoramaEnabled; },
-  get orientation() { return orientation; },
-  get direction() { return direction; },
-  get pageStep() { return getPageStep(); },
-  
-  setPageMode,
-  setPanoramaEnabled,
-  setOrientation,
-  setDirection,
-  togglePageMode,
-  togglePanorama,
-  toggleOrientation,
+	get pageMode() {
+		return pageMode;
+	},
+	get panoramaEnabled() {
+		return panoramaEnabled;
+	},
+	get orientation() {
+		return orientation;
+	},
+	get direction() {
+		return direction;
+	},
+	get pageStep() {
+		return getPageStep();
+	},
+
+	setPageMode,
+	setPanoramaEnabled,
+	setOrientation,
+	setDirection,
+	togglePageMode,
+	togglePanorama,
+	toggleOrientation
 };

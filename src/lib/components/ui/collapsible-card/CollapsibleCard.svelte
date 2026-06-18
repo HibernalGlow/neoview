@@ -60,20 +60,20 @@
 </script>
 
 <div
-	class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
-	style:order={order}
+	class="bg-muted/10 hover:border-primary/60 space-y-3 rounded-lg border p-3 transition-all"
+	style:order
 >
 	<div class="flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			{#if Icon}
 				<Icon class="h-4 w-4 {iconColor}" />
 			{/if}
-			<div class="font-semibold text-sm">{title}</div>
+			<div class="text-sm font-semibold">{title}</div>
 		</div>
 		<div class="flex items-center gap-1 text-[10px]">
 			<button
 				type="button"
-				class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+				class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded"
 				onclick={toggleExpanded}
 				title={expanded ? '收起' : '展开'}
 			>
@@ -86,7 +86,7 @@
 			{#if onMove}
 				<button
 					type="button"
-					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+					class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded disabled:opacity-40"
 					onclick={() => handleMove('up')}
 					disabled={!canMoveUp}
 				>
@@ -94,7 +94,7 @@
 				</button>
 				<button
 					type="button"
-					class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40"
+					class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded disabled:opacity-40"
 					onclick={() => handleMove('down')}
 					disabled={!canMoveDown}
 				>

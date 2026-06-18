@@ -19,7 +19,9 @@
 		/** 对齐方向 */
 		direction?: Direction;
 		/** 子内容 */
-		children?: import('svelte').Snippet<[{ mouseX: number; magnification: number; distance: number }]>;
+		children?: import('svelte').Snippet<
+			[{ mouseX: number; magnification: number; distance: number }]
+		>;
 	}
 
 	let {
@@ -55,12 +57,7 @@
 
 <Motion let:motion>
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		use:motion
-		onmousemove={handleMouseMove}
-		onmouseleave={handleMouseLeave}
-		class={dockClass}
-	>
+	<div use:motion onmousemove={handleMouseMove} onmouseleave={handleMouseLeave} class={dockClass}>
 		{#if children}
 			{@render children({ mouseX, magnification, distance })}
 		{:else}

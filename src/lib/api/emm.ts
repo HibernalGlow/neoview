@@ -39,7 +39,7 @@ export interface EMMMetadata {
 export interface EMMCollectTag {
 	id: string;
 	letter: string; // 分类字母
-	tag: string;   // 标签名
+	tag: string; // 标签名
 	color: string; // 颜色
 	display: string; // 显示格式 "分类:标签"
 }
@@ -101,7 +101,6 @@ export async function findEMMTranslationDatabase(): Promise<string | null> {
 export async function findEMMSettingFile(): Promise<string | null> {
 	return await invoke<string | null>('find_emm_setting_file');
 }
-
 
 export interface EMMTranslationRecord {
 	name?: string;

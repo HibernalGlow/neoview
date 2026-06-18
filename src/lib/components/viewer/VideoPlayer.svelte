@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import {
-		Maximize,
-		FastForward,
-		Pin,
-		PinOff,
-		PictureInPicture2
-	} from '@lucide/svelte';
+	import { Maximize, FastForward, Pin, PinOff, PictureInPicture2 } from '@lucide/svelte';
 	import { settingsManager, type NeoViewSettings } from '$lib/settings/settingsManager';
 	import type { SubtitleData } from '$lib/utils/subtitleUtils';
 	import { infoPanelStore } from '$lib/stores/infoPanel.svelte';
@@ -90,31 +84,34 @@
 	let videoUrl = $state<string>('');
 
 	// 进度条预览状态
-	let progressBarComponent = $state<{ getPreviewCanvas: () => HTMLCanvasElement | null; getProgressBarRef: () => HTMLDivElement | null } | null>(null);
+	let progressBarComponent = $state<{
+		getPreviewCanvas: () => HTMLCanvasElement | null;
+		getProgressBarRef: () => HTMLDivElement | null;
+	} | null>(null);
 	let previewVisible = $state(false);
 	let previewTime = $state(0);
 	let previewX = $state(0);
-	
+
 	// 帧缓存管理器
 	const frameCacheManager = new FrameCacheManager();
-	
+
 	// AB循环
 	let abLoop = $state<{ a: number | null; b: number | null }>({ a: null, b: null });
 	let abLoopActive = $derived(abLoop.a !== null && abLoop.b !== null);
-	
+
 	// 视频滤镜
 	let showFilterPanel = $state(false);
 	let brightness = $state(100); // 0-200, 100 = 正常
-	let contrast = $state(100);   // 0-200, 100 = 正常
-	let saturate = $state(100);   // 0-200, 100 = 正常
-	
+	let contrast = $state(100); // 0-200, 100 = 正常
+	let saturate = $state(100); // 0-200, 100 = 正常
+
 	// 更多菜单
 	let showMoreMenu = $state(false);
-	
+
 	// 音量/倍速展开面板
 	let showVolumePanel = $state(false);
 	let showRatePanel = $state(false);
-	
+
 	// 字幕设置 - 从 settings 读取初始值
 	let showSubtitleSettings = $state(false);
 	let subtitleFontSize = $state(1.0); // em 单位
@@ -256,7 +253,7 @@
 		if (!videoElement) return;
 		currentTime = videoElement.currentTime;
 		if (onProgress) {
-			const safeDuration = duration || (videoElement.duration || 0);
+			const safeDuration = duration || videoElement.duration || 0;
 			onProgress(currentTime, safeDuration, false);
 		}
 	}
@@ -272,7 +269,7 @@
 		if (initialTime && isFinite(initialTime) && initialTime > 0 && initialTime < duration) {
 			videoElement.currentTime = initialTime;
 		}
-		
+
 		// 更新信息面板 - 视频元数据
 		const fileName = src ? src.split('/').pop()?.split('\\').pop() || 'video' : 'video';
 		infoPanelStore.setImageInfo({
@@ -300,7 +297,7 @@
 		}
 		isPlaying = false;
 		if (onProgress) {
-			const safeDuration = duration || (videoElement?.duration || 0);
+			const safeDuration = duration || videoElement?.duration || 0;
 			onProgress(safeDuration, safeDuration, true);
 		}
 		if (loopMode === 'list') {
@@ -328,7 +325,7 @@
 		previewTime = pos * duration;
 		previewX = e.clientX - rect.left;
 		previewVisible = true;
-		
+
 		// 生成预览帧
 		generatePreviewFrame(previewTime);
 	}
@@ -341,15 +338,12 @@
 	function generatePreviewFrame(time: number) {
 		const previewCanvas = progressBarComponent?.getPreviewCanvas();
 		if (!videoElement || !previewCanvas) return;
-		
-		frameCacheManager.generatePreviewFrame(
-			time,
-			videoUrl,
-			previewCanvas,
-			() => { /* preview generated */ }
-		);
+
+		frameCacheManager.generatePreviewFrame(time, videoUrl, previewCanvas, () => {
+			/* preview generated */
+		});
 	}
-	
+
 	// 清理帧缓存（视频切换时调用）
 	function clearFrameCache() {
 		frameCacheManager.clear();
@@ -439,10 +433,10 @@
 
 	// 画中画状态
 	let isPiP = $state(false);
-	
+
 	async function togglePictureInPicture() {
 		if (!videoElement) return;
-		
+
 		try {
 			if (document.pictureInPictureElement) {
 				await document.exitPictureInPicture();
@@ -455,18 +449,22 @@
 			console.warn('画中画切换失败:', err);
 		}
 	}
-	
+
 	// 监听画中画状态变化
 	$effect(() => {
 		const video = videoElement;
 		if (!video) return;
-		
-		const handleEnterPiP = () => { isPiP = true; };
-		const handleLeavePiP = () => { isPiP = false; };
-		
+
+		const handleEnterPiP = () => {
+			isPiP = true;
+		};
+		const handleLeavePiP = () => {
+			isPiP = false;
+		};
+
 		video.addEventListener('enterpictureinpicture', handleEnterPiP);
 		video.addEventListener('leavepictureinpicture', handleLeavePiP);
-		
+
 		return () => {
 			video.removeEventListener('enterpictureinpicture', handleEnterPiP);
 			video.removeEventListener('leavepictureinpicture', handleLeavePiP);
@@ -476,7 +474,7 @@
 	// === 截图功能 ===
 	async function captureScreenshot() {
 		if (!videoElement) return;
-		
+
 		try {
 			const blob = await captureVideoScreenshot(videoElement, currentTime);
 			if (blob) {
@@ -492,22 +490,22 @@
 		if (!videoElement) return;
 		abLoop = { ...abLoop, a: currentTime };
 	}
-	
+
 	function setLoopPointB() {
 		if (!videoElement) return;
 		if (abLoop.a !== null && currentTime > abLoop.a) {
 			abLoop = { ...abLoop, b: currentTime };
 		}
 	}
-	
+
 	function clearAbLoop() {
 		abLoop = { a: null, b: null };
 	}
-	
+
 	// AB循环时间检测
 	$effect(() => {
 		if (!videoElement || !abLoopActive) return;
-		
+
 		const checkAbLoop = () => {
 			if (abLoop.a !== null && abLoop.b !== null) {
 				if (videoElement!.currentTime >= abLoop.b) {
@@ -515,7 +513,7 @@
 				}
 			}
 		};
-		
+
 		videoElement.addEventListener('timeupdate', checkAbLoop);
 		return () => videoElement?.removeEventListener('timeupdate', checkAbLoop);
 	});
@@ -524,7 +522,7 @@
 	let videoFilter = $derived(
 		`brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%)`
 	);
-	
+
 	function resetFilters() {
 		brightness = 100;
 		contrast = 100;
@@ -536,11 +534,11 @@
 		if (showControls && hideControlsTimeout) {
 			return;
 		}
-		
+
 		showControls = true;
 		// 固定模式下不自动隐藏
 		if (controlsPinned) return;
-		
+
 		if (hideControlsTimeout) {
 			clearTimeout(hideControlsTimeout);
 		}
@@ -612,11 +610,11 @@
 		<!-- 自定义字幕渲染层 -->
 		{#if currentSubtitleText}
 			<div
-				class="pointer-events-none absolute left-0 right-0 flex justify-center px-4"
+				class="pointer-events-none absolute right-0 left-0 flex justify-center px-4"
 				style="bottom: {subtitleBottom}%;"
 			>
 				<div
-					class="max-w-[80%] whitespace-pre-wrap rounded px-3 py-1 text-center"
+					class="max-w-[80%] rounded px-3 py-1 text-center whitespace-pre-wrap"
 					style="
 						font-size: {subtitleFontSize}em;
 						color: {subtitleColor};
@@ -634,7 +632,7 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
-			class="video-controls absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
+			class="video-controls absolute right-0 bottom-0 left-0 bg-linear-to-t from-black/80 to-transparent p-4 transition-opacity duration-300"
 			class:opacity-0={!showControls}
 			class:opacity-100={showControls}
 			data-video-controls="true"
@@ -717,15 +715,15 @@
 					onSetLoopPointA={setLoopPointA}
 					onSetLoopPointB={setLoopPointB}
 					onClearAbLoop={clearAbLoop}
-					onToggleFilterPanel={() => showFilterPanel = !showFilterPanel}
+					onToggleFilterPanel={() => (showFilterPanel = !showFilterPanel)}
 					onResetFilters={resetFilters}
-					onBrightnessChange={(v) => brightness = v}
-					onContrastChange={(v) => contrast = v}
-					onSaturateChange={(v) => saturate = v}
+					onBrightnessChange={(v) => (brightness = v)}
+					onContrastChange={(v) => (contrast = v)}
+					onSaturateChange={(v) => (saturate = v)}
 				/>
 
 				<!-- 时间显示 -->
-				<div class="time-display text-sm text-primary">
+				<div class="time-display text-primary text-sm">
 					{formatTime(currentTime)} / {formatTime(duration)}
 				</div>
 
@@ -763,7 +761,9 @@
 
 				<!-- 快进模式 -->
 				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {seekMode ? 'bg-white/30' : ''}"
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {seekMode
+						? 'bg-white/30'
+						: ''}"
 					onclick={(event) => {
 						event.stopPropagation();
 						onSeekModeChange(!seekMode);
@@ -771,7 +771,7 @@
 					aria-label={seekMode ? '关闭快进模式' : '开启快进模式（翻页键变为快进/快退）'}
 					title={seekMode ? '快进模式已开启' : '开启快进模式'}
 				>
-					<FastForward class="h-5 w-5 text-primary {seekMode ? '' : 'opacity-40'}" />
+					<FastForward class="text-primary h-5 w-5 {seekMode ? '' : 'opacity-40'}" />
 				</button>
 
 				<!-- 字幕状态/选择 - 使用子组件 -->
@@ -788,10 +788,10 @@
 						e.stopPropagation();
 						showSubtitleSettings = !showSubtitleSettings;
 					}}
-					onFontSizeChange={(v) => subtitleFontSize = v}
-					onColorChange={(v) => subtitleColor = v}
-					onBgOpacityChange={(v) => subtitleBgOpacity = v}
-					onBottomChange={(v) => subtitleBottom = v}
+					onFontSizeChange={(v) => (subtitleFontSize = v)}
+					onColorChange={(v) => (subtitleColor = v)}
+					onBgOpacityChange={(v) => (subtitleBgOpacity = v)}
+					onBottomChange={(v) => (subtitleBottom = v)}
 					onReset={() => {
 						subtitleFontSize = 1.0;
 						subtitleColor = '#ffffff';
@@ -814,7 +814,9 @@
 
 				<!-- 固定控件 -->
 				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {controlsPinned ? 'bg-white/30' : ''}"
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {controlsPinned
+						? 'bg-white/30'
+						: ''}"
 					onclick={(event) => {
 						event.stopPropagation();
 						controlsPinned = !controlsPinned;
@@ -823,15 +825,17 @@
 					title={controlsPinned ? '控件已固定' : '固定控件'}
 				>
 					{#if controlsPinned}
-						<Pin class="h-5 w-5 text-primary" />
+						<Pin class="text-primary h-5 w-5" />
 					{:else}
-						<PinOff class="h-5 w-5 text-primary opacity-40" />
+						<PinOff class="text-primary h-5 w-5 opacity-40" />
 					{/if}
 				</button>
 
 				<!-- 画中画 -->
 				<button
-					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {isPiP ? 'bg-white/30' : ''}"
+					class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {isPiP
+						? 'bg-white/30'
+						: ''}"
 					onclick={(event) => {
 						event.stopPropagation();
 						togglePictureInPicture();
@@ -839,7 +843,7 @@
 					aria-label={isPiP ? '退出画中画' : '画中画'}
 					title={isPiP ? '退出画中画' : '画中画模式'}
 				>
-					<PictureInPicture2 class="h-5 w-5 text-primary {isPiP ? '' : 'opacity-70'}" />
+					<PictureInPicture2 class="text-primary h-5 w-5 {isPiP ? '' : 'opacity-70'}" />
 				</button>
 
 				<!-- 全屏 -->
@@ -848,7 +852,7 @@
 					onclick={toggleFullscreen}
 					aria-label="全屏"
 				>
-					<Maximize class="h-5 w-5 text-primary" />
+					<Maximize class="text-primary h-5 w-5" />
 				</button>
 			</div>
 		</div>
@@ -877,5 +881,4 @@
 		border-radius: 4px;
 		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 	}
-
 </style>

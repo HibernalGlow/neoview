@@ -1,6 +1,6 @@
 /**
  * 缩略图持久化适配器
- * 
+ *
  * 将缩略图缓存接入全局缓存管理器，支持：
  * - 跨会话持久化（IndexedDB）
  * - 按时间过期
@@ -37,7 +37,7 @@ const THUMBNAIL_CACHE_CONFIG = {
 	maxItems: 5000,
 	ttl: 7 * 24 * 60 * 60 * 1000, // 7天过期
 	persistent: true,
-	storeName: 'thumbnails',
+	storeName: 'thumbnails'
 };
 
 // ============================================================================
@@ -60,7 +60,7 @@ function hashPath(path: string): string {
 	let hash = 0;
 	for (let i = 0; i < path.length; i++) {
 		const char = path.charCodeAt(i);
-		hash = ((hash << 5) - hash) + char;
+		hash = (hash << 5) - hash + char;
 		hash = hash & hash; // Convert to 32bit integer
 	}
 	return Math.abs(hash).toString(36);
@@ -69,11 +69,13 @@ function hashPath(path: string): string {
 /**
  * Blob URL 转 Base64
  */
-async function blobUrlToBase64(blobUrl: string): Promise<{ data: string; mimeType: string } | null> {
+async function blobUrlToBase64(
+	blobUrl: string
+): Promise<{ data: string; mimeType: string } | null> {
 	try {
 		const response = await fetch(blobUrl);
 		const blob = await response.blob();
-		
+
 		return new Promise((resolve) => {
 			const reader = new FileReader();
 			reader.onloadend = () => {
@@ -123,7 +125,7 @@ class ThumbnailPersistenceAdapter {
 		height: number
 	): Promise<boolean> {
 		const key = makeThumbnailKey(bookPath, pageIndex);
-		
+
 		// 转换为 Base64 以便持久化
 		const base64Data = await blobUrlToBase64(blobUrl);
 		if (!base64Data) {
@@ -136,12 +138,12 @@ class ThumbnailPersistenceAdapter {
 			mimeType: base64Data.mimeType,
 			width,
 			height,
-			createdAt: Date.now(),
+			createdAt: Date.now()
 		};
 
 		// 估算大小（Base64 约为原始大小的 1.37 倍）
 		const size = Math.ceil(base64Data.data.length * 1.37);
-		
+
 		try {
 			await this.cache.set(key, entry, size);
 			this.urlCache.set(key, blobUrl);
@@ -201,7 +203,7 @@ class ThumbnailPersistenceAdapter {
 	 */
 	async warmupBook(bookPath: string, pageIndices: number[]): Promise<number> {
 		let loaded = 0;
-		
+
 		// 并行处理，每批 10 个
 		const batchSize = 10;
 		for (let i = 0; i < pageIndices.length; i += batchSize) {
@@ -233,7 +235,7 @@ class ThumbnailPersistenceAdapter {
 	 */
 	clearBook(bookPath: string): void {
 		const prefix = hashPath(bookPath);
-		
+
 		// 清除内存缓存
 		for (const [key, url] of this.urlCache) {
 			if (key.startsWith(prefix + ':')) {
@@ -241,7 +243,7 @@ class ThumbnailPersistenceAdapter {
 				this.urlCache.delete(key);
 			}
 		}
-		
+
 		// 持久化缓存不清除，下次打开还能用
 	}
 
@@ -262,7 +264,7 @@ class ThumbnailPersistenceAdapter {
 		const cacheStats = this.cache.getStats();
 		return {
 			memory: this.urlCache.size,
-			persistent: cacheStats.items,
+			persistent: cacheStats.items
 		};
 	}
 }

@@ -21,40 +21,46 @@ function shouldShowToast(key: string): boolean {
 export function showSuccessToast(title: string, description?: string) {
 	const key = `success:${title}:${description || ''}`;
 	if (!shouldShowToast(key)) return;
-	
-	window.dispatchEvent(new CustomEvent('show-toast', {
-		detail: {
-			type: 'success',
-			title,
-			description
-		}
-	}));
+
+	window.dispatchEvent(
+		new CustomEvent('show-toast', {
+			detail: {
+				type: 'success',
+				title,
+				description
+			}
+		})
+	);
 }
 
 export function showErrorToast(title: string, description?: string) {
 	const key = `error:${title}:${description || ''}`;
 	if (!shouldShowToast(key)) return;
-	
-	window.dispatchEvent(new CustomEvent('show-toast', {
-		detail: {
-			type: 'error',
-			title,
-			description
-		}
-	}));
+
+	window.dispatchEvent(
+		new CustomEvent('show-toast', {
+			detail: {
+				type: 'error',
+				title,
+				description
+			}
+		})
+	);
 }
 
 export function showInfoToast(title: string, description?: string) {
 	const key = `info:${title}:${description || ''}`;
 	if (!shouldShowToast(key)) return;
-	
-	window.dispatchEvent(new CustomEvent('show-toast', {
-		detail: {
-			type: 'info',
-			title,
-			description
-		}
-	}));
+
+	window.dispatchEvent(
+		new CustomEvent('show-toast', {
+			detail: {
+				type: 'info',
+				title,
+				description
+			}
+		})
+	);
 }
 
 export function showToast(options: {
@@ -65,13 +71,15 @@ export function showToast(options: {
 }) {
 	const key = `${options.variant || 'info'}:${options.title}:${options.description || ''}`;
 	if (!shouldShowToast(key)) return;
-	
-	window.dispatchEvent(new CustomEvent('show-toast', {
-		detail: {
-			type: options.variant || 'info',
-			title: options.title,
-			description: options.description,
-			duration: options.duration
-		}
-	}));
+
+	window.dispatchEvent(
+		new CustomEvent('show-toast', {
+			detail: {
+				type: options.variant || 'info',
+				title: options.title,
+				description: options.description,
+				duration: options.duration
+			}
+		})
+	);
 }

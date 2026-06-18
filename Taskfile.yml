@@ -1,5 +1,5 @@
 # https://taskfile.dev
- 
+
 version: '3'
 
 vars:
@@ -11,7 +11,6 @@ tasks:
     cmds:
       - task: version:show
 
-
   tdev:
     desc: Start Tauri development server
     cmds:
@@ -19,7 +18,7 @@ tasks:
   ydev:
     desc: Start development server
     cmds:
-      - pnpm dev  
+      - pnpm dev
   buildebug:
     desc: Start Tauri development server
     cmds:

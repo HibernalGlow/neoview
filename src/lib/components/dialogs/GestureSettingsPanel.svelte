@@ -122,7 +122,7 @@
 	<div class="space-y-4">
 		<div>
 			<h3 class="text-lg font-semibold">触摸手势</h3>
-			<p class="text-sm text-muted-foreground">支持多指手势操作（需要触摸屏设备）</p>
+			<p class="text-muted-foreground text-sm">支持多指手势操作（需要触摸屏设备）</p>
 		</div>
 
 		<!-- 手势开关 -->
@@ -146,9 +146,9 @@
 						bind:value={swipeThreshold}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">{swipeThreshold}px</span>
+					<span class="text-muted-foreground text-sm">{swipeThreshold}px</span>
 				</div>
-				<p class="text-xs text-muted-foreground">手指滑动超过此距离才会被识别</p>
+				<p class="text-muted-foreground text-xs">手指滑动超过此距离才会被识别</p>
 			</div>
 
 			<div class="space-y-2">
@@ -163,9 +163,9 @@
 						bind:value={longPressDuration}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">{longPressDuration}ms</span>
+					<span class="text-muted-foreground text-sm">{longPressDuration}ms</span>
 				</div>
-				<p class="text-xs text-muted-foreground">按住屏幕超过此时间触发长按</p>
+				<p class="text-muted-foreground text-xs">按住屏幕超过此时间触发长按</p>
 			</div>
 
 			<div class="space-y-2">
@@ -180,9 +180,9 @@
 						bind:value={doubleTapDelay}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">{doubleTapDelay}ms</span>
+					<span class="text-muted-foreground text-sm">{doubleTapDelay}ms</span>
 				</div>
-				<p class="text-xs text-muted-foreground">两次点击间隔小于此时间识别为双击</p>
+				<p class="text-muted-foreground text-xs">两次点击间隔小于此时间识别为双击</p>
 			</div>
 
 			<div class="space-y-2">
@@ -197,9 +197,9 @@
 						bind:value={pinchSensitivity}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">×{pinchSensitivity.toFixed(1)}</span>
+					<span class="text-muted-foreground text-sm">×{pinchSensitivity.toFixed(1)}</span>
 				</div>
-				<p class="text-xs text-muted-foreground">值越大，缩放速度越快</p>
+				<p class="text-muted-foreground text-xs">值越大，缩放速度越快</p>
 			</div>
 
 			<div class="space-y-2">
@@ -214,9 +214,9 @@
 						bind:value={rotateSensitivity}
 						class="w-24"
 					/>
-					<span class="text-sm text-muted-foreground">×{rotateSensitivity.toFixed(1)}</span>
+					<span class="text-muted-foreground text-sm">×{rotateSensitivity.toFixed(1)}</span>
 				</div>
-				<p class="text-xs text-muted-foreground">值越大，旋转速度越快</p>
+				<p class="text-muted-foreground text-xs">值越大，旋转速度越快</p>
 			</div>
 		</div>
 
@@ -227,28 +227,28 @@
 			<div class="flex items-center justify-between">
 				<h4 class="text-sm font-medium">手势绑定</h4>
 				<Button variant="outline" size="sm" onclick={resetGestureSettings}>
-					<RotateCcw class="h-3 w-3 mr-2" />
+					<RotateCcw class="mr-2 h-3 w-3" />
 					重置
 				</Button>
 			</div>
 
 			{#each Object.entries(gesturesByCategory()) as [category, bindings]}
 				<div class="space-y-2">
-					<h5 class="text-xs font-medium text-muted-foreground uppercase">
+					<h5 class="text-muted-foreground text-xs font-medium uppercase">
 						{getCategoryName(category)}
 					</h5>
 					<div class="space-y-1">
 						{#each bindings as binding}
 							<div
-								class="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+								class="hover:bg-accent flex items-center justify-between rounded-lg border p-3 transition-colors"
 							>
-								<div class="flex items-center gap-3 flex-1">
+								<div class="flex flex-1 items-center gap-3">
 									<span class="text-2xl">{getGestureIcon(binding.gesture)}</span>
 									<div>
 										<div class="text-sm font-medium">
 											{getGestureName(binding.gesture)}
 										</div>
-										<div class="text-xs text-muted-foreground">
+										<div class="text-muted-foreground text-xs">
 											{binding.description} ({binding.command})
 										</div>
 									</div>
@@ -272,7 +272,7 @@
 				class="w-full"
 				onclick={() => showInfoToast('添加新手势绑定功能即将推出')}
 			>
-				<Plus class="h-4 w-4 mr-2" />
+				<Plus class="mr-2 h-4 w-4" />
 				添加手势绑定
 			</Button>
 		</div>
@@ -281,12 +281,12 @@
 	<Separator />
 
 	<!-- 使用提示 -->
-	<div class="rounded-lg border bg-muted/50 p-4">
+	<div class="bg-muted/50 rounded-lg border p-4">
 		<div class="flex gap-2">
-			<Info class="h-5 w-5 text-muted-foreground shrink-0" />
+			<Info class="text-muted-foreground h-5 w-5 shrink-0" />
 			<div class="space-y-2">
 				<h4 class="text-sm font-medium">使用提示</h4>
-				<ul class="text-xs text-muted-foreground space-y-1">
+				<ul class="text-muted-foreground space-y-1 text-xs">
 					<li>• 单指滑动：在图像上滑动翻页</li>
 					<li>• 双指捏合/张开：缩放图像</li>
 					<li>• 双指旋转：旋转图像</li>
@@ -308,7 +308,7 @@
 		>
 			测试手势识别
 		</Button>
-		<p class="text-xs text-muted-foreground text-center">
+		<p class="text-muted-foreground text-center text-xs">
 			在图像查看器中尝试各种手势，查看是否被正确识别
 		</p>
 	</div>

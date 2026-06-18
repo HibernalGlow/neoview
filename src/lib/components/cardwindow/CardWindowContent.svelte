@@ -42,7 +42,8 @@
 		favoriteTags: () => import('$lib/cards/properties/FavoriteTagsCard.svelte'),
 		emmSync: () => import('$lib/cards/properties/EmmSyncCard.svelte'),
 		thumbnailMaintenance: () => import('$lib/cards/properties/ThumbnailMaintenanceCard.svelte'),
-		thumbnailArchMetrics: () => import('$lib/cards/properties/ThumbnailArchitectureMetricsCard.svelte'),
+		thumbnailArchMetrics: () =>
+			import('$lib/cards/properties/ThumbnailArchitectureMetricsCard.svelte'),
 		emmRawData: () => import('$lib/cards/properties/EmmRawDataCard.svelte'),
 		emmConfig: () => import('$lib/cards/properties/EmmConfigCard.svelte'),
 		fileListTagDisplay: () => import('$lib/cards/properties/FileListTagDisplayCard.svelte'),
@@ -123,13 +124,11 @@
 
 <div class="h-full w-full">
 	{#if isLoading}
-		<div class="text-muted-foreground flex items-center justify-center py-8 text-sm">
-			加载中...
-		</div>
+		<div class="text-muted-foreground flex items-center justify-center py-8 text-sm">加载中...</div>
 	{:else if CardComponent}
 		<CardComponent />
 	{:else}
-		<div class="text-destructive py-4 text-sm text-center">
+		<div class="text-destructive py-4 text-center text-sm">
 			卡片加载失败: {cardId}
 			{#if cardDef}
 				<br />

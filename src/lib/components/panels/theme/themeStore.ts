@@ -145,7 +145,9 @@ export function persistCustomThemes(themes: ThemeConfig[]) {
 }
 
 /** 解析 CSS 主题格式 */
-export function parseCssTheme(css: string): { light: Record<string, string>; dark: Record<string, string> } | null {
+export function parseCssTheme(
+	css: string
+): { light: Record<string, string>; dark: Record<string, string> } | null {
 	const cleanCss = css.replace(/\/\*[\s\S]*?\*\//g, '');
 	const light: Record<string, string> = {};
 	const dark: Record<string, string> = {};

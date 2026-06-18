@@ -46,14 +46,13 @@
 		setActivePanelTab($activePanel === panelId ? null : panelId);
 	}
 
-
 	function handleMoveToOpposite() {
 		onMoveToOpposite?.();
 	}
 </script>
 
 <div
-	class="flex flex-col bg-secondary/30 border-r {location === 'right' ? 'border-l' : ''}"
+	class="bg-secondary/30 flex flex-col border-r {location === 'right' ? 'border-l' : ''}"
 	style="width: 48px;"
 >
 	{#each panels as panel (panel.id)}
@@ -61,45 +60,44 @@
 		{@const isActive = $activePanel === panel.id}
 
 		<div class="relative">
-
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					<button
-							onclick={() => handlePanelClick(panel.id)}
-							class="group relative w-full h-12 flex items-center justify-center border-b hover:bg-accent transition-colors {isActive
-								? 'bg-accent border-l-2 border-l-primary'
-								: ''}"
+						onclick={() => handlePanelClick(panel.id)}
+						class="group hover:bg-accent relative flex h-12 w-full items-center justify-center border-b transition-colors {isActive
+							? 'bg-accent border-l-primary border-l-2'
+							: ''}"
 					>
-							<!-- 拖拽手柄 -->
-							<div
-								class="absolute left-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-							>
-								<GripVertical class="h-3 w-3 text-muted-foreground" />
-							</div>
+						<!-- 拖拽手柄 -->
+						<div
+							class="absolute top-0 bottom-0 left-0 flex w-4 cursor-grab items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+						>
+							<GripVertical class="text-muted-foreground h-3 w-3" />
+						</div>
 
-							<!-- 图标 -->
-							<IconComponent class="h-5 w-5 {isActive ? 'text-primary' : 'text-muted-foreground'}" />
+						<!-- 图标 -->
+						<IconComponent class="h-5 w-5 {isActive ? 'text-primary' : 'text-muted-foreground'}" />
 
-							<!-- 切换到对面按钮 -->
-							<div
-								onclick={(e) => {
-									e.stopPropagation();
+						<!-- 切换到对面按钮 -->
+						<div
+							onclick={(e) => {
+								e.stopPropagation();
+								handleMoveToOpposite();
+							}}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
 									handleMoveToOpposite();
-								}}
-								onkeydown={(e) => {
-									if (e.key === 'Enter' || e.key === ' ') {
-										e.preventDefault();
-										handleMoveToOpposite();
-									}
-								}}
-								class="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10"
-								title="移动到对面侧边栏"
-								role="button"
-								tabindex="0"
-							>
-								<ArrowLeftRight class="h-3 w-3 text-muted-foreground" />
-							</div>
-						</button>
+								}
+							}}
+							class="hover:bg-primary/10 absolute top-0 right-0 bottom-0 flex w-4 items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+							title="移动到对面侧边栏"
+							role="button"
+							tabindex="0"
+						>
+							<ArrowLeftRight class="text-muted-foreground h-3 w-3" />
+						</div>
+					</button>
 				</Tooltip.Trigger>
 				<Tooltip.Content side={location === 'left' ? 'right' : 'left'}>
 					<p>{panel.title}</p>

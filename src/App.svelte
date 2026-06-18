@@ -64,7 +64,11 @@
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { getMatches } from '@tauri-apps/plugin-cli';
-	import { restoreStateCurrent, saveWindowState, StateFlags } from '@tauri-apps/plugin-window-state';
+	import {
+		restoreStateCurrent,
+		saveWindowState,
+		StateFlags
+	} from '@tauri-apps/plugin-window-state';
 	import { getFileMetadata } from '$lib/api/filesystem';
 	import { openFileSystemItem } from '$lib/utils/navigationUtils';
 	import { windowManager } from '$lib/core/windows/windowManager';
@@ -510,8 +514,7 @@
 
 		// 如果当前是视频页，对部分导航动作做视频模式优先的重解释
 		const currentPage = bookStore.currentPage;
-		const currentMediaName =
-			currentPage?.name || currentPage?.innerPath || currentPage?.path || '';
+		const currentMediaName = currentPage?.name || currentPage?.innerPath || currentPage?.path || '';
 		const isAnimatedVideoPage =
 			animatedVideoModeStore.canUse && isAnimatedImageVideoCandidate(currentMediaName);
 		const isVideoPage = Boolean(

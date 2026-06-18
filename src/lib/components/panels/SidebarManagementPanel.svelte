@@ -92,7 +92,12 @@
 
 	// 动态分组列表
 	const layoutGroups = $derived([
-		{ id: 'all' as const, title: '全部', icon: LayoutGrid, count: leftPanels.length + rightPanels.length + hiddenPanels.length },
+		{
+			id: 'all' as const,
+			title: '全部',
+			icon: LayoutGrid,
+			count: leftPanels.length + rightPanels.length + hiddenPanels.length
+		},
 		{ id: 'left' as const, title: '左侧栏', icon: PanelLeft, count: leftPanels.length },
 		{ id: 'right' as const, title: '右侧栏', icon: PanelRight, count: rightPanels.length },
 		{ id: 'hidden' as const, title: '已隐藏', icon: EyeOff, count: hiddenPanels.length }
@@ -108,13 +113,13 @@
 	function handlePointerDown(event: PointerEvent, panel: PanelConfig, index: number) {
 		// 仅允许主键点击（左键）
 		if (event.button !== 0) return;
-		
+
 		// 如果点击的是按钮或其他交互元素，不触发拖拽
 		const target = event.target as HTMLElement;
 		if (target.closest('button') || target.closest('a')) return;
 
 		console.log('Pointer down for drag:', panel.id);
-		
+
 		dragId = panel.id;
 		startY = event.clientY;
 		currentDeltaY = 0;
@@ -133,11 +138,11 @@
 		// 极其稳健的落点检测：直接查找鼠标下的行元素
 		const element = document.elementFromPoint(event.clientX, event.clientY);
 		const row = element?.closest('[data-drag-id]') as HTMLElement;
-		
+
 		if (row && row.dataset.dragId && row.dataset.dragId !== dragId) {
 			const targetId = row.dataset.dragId;
-			const targetPanel = filteredPanelsForGroup.find(p => p.id === targetId);
-			
+			const targetPanel = filteredPanelsForGroup.find((p) => p.id === targetId);
+
 			// 仅在同侧内预览（跨侧拖拽通过勋章或下拉菜单处理，此处仅处理排序）
 			if (targetPanel && targetPanel.side === filteredPanelsForGroup[dragIndex].side) {
 				dropTargetPanelId = targetId;
@@ -154,27 +159,27 @@
 
 		const sourceId = dragId;
 		const panels = filteredPanelsForGroup;
-		
+
 		if (dropTargetPanelId && dropTargetPanelId !== sourceId) {
-			const sourceIdx = panels.findIndex(p => p.id === sourceId);
-			const targetIdx = panels.findIndex(p => p.id === dropTargetPanelId);
-			
+			const sourceIdx = panels.findIndex((p) => p.id === sourceId);
+			const targetIdx = panels.findIndex((p) => p.id === dropTargetPanelId);
+
 			if (sourceIdx !== -1 && targetIdx !== -1) {
 				const sourcePanel = panels[sourceIdx];
 				const targetPanel = panels[targetIdx];
-				
+
 				if (sourcePanel.side === targetPanel.side) {
 					// 采用“插入”逻辑而非“交换”逻辑，确保排序自然
 					// 计算该侧所有面板的新顺序
-					const sidePanels = [...panels.filter(p => p.side === sourcePanel.side)];
-					const sIdx = sidePanels.findIndex(p => p.id === sourceId);
-					const tIdx = sidePanels.findIndex(p => p.id === dropTargetPanelId);
-					
+					const sidePanels = [...panels.filter((p) => p.side === sourcePanel.side)];
+					const sIdx = sidePanels.findIndex((p) => p.id === sourceId);
+					const tIdx = sidePanels.findIndex((p) => p.id === dropTargetPanelId);
+
 					if (sIdx !== -1 && tIdx !== -1) {
 						const result = [...sidePanels];
 						const [removed] = result.splice(sIdx, 1);
 						result.splice(tIdx, 0, removed);
-						
+
 						// 批量更新顺序
 						result.forEach((p, i) => {
 							sidebarConfigStore.setPanelOrder(p.id as PanelId, i);
@@ -188,7 +193,7 @@
 		dropTargetPanelId = null;
 		currentDeltaY = 0;
 		dragIndex = -1;
-		
+
 		const row = event.currentTarget as HTMLElement;
 		if (row && row.releasePointerCapture) {
 			row.releasePointerCapture(event.pointerId);
@@ -254,7 +259,6 @@
 	}
 
 	// 移除 Pointer Events 逻辑
-	
 
 	const handleSettingsUpdate = (next: NeoViewSettings) => {
 		settings = next;
@@ -395,10 +399,7 @@
 			</Tabs.List>
 		</div>
 
-		<Tabs.Content
-			value="layout"
-			class="mt-0 flex flex-col gap-6 focus-visible:outline-none"
-		>
+		<Tabs.Content value="layout" class="mt-0 flex flex-col gap-6 focus-visible:outline-none">
 			<div class="flex flex-col gap-1.5">
 				<h3 class="text-xl font-bold tracking-tight">边栏布局</h3>
 				<p class="text-muted-foreground text-sm">管理左右边栏的面板位置、顺序和可见性。</p>
@@ -435,8 +436,14 @@
 
 			<!-- 分组标签页 -->
 			<div class="flex items-center gap-2 px-1">
-				<Tabs.Root value={activeLayoutGroup} onValueChange={(v) => activeLayoutGroup = v as any} class="w-full">
-					<Tabs.List class="bg-muted/50 flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border p-1 shadow-sm">
+				<Tabs.Root
+					value={activeLayoutGroup}
+					onValueChange={(v) => (activeLayoutGroup = v as any)}
+					class="w-full"
+				>
+					<Tabs.List
+						class="bg-muted/50 flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border p-1 shadow-sm"
+					>
 						<Tooltip.Provider>
 							{#each layoutGroups as group}
 								{@const GroupIcon = group.icon}
@@ -449,13 +456,18 @@
 												class="data-[state=active]:bg-background data-[state=active]:text-primary flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-xs transition-all data-[state=active]:shadow-sm"
 											>
 												<GroupIcon class="h-4 w-4" />
-												<Badge variant="secondary" class="h-4.5 min-w-4.5 justify-center px-1 text-[9px] opacity-70">
+												<Badge
+													variant="secondary"
+													class="h-4.5 min-w-4.5 justify-center px-1 text-[9px] opacity-70"
+												>
 													{group.count}
 												</Badge>
 											</Tabs.Trigger>
 										{/snippet}
 									</Tooltip.Trigger>
-									<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs">{group.title}</Tooltip.Content>
+									<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs"
+										>{group.title}</Tooltip.Content
+									>
 								</Tooltip.Root>
 							{/each}
 						</Tooltip.Provider>
@@ -503,11 +515,16 @@
 								onpointercancel={handlePointerUp}
 								data-drag-id={panel.id}
 								class={cn(
-									'group transition-all duration-200 select-none touch-none',
-									dragId === panel.id && 'z-50 shadow-xl ring-2 ring-primary/50 bg-accent relative translate-y-0 opacity-90 scale-[1.02] pointer-events-none',
-									dropTargetPanelId === panel.id && dragId !== panel.id && 'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
+									'group touch-none transition-all duration-200 select-none',
+									dragId === panel.id &&
+										'ring-primary/50 bg-accent pointer-events-none relative z-50 translate-y-0 scale-[1.02] opacity-90 shadow-xl ring-2',
+									dropTargetPanelId === panel.id &&
+										dragId !== panel.id &&
+										'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
 								)}
-								style={dragId === panel.id ? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;` : ''}
+								style={dragId === panel.id
+									? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;`
+									: ''}
 							>
 								<Table.Cell class="px-2">
 									<div
@@ -527,8 +544,7 @@
 								</Table.Cell>
 								<Table.Cell class="min-w-0 px-2">
 									<div class="flex min-w-0 flex-col overflow-hidden">
-										<span class="block truncate font-medium" title={panel.title}
-											>{panel.title}</span
+										<span class="block truncate font-medium" title={panel.title}>{panel.title}</span
 										>
 										<span
 											class="text-muted-foreground block truncate font-mono text-[10px] uppercase opacity-50"
@@ -1009,5 +1025,4 @@
 			</div>
 		</Tabs.Content>
 	</Tabs.Root>
-
 </div>

@@ -1,122 +1,122 @@
 <script lang="ts">
-/**
- * PanelToolbar - 共用面板工具栏
- * 用于历史记录、书签等面板的工具栏
- */
-import {
-	Grid3x3,
-	List,
-	Search,
-	X,
-	ArrowUpDown,
-	ArrowUp,
-	ArrowDown,
-	Calendar,
-	Type,
-	Star,
-	Shuffle,
-	FolderOpen,
-	Layers,
-	Check
-} from '@lucide/svelte';
-import { Button } from '$lib/components/ui/button';
-import * as Tooltip from '$lib/components/ui/tooltip';
+	/**
+	 * PanelToolbar - 共用面板工具栏
+	 * 用于历史记录、书签等面板的工具栏
+	 */
+	import {
+		Grid3x3,
+		List,
+		Search,
+		X,
+		ArrowUpDown,
+		ArrowUp,
+		ArrowDown,
+		Calendar,
+		Type,
+		Star,
+		Shuffle,
+		FolderOpen,
+		Layers,
+		Check
+	} from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 
-// 排序字段类型
-export type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random' | 'rating';
-export type SortOrder = 'asc' | 'desc';
-export type ViewMode = 'list' | 'grid';
+	// 排序字段类型
+	export type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random' | 'rating';
+	export type SortOrder = 'asc' | 'desc';
+	export type ViewMode = 'list' | 'grid';
 
-interface Props {
-	/** 视图模式 */
-	viewMode?: ViewMode;
-	/** 是否显示搜索栏 */
-	showSearchBar?: boolean;
-	/** 当前排序字段 */
-	sortField?: SortField;
-	/** 排序顺序 */
-	sortOrder?: SortOrder;
-	/** 是否分组（按日期） */
-	isGrouped?: boolean;
-	/** 仅显示当前文件夹 */
-	isCurrentFolderOnly?: boolean;
-	/** 是否显示视图切换 */
-	showViewToggle?: boolean;
-	/** 是否显示搜索按钮 */
-	showSearchToggle?: boolean;
-	/** 是否显示排序 */
-	showSort?: boolean;
-	/** 是否显示分组选项 */
-	showGroupOption?: boolean;
-	/** 是否显示当前文件夹选项 */
-	showCurrentFolderOption?: boolean;
-	/** 视图切换回调 */
-	onViewModeChange?: (mode: ViewMode) => void;
-	/** 搜索栏切换回调 */
-	onSearchToggle?: () => void;
-	/** 排序字段变更回调 */
-	onSortChange?: (field: SortField, order: SortOrder) => void;
-	/** 分组变更回调 */
-	onGroupChange?: (grouped: boolean) => void;
-	/** 仅当前文件夹变更回调 */
-	onCurrentFolderChange?: (currentOnly: boolean) => void;
-}
-
-let {
-	viewMode = 'list',
-	showSearchBar = false,
-	sortField = 'timestamp',
-	sortOrder = 'desc',
-	isGrouped = false,
-	isCurrentFolderOnly = false,
-	showViewToggle = true,
-	showSearchToggle = true,
-	showSort = true,
-	showGroupOption = false,
-	showCurrentFolderOption = false,
-	onViewModeChange,
-	onSearchToggle,
-	onSortChange,
-	onGroupChange,
-	onCurrentFolderChange
-}: Props = $props();
-
-// 排序选项配置
-const sortOptions: { field: SortField; label: string; icon: typeof Calendar }[] = [
-	{ field: 'timestamp', label: '添加时间', icon: Calendar },
-	{ field: 'name', label: '名称', icon: Type },
-	{ field: 'path', label: '路径', icon: FolderOpen },
-	{ field: 'type', label: '类型', icon: Type },
-	{ field: 'rating', label: '评分', icon: Star },
-	{ field: 'starred', label: '星标', icon: Star },
-	{ field: 'random', label: '随机', icon: Shuffle }
-];
-
-function toggleViewMode() {
-	const next = viewMode === 'list' ? 'grid' : 'list';
-	onViewModeChange?.(next);
-}
-
-function handleSortChange(field: SortField) {
-	if (field === sortField) {
-		// 切换排序顺序
-		const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-		onSortChange?.(field, newOrder);
-	} else {
-		onSortChange?.(field, 'asc');
+	interface Props {
+		/** 视图模式 */
+		viewMode?: ViewMode;
+		/** 是否显示搜索栏 */
+		showSearchBar?: boolean;
+		/** 当前排序字段 */
+		sortField?: SortField;
+		/** 排序顺序 */
+		sortOrder?: SortOrder;
+		/** 是否分组（按日期） */
+		isGrouped?: boolean;
+		/** 仅显示当前文件夹 */
+		isCurrentFolderOnly?: boolean;
+		/** 是否显示视图切换 */
+		showViewToggle?: boolean;
+		/** 是否显示搜索按钮 */
+		showSearchToggle?: boolean;
+		/** 是否显示排序 */
+		showSort?: boolean;
+		/** 是否显示分组选项 */
+		showGroupOption?: boolean;
+		/** 是否显示当前文件夹选项 */
+		showCurrentFolderOption?: boolean;
+		/** 视图切换回调 */
+		onViewModeChange?: (mode: ViewMode) => void;
+		/** 搜索栏切换回调 */
+		onSearchToggle?: () => void;
+		/** 排序字段变更回调 */
+		onSortChange?: (field: SortField, order: SortOrder) => void;
+		/** 分组变更回调 */
+		onGroupChange?: (grouped: boolean) => void;
+		/** 仅当前文件夹变更回调 */
+		onCurrentFolderChange?: (currentOnly: boolean) => void;
 	}
-}
 
-function getSortIcon() {
-	return sortOrder === 'asc' ? ArrowUp : ArrowDown;
-}
+	let {
+		viewMode = 'list',
+		showSearchBar = false,
+		sortField = 'timestamp',
+		sortOrder = 'desc',
+		isGrouped = false,
+		isCurrentFolderOnly = false,
+		showViewToggle = true,
+		showSearchToggle = true,
+		showSort = true,
+		showGroupOption = false,
+		showCurrentFolderOption = false,
+		onViewModeChange,
+		onSearchToggle,
+		onSortChange,
+		onGroupChange,
+		onCurrentFolderChange
+	}: Props = $props();
 
-// 排序面板展开状态
-let sortPanelExpanded = $state(false);
+	// 排序选项配置
+	const sortOptions: { field: SortField; label: string; icon: typeof Calendar }[] = [
+		{ field: 'timestamp', label: '添加时间', icon: Calendar },
+		{ field: 'name', label: '名称', icon: Type },
+		{ field: 'path', label: '路径', icon: FolderOpen },
+		{ field: 'type', label: '类型', icon: Type },
+		{ field: 'rating', label: '评分', icon: Star },
+		{ field: 'starred', label: '星标', icon: Star },
+		{ field: 'random', label: '随机', icon: Shuffle }
+	];
 
-function toggleSortPanel() {
-	sortPanelExpanded = !sortPanelExpanded;
-}
+	function toggleViewMode() {
+		const next = viewMode === 'list' ? 'grid' : 'list';
+		onViewModeChange?.(next);
+	}
+
+	function handleSortChange(field: SortField) {
+		if (field === sortField) {
+			// 切换排序顺序
+			const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+			onSortChange?.(field, newOrder);
+		} else {
+			onSortChange?.(field, 'asc');
+		}
+	}
+
+	function getSortIcon() {
+		return sortOrder === 'asc' ? ArrowUp : ArrowDown;
+	}
+
+	// 排序面板展开状态
+	let sortPanelExpanded = $state(false);
+
+	function toggleSortPanel() {
+		sortPanelExpanded = !sortPanelExpanded;
+	}
 </script>
 
 <div class="flex items-center gap-1">
@@ -152,10 +152,10 @@ function toggleSortPanel() {
 	{#if showSort}
 		<Tooltip.Root>
 			<Tooltip.Trigger>
-				<Button 
-					variant={sortPanelExpanded ? 'default' : 'ghost'} 
-					size="icon" 
-					class="h-7 w-7" 
+				<Button
+					variant={sortPanelExpanded ? 'default' : 'ghost'}
+					size="icon"
+					class="h-7 w-7"
 					onclick={toggleSortPanel}
 				>
 					<ArrowUpDown class="h-4 w-4" />
@@ -170,8 +170,8 @@ function toggleSortPanel() {
 
 <!-- 排序展开面板 -->
 {#if sortPanelExpanded && showSort}
-	<div class="flex flex-wrap items-center gap-1 border-t border-border/50 pt-1 mt-1">
-		<span class="text-muted-foreground text-xs mr-1">排序</span>
+	<div class="border-border/50 mt-1 flex flex-wrap items-center gap-1 border-t pt-1">
+		<span class="text-muted-foreground mr-1 text-xs">排序</span>
 		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
 			{#each sortOptions as option}
 				{@const Icon = option.icon}
@@ -187,7 +187,9 @@ function toggleSortPanel() {
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
-						<p>{option.label}{sortField === option.field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}</p>
+						<p>
+							{option.label}{sortField === option.field ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}
+						</p>
 					</Tooltip.Content>
 				</Tooltip.Root>
 			{/each}

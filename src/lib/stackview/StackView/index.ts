@@ -1,6 +1,6 @@
 /**
  * StackView 模块导出
- * 
+ *
  * 层叠式图片查看器（独立模式）
  * 使用 imageStore 管理图片加载，复用现有手势和缩放
  */
@@ -26,8 +26,8 @@ export {
 
 // 类型导出
 export interface DisplaySize {
-  width: number;
-  height: number;
+	width: number;
+	height: number;
 }
 
 // 对齐模式

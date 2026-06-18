@@ -181,7 +181,7 @@ export class BlobCache {
 		return {
 			count: this.cache.size,
 			sizeBytes: this.currentSize,
-			sizeMB: Math.round(this.currentSize / 1024 / 1024 * 100) / 100
+			sizeMB: Math.round((this.currentSize / 1024 / 1024) * 100) / 100
 		};
 	}
 
@@ -204,10 +204,10 @@ export class BlobCache {
 
 		// 计算需要释放的空间
 		const targetSize = Math.floor(this.config.maxSizeBytes * 0.8); // 释放到80%，避免频繁触发
-		
+
 		// 收集所有条目
 		const entries = Array.from(this.cache.entries());
-		
+
 		// 如果条目很少，直接排序
 		if (entries.length <= 20) {
 			entries.sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed);
@@ -223,14 +223,14 @@ export class BlobCache {
 		while (this.currentSize > targetSize && this.cache.size > 0) {
 			let oldestKey: number | null = null;
 			let oldestTime = Infinity;
-			
+
 			for (const [key, item] of this.cache) {
 				if (item.lastAccessed < oldestTime) {
 					oldestTime = item.lastAccessed;
 					oldestKey = key;
 				}
 			}
-			
+
 			if (oldestKey !== null) {
 				this.delete(oldestKey);
 			} else {
@@ -243,7 +243,7 @@ export class BlobCache {
 	 * 预热：批量检查哪些页面需要加载
 	 */
 	getMissingPages(pageIndices: number[]): number[] {
-		return pageIndices.filter(index => !this.cache.has(index));
+		return pageIndices.filter((index) => !this.cache.has(index));
 	}
 }
 

@@ -57,8 +57,12 @@
 	let treatHorizontalAsDoublePage = $derived(
 		settings.view.pageLayout?.treatHorizontalAsDoublePage ?? false
 	);
-	let singleFirstPageMode = $derived(settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault');
-	let singleLastPageMode = $derived(settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault');
+	let singleFirstPageMode = $derived(
+		settings.view.pageLayout?.singleFirstPageMode ?? 'restoreOrDefault'
+	);
+	let singleLastPageMode = $derived(
+		settings.view.pageLayout?.singleLastPageMode ?? 'restoreOrDefault'
+	);
 	let singleFirstPage = $derived(singleFirstPageMode !== 'continue');
 	let singleLastPage = $derived(singleLastPageMode === 'continue');
 	let widePageStretch = $derived(settings.view.pageLayout?.widePageStretch ?? 'uniformHeight');
@@ -145,7 +149,7 @@
 </script>
 
 {#if expanded}
-	<div class="flex flex-wrap items-center justify-center gap-1 border-t border-border/50 pt-1">
+	<div class="border-border/50 flex flex-wrap items-center justify-center gap-1 border-t pt-1">
 		<span class="text-muted-foreground mr-2 text-xs">缩放模式</span>
 		<div class="bg-muted/60 inline-flex items-center gap-0.5 rounded-full p-0.5 shadow-inner">
 			{#each zoomModeOptions as { mode, label }}

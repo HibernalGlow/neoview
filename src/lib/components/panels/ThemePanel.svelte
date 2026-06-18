@@ -30,12 +30,11 @@
 		currentMode = mode;
 		applyTheme(currentMode, selectedTheme, systemPrefersDark);
 	}
-// ... (omitting lines for brevity, just targeting the import and grid-cols)
+	// ... (omitting lines for brevity, just targeting the import and grid-cols)
 
-// actually I can't skip lines in ReplacementContent easily without copying them.
-// I will do separate replace calls if needed or just copy the necessary block.
-// Let's just do the import first.
-
+	// actually I can't skip lines in ReplacementContent easily without copying them.
+	// I will do separate replace calls if needed or just copy the necessary block.
+	// Let's just do the import first.
 
 	function handleThemeSelect(theme: ThemeConfig) {
 		selectedTheme = theme;
@@ -147,11 +146,7 @@
 		</Tabs.List>
 
 		<Tabs.Content value="mode" class="mt-4">
-			<ThemeModeTab
-				{currentMode}
-				{systemPrefersDark}
-				onModeChange={handleModeChange}
-			/>
+			<ThemeModeTab {currentMode} {systemPrefersDark} onModeChange={handleModeChange} />
 		</Tabs.Content>
 
 		<Tabs.Content value="transparency" class="mt-4">

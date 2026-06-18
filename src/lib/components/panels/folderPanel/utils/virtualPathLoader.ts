@@ -6,9 +6,16 @@
 import type { FsItem } from '$lib/types';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { unifiedHistoryStore, type UnifiedHistoryEntry } from '$lib/stores/unifiedHistory.svelte';
-import { virtualPanelSettingsStore, type VirtualItemTypeFilter } from '$lib/stores/virtualPanelSettings.svelte';
+import {
+	virtualPanelSettingsStore,
+	type VirtualItemTypeFilter
+} from '$lib/stores/virtualPanelSettings.svelte';
 import { get } from 'svelte/store';
-import { getVirtualPathType, tabSearchResults, type VirtualPathType } from '../stores/folderTabStore';
+import {
+	getVirtualPathType,
+	tabSearchResults,
+	type VirtualPathType
+} from '../stores/folderTabStore';
 
 // 清理状态追踪，避免重复清理
 let bookmarkCleanedUp = false;
@@ -256,7 +263,7 @@ export function subscribeVirtualPathData(
 			});
 		}
 		default:
-			return () => { };
+			return () => {};
 	}
 }
 
@@ -269,7 +276,7 @@ export function removeVirtualPathItem(path: string, itemPath: string): boolean {
 	switch (type) {
 		case 'bookmark': {
 			const bookmarks = bookmarkStore.getAll() as BookmarkEntry[];
-			const bookmark = bookmarks.find(b => b.path === itemPath);
+			const bookmark = bookmarks.find((b) => b.path === itemPath);
 			if (bookmark) {
 				bookmarkStore.remove(bookmark.id);
 				return true;
@@ -278,7 +285,7 @@ export function removeVirtualPathItem(path: string, itemPath: string): boolean {
 		}
 		case 'history': {
 			const history = get(unifiedHistoryStore) as UnifiedHistoryEntry[];
-			const entry = history.find(h => (h.pathStack?.[0]?.path || '') === itemPath);
+			const entry = history.find((h) => (h.pathStack?.[0]?.path || '') === itemPath);
 			if (entry) {
 				unifiedHistoryStore.remove(entry.id);
 				return true;

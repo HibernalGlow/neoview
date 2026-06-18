@@ -48,7 +48,7 @@
 	const menuStyle = $derived.by(() => {
 		const menuWidth = 200;
 		const menuHeight = 80;
-		
+
 		let x = position.x;
 		let y = position.y;
 
@@ -71,17 +71,17 @@
 
 <div
 	bind:this={menuRef}
-	class="fixed z-50 min-w-[200px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+	class="bg-popover text-popover-foreground fixed z-50 min-w-[200px] rounded-md border p-1 shadow-md"
 	style={menuStyle}
 	role="menu"
 >
 	<button
 		type="button"
-		class="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+		class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none"
 		onclick={handleOpenInNewWindow}
 		role="menuitem"
 	>
-		<ExternalLink class="h-4 w-4 mr-2" />
+		<ExternalLink class="mr-2 h-4 w-4" />
 		在新窗口打开
 	</button>
 </div>

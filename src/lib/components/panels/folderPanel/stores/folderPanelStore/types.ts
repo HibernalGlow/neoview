@@ -11,7 +11,15 @@ import type { FsItem } from '$lib/types';
 export type FolderViewStyle = 'list' | 'content' | 'banner' | 'thumbnail';
 
 /** 文件夹排序字段 */
-export type FolderSortField = 'name' | 'date' | 'size' | 'type' | 'random' | 'rating' | 'path' | 'collectTagCount';
+export type FolderSortField =
+	| 'name'
+	| 'date'
+	| 'size'
+	| 'type'
+	| 'random'
+	| 'rating'
+	| 'path'
+	| 'collectTagCount';
 
 /** 文件夹排序顺序 */
 export type FolderSortOrder = 'asc' | 'desc';

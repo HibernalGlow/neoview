@@ -1,7 +1,7 @@
 /**
  * NeoView - Async Store Utility
  * 异步操作状态管理工具函数 (Svelte 5 Runes)
- * 
+ *
  * 提供统一的异步操作状态管理模式，包括 loading、error、data 状态
  */
 
@@ -71,7 +71,7 @@ export interface AsyncStore<T, Args extends unknown[]> {
 
 /**
  * 创建异步 store
- * 
+ *
  * @example
  * ```ts
  * const userStore = createAsyncStore({
@@ -82,17 +82,17 @@ export interface AsyncStore<T, Args extends unknown[]> {
  *   onSuccess: (user) => console.log('Loaded:', user),
  *   onError: (err) => console.error('Failed:', err)
  * });
- * 
+ *
  * // 执行
  * await userStore.execute('123');
- * 
+ *
  * // 访问状态
  * console.log(userStore.data);
  * console.log(userStore.isLoading);
- * 
+ *
  * // 重试
  * await userStore.retry();
- * 
+ *
  * // 取消
  * userStore.cancel();
  * ```
@@ -122,13 +122,13 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 
 	// 取消控制器
 	let abortController: AbortController | null = null;
-	
+
 	// 上次执行的参数（用于 retry）
 	let lastArgs: Args | null = null;
-	
+
 	// 去重缓存：参数序列化 -> { timestamp, promise }
 	const dedupeCache = new Map<string, { timestamp: number; promise: Promise<T> }>();
-	
+
 	// 当前执行 ID（用于检测取消）
 	let currentExecutionId = 0;
 
@@ -148,10 +148,10 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 	 */
 	function checkDedupeCache(args: Args): Promise<T> | null {
 		if (!dedupe) return null;
-		
+
 		const key = serializeArgs(args);
 		const cached = dedupeCache.get(key);
-		
+
 		if (cached) {
 			const now = Date.now();
 			if (dedupeInterval === 0 || now - cached.timestamp < dedupeInterval) {
@@ -160,7 +160,7 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 			// 缓存过期，删除
 			dedupeCache.delete(key);
 		}
-		
+
 		return null;
 	}
 
@@ -169,7 +169,7 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 	 */
 	function setDedupeCache(args: Args, promise: Promise<T>): void {
 		if (!dedupe) return;
-		
+
 		const key = serializeArgs(args);
 		dedupeCache.set(key, {
 			timestamp: Date.now(),
@@ -181,23 +181,23 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 		get state() {
 			return _state;
 		},
-		
+
 		get data() {
 			return _state.data;
 		},
-		
+
 		get isLoading() {
 			return _state.isLoading;
 		},
-		
+
 		get error() {
 			return _state.error;
 		},
-		
+
 		get isSuccess() {
 			return _state.isSuccess;
 		},
-		
+
 		get isError() {
 			return _state.isError;
 		},
@@ -230,7 +230,7 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 			const executePromise = (async () => {
 				try {
 					const result = await fetcher(...args);
-					
+
 					// 检查是否被取消
 					if (executionId !== currentExecutionId) {
 						throw new Error('Operation cancelled');
@@ -255,7 +255,7 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 					}
 
 					const error = err instanceof Error ? err : new Error(String(err));
-					
+
 					// 不处理取消错误
 					if (error.name === 'AbortError' || error.message === 'Operation cancelled') {
 						throw error;
@@ -288,10 +288,10 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 				abortController.abort();
 				abortController = null;
 			}
-			
+
 			currentExecutionId++;
 			lastArgs = null;
-			
+
 			_state = {
 				data: initialData,
 				isLoading: false,
@@ -307,13 +307,13 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 				console.warn('No previous execution to retry');
 				return null;
 			}
-			
+
 			// 清除去重缓存以允许重试
 			if (dedupe) {
 				const key = serializeArgs(lastArgs);
 				dedupeCache.delete(key);
 			}
-			
+
 			return this.execute(...lastArgs);
 		},
 
@@ -322,9 +322,9 @@ export function createAsyncStore<T, Args extends unknown[] = []>(
 				abortController.abort();
 				abortController = null;
 			}
-			
+
 			currentExecutionId++;
-			
+
 			if (_state.isLoading) {
 				_state = {
 					..._state,

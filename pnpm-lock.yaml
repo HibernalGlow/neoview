@@ -118,6 +118,9 @@ importers:
       '@eslint/compat':
         specifier: ^1.2.9
         version: 1.4.1(eslint@9.39.3(jiti@2.6.1))
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@9.39.3(jiti@2.6.1))
       '@internationalized/date':
         specifier: ^3.10.0
         version: 3.11.0
@@ -157,6 +160,9 @@ importers:
       formsnap:
         specifier: ^2.0.1
         version: 2.0.1(svelte@5.53.5)(sveltekit-superforms@2.30.0(@sveltejs/kit@2.53.3(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.8.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.9.0)))(@types/json-schema@7.0.15)(svelte@5.53.5)(typescript@5.8.3))
+      globals:
+        specifier: ^17.6.0
+        version: 17.6.0
       layerchart:
         specifier: 2.0.0-next.27
         version: 2.0.0-next.27(svelte@5.53.5)
@@ -167,14 +173,14 @@ importers:
         specifier: ^1.0.2
         version: 1.0.2(svelte@5.53.5)
       prettier:
-        specifier: ^3.5.3
-        version: 3.8.1
+        specifier: ~3.5.3
+        version: 3.5.3
       prettier-plugin-svelte:
         specifier: ^3.4.0
-        version: 3.5.0(prettier@3.8.1)(svelte@5.53.5)
+        version: 3.5.0(prettier@3.5.3)(svelte@5.53.5)
       prettier-plugin-tailwindcss:
         specifier: ^0.6.11
-        version: 0.6.14(prettier-plugin-svelte@3.5.0(prettier@3.8.1)(svelte@5.53.5))(prettier@3.8.1)
+        version: 0.6.14(prettier-plugin-svelte@3.5.0(prettier@3.5.3)(svelte@5.53.5))(prettier@3.5.3)
       runed:
         specifier: ^0.37.1
         version: 0.37.1(@sveltejs/kit@2.53.3(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.8.3)(vite@7.3.1(@types/node@22.19.13)(jiti@2.6.1)(lightningcss@1.31.1)(yaml@2.9.0)))(svelte@5.53.5)(zod@4.3.6)
@@ -203,7 +209,7 @@ importers:
         specifier: ~5.8.3
         version: 5.8.3
       typescript-eslint:
-        specifier: ^8.32.1
+        specifier: ^8.56.1
         version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.8.3)
       vite:
         specifier: ^7
@@ -455,6 +461,15 @@ packages:
   '@eslint/eslintrc@3.3.4':
     resolution: {integrity: sha512-4h4MVF8pmBsncB60r0wSJiIeUKTSD4m7FmTFThG8RHlsg9ajqckLm9OraguFGZE4vVdpiI1Q4+hFnisopmG6gQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@eslint/js@10.0.1':
+    resolution: {integrity: sha512-zeR9k5pd4gxjZ0abRoIaxdc7I3nDktoXZk2qOv9gCNWx3mVwEn32VRhyLaRsDiJjTs0xq/T8mfPtyuXu7GWBcA==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+    peerDependencies:
+      eslint: ^10.0.0
+    peerDependenciesMeta:
+      eslint:
+        optional: true
 
   '@eslint/js@9.39.3':
     resolution: {integrity: sha512-1B1VkCq6FuUNlQvlBYb+1jDu/gV297TIs/OeiaSR9l1H27SVW55ONE1e1Vp16NqP683+xEGzxYtv4XCiDPaQiw==}
@@ -1711,6 +1726,10 @@ packages:
     resolution: {integrity: sha512-c/c15i26VrJ4IRt5Z89DnIzCGDn9EcebibhAOjw5ibqEHsE1wLUgkPn9RDmNcUKyU87GeaL633nyJ+pplFR2ZQ==}
     engines: {node: '>=18'}
 
+  globals@17.6.0:
+    resolution: {integrity: sha512-sepffkT8stwnIYbsMBpoCHJuJM5l98FUF2AnE07hfvE0m/qp3R586hw4jF4uadbhvg1ooIdzuu7CsfD2jzCaNA==}
+    engines: {node: '>=18'}
+
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
@@ -2175,8 +2194,8 @@ packages:
       prettier-plugin-svelte:
         optional: true
 
-  prettier@3.8.1:
-    resolution: {integrity: sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg==}
+  prettier@3.5.3:
+    resolution: {integrity: sha512-QQtaxnoDJeAkDvDKWCLiwIXkTgRhwYDEQCghU9Z6q03iyek/rxRh/2lC3HB7P8sWT2xC/y5JDctPLBIGzHKbhw==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -2867,6 +2886,10 @@ snapshots:
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
       - supports-color
+
+  '@eslint/js@10.0.1(eslint@9.39.3(jiti@2.6.1))':
+    optionalDependencies:
+      eslint: 9.39.3(jiti@2.6.1)
 
   '@eslint/js@9.39.3': {}
 
@@ -4148,6 +4171,8 @@ snapshots:
 
   globals@16.5.0: {}
 
+  globals@17.6.0: {}
+
   graceful-fs@4.2.11: {}
 
   has-flag@4.0.0: {}
@@ -4501,18 +4526,18 @@ snapshots:
 
   prelude-ls@1.2.1: {}
 
-  prettier-plugin-svelte@3.5.0(prettier@3.8.1)(svelte@5.53.5):
+  prettier-plugin-svelte@3.5.0(prettier@3.5.3)(svelte@5.53.5):
     dependencies:
-      prettier: 3.8.1
+      prettier: 3.5.3
       svelte: 5.53.5
 
-  prettier-plugin-tailwindcss@0.6.14(prettier-plugin-svelte@3.5.0(prettier@3.8.1)(svelte@5.53.5))(prettier@3.8.1):
+  prettier-plugin-tailwindcss@0.6.14(prettier-plugin-svelte@3.5.0(prettier@3.5.3)(svelte@5.53.5))(prettier@3.5.3):
     dependencies:
-      prettier: 3.8.1
+      prettier: 3.5.3
     optionalDependencies:
-      prettier-plugin-svelte: 3.5.0(prettier@3.8.1)(svelte@5.53.5)
+      prettier-plugin-svelte: 3.5.0(prettier@3.5.3)(svelte@5.53.5)
 
-  prettier@3.8.1: {}
+  prettier@3.5.3: {}
 
   process@0.11.10: {}
 

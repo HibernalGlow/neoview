@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+	import { ContextMenu as ContextMenuPrimitive } from 'bits-ui';
+	import { cn } from '$lib/utils.js';
 
 	let {
 		children,
@@ -12,12 +12,6 @@
 	} & any = $props();
 </script>
 
-<div
-	class={cn(
-		"flex flex-row items-center justify-between gap-1 p-1",
-		className
-	)}
-	{...restProps}
->
+<div class={cn('flex flex-row items-center justify-between gap-1 p-1', className)} {...restProps}>
 	{@render children?.()}
 </div>

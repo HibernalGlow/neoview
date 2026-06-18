@@ -57,14 +57,14 @@ const MAX_HISTORY = 20;
 export function updateVisibility(info: Partial<VisibilityInfo>) {
 	// 如果监控未开启，直接返回
 	if (!monitorEnabled) return;
-	
+
 	const now = Date.now();
 	visibilityInfo = {
 		...visibilityInfo,
 		...info,
 		timestamp: now
 	};
-	
+
 	// 记录更新历史
 	updateHistory = [...updateHistory.slice(-(MAX_HISTORY - 1)), now];
 }
@@ -127,8 +127,16 @@ export function resetVisibility() {
 
 // 导出响应式 getter
 export const visibilityMonitor = {
-	get info() { return visibilityInfo; },
-	get updateFrequency() { return getUpdateFrequency(); },
-	get history() { return updateHistory; },
-	get enabled() { return monitorEnabled; }
+	get info() {
+		return visibilityInfo;
+	},
+	get updateFrequency() {
+		return getUpdateFrequency();
+	},
+	get history() {
+		return updateHistory;
+	},
+	get enabled() {
+		return monitorEnabled;
+	}
 };

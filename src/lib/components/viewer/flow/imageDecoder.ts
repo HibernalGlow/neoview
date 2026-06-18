@@ -5,7 +5,10 @@
 
 // Worker 解码池
 let decoderWorker: Worker | null = null;
-let pendingDecodes = new Map<string, { resolve: (result: DecodedImage) => void; reject: (error: Error) => void }>();
+let pendingDecodes = new Map<
+	string,
+	{ resolve: (result: DecodedImage) => void; reject: (error: Error) => void }
+>();
 let decodeId = 0;
 
 export interface DecodedImage {
@@ -54,7 +57,7 @@ function getDecoderWorker(): Worker {
 		`;
 		const blob = new Blob([workerCode], { type: 'application/javascript' });
 		decoderWorker = new Worker(URL.createObjectURL(blob));
-		
+
 		decoderWorker.onmessage = (e) => {
 			const { id, success, error, width, height, originalSize } = e.data;
 			const pending = pendingDecodes.get(id);
@@ -81,7 +84,10 @@ function getDecoderWorker(): Worker {
 /**
  * 在 Worker 中解码图片（不阻塞主线程）
  */
-export async function decodeImageInWorker(blob: Blob, options?: DecodeOptions): Promise<DecodedImage> {
+export async function decodeImageInWorker(
+	blob: Blob,
+	options?: DecodeOptions
+): Promise<DecodedImage> {
 	// 如果 Worker 不可用，回退到主线程
 	if (typeof Worker === 'undefined') {
 		return decodeImageMainThread(blob, options);
@@ -93,7 +99,7 @@ export async function decodeImageInWorker(blob: Blob, options?: DecodeOptions): 
 	return new Promise((resolve, reject) => {
 		pendingDecodes.set(id, { resolve, reject });
 		worker.postMessage({ id, blob, options });
-		
+
 		// 超时处理
 		setTimeout(() => {
 			if (pendingDecodes.has(id)) {
@@ -107,7 +113,10 @@ export async function decodeImageInWorker(blob: Blob, options?: DecodeOptions): 
 /**
  * 主线程解码（回退方案）
  */
-export async function decodeImageMainThread(blob: Blob, options?: DecodeOptions): Promise<DecodedImage> {
+export async function decodeImageMainThread(
+	blob: Blob,
+	options?: DecodeOptions
+): Promise<DecodedImage> {
 	const bitmap = await createImageBitmap(blob, {
 		resizeQuality: options?.quality || 'medium',
 		premultiplyAlpha: 'none'
@@ -124,21 +133,23 @@ export async function decodeImageMainThread(blob: Blob, options?: DecodeOptions)
 /**
  * 快速获取图片尺寸（不完全解码）
  */
-export async function getImageDimensionsFast(blob: Blob): Promise<{ width: number; height: number }> {
+export async function getImageDimensionsFast(
+	blob: Blob
+): Promise<{ width: number; height: number }> {
 	return new Promise((resolve, reject) => {
 		const url = URL.createObjectURL(blob);
 		const img = new Image();
-		
+
 		img.onload = () => {
 			URL.revokeObjectURL(url);
 			resolve({ width: img.naturalWidth, height: img.naturalHeight });
 		};
-		
+
 		img.onerror = () => {
 			URL.revokeObjectURL(url);
 			reject(new Error('Failed to get image dimensions'));
 		};
-		
+
 		// 只需要获取尺寸，不需要完整解码
 		img.decoding = 'async';
 		img.src = url;
@@ -153,15 +164,15 @@ export async function batchDecodeImages(
 	options?: DecodeOptions
 ): Promise<Map<number, DecodedImage>> {
 	const results = new Map<number, DecodedImage>();
-	
+
 	// 并行解码（限制并发数）
 	const concurrency = navigator.hardwareConcurrency || 4;
 	const chunks: Array<Array<{ pageIndex: number; blob: Blob }>> = [];
-	
+
 	for (let i = 0; i < blobs.length; i += concurrency) {
 		chunks.push(blobs.slice(i, i + concurrency));
 	}
-	
+
 	for (const chunk of chunks) {
 		const promises = chunk.map(async ({ pageIndex, blob }) => {
 			try {
@@ -172,7 +183,7 @@ export async function batchDecodeImages(
 				return null;
 			}
 		});
-		
+
 		const chunkResults = await Promise.all(promises);
 		for (const result of chunkResults) {
 			if (result) {
@@ -180,7 +191,7 @@ export async function batchDecodeImages(
 			}
 		}
 	}
-	
+
 	return results;
 }
 

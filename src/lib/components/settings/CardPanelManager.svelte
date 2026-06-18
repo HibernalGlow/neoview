@@ -80,8 +80,7 @@
 		return !query
 			? cards
 			: cards.filter(
-					(c) =>
-						c.title.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
+					(c) => c.title.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
 				);
 	});
 
@@ -126,11 +125,11 @@
 		// 极其稳健的落点检测：直接查找鼠标下的行元素
 		const element = document.elementFromPoint(event.clientX, event.clientY);
 		const row = element?.closest('[data-drag-id]') as HTMLElement;
-		
+
 		if (row && row.dataset.dragId && row.dataset.dragId !== dragId) {
 			const targetId = row.dataset.dragId;
-			const targetCard = filteredCards.find(c => c.id === targetId);
-			
+			const targetCard = filteredCards.find((c) => c.id === targetId);
+
 			// 仅在同一个面板内支持拖拽预览
 			if (targetCard && targetCard.panelId === filteredCards[dragIndex].panelId) {
 				dropTargetCardId = targetId;
@@ -147,15 +146,15 @@
 
 		const sourceId = dragId;
 		const cards = filteredCards;
-		
+
 		if (dropTargetCardId && dropTargetCardId !== sourceId) {
-			const sourceCard = cards.find(c => c.id === sourceId);
-			const targetCard = cards.find(c => c.id === dropTargetCardId);
-			
+			const sourceCard = cards.find((c) => c.id === sourceId);
+			const targetCard = cards.find((c) => c.id === dropTargetCardId);
+
 			if (sourceCard && targetCard && sourceCard.panelId === targetCard.panelId) {
 				// 获取目标面板内的所有卡片，找到目标卡片的实际排序索引
 				const panelCards = cardConfigStore.getPanelCards(sourceCard.panelId);
-				const targetIdx = panelCards.findIndex(c => c.id === dropTargetCardId);
+				const targetIdx = panelCards.findIndex((c) => c.id === dropTargetCardId);
 				if (targetIdx !== -1) {
 					cardConfigStore.moveCard(sourceCard.panelId, sourceId, targetIdx);
 				}
@@ -166,7 +165,7 @@
 		dropTargetCardId = null;
 		currentDeltaY = 0;
 		dragIndex = -1;
-		
+
 		const row = event.currentTarget as HTMLElement;
 		if (row && row.releasePointerCapture) {
 			row.releasePointerCapture(event.pointerId);
@@ -221,11 +220,7 @@
 	<div class="flex flex-wrap items-center justify-between gap-4 px-1">
 		<div class="relative w-full max-w-sm">
 			<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-			<Input
-				bind:value={searchQuery}
-				placeholder="搜索卡片..."
-				class="h-10 rounded-xl pl-9"
-			/>
+			<Input bind:value={searchQuery} placeholder="搜索卡片..." class="h-10 rounded-xl pl-9" />
 		</div>
 
 		<div class="flex items-center gap-2">
@@ -255,11 +250,7 @@
 
 	<!-- 分组标签页 -->
 	<div class="flex items-center gap-2 px-1">
-		<Tabs.Root
-			value={panelFilter}
-			onValueChange={(v) => (panelFilter = v as any)}
-			class="w-full"
-		>
+		<Tabs.Root value={panelFilter} onValueChange={(v) => (panelFilter = v as any)} class="w-full">
 			<Tabs.List
 				class="bg-muted/50 flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border p-1 shadow-sm"
 			>
@@ -282,7 +273,9 @@
 								</Tabs.Trigger>
 							{/snippet}
 						</Tooltip.Trigger>
-						<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs">显示全部卡片</Tooltip.Content>
+						<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs"
+							>显示全部卡片</Tooltip.Content
+						>
 					</Tooltip.Root>
 
 					{#each allPanelIds as panelId}
@@ -306,7 +299,9 @@
 									</Tabs.Trigger>
 								{/snippet}
 							</Tooltip.Trigger>
-							<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs">{title}</Tooltip.Content>
+							<Tooltip.Content side="top" class="rounded-lg px-2 py-1 text-xs"
+								>{title}</Tooltip.Content
+							>
 						</Tooltip.Root>
 					{/each}
 				</Tooltip.Provider>
@@ -315,7 +310,6 @@
 	</div>
 
 	<div class="bg-card overflow-auto rounded-2xl border shadow-sm">
-
 		<Table.Root class="table-fixed">
 			<Table.Header class="bg-muted/50 sticky top-0 z-10 backdrop-blur-md">
 				<Table.Row>
@@ -348,11 +342,16 @@
 						onpointercancel={handlePointerUp}
 						data-drag-id={card.id}
 						class={cn(
-							'group transition-all duration-200 select-none touch-none',
-							dragId === card.id && 'z-50 shadow-xl ring-2 ring-primary/50 bg-accent relative translate-y-0 opacity-90 scale-[1.02] pointer-events-none',
-							dropTargetCardId === card.id && dragId !== card.id && 'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
+							'group touch-none transition-all duration-200 select-none',
+							dragId === card.id &&
+								'ring-primary/50 bg-accent pointer-events-none relative z-50 translate-y-0 scale-[1.02] opacity-90 shadow-xl ring-2',
+							dropTargetCardId === card.id &&
+								dragId !== card.id &&
+								'bg-primary/5 border-primary/20 scale-[0.98] blur-[0.5px]'
 						)}
-						style={dragId === card.id ? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;` : ''}
+						style={dragId === card.id
+							? `transform: translateY(${currentDeltaY}px); z-index: 100; cursor: grabbing;`
+							: ''}
 					>
 						<Table.Cell class="px-2">
 							<div
@@ -391,7 +390,7 @@
 										>
 											<Badge
 												variant={card.visible ? 'default' : 'outline'}
-												class="pointer-events-none block h-4 max-w-20 truncate px-1 text-center text-[9px] font-bold uppercase tracking-tighter"
+												class="pointer-events-none block h-4 max-w-20 truncate px-1 text-center text-[9px] font-bold tracking-tighter uppercase"
 											>
 												{getPanelTitle(card.panelId)}
 											</Badge>
@@ -507,12 +506,10 @@
 		</Table.Root>
 
 		{#if filteredCards.length === 0}
-			<div class="bg-muted/5 flex flex-col items-center justify-center py-20 text-muted-foreground">
+			<div class="bg-muted/5 text-muted-foreground flex flex-col items-center justify-center py-20">
 				<LayoutGrid class="mb-4 h-12 w-12 opacity-10" />
 				<p class="text-sm">未找到匹配的卡片</p>
 			</div>
 		{/if}
 	</div>
 </div>
-
-

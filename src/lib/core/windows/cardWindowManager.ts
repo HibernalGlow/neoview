@@ -7,14 +7,14 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { cardRegistry } from '$lib/cards/registry';
-import { 
-	CardWindowTabStore, 
-	getOrCreateTabStore, 
-	getTabStore, 
-	registerTabStore, 
+import {
+	CardWindowTabStore,
+	getOrCreateTabStore,
+	getTabStore,
+	registerTabStore,
 	removeTabStore,
 	getAllWindowIds,
-	type CardTabConfig 
+	type CardTabConfig
 } from '$lib/stores/cardWindowTabStore.svelte';
 
 // ============ Types ============
@@ -60,11 +60,14 @@ class CardWindowManagerImpl {
 	 */
 	async init(): Promise<void> {
 		if (this.initialized) return;
-		
+
 		// 监听窗口间通信事件
-		const unlistenTransfer = await listen<TabTransferPayload>('card-window-tab-transfer', (event) => {
-			this.handleTabTransfer(event.payload);
-		});
+		const unlistenTransfer = await listen<TabTransferPayload>(
+			'card-window-tab-transfer',
+			(event) => {
+				this.handleTabTransfer(event.payload);
+			}
+		);
 		this.unlistenFns.push(unlistenTransfer);
 
 		const unlistenClose = await listen<string>('card-window-closed', (event) => {
@@ -79,7 +82,7 @@ class CardWindowManagerImpl {
 	 * 清理资源
 	 */
 	cleanup(): void {
-		this.unlistenFns.forEach(fn => fn());
+		this.unlistenFns.forEach((fn) => fn());
 		this.unlistenFns = [];
 		this.initialized = false;
 	}
@@ -98,7 +101,7 @@ class CardWindowManagerImpl {
 		try {
 			const windowId = `card-window-${++this.windowCounter}-${Date.now()}`;
 			const cardDef = cardRegistry[cardId];
-			
+
 			// 创建 Tauri 窗口
 			// 使用独立的 cardwindow.html 入口点，通过查询参数传递窗口 ID 和卡片 ID
 			const window = new WebviewWindow(windowId, {
@@ -118,7 +121,7 @@ class CardWindowManagerImpl {
 
 			// 创建标签页 store
 			const tabStore = getOrCreateTabStore(windowId, cardId);
-			
+
 			// 监听窗口关闭事件
 			window.once('tauri://close-requested', async () => {
 				await this.closeCardWindow(windowId);
@@ -141,14 +144,14 @@ class CardWindowManagerImpl {
 		try {
 			const windowId = config.windowId;
 			const firstTab = config.tabs[0];
-			
+
 			if (!firstTab || !cardRegistry[firstTab.cardId]) {
 				console.warn(`[CardWindowManager] Invalid config for window ${windowId}`);
 				return null;
 			}
 
 			const cardDef = cardRegistry[firstTab.cardId];
-			
+
 			// 使用独立的 cardwindow.html 入口点
 			const window = new WebviewWindow(windowId, {
 				url: `/cardwindow.html?windowId=${encodeURIComponent(windowId)}`,
@@ -169,7 +172,7 @@ class CardWindowManagerImpl {
 
 			// 从配置创建标签页 store
 			const tabStore = CardWindowTabStore.fromConfig(windowId, config.tabs);
-			if (config.activeTabId && tabStore.tabs.find(t => t.id === config.activeTabId)) {
+			if (config.activeTabId && tabStore.tabs.find((t) => t.id === config.activeTabId)) {
 				tabStore.setActiveTab(config.activeTabId);
 			}
 			registerTabStore(windowId, tabStore);
@@ -209,10 +212,10 @@ class CardWindowManagerImpl {
 	 */
 	async closeCardWindow(windowId: string): Promise<void> {
 		const window = this.windows.get(windowId);
-		
+
 		// 移除标签页 store
 		removeTabStore(windowId);
-		
+
 		// 关闭窗口
 		if (window) {
 			try {
@@ -235,29 +238,27 @@ class CardWindowManagerImpl {
 	 */
 	getAllCardWindows(): CardWindowConfig[] {
 		const windowIds = getAllWindowIds();
-		return windowIds.map(windowId => {
-			const tabStore = getTabStore(windowId);
-			if (!tabStore) return null;
+		return windowIds
+			.map((windowId) => {
+				const tabStore = getTabStore(windowId);
+				if (!tabStore) return null;
 
-			return {
-				windowId,
-				label: `Card Window ${windowId}`,
-				tabs: tabStore.toConfig(),
-				activeTabId: tabStore.activeTabId,
-				createdAt: Date.now()
-			};
-		}).filter((config): config is CardWindowConfig => config !== null);
+				return {
+					windowId,
+					label: `Card Window ${windowId}`,
+					tabs: tabStore.toConfig(),
+					activeTabId: tabStore.activeTabId,
+					createdAt: Date.now()
+				};
+			})
+			.filter((config): config is CardWindowConfig => config !== null);
 	}
 
 	/**
 	 * 跨窗口移动标签页
 	 * Requirements: 4.2, 4.3
 	 */
-	moveTabBetweenWindows(
-		sourceWindowId: string,
-		targetWindowId: string,
-		tabId: string
-	): boolean {
+	moveTabBetweenWindows(sourceWindowId: string, targetWindowId: string, tabId: string): boolean {
 		const sourceStore = getTabStore(sourceWindowId);
 		const targetStore = getTabStore(targetWindowId);
 
@@ -267,7 +268,7 @@ class CardWindowManagerImpl {
 		}
 
 		// 获取要移动的标签页
-		const tab = sourceStore.tabs.find(t => t.id === tabId);
+		const tab = sourceStore.tabs.find((t) => t.id === tabId);
 		if (!tab) {
 			console.warn(`[CardWindowManager] Tab not found: ${tabId}`);
 			return false;
@@ -299,7 +300,7 @@ class CardWindowManagerImpl {
 		const sourceStore = getTabStore(sourceWindowId);
 		if (!sourceStore) return null;
 
-		const tab = sourceStore.tabs.find(t => t.id === tabId);
+		const tab = sourceStore.tabs.find((t) => t.id === tabId);
 		if (!tab) return null;
 
 		// 创建新窗口
@@ -346,7 +347,7 @@ class CardWindowManagerImpl {
 			if (!stored) return null;
 
 			const config = JSON.parse(stored) as PersistedCardWindowConfig;
-			
+
 			// 版本检查
 			if (config.version !== CONFIG_VERSION) {
 				console.warn('[CardWindowManager] Config version mismatch, resetting');
@@ -370,8 +371,8 @@ class CardWindowManagerImpl {
 
 		for (const windowConfig of config.windows) {
 			// 过滤无效的卡片
-			const validTabs = windowConfig.tabs.filter(tab => cardRegistry[tab.cardId]);
-			
+			const validTabs = windowConfig.tabs.filter((tab) => cardRegistry[tab.cardId]);
+
 			if (validTabs.length === 0) {
 				console.warn(`[CardWindowManager] No valid tabs for window ${windowConfig.windowId}`);
 				continue;
@@ -381,7 +382,7 @@ class CardWindowManagerImpl {
 			const updatedConfig: CardWindowConfig = {
 				...windowConfig,
 				tabs: validTabs,
-				activeTabId: validTabs.find(t => t.tabId === windowConfig.activeTabId)
+				activeTabId: validTabs.find((t) => t.tabId === windowConfig.activeTabId)
 					? windowConfig.activeTabId
 					: validTabs[0].tabId
 			};
@@ -397,7 +398,7 @@ class CardWindowManagerImpl {
 	 */
 	private handleTabTransfer(payload: TabTransferPayload): void {
 		const { sourceWindowId, targetWindowId, tabConfig } = payload;
-		
+
 		const targetStore = getTabStore(targetWindowId);
 		if (!targetStore) return;
 

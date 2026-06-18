@@ -112,12 +112,12 @@ class GistSyncStore {
 			if (stored) {
 				const parsed = JSON.parse(stored);
 				this._config = { ...DEFAULT_CONFIG, ...parsed };
-				
+
 				// 如果有 token，验证并获取用户信息
 				if (this._config.token) {
 					this.validateToken();
 				}
-				
+
 				// 启动自动同步
 				if (this._config.autoSync) {
 					this.startAutoSync();
@@ -144,7 +144,7 @@ class GistSyncStore {
 	updateConfig(partial: Partial<GistSyncConfig>) {
 		this._config = { ...this._config, ...partial };
 		this.save();
-		
+
 		// 处理自动同步开关
 		if ('autoSync' in partial || 'syncInterval' in partial) {
 			if (this._config.autoSync) {
@@ -217,7 +217,9 @@ class GistSyncStore {
 	}
 
 	/** 创建新 Gist */
-	async createGist(content: string): Promise<{ success: boolean; gistId?: string; message: string }> {
+	async createGist(
+		content: string
+	): Promise<{ success: boolean; gistId?: string; message: string }> {
 		if (!this._config.token) {
 			return { success: false, message: '请先登录' };
 		}
@@ -343,7 +345,7 @@ class GistSyncStore {
 			if (response.ok) {
 				const gist: GistResponse = await response.json();
 				const file = gist.files[this._config.filename];
-				
+
 				if (!file) {
 					this._status = 'error';
 					this._statusMessage = `Gist 中没有找到文件: ${this._config.filename}`;
@@ -428,7 +430,7 @@ class GistSyncStore {
 	/** 启动自动同步 */
 	startAutoSync() {
 		this.stopAutoSync();
-		
+
 		if (!this._config.autoSync || !this._config.token) {
 			return;
 		}

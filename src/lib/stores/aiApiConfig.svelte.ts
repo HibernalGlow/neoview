@@ -12,7 +12,7 @@ import { normalizeError, withRetry, getErrorMessage } from '$lib/ai/errorHandler
 // API 提供商配置 - 与 EMM 格式兼容
 export interface AiProvider {
 	name: string;
-	provider: 'openai' | 'gemini';  // API 类型
+	provider: 'openai' | 'gemini'; // API 类型
 	baseUrl: string;
 	apiKey: string;
 	model: string;
@@ -137,7 +137,7 @@ function createAiApiConfigStore() {
 
 		// 添加提供商
 		addProvider(provider: AiProvider) {
-			update(state => {
+			update((state) => {
 				const newState = {
 					...state,
 					providers: [...state.providers, provider]
@@ -165,12 +165,10 @@ function createAiApiConfigStore() {
 
 		// 更新提供商（按索引）
 		updateProvider(index: number, updates: Partial<AiProvider>) {
-			update(state => {
+			update((state) => {
 				const newState = {
 					...state,
-					providers: state.providers.map((p, i) => 
-						i === index ? { ...p, ...updates } : p
-					)
+					providers: state.providers.map((p, i) => (i === index ? { ...p, ...updates } : p))
 				};
 				saveToStorage(newState);
 				return newState;
@@ -179,7 +177,7 @@ function createAiApiConfigStore() {
 
 		// 删除提供商（按索引）
 		removeProvider(index: number) {
-			update(state => {
+			update((state) => {
 				const newProviders = state.providers.filter((_, i) => i !== index);
 				let newActiveIndex = state.activeIndex;
 				if (index === state.activeIndex) {
@@ -198,8 +196,11 @@ function createAiApiConfigStore() {
 
 		// 设置活动提供商（按索引）
 		setActiveIndex(index: number) {
-			update(state => {
-				const newState = { ...state, activeIndex: Math.max(0, Math.min(index, state.providers.length - 1)) };
+			update((state) => {
+				const newState = {
+					...state,
+					activeIndex: Math.max(0, Math.min(index, state.providers.length - 1))
+				};
 				saveToStorage(newState);
 				return newState;
 			});
@@ -218,7 +219,8 @@ function createAiApiConfigStore() {
 			return {
 				providers: state.providers,
 				activeIndex: state.activeIndex,
-				comment: '翻译和 AI 标签推断的 API 配置。请填写正确的 API Key 并设置 activeIndex 选择要使用的提供商。'
+				comment:
+					'翻译和 AI 标签推断的 API 配置。请填写正确的 API Key 并设置 activeIndex 选择要使用的提供商。'
 			};
 		},
 
@@ -243,7 +245,7 @@ function createAiApiConfigStore() {
 
 			try {
 				const isGemini = p.baseUrl.includes('googleapis.com');
-				
+
 				if (isGemini) {
 					// Gemini API 测试
 					const url = `${p.baseUrl}/v1beta/models/${p.model}:generateContent?key=${p.apiKey}`;
@@ -269,7 +271,7 @@ function createAiApiConfigStore() {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/json',
-							'Authorization': `Bearer ${p.apiKey}`
+							Authorization: `Bearer ${p.apiKey}`
 						},
 						body: JSON.stringify({
 							model: p.model,
@@ -277,7 +279,7 @@ function createAiApiConfigStore() {
 							max_tokens: 10
 						})
 					});
-					
+
 					if (!response.ok) {
 						const err = await response.text();
 						return { success: false, message: `API 错误: ${err.slice(0, 100)}` };
@@ -285,7 +287,10 @@ function createAiApiConfigStore() {
 					return { success: true, message: `${p.name} 连接成功` };
 				}
 			} catch (e) {
-				return { success: false, message: `连接失败: ${e instanceof Error ? e.message : '未知错误'}` };
+				return {
+					success: false,
+					message: `连接失败: ${e instanceof Error ? e.message : '未知错误'}`
+				};
 			}
 		},
 
@@ -306,18 +311,20 @@ function createAiApiConfigStore() {
 			const tanstackConfig = createTanStackProvider(p);
 
 			// 合并消息为 prompt（TanStack AI 的 generateText 使用 prompt 或 messages）
-			const systemMessage = messages.find(m => m.role === 'system');
-			const userMessages = messages.filter(m => m.role !== 'system');
-			
+			const systemMessage = messages.find((m) => m.role === 'system');
+			const userMessages = messages.filter((m) => m.role !== 'system');
+
 			// 构建 prompt
 			let prompt = '';
 			if (systemMessage) {
 				prompt += `[System] ${systemMessage.content}\n\n`;
 			}
-			prompt += userMessages.map(m => {
-				if (m.role === 'assistant') return `[Assistant] ${m.content}`;
-				return m.content;
-			}).join('\n\n');
+			prompt += userMessages
+				.map((m) => {
+					if (m.role === 'assistant') return `[Assistant] ${m.content}`;
+					return m.content;
+				})
+				.join('\n\n');
 
 			try {
 				// 使用重试机制
@@ -327,7 +334,7 @@ function createAiApiConfigStore() {
 							model: tanstackConfig.model,
 							prompt,
 							temperature: tanstackConfig.temperature,
-							maxOutputTokens: tanstackConfig.maxTokens,
+							maxOutputTokens: tanstackConfig.maxTokens
 						});
 
 						if (!response.text) {
@@ -341,7 +348,7 @@ function createAiApiConfigStore() {
 						provider: p.name,
 						onRetry: (error, attempt) => {
 							console.warn(`[aiApiConfig] 重试 ${attempt}:`, getErrorMessage(error));
-						},
+						}
 					}
 				);
 

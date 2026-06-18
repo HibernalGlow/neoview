@@ -71,7 +71,7 @@ export const collectTagCountStore = {
 			});
 
 			// 更新缓存
-			update(cache => {
+			update((cache) => {
 				const newCounts = new Map(cache.counts);
 				let changed = false;
 				for (const [path, count] of countResults) {
@@ -108,13 +108,13 @@ export const collectTagCountStore = {
 	 */
 	setCount(path: string, count: number): void {
 		const key = normalizePath(path);
-		
+
 		// 如果值没有变化，不触发更新
 		if (cacheSnapshot.counts.get(key) === count) {
 			return;
 		}
-		
-		update(c => {
+
+		update((c) => {
 			const newCounts = new Map(c.counts);
 			newCounts.set(key, count);
 			return {

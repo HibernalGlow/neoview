@@ -15,9 +15,7 @@
 	} from '$lib/stores/keybindings';
 	import { settingsOverlayOpen } from '$lib/stores/settingsOverlay.svelte';
 
-	let {
-		onselect = (_action: string) => {},
-	} = $props();
+	let { onselect = (_action: string) => {} } = $props();
 
 	let holdTimer: ReturnType<typeof setTimeout> | null = null;
 	let mouseHoldTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,8 +77,7 @@
 			if (binding.type !== 'keyboard') return false;
 			const keyBinding = binding as KeyBinding;
 			return (
-				normalizeKey(keyBinding.key) === normalizeKey(keyCombo) &&
-				keyBinding.trigger === 'hold'
+				normalizeKey(keyBinding.key) === normalizeKey(keyCombo) && keyBinding.trigger === 'hold'
 			);
 		})?.binding as KeyBinding | undefined;
 
@@ -123,10 +120,7 @@
 			const binding = keyBindingsStore.getAllBindingsForAction(action).find(({ binding }) => {
 				if (binding.type !== 'touch') return false;
 				const touchBinding = binding as TouchGesture;
-				return (
-					touchBinding.gesture === gesture &&
-					(touchBinding.trigger ?? 'instant') === trigger
-				);
+				return touchBinding.gesture === gesture && (touchBinding.trigger ?? 'instant') === trigger;
 			})?.binding as TouchGesture | undefined;
 
 			if (binding) return binding;

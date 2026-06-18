@@ -6,26 +6,26 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export interface PerformanceSettings {
-  cache_memory_size: number;         // MB
-  preload_enabled: boolean;          // whether to preload pages
-  preload_size: number;              // number of pages
-  gpu_acceleration: boolean;         // GPU rendering
-  multi_threaded_rendering: boolean; // multi-threaded decoding
-  decoding_threads: number;          // number of threads for decoding
-  // 缩略图设置
-  thumbnail_concurrent_local?: number;    // 本地文件并发数
-  thumbnail_concurrent_archive?: number;  // 压缩包并发数
-  thumbnail_concurrent_video?: number;    // 视频处理并发数
-  enable_video_thumbnail?: boolean;       // 启用视频缩略图
-  archive_tempfile_threshold_mb?: number; // 压缩包提取阈值 (后端)
-  direct_url_threshold_mb?: number;       // 协议直连触发阈值
+	cache_memory_size: number; // MB
+	preload_enabled: boolean; // whether to preload pages
+	preload_size: number; // number of pages
+	gpu_acceleration: boolean; // GPU rendering
+	multi_threaded_rendering: boolean; // multi-threaded decoding
+	decoding_threads: number; // number of threads for decoding
+	// 缩略图设置
+	thumbnail_concurrent_local?: number; // 本地文件并发数
+	thumbnail_concurrent_archive?: number; // 压缩包并发数
+	thumbnail_concurrent_video?: number; // 视频处理并发数
+	enable_video_thumbnail?: boolean; // 启用视频缩略图
+	archive_tempfile_threshold_mb?: number; // 压缩包提取阈值 (后端)
+	direct_url_threshold_mb?: number; // 协议直连触发阈值
 }
 
 /**
  * 获取性能设置
  */
 export async function getPerformanceSettings(): Promise<PerformanceSettings> {
-  return await invoke('get_performance_settings');
+	return await invoke('get_performance_settings');
 }
 
 /**
@@ -33,5 +33,5 @@ export async function getPerformanceSettings(): Promise<PerformanceSettings> {
  * 注意：仅保存设置，不强制重启
  */
 export async function savePerformanceSettings(settings: PerformanceSettings): Promise<void> {
-  await invoke('save_performance_settings', { settings });
+	await invoke('save_performance_settings', { settings });
 }

@@ -1,6 +1,6 @@
 /**
  * ImageData 模块 - 统一图片数据管理
- * 
+ *
  * 参考 NeeView (C#) 和 OpenComic (JS) 的设计模式：
  * - PageDataRepository: 统一的页面数据仓库
  * - 零重复 IPC: 同一图片只从后端获取一次
@@ -9,9 +9,9 @@
  */
 
 export {
-  PageDataRepository,
-  getPageDataRepository,
-  resetPageDataRepository,
-  type PageData,
-  type PageDataOptions,
+	PageDataRepository,
+	getPageDataRepository,
+	resetPageDataRepository,
+	type PageData,
+	type PageDataOptions
 } from './PageDataRepository';

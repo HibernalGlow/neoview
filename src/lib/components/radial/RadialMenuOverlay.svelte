@@ -16,7 +16,9 @@
 	const rayItems = $derived(toRayItems(radialMenuStore.config.items));
 	const rayLayers = $derived(
 		[0, 1, 2].map((index) =>
-			toRayItems(radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : []))
+			toRayItems(
+				radialMenuStore.config.layers?.[index] ?? (index === 0 ? radialMenuStore.config.items : [])
+			)
 		)
 	);
 	const confirmKeys = $derived.by(() =>

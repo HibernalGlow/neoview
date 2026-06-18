@@ -42,20 +42,36 @@
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
 
 	// 计算左侧边栏高度和对齐样式
-	let leftHeightPercent = $derived(getSidebarHeightPercent($leftSidebarHeight, $leftSidebarCustomHeight));
-	let leftVerticalStyle = $derived(getVerticalAlignStyle($leftSidebarVerticalAlign, leftHeightPercent));
+	let leftHeightPercent = $derived(
+		getSidebarHeightPercent($leftSidebarHeight, $leftSidebarCustomHeight)
+	);
+	let leftVerticalStyle = $derived(
+		getVerticalAlignStyle($leftSidebarVerticalAlign, leftHeightPercent)
+	);
 	let leftHeightStyle = $derived(`height: ${leftHeightPercent}%;`);
-	let leftWidth = $derived($leftSidebarOpen ? $leftSidebarWidth : (hoverAreas?.leftTriggerWidth ?? 32));
+	let leftWidth = $derived(
+		$leftSidebarOpen ? $leftSidebarWidth : (hoverAreas?.leftTriggerWidth ?? 32)
+	);
 	// X轴位置: 0=贴左边, 100=居中(对于左侧边栏)
-	let leftXOffset = $derived($leftSidebarHorizontalPos > 0 ? `left: ${$leftSidebarHorizontalPos * 0.5}%;` : 'left: 0;');
+	let leftXOffset = $derived(
+		$leftSidebarHorizontalPos > 0 ? `left: ${$leftSidebarHorizontalPos * 0.5}%;` : 'left: 0;'
+	);
 
 	// 计算右侧边栏高度和对齐样式
-	let rightHeightPercent = $derived(getSidebarHeightPercent($rightSidebarHeight, $rightSidebarCustomHeight));
-	let rightVerticalStyle = $derived(getVerticalAlignStyle($rightSidebarVerticalAlign, rightHeightPercent));
+	let rightHeightPercent = $derived(
+		getSidebarHeightPercent($rightSidebarHeight, $rightSidebarCustomHeight)
+	);
+	let rightVerticalStyle = $derived(
+		getVerticalAlignStyle($rightSidebarVerticalAlign, rightHeightPercent)
+	);
 	let rightHeightStyle = $derived(`height: ${rightHeightPercent}%;`);
-	let rightWidth = $derived($rightSidebarOpen ? $rightSidebarWidth : (hoverAreas?.rightTriggerWidth ?? 32));
+	let rightWidth = $derived(
+		$rightSidebarOpen ? $rightSidebarWidth : (hoverAreas?.rightTriggerWidth ?? 32)
+	);
 	// X轴位置: 0=贴右边, 100=居中(对于右侧边栏)
-	let rightXOffset = $derived($rightSidebarHorizontalPos > 0 ? `right: ${$rightSidebarHorizontalPos * 0.5}%;` : 'right: 0;');
+	let rightXOffset = $derived(
+		$rightSidebarHorizontalPos > 0 ? `right: ${$rightSidebarHorizontalPos * 0.5}%;` : 'right: 0;'
+	);
 
 	// 调试日志
 	$effect(() => {
@@ -190,7 +206,7 @@
 
 	<!-- 左侧边栏（悬浮，支持自由移动） -->
 	<div
-		class="absolute z-[55] pointer-events-none"
+		class="pointer-events-none absolute z-[55]"
 		style="{leftXOffset} {leftVerticalStyle} {leftHeightStyle} width: {leftWidth}px;"
 	>
 		<div class="pointer-events-auto h-full w-full">
@@ -200,7 +216,7 @@
 
 	<!-- 右侧边栏（悬浮，支持自由移动） -->
 	<div
-		class="absolute z-[55] pointer-events-none"
+		class="pointer-events-none absolute z-[55]"
 		style="{rightXOffset} {rightVerticalStyle} {rightHeightStyle} width: {rightWidth}px;"
 	>
 		<div class="pointer-events-auto h-full w-full">

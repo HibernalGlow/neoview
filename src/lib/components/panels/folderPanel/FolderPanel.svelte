@@ -1,21 +1,21 @@
 <script lang="ts">
-/**
- * FolderPanel - 纯容器版本
- * 使用卡片系统渲染
- */
-import CardRenderer from '$lib/cards/CardRenderer.svelte';
-import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
+	/**
+	 * FolderPanel - 纯容器版本
+	 * 使用卡片系统渲染
+	 */
+	import CardRenderer from '$lib/cards/CardRenderer.svelte';
+	import { cardConfigStore } from '$lib/stores/cardConfig.svelte';
 
-const panelCards = $derived(cardConfigStore.getPanelCards('folder'));
+	const panelCards = $derived(cardConfigStore.getPanelCards('folder'));
 
-$effect(() => {
-	// 日志已移除，避免频繁触发时的性能损耗
-});
+	$effect(() => {
+		// 日志已移除，避免频繁触发时的性能损耗
+	});
 </script>
 
-<div class="h-full flex flex-col overflow-hidden">
+<div class="flex h-full flex-col overflow-hidden">
 	{#each panelCards as card (card.id)}
-		<div class="flex-1 min-h-0 flex flex-col">
+		<div class="flex min-h-0 flex-1 flex-col">
 			<CardRenderer cardId={card.id} panelId="folder" />
 		</div>
 	{/each}

@@ -22,7 +22,7 @@
 	// 获取阅读方向
 	let settings = $state(settingsManager.getSettings());
 	let isRTL = $derived(settings.book.readingDirection === 'right-to-left');
-	
+
 	// 监听设置变化
 	settingsManager.addListener((newSettings) => {
 		settings = newSettings;
@@ -76,7 +76,7 @@
 
 {#if visible}
 	<div
-		class="slideshow-control fixed left-1/2 top-4 z-50 -translate-x-1/2 transform"
+		class="slideshow-control fixed top-4 left-1/2 z-50 -translate-x-1/2 transform"
 		transition:fly={{ y: -20, duration: 200 }}
 	>
 		<!-- 主控制栏 -->
@@ -135,7 +135,7 @@
 								fill="none"
 								stroke="rgba(255,255,255,0.2)"
 								stroke-width="3"
-							/>
+							></circle>
 							<!-- 进度圆 -->
 							<circle
 								cx="18"
@@ -148,7 +148,7 @@
 								stroke-dashoffset={94.2 - (slideshowStore.progress / 100) * 94.2}
 								stroke-linecap="round"
 								class="transition-all duration-200"
-							/>
+							></circle>
 						</svg>
 						<!-- 中心时间 -->
 						<div
@@ -221,7 +221,9 @@
 
 				<!-- 间隔时间 -->
 				<div class="mb-4">
-					<label for="slideshow-interval" class="mb-1 block text-xs text-white/70">切换间隔（秒）</label>
+					<label for="slideshow-interval" class="mb-1 block text-xs text-white/70"
+						>切换间隔（秒）</label
+					>
 					<div class="flex items-center gap-2">
 						<input
 							id="slideshow-interval"
@@ -243,7 +245,10 @@
 					<div class="flex gap-1">
 						{#each [3, 5, 10, 15, 30] as sec}
 							<button
-								class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 {intervalInput === sec ? 'bg-primary/50' : ''}"
+								class="flex-1 rounded bg-white/10 px-2 py-1 text-xs text-white transition-colors hover:bg-white/20 {intervalInput ===
+								sec
+									? 'bg-primary/50'
+									: ''}"
 								onclick={() => {
 									intervalInput = sec;
 									slideshowStore.setInterval(sec);
@@ -283,11 +288,11 @@
 	<!-- 底部进度条（可选）- 跟随阅读方向 -->
 	{#if slideshowStore.isPlaying && slideshowStore.showTimer}
 		<div
-			class="slideshow-progress fixed bottom-0 left-0 right-0 z-40 h-0.5 bg-white/20"
+			class="slideshow-progress fixed right-0 bottom-0 left-0 z-40 h-0.5 bg-white/20"
 			transition:fade={{ duration: 100 }}
 		>
 			<div
-				class="h-full bg-primary transition-all duration-1000 ease-linear"
+				class="bg-primary h-full transition-all duration-1000 ease-linear"
 				style="width: {slideshowStore.progress}%; {isRTL ? 'margin-left: auto;' : ''}"
 			></div>
 		</div>

@@ -35,7 +35,3 @@ export function createImageTraceId(source: string, pageIndex?: number): string {
 export function logImageTrace(traceId: string, stage: string, info?: TraceInfo): void {
 	console.log(`🧭 [ImagePipeline][${traceId}] ${stage}${formatInfo(info)}`);
 }
-
-
-
-

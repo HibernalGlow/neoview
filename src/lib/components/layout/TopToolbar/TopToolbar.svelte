@@ -57,7 +57,7 @@
 		ArrowLeft,
 		Play,
 		Pause,
-        Search
+		Search
 	} from '@lucide/svelte';
 
 	import { settingsManager } from '$lib/settings/settingsManager';
@@ -71,7 +71,12 @@
 	import SortPanel from './SortPanel.svelte';
 	import SlideshowPanel from './SlideshowPanel.svelte';
 	import HoverScrollPanel from './HoverScrollPanel.svelte';
-	import { getZoomModeIcon, getZoomModeLabel, getAutoRotateLabel, SORT_CATEGORIES } from './constants';
+	import {
+		getZoomModeIcon,
+		getZoomModeLabel,
+		getAutoRotateLabel,
+		SORT_CATEGORIES
+	} from './constants';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -188,29 +193,29 @@
 		settingsManager.updateNestedSettings('image', { hoverScrollEnabled: next });
 	}
 
-    function toggleMagnifier() {
-        // Toggle the panel if it's already enabled, or enable it and open panel if disabled
-        const snapshot = appState.getSnapshot();
-        const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false };
-        const newState = !currentMagnifier.enabled;
+	function toggleMagnifier() {
+		// Toggle the panel if it's already enabled, or enable it and open panel if disabled
+		const snapshot = appState.getSnapshot();
+		const currentMagnifier = snapshot.viewer.magnifier ?? { enabled: false };
+		const newState = !currentMagnifier.enabled;
 
-        appState.update({
-            viewer: {
-                ...snapshot.viewer,
-                magnifier: {
-                    enabled: newState
-                }
-            }
-        });
+		appState.update({
+			viewer: {
+				...snapshot.viewer,
+				magnifier: {
+					enabled: newState
+				}
+			}
+		});
 
-        // Automatically manage panel visibility
-        if (newState) {
-            closePanels();
-            magnifierPanelExpanded = true;
-        } else {
-             magnifierPanelExpanded = false;
-        }
-    }
+		// Automatically manage panel visibility
+		if (newState) {
+			closePanels();
+			magnifierPanelExpanded = true;
+		} else {
+			magnifierPanelExpanded = false;
+		}
+	}
 
 	// 可见性和悬停状态
 	let isVisible = $state(false);
@@ -221,11 +226,11 @@
 	let resizeStartHeight = 0;
 	let hoverCount = $state(0);
 
-    import MagnifierPanel from './MagnifierPanel.svelte';
+	import MagnifierPanel from './MagnifierPanel.svelte';
 
 	// ... (existing imports)
 
-    // ... (existing code)
+	// ... (existing code)
 
 	// 展开面板状态
 	let sortPanelExpanded = $state(false);
@@ -233,7 +238,7 @@
 	let rotatePanelExpanded = $state(false);
 	let slideshowPanelExpanded = $state(false);
 	let hoverScrollPanelExpanded = $state(false);
-    let magnifierPanelExpanded = $state(false);
+	let magnifierPanelExpanded = $state(false);
 
 	function closePanels() {
 		sortPanelExpanded = false;
@@ -241,10 +246,10 @@
 		rotatePanelExpanded = false;
 		slideshowPanelExpanded = false;
 		hoverScrollPanelExpanded = false;
-        magnifierPanelExpanded = false;
+		magnifierPanelExpanded = false;
 	}
 
-    // ... (existing toggle functions)
+	// ... (existing toggle functions)
 
 	function toggleMagnifierPanel() {
 		const wasExpanded = magnifierPanelExpanded;
@@ -252,7 +257,7 @@
 		magnifierPanelExpanded = !wasExpanded;
 	}
 
-    // ... (existing code)
+	// ... (existing code)
 
 	function toggleSortPanel() {
 		const wasExpanded = sortPanelExpanded;
@@ -446,7 +451,9 @@
 					{/if}
 
 					{#if bookStore.currentBook}
-						<div class="text-muted-foreground flex shrink-0 items-center gap-2 text-sm whitespace-nowrap">
+						<div
+							class="text-muted-foreground flex shrink-0 items-center gap-2 text-sm whitespace-nowrap"
+						>
 							{#if bookStore.currentBook.type === 'archive'}
 								<FileArchive class="h-3 w-3" />
 							{:else}
@@ -468,14 +475,18 @@
 								<Button
 									variant={sortPanelExpanded ? 'default' : 'ghost'}
 									size="icon"
-									class="h-8 w-8 {isSortLocked ? 'ring-2 ring-primary' : ''}"
+									class="h-8 w-8 {isSortLocked ? 'ring-primary ring-2' : ''}"
 									onclick={toggleSortPanel}
 								>
 									<ArrowDownUp class="h-3.5 w-3.5" />
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
-								<p>页面排序：{mediaPriorityLabel ? `${mediaPriorityLabel} + ` : ''}{currentSortModeLabel}{isSortLocked ? '（已锁定）' : ''}</p>
+								<p>
+									页面排序：{mediaPriorityLabel
+										? `${mediaPriorityLabel} + `
+										: ''}{currentSortModeLabel}{isSortLocked ? '（已锁定）' : ''}
+								</p>
 							</Tooltip.Content>
 						</Tooltip.Root>
 
@@ -524,35 +535,35 @@
 							<Tooltip.Content><p>缩小</p></Tooltip.Content>
 						</Tooltip.Root>
 
-<!-- 百分比：单击重置100%，长按输入自定义值 -->
-							{#if zoomInputActive}
-								<input
-									bind:this={zoomInputEl}
-									bind:value={zoomInputValue}
-									type="number"
-									min="10"
-									max="1000"
-									class="h-8 w-16 rounded border border-border bg-background px-1 text-center font-mono text-xs outline-none focus:ring-1 focus:ring-primary"
-									onkeydown={handleZoomInputKeydown}
-									onblur={commitZoomInput}
-								/>
-							{:else}
-								<Tooltip.Root>
-									<Tooltip.Trigger>
-										<Button
-											variant="ghost"
-											size="sm"
-											class="h-8 px-2 font-mono text-xs select-none"
-											onpointerdown={startLongPress}
-											onpointerup={cancelLongPress}
-											onpointerleave={cancelLongPress}
-										>
-											{($viewerState.zoom * 100).toFixed(0)}%
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content><p>单击重置100%・长按输入数值</p></Tooltip.Content>
-								</Tooltip.Root>
-							{/if}
+						<!-- 百分比：单击重置100%，长按输入自定义值 -->
+						{#if zoomInputActive}
+							<input
+								bind:this={zoomInputEl}
+								bind:value={zoomInputValue}
+								type="number"
+								min="10"
+								max="1000"
+								class="border-border bg-background focus:ring-primary h-8 w-16 rounded border px-1 text-center font-mono text-xs outline-none focus:ring-1"
+								onkeydown={handleZoomInputKeydown}
+								onblur={commitZoomInput}
+							/>
+						{:else}
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									<Button
+										variant="ghost"
+										size="sm"
+										class="h-8 px-2 font-mono text-xs select-none"
+										onpointerdown={startLongPress}
+										onpointerup={cancelLongPress}
+										onpointerleave={cancelLongPress}
+									>
+										{($viewerState.zoom * 100).toFixed(0)}%
+									</Button>
+								</Tooltip.Trigger>
+								<Tooltip.Content><p>单击重置100%・长按输入数值</p></Tooltip.Content>
+							</Tooltip.Root>
+						{/if}
 
 						<Tooltip.Root>
 							<Tooltip.Trigger>
@@ -562,8 +573,6 @@
 							</Tooltip.Trigger>
 							<Tooltip.Content><p>放大</p></Tooltip.Content>
 						</Tooltip.Root>
-
-
 
 						<!-- 缩放模式切换 -->
 						<Tooltip.Root>
@@ -793,16 +802,18 @@
 						<!-- 放大镜开关 -->
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<Button 
-                                    variant={magnifierPanelExpanded || ($viewerState.magnifier?.enabled ?? false) ? 'default' : 'ghost'} 
-                                    size="icon" 
-                                    class="h-8 w-8" 
-                                    onclick={toggleMagnifier}
+								<Button
+									variant={magnifierPanelExpanded || ($viewerState.magnifier?.enabled ?? false)
+										? 'default'
+										: 'ghost'}
+									size="icon"
+									class="h-8 w-8"
+									onclick={toggleMagnifier}
 									oncontextmenu={(e: MouseEvent) => {
-                                        e.preventDefault();
-                                        toggleMagnifierPanel();
-                                    }}
-                                >
+										e.preventDefault();
+										toggleMagnifierPanel();
+									}}
+								>
 									<Search class="h-4 w-4" />
 								</Button>
 							</Tooltip.Trigger>
@@ -817,7 +828,7 @@
 				<RotatePanel expanded={rotatePanelExpanded} />
 				<HoverScrollPanel expanded={hoverScrollPanelExpanded} />
 				<SlideshowPanel expanded={slideshowPanelExpanded} />
-                <MagnifierPanel expanded={magnifierPanelExpanded} />
+				<MagnifierPanel expanded={magnifierPanelExpanded} />
 			</div>
 
 			<!-- 拖拽手柄 -->

@@ -1,35 +1,35 @@
 <script lang="ts">
-/**
- * EMM 标签热度卡片
- */
-import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
-import { Badge } from '$lib/components/ui/badge';
-import type { EMMCollectTag } from '$lib/api/emm';
+	/**
+	 * EMM 标签热度卡片
+	 */
+	import { emmMetadataStore } from '$lib/stores/emmMetadata.svelte';
+	import { Badge } from '$lib/components/ui/badge';
+	import type { EMMCollectTag } from '$lib/api/emm';
 
-let collectTags = $state<EMMCollectTag[]>([]);
+	let collectTags = $state<EMMCollectTag[]>([]);
 
-$effect(() => {
-	const unsubscribe = emmMetadataStore.subscribe((value) => {
-		collectTags = value.collectTags ?? [];
+	$effect(() => {
+		const unsubscribe = emmMetadataStore.subscribe((value) => {
+			collectTags = value.collectTags ?? [];
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-function buildEmmTagStats() {
-	const total = collectTags.length;
-	const byLetter: Record<string, number> = {};
-	for (const tag of collectTags) {
-		const letter = tag.letter || 'other';
-		byLetter[letter] = (byLetter[letter] ?? 0) + 1;
+	function buildEmmTagStats() {
+		const total = collectTags.length;
+		const byLetter: Record<string, number> = {};
+		for (const tag of collectTags) {
+			const letter = tag.letter || 'other';
+			byLetter[letter] = (byLetter[letter] ?? 0) + 1;
+		}
+		const topLetters = Object.entries(byLetter)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 5);
+		const previewTags = collectTags.slice(0, 6);
+		return { total, topLetters, previewTags };
 	}
-	const topLetters = Object.entries(byLetter)
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, 5);
-	const previewTags = collectTags.slice(0, 6);
-	return { total, topLetters, previewTags };
-}
 
-const stats = $derived(buildEmmTagStats());
+	const stats = $derived(buildEmmTagStats());
 </script>
 
 <div class="space-y-3">
@@ -37,7 +37,7 @@ const stats = $derived(buildEmmTagStats());
 		<span class="text-muted-foreground">收藏标签总数</span>
 		<span class="font-semibold">{stats.total}</span>
 	</div>
-	
+
 	{#if stats.topLetters.length > 0}
 		<div class="flex flex-wrap gap-1.5">
 			{#each stats.topLetters as [letter, count]}
@@ -47,19 +47,19 @@ const stats = $derived(buildEmmTagStats());
 			{/each}
 		</div>
 	{/if}
-	
+
 	{#if stats.previewTags.length > 0}
 		<div class="flex flex-wrap gap-1">
 			{#each stats.previewTags as tag}
-				<span class="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+				<span class="bg-muted/50 text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
 					{tag.tag}
 				</span>
 			{/each}
 			{#if stats.total > 6}
-				<span class="text-[10px] text-muted-foreground">+{stats.total - 6} 更多</span>
+				<span class="text-muted-foreground text-[10px]">+{stats.total - 6} 更多</span>
 			{/if}
 		</div>
 	{:else}
-		<p class="text-xs text-muted-foreground text-center py-4">暂无 EMM 标签数据</p>
+		<p class="text-muted-foreground py-4 text-center text-xs">暂无 EMM 标签数据</p>
 	{/if}
 </div>

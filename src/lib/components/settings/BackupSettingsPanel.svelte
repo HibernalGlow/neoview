@@ -40,7 +40,9 @@
 	// 排除配置
 	let newExcludedKey = $state('');
 	let showAnalysis = $state(false);
-	let analysisData = $state<Array<{ key: string; lines: number; size: number; excluded: boolean; reason?: string }>>([]);
+	let analysisData = $state<
+		Array<{ key: string; lines: number; size: number; excluded: boolean; reason?: string }>
+	>([]);
 
 	// 间隔选项
 	const intervalOptions = [
@@ -149,7 +151,12 @@
 	// 添加排除键
 	function addExcludedKey() {
 		if (!newExcludedKey.trim()) return;
-		const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+		const exclusion = settings.exclusion || {
+			excludedKeys: [],
+			excludedModules: [],
+			autoExcludeLargeData: true,
+			maxLineCount: 1000
+		};
 		if (!exclusion.excludedKeys.includes(newExcludedKey.trim())) {
 			autoBackupStore.updateSettings({
 				exclusion: {
@@ -163,11 +170,16 @@
 
 	// 移除排除键
 	function removeExcludedKey(key: string) {
-		const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
+		const exclusion = settings.exclusion || {
+			excludedKeys: [],
+			excludedModules: [],
+			autoExcludeLargeData: true,
+			maxLineCount: 1000
+		};
 		autoBackupStore.updateSettings({
 			exclusion: {
 				...exclusion,
-				excludedKeys: exclusion.excludedKeys.filter(k => k !== key)
+				excludedKeys: exclusion.excludedKeys.filter((k) => k !== key)
 			}
 		});
 	}
@@ -189,11 +201,11 @@
 	<!-- 自动备份设置 -->
 	<div class="space-y-4">
 		<div>
-			<h3 class="text-lg font-semibold flex items-center gap-2">
+			<h3 class="flex items-center gap-2 text-lg font-semibold">
 				<Clock class="h-5 w-5" />
 				自动备份
 			</h3>
-			<p class="text-sm text-muted-foreground">定时自动备份所有应用数据</p>
+			<p class="text-muted-foreground text-sm">定时自动备份所有应用数据</p>
 		</div>
 
 		<!-- 启用开关 -->
@@ -251,7 +263,7 @@
 		<div class="flex items-center justify-between">
 			<div>
 				<Label for="include-all-storage">包含所有本地数据</Label>
-				<p class="text-xs text-muted-foreground">包含所有 localStorage 数据以确保完整恢复</p>
+				<p class="text-muted-foreground text-xs">包含所有 localStorage 数据以确保完整恢复</p>
 			</div>
 			<Switch
 				id="include-all-storage"
@@ -263,123 +275,143 @@
 
 		<!-- 排除配置 -->
 		{#if settings.includeAllLocalStorage}
-		<div class="space-y-3 rounded-lg border p-3">
-			<div class="flex items-center justify-between">
-				<div>
-					<Label class="flex items-center gap-2">
-						<Filter class="h-4 w-4" />
-						排除配置
-					</Label>
-					<p class="text-xs text-muted-foreground">配置备份时排除的数据项</p>
-				</div>
-				<Button variant="outline" size="sm" onclick={analyzeStorage}>
-					<Search class="mr-1 h-3 w-3" />
-					分析
-				</Button>
-			</div>
-
-			<!-- 自动排除大数据 -->
-			<div class="flex items-center justify-between">
-				<div>
-					<Label for="auto-exclude-large" class="text-sm">自动排除大数据</Label>
-					<p class="text-xs text-muted-foreground">自动排除超过指定行数的数据</p>
-				</div>
-				<Switch
-					id="auto-exclude-large"
-					checked={settings.exclusion?.autoExcludeLargeData ?? true}
-					onCheckedChange={(checked) => {
-						const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
-						autoBackupStore.updateSettings({ exclusion: { ...exclusion, autoExcludeLargeData: !!checked } });
-					}}
-				/>
-			</div>
-
-			<!-- 最大行数 -->
-			{#if settings.exclusion?.autoExcludeLargeData ?? true}
-			<div class="flex items-center justify-between gap-2">
-				<Label class="text-sm">最大行数阈值</Label>
-				<Input
-					type="number"
-					min="100"
-					max="10000"
-					step="100"
-					value={settings.exclusion?.maxLineCount ?? 1000}
-					onchange={(e) => {
-						const target = e.target as HTMLInputElement;
-						const exclusion = settings.exclusion || { excludedKeys: [], excludedModules: [], autoExcludeLargeData: true, maxLineCount: 1000 };
-						autoBackupStore.updateSettings({ exclusion: { ...exclusion, maxLineCount: parseInt(target.value) || 1000 } });
-					}}
-					class="w-24"
-				/>
-			</div>
-			{/if}
-
-			<!-- 手动排除列表 -->
-			<div class="space-y-2">
-				<Label class="text-sm">手动排除的键名</Label>
-				<div class="flex gap-2">
-					<Input
-						bind:value={newExcludedKey}
-						placeholder="输入要排除的 localStorage 键名"
-						class="flex-1 text-sm"
-						onkeydown={(e) => e.key === 'Enter' && addExcludedKey()}
-					/>
-					<Button variant="outline" size="icon" onclick={addExcludedKey}>
-						<Plus class="h-4 w-4" />
+			<div class="space-y-3 rounded-lg border p-3">
+				<div class="flex items-center justify-between">
+					<div>
+						<Label class="flex items-center gap-2">
+							<Filter class="h-4 w-4" />
+							排除配置
+						</Label>
+						<p class="text-muted-foreground text-xs">配置备份时排除的数据项</p>
+					</div>
+					<Button variant="outline" size="sm" onclick={analyzeStorage}>
+						<Search class="mr-1 h-3 w-3" />
+						分析
 					</Button>
 				</div>
-				{#if (settings.exclusion?.excludedKeys?.length ?? 0) > 0}
-				<div class="flex flex-wrap gap-1.5">
-					{#each settings.exclusion?.excludedKeys ?? [] as key}
-					<span class="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs">
-						{key}
-						<button type="button" class="hover:text-destructive" onclick={() => removeExcludedKey(key)}>
-							<X class="h-3 w-3" />
-						</button>
-					</span>
-					{/each}
+
+				<!-- 自动排除大数据 -->
+				<div class="flex items-center justify-between">
+					<div>
+						<Label for="auto-exclude-large" class="text-sm">自动排除大数据</Label>
+						<p class="text-muted-foreground text-xs">自动排除超过指定行数的数据</p>
+					</div>
+					<Switch
+						id="auto-exclude-large"
+						checked={settings.exclusion?.autoExcludeLargeData ?? true}
+						onCheckedChange={(checked) => {
+							const exclusion = settings.exclusion || {
+								excludedKeys: [],
+								excludedModules: [],
+								autoExcludeLargeData: true,
+								maxLineCount: 1000
+							};
+							autoBackupStore.updateSettings({
+								exclusion: { ...exclusion, autoExcludeLargeData: !!checked }
+							});
+						}}
+					/>
 				</div>
+
+				<!-- 最大行数 -->
+				{#if settings.exclusion?.autoExcludeLargeData ?? true}
+					<div class="flex items-center justify-between gap-2">
+						<Label class="text-sm">最大行数阈值</Label>
+						<Input
+							type="number"
+							min="100"
+							max="10000"
+							step="100"
+							value={settings.exclusion?.maxLineCount ?? 1000}
+							onchange={(e) => {
+								const target = e.target as HTMLInputElement;
+								const exclusion = settings.exclusion || {
+									excludedKeys: [],
+									excludedModules: [],
+									autoExcludeLargeData: true,
+									maxLineCount: 1000
+								};
+								autoBackupStore.updateSettings({
+									exclusion: { ...exclusion, maxLineCount: parseInt(target.value) || 1000 }
+								});
+							}}
+							class="w-24"
+						/>
+					</div>
 				{/if}
+
+				<!-- 手动排除列表 -->
+				<div class="space-y-2">
+					<Label class="text-sm">手动排除的键名</Label>
+					<div class="flex gap-2">
+						<Input
+							bind:value={newExcludedKey}
+							placeholder="输入要排除的 localStorage 键名"
+							class="flex-1 text-sm"
+							onkeydown={(e) => e.key === 'Enter' && addExcludedKey()}
+						/>
+						<Button variant="outline" size="icon" onclick={addExcludedKey}>
+							<Plus class="h-4 w-4" />
+						</Button>
+					</div>
+					{#if (settings.exclusion?.excludedKeys?.length ?? 0) > 0}
+						<div class="flex flex-wrap gap-1.5">
+							{#each settings.exclusion?.excludedKeys ?? [] as key}
+								<span
+									class="bg-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+								>
+									{key}
+									<button
+										type="button"
+										class="hover:text-destructive"
+										onclick={() => removeExcludedKey(key)}
+									>
+										<X class="h-3 w-3" />
+									</button>
+								</span>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			</div>
-		</div>
 		{/if}
 
 		<!-- 数据分析弹窗 -->
 		{#if showAnalysis}
-		<div class="space-y-2 rounded-lg border p-3">
-			<div class="flex items-center justify-between">
-				<Label class="text-sm font-semibold">localStorage 数据分析</Label>
-				<Button variant="ghost" size="sm" onclick={() => showAnalysis = false}>
-					<X class="h-4 w-4" />
-				</Button>
-			</div>
-			<div class="max-h-48 overflow-y-auto space-y-1">
-				{#each analysisData as item}
-				<div class="flex items-center justify-between text-xs p-1.5 rounded {item.excluded ? 'bg-destructive/10 text-destructive' : 'hover:bg-muted'}">
-					<span class="truncate flex-1" title={item.key}>{item.key}</span>
-					<span class="text-muted-foreground mx-2">{item.lines}行</span>
-					<span class="text-muted-foreground">{formatSize(item.size)}</span>
-					{#if item.excluded}
-					<span class="ml-2 text-destructive">({item.reason})</span>
-					{/if}
+			<div class="space-y-2 rounded-lg border p-3">
+				<div class="flex items-center justify-between">
+					<Label class="text-sm font-semibold">localStorage 数据分析</Label>
+					<Button variant="ghost" size="sm" onclick={() => (showAnalysis = false)}>
+						<X class="h-4 w-4" />
+					</Button>
 				</div>
-				{/each}
+				<div class="max-h-48 space-y-1 overflow-y-auto">
+					{#each analysisData as item}
+						<div
+							class="flex items-center justify-between rounded p-1.5 text-xs {item.excluded
+								? 'bg-destructive/10 text-destructive'
+								: 'hover:bg-muted'}"
+						>
+							<span class="flex-1 truncate" title={item.key}>{item.key}</span>
+							<span class="text-muted-foreground mx-2">{item.lines}行</span>
+							<span class="text-muted-foreground">{formatSize(item.size)}</span>
+							{#if item.excluded}
+								<span class="text-destructive ml-2">({item.reason})</span>
+							{/if}
+						</div>
+					{/each}
+				</div>
+				<p class="text-muted-foreground text-xs">
+					共 {analysisData.length} 项，排除 {analysisData.filter((i) => i.excluded).length} 项
+				</p>
 			</div>
-			<p class="text-xs text-muted-foreground">
-				共 {analysisData.length} 项，排除 {analysisData.filter(i => i.excluded).length} 项
-			</p>
-		</div>
 		{/if}
 
 		<!-- 备份目录 -->
 		<div class="space-y-2">
 			<Label>备份目录</Label>
 			<div class="flex items-center gap-2">
-				<Input
-					value={settings.backupPath || '未设置'}
-					readonly
-					class="flex-1 text-sm"
-				/>
+				<Input value={settings.backupPath || '未设置'} readonly class="flex-1 text-sm" />
 				<Button variant="outline" size="icon" onclick={selectBackupPath}>
 					<FolderOpen class="h-4 w-4" />
 				</Button>
@@ -388,7 +420,7 @@
 
 		<!-- 状态信息 -->
 		{#if settings.enabled}
-			<div class="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
+			<div class="bg-muted/50 space-y-1 rounded-lg p-3 text-sm">
 				<div class="flex items-center justify-between">
 					<span class="text-muted-foreground">上次备份:</span>
 					<span>{autoBackupStore.formatTime(settings.lastBackupTime)}</span>
@@ -422,11 +454,11 @@
 	<!-- 导入导出 -->
 	<div class="space-y-4">
 		<div>
-			<h3 class="text-lg font-semibold flex items-center gap-2">
+			<h3 class="flex items-center gap-2 text-lg font-semibold">
 				<HardDrive class="h-5 w-5" />
 				手动导入导出
 			</h3>
-			<p class="text-sm text-muted-foreground">手动导出或导入完整备份文件</p>
+			<p class="text-muted-foreground text-sm">手动导出或导入完整备份文件</p>
 		</div>
 
 		<div class="flex gap-2">
@@ -447,11 +479,11 @@
 	<div class="space-y-4">
 		<div class="flex items-center justify-between">
 			<div>
-				<h3 class="text-lg font-semibold flex items-center gap-2">
+				<h3 class="flex items-center gap-2 text-lg font-semibold">
 					<History class="h-5 w-5" />
 					备份历史
 				</h3>
-				<p class="text-sm text-muted-foreground">已保存的备份文件</p>
+				<p class="text-muted-foreground text-sm">已保存的备份文件</p>
 			</div>
 			<Button variant="ghost" size="icon" onclick={loadBackups} disabled={loadingBackups}>
 				<RefreshCw class="h-4 w-4 {loadingBackups ? 'animate-spin' : ''}" />
@@ -459,26 +491,26 @@
 		</div>
 
 		{#if !settings.backupPath}
-			<div class="text-center py-8 text-muted-foreground">
+			<div class="text-muted-foreground py-8 text-center">
 				<p>请先设置备份目录</p>
 			</div>
 		{:else if backups.length === 0}
-			<div class="text-center py-8 text-muted-foreground">
+			<div class="text-muted-foreground py-8 text-center">
 				<p>暂无备份</p>
 			</div>
 		{:else}
-			<div class="space-y-2 max-h-64 overflow-y-auto">
+			<div class="max-h-64 space-y-2 overflow-y-auto">
 				{#each backups as backup}
 					<div
-						class="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+						class="hover:bg-accent flex items-center justify-between rounded-lg border p-3 transition-colors"
 					>
-						<div class="flex-1 min-w-0">
-							<div class="text-sm font-medium truncate">{backup.filename}</div>
-							<div class="text-xs text-muted-foreground">
+						<div class="min-w-0 flex-1">
+							<div class="truncate text-sm font-medium">{backup.filename}</div>
+							<div class="text-muted-foreground text-xs">
 								{formatTime(backup.timestamp)} · {formatSize(backup.size)}
 							</div>
 						</div>
-						<div class="flex items-center gap-1 ml-2">
+						<div class="ml-2 flex items-center gap-1">
 							<Button
 								variant="ghost"
 								size="sm"

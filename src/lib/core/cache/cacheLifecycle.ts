@@ -1,6 +1,6 @@
 /**
  * 缓存生命周期管理
- * 
+ *
  * 处理应用启动时的缓存预热和关闭时的清理
  */
 
@@ -12,7 +12,7 @@ let beforeUnloadHandler: (() => void) | null = null;
 
 /**
  * 初始化缓存系统
- * 
+ *
  * - 启动自动清理
  * - 从持久化存储预热常用缓存
  * - 注册应用关闭处理器
@@ -92,15 +92,15 @@ export function teardownCacheSystem(): void {
  */
 export function getCacheStatsSummary(): string {
 	const stats = globalCacheManager.getStats();
-	const sizeMB = Math.round(stats.totalSize / 1024 / 1024 * 100) / 100;
-	
+	const sizeMB = Math.round((stats.totalSize / 1024 / 1024) * 100) / 100;
+
 	const lines = [
 		`总缓存: ${stats.totalItems} 项, ${sizeMB}MB`,
-		`命名空间: ${stats.namespaces.size} (持久化: ${stats.persistentNamespaces})`,
+		`命名空间: ${stats.namespaces.size} (持久化: ${stats.persistentNamespaces})`
 	];
 
 	for (const [name, ns] of stats.namespaces) {
-		const nsSizeMB = Math.round(ns.size / 1024 / 1024 * 100) / 100;
+		const nsSizeMB = Math.round((ns.size / 1024 / 1024) * 100) / 100;
 		const hitRatePct = Math.round(ns.hitRate * 100);
 		lines.push(`  - ${name}: ${ns.items} 项, ${nsSizeMB}MB, 命中率 ${hitRatePct}%`);
 	}

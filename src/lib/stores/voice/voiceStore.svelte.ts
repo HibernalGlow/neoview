@@ -8,12 +8,9 @@ import type {
 	VoiceRecognitionStatus,
 	VoiceCommandMatch,
 	VoiceControlConfig,
-	VoiceControlStats,
+	VoiceControlStats
 } from '$lib/services/voice/types';
-import {
-	DEFAULT_VOICE_CONFIG,
-	DEFAULT_VOICE_STATS,
-} from '$lib/services/voice/types';
+import { DEFAULT_VOICE_CONFIG, DEFAULT_VOICE_STATS } from '$lib/services/voice/types';
 
 const STORAGE_KEY = 'neoview-voice-control';
 
@@ -26,12 +23,14 @@ let isSupported = $state<boolean>(false);
 let errorMessage = $state<string | null>(null);
 
 // 命令历史记录
-let commandHistory = $state<Array<{
-	action: string;
-	transcript: string;
-	time: number;
-	success: boolean;
-}>>([]);
+let commandHistory = $state<
+	Array<{
+		action: string;
+		transcript: string;
+		time: number;
+		success: boolean;
+	}>
+>([]);
 
 /**
  * 从 localStorage 加载配置
@@ -65,7 +64,7 @@ function saveToStorage(): void {
  */
 function initialize(): boolean {
 	isSupported = voiceControlService.getIsSupported();
-	
+
 	if (!isSupported) {
 		errorMessage = '当前浏览器不支持语音识别';
 		return false;
@@ -73,7 +72,7 @@ function initialize(): boolean {
 
 	// 加载保存的配置
 	loadFromStorage();
-	
+
 	// 应用自定义命令
 	if (config.customCommands) {
 		updateCommandDict(config.customCommands);
@@ -102,7 +101,7 @@ function initialize(): boolean {
 		},
 		onSpeechEnd: () => {
 			// 语音结束
-		},
+		}
 	});
 
 	// 初始化服务
@@ -165,7 +164,7 @@ function updateCommandPhrases(action: string, phrases: string[]): void {
  */
 function setEnabled(enabled: boolean): void {
 	updateConfig({ enabled });
-	
+
 	if (!enabled && status === 'listening') {
 		stopListening();
 	}
@@ -176,7 +175,7 @@ function setEnabled(enabled: boolean): void {
  */
 function recordCommand(match: VoiceCommandMatch, success: boolean): void {
 	lastRecognizedText = match.transcript;
-	
+
 	stats.totalCommands++;
 	if (success) {
 		stats.successfulCommands++;
@@ -192,9 +191,9 @@ function recordCommand(match: VoiceCommandMatch, success: boolean): void {
 			action: match.action,
 			transcript: match.transcript,
 			time: Date.now(),
-			success,
+			success
 		},
-		...commandHistory.slice(0, 49), // 保留最近50条
+		...commandHistory.slice(0, 49) // 保留最近50条
 	];
 
 	saveToStorage();
@@ -228,17 +227,39 @@ function destroy(): void {
 // 导出 store
 export const voiceStore = {
 	// 状态 getters
-	get config() { return config; },
-	get stats() { return stats; },
-	get status() { return status; },
-	get lastRecognizedText() { return lastRecognizedText; },
-	get isSupported() { return isSupported; },
-	get errorMessage() { return errorMessage; },
-	get commandHistory() { return commandHistory; },
-	get isListening() { return status === 'listening'; },
-	get isProcessing() { return status === 'processing'; },
-	get isIdle() { return status === 'idle'; },
-	get hasError() { return status === 'error'; },
+	get config() {
+		return config;
+	},
+	get stats() {
+		return stats;
+	},
+	get status() {
+		return status;
+	},
+	get lastRecognizedText() {
+		return lastRecognizedText;
+	},
+	get isSupported() {
+		return isSupported;
+	},
+	get errorMessage() {
+		return errorMessage;
+	},
+	get commandHistory() {
+		return commandHistory;
+	},
+	get isListening() {
+		return status === 'listening';
+	},
+	get isProcessing() {
+		return status === 'processing';
+	},
+	get isIdle() {
+		return status === 'idle';
+	},
+	get hasError() {
+		return status === 'error';
+	},
 
 	// 方法
 	initialize,
@@ -254,5 +275,5 @@ export const voiceStore = {
 	destroy,
 
 	// 获取服务实例（用于设置自定义回调）
-	getService: () => voiceControlService,
+	getService: () => voiceControlService
 };

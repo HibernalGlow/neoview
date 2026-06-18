@@ -13,7 +13,7 @@ const LANG_NAMES: Record<string, string> = {
 	en: '英语',
 	zh: '中文',
 	ko: '韩语',
-	auto: '原文',
+	auto: '原文'
 };
 
 /**
@@ -73,11 +73,12 @@ function parsePromptTemplate(
 /**
  * 默认翻译 prompt 模板
  */
-const DEFAULT_PROMPT_TEMPLATE = '请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}';
+const DEFAULT_PROMPT_TEMPLATE =
+	'请将以下{source_lang}文本翻译成{target_lang}，只返回翻译结果，不要解释：\n{text}';
 
 /**
  * 使用流式响应进行翻译
- * 
+ *
  * @param config - TanStack AI 配置
  * @param options - 翻译选项
  * @returns 翻译结果
@@ -94,7 +95,7 @@ export async function translateWithStreaming(
 		onChunk,
 		onComplete,
 		onError,
-		abortSignal,
+		abortSignal
 	} = options;
 
 	const prompt = parsePromptTemplate(promptTemplate, text, sourceLang, targetLang);
@@ -105,7 +106,7 @@ export async function translateWithStreaming(
 			prompt,
 			temperature: config.temperature,
 			maxOutputTokens: config.maxTokens,
-			abortSignal,
+			abortSignal
 		});
 
 		let fullText = '';
@@ -122,7 +123,7 @@ export async function translateWithStreaming(
 
 		return {
 			success: true,
-			translated: cleanedResult,
+			translated: cleanedResult
 		};
 	} catch (error) {
 		// 检查是否是中断错误
@@ -130,7 +131,7 @@ export async function translateWithStreaming(
 			return {
 				success: false,
 				aborted: true,
-				error: '翻译被取消',
+				error: '翻译被取消'
 			};
 		}
 
@@ -139,14 +140,14 @@ export async function translateWithStreaming(
 
 		return {
 			success: false,
-			error: `翻译失败: ${errorMessage}`,
+			error: `翻译失败: ${errorMessage}`
 		};
 	}
 }
 
 /**
  * 使用非流式响应进行翻译（用于不需要实时显示的场景）
- * 
+ *
  * @param config - TanStack AI 配置
  * @param options - 翻译选项（不包含流式回调）
  * @returns 翻译结果
@@ -162,7 +163,7 @@ export async function translateWithoutStreaming(
 		promptTemplate = DEFAULT_PROMPT_TEMPLATE,
 		onComplete,
 		onError,
-		abortSignal,
+		abortSignal
 	} = options;
 
 	const prompt = parsePromptTemplate(promptTemplate, text, sourceLang, targetLang);
@@ -173,7 +174,7 @@ export async function translateWithoutStreaming(
 			prompt,
 			temperature: config.temperature,
 			maxOutputTokens: config.maxTokens,
-			abortSignal,
+			abortSignal
 		});
 
 		const cleanedResult = result.text.trim().replace(/^["']|["']$/g, '');
@@ -182,14 +183,14 @@ export async function translateWithoutStreaming(
 
 		return {
 			success: true,
-			translated: cleanedResult,
+			translated: cleanedResult
 		};
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			return {
 				success: false,
 				aborted: true,
-				error: '翻译被取消',
+				error: '翻译被取消'
 			};
 		}
 
@@ -198,7 +199,7 @@ export async function translateWithoutStreaming(
 
 		return {
 			success: false,
-			error: `翻译失败: ${errorMessage}`,
+			error: `翻译失败: ${errorMessage}`
 		};
 	}
 }

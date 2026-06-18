@@ -103,7 +103,9 @@ export function createTagActions(
 	}
 
 	return {
-		get randomTags() { return randomTags; },
+		get randomTags() {
+			return randomTags;
+		},
 		refreshRandomTags,
 		appendTagToSearch,
 		handleRandomTagClick

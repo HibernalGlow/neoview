@@ -1,8 +1,8 @@
 /**
  * IpcBatcher - IPC 请求批处理器
- * 
+ *
  * 支持请求批处理、重试机制和流式传输
- * 
+ *
  * Requirements: 4.2, 4.4
  */
 
@@ -11,279 +11,286 @@ import { perfMonitor } from '$lib/utils/perfMonitor';
 import { RequestDeduplicator } from '$lib/utils/requestDedup';
 
 export interface BatchRequest {
-  id: string;
-  command: string;
-  args: Record<string, unknown>;
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-  timestamp: number;
+	id: string;
+	command: string;
+	args: Record<string, unknown>;
+	resolve: (value: unknown) => void;
+	reject: (error: Error) => void;
+	timestamp: number;
 }
 
 export interface IpcBatcherConfig {
-  batchWindowMs: number;      // 批处理窗口时间
-  maxBatchSize: number;       // 最大批次大小
-  maxRetries: number;         // 最大重试次数
-  retryDelays: number[];      // 重试延迟（指数退避）
-  smallRequestThreshold: number; // 小请求阈值（字节）
+	batchWindowMs: number; // 批处理窗口时间
+	maxBatchSize: number; // 最大批次大小
+	maxRetries: number; // 最大重试次数
+	retryDelays: number[]; // 重试延迟（指数退避）
+	smallRequestThreshold: number; // 小请求阈值（字节）
 }
 
 const DEFAULT_CONFIG: IpcBatcherConfig = {
-  batchWindowMs: 12,
-  maxBatchSize: 12,
-  maxRetries: 3,
-  retryDelays: [50, 100, 200],
-  smallRequestThreshold: 1024,
+	batchWindowMs: 12,
+	maxBatchSize: 12,
+	maxRetries: 3,
+	retryDelays: [50, 100, 200],
+	smallRequestThreshold: 1024
 };
 
 class IpcBatcherImpl {
-  private config: IpcBatcherConfig = { ...DEFAULT_CONFIG };
-  private pendingRequests: Map<string, BatchRequest> = new Map();
-  private batchTimer: ReturnType<typeof setTimeout> | null = null;
-  private requestCounter: number = 0;
-  private requestDedup = new RequestDeduplicator(150);
+	private config: IpcBatcherConfig = { ...DEFAULT_CONFIG };
+	private pendingRequests: Map<string, BatchRequest> = new Map();
+	private batchTimer: ReturnType<typeof setTimeout> | null = null;
+	private requestCounter: number = 0;
+	private requestDedup = new RequestDeduplicator(150);
 
-  /**
-   * 设置配置
-   */
-  setConfig(config: Partial<IpcBatcherConfig>): void {
-    this.config = { ...this.config, ...config };
-  }
+	/**
+	 * 设置配置
+	 */
+	setConfig(config: Partial<IpcBatcherConfig>): void {
+		this.config = { ...this.config, ...config };
+	}
 
-  /**
-   * 发送请求（支持批处理和重试）
-   */
-  async invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-    const startTime = performance.now();
-    const executor = () => this.invokeWithRetry<T>(command, args);
-    const task = this.shouldDedup(command)
-      ? this.requestDedup.run<T>(this.buildRequestKey(command, args), executor)
-      : executor();
-    
-    try {
-      const result = await task;
-      const latency = performance.now() - startTime;
-      perfMonitor.record('ipcLatency', latency);
-      return result;
-    } catch (error) {
-      const latency = performance.now() - startTime;
-      perfMonitor.record('ipcLatency', latency);
-      throw error;
-    }
-  }
+	/**
+	 * 发送请求（支持批处理和重试）
+	 */
+	async invoke<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+		const startTime = performance.now();
+		const executor = () => this.invokeWithRetry<T>(command, args);
+		const task = this.shouldDedup(command)
+			? this.requestDedup.run<T>(this.buildRequestKey(command, args), executor)
+			: executor();
 
-  /**
-   * 仅对读路径命令启用去重，避免影响写操作语义。
-   */
-  private shouldDedup(command: string): boolean {
-    const writeCommandPattern = /^(set_|update_|save_|delete_|remove_|create_|clear_|toggle_|rename_|move_|copy_|batch_set_|batch_update_)/;
-    return !writeCommandPattern.test(command);
-  }
+		try {
+			const result = await task;
+			const latency = performance.now() - startTime;
+			perfMonitor.record('ipcLatency', latency);
+			return result;
+		} catch (error) {
+			const latency = performance.now() - startTime;
+			perfMonitor.record('ipcLatency', latency);
+			throw error;
+		}
+	}
 
-  /**
-   * 构建稳定请求键，保证相同命令+参数可命中去重。
-   */
-  private buildRequestKey(command: string, args: Record<string, unknown>): string {
-    return `${command}:${this.stableStringify(args)}`;
-  }
+	/**
+	 * 仅对读路径命令启用去重，避免影响写操作语义。
+	 */
+	private shouldDedup(command: string): boolean {
+		const writeCommandPattern =
+			/^(set_|update_|save_|delete_|remove_|create_|clear_|toggle_|rename_|move_|copy_|batch_set_|batch_update_)/;
+		return !writeCommandPattern.test(command);
+	}
 
-  private stableStringify(value: unknown): string {
-    if (value === null || typeof value !== 'object') {
-      return JSON.stringify(value);
-    }
+	/**
+	 * 构建稳定请求键，保证相同命令+参数可命中去重。
+	 */
+	private buildRequestKey(command: string, args: Record<string, unknown>): string {
+		return `${command}:${this.stableStringify(args)}`;
+	}
 
-    if (Array.isArray(value)) {
-      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
-    }
+	private stableStringify(value: unknown): string {
+		if (value === null || typeof value !== 'object') {
+			return JSON.stringify(value);
+		}
 
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).sort();
-    const serialized = keys.map((key) => `${JSON.stringify(key)}:${this.stableStringify(obj[key])}`);
-    return `{${serialized.join(',')}}`;
-  }
+		if (Array.isArray(value)) {
+			return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+		}
 
-  /**
-   * 带重试的调用
-   */
-  private async invokeWithRetry<T>(
-    command: string,
-    args: Record<string, unknown>,
-    retryCount: number = 0
-  ): Promise<T> {
-    try {
-      return await invoke<T>(command, args);
-    } catch (error) {
-      const isRetryable = this.isRetryableError(error);
-      
-      if (isRetryable && retryCount < this.config.maxRetries) {
-        const delay = this.config.retryDelays[retryCount] || this.config.retryDelays[this.config.retryDelays.length - 1];
-        console.warn(`[IpcBatcher] Retry ${retryCount + 1}/${this.config.maxRetries} for ${command} after ${delay}ms`);
-        
-        await this.sleep(delay);
-        return this.invokeWithRetry<T>(command, args, retryCount + 1);
-      }
-      
-      throw error;
-    }
-  }
+		const obj = value as Record<string, unknown>;
+		const keys = Object.keys(obj).sort();
+		const serialized = keys.map(
+			(key) => `${JSON.stringify(key)}:${this.stableStringify(obj[key])}`
+		);
+		return `{${serialized.join(',')}}`;
+	}
 
-  /**
-   * 批量请求（将多个小请求合并）
-   */
-  async batchInvoke<T>(
-    requests: Array<{ command: string; args: Record<string, unknown> }>
-  ): Promise<T[]> {
-    // 如果只有一个请求，直接调用
-    if (requests.length === 1) {
-      const result = await this.invoke<T>(requests[0].command, requests[0].args);
-      return [result];
-    }
+	/**
+	 * 带重试的调用
+	 */
+	private async invokeWithRetry<T>(
+		command: string,
+		args: Record<string, unknown>,
+		retryCount: number = 0
+	): Promise<T> {
+		try {
+			return await invoke<T>(command, args);
+		} catch (error) {
+			const isRetryable = this.isRetryableError(error);
 
-    // 并行执行所有请求
-    const promises = requests.map(req => this.invoke<T>(req.command, req.args));
-    return Promise.all(promises);
-  }
+			if (isRetryable && retryCount < this.config.maxRetries) {
+				const delay =
+					this.config.retryDelays[retryCount] ||
+					this.config.retryDelays[this.config.retryDelays.length - 1];
+				console.warn(
+					`[IpcBatcher] Retry ${retryCount + 1}/${this.config.maxRetries} for ${command} after ${delay}ms`
+				);
 
-  /**
-   * 排队请求（用于批处理）
-   */
-  queueRequest<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const id = `req_${++this.requestCounter}`;
-      const request: BatchRequest = {
-        id,
-        command,
-        args,
-        resolve: resolve as (value: unknown) => void,
-        reject,
-        timestamp: Date.now(),
-      };
+				await this.sleep(delay);
+				return this.invokeWithRetry<T>(command, args, retryCount + 1);
+			}
 
-      this.pendingRequests.set(id, request);
-      this.scheduleBatchProcessing();
-    });
-  }
+			throw error;
+		}
+	}
 
-  /**
-   * 调度批处理
-   */
-  private scheduleBatchProcessing(): void {
-    if (this.batchTimer) return;
+	/**
+	 * 批量请求（将多个小请求合并）
+	 */
+	async batchInvoke<T>(
+		requests: Array<{ command: string; args: Record<string, unknown> }>
+	): Promise<T[]> {
+		// 如果只有一个请求，直接调用
+		if (requests.length === 1) {
+			const result = await this.invoke<T>(requests[0].command, requests[0].args);
+			return [result];
+		}
 
-    // 如果达到最大批次大小，立即处理
-    if (this.pendingRequests.size >= this.config.maxBatchSize) {
-      this.processBatch();
-      return;
-    }
+		// 并行执行所有请求
+		const promises = requests.map((req) => this.invoke<T>(req.command, req.args));
+		return Promise.all(promises);
+	}
 
-    // 否则等待批处理窗口
-    this.batchTimer = setTimeout(() => {
-      this.batchTimer = null;
-      this.processBatch();
-    }, this.config.batchWindowMs);
-  }
+	/**
+	 * 排队请求（用于批处理）
+	 */
+	queueRequest<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
+		return new Promise((resolve, reject) => {
+			const id = `req_${++this.requestCounter}`;
+			const request: BatchRequest = {
+				id,
+				command,
+				args,
+				resolve: resolve as (value: unknown) => void,
+				reject,
+				timestamp: Date.now()
+			};
 
-  /**
-   * 处理批次
-   */
-  private async processBatch(): Promise<void> {
-    if (this.pendingRequests.size === 0) return;
+			this.pendingRequests.set(id, request);
+			this.scheduleBatchProcessing();
+		});
+	}
 
-    // 按命令分组
-    const byCommand = new Map<string, BatchRequest[]>();
-    for (const request of this.pendingRequests.values()) {
-      const existing = byCommand.get(request.command) || [];
-      existing.push(request);
-      byCommand.set(request.command, existing);
-    }
+	/**
+	 * 调度批处理
+	 */
+	private scheduleBatchProcessing(): void {
+		if (this.batchTimer) return;
 
-    this.pendingRequests.clear();
+		// 如果达到最大批次大小，立即处理
+		if (this.pendingRequests.size >= this.config.maxBatchSize) {
+			this.processBatch();
+			return;
+		}
 
-    // 并行处理每个命令组
-    const promises: Promise<void>[] = [];
-    for (const [command, requests] of byCommand) {
-      promises.push(this.processCommandBatch(command, requests));
-    }
+		// 否则等待批处理窗口
+		this.batchTimer = setTimeout(() => {
+			this.batchTimer = null;
+			this.processBatch();
+		}, this.config.batchWindowMs);
+	}
 
-    await Promise.all(promises);
-  }
+	/**
+	 * 处理批次
+	 */
+	private async processBatch(): Promise<void> {
+		if (this.pendingRequests.size === 0) return;
 
-  /**
-   * 处理单个命令的批次
-   */
-  private async processCommandBatch(command: string, requests: BatchRequest[]): Promise<void> {
-    // 尝试使用批量命令（如果存在）
-    const batchCommand = `batch_${command}`;
-    
-    try {
-      // 尝试批量调用
-      const argsArray = requests.map(r => r.args);
-      const results = await this.invoke<unknown[]>(batchCommand, { requests: argsArray });
-      
-      // 分发结果
-      for (let i = 0; i < requests.length; i++) {
-        requests[i].resolve(results[i]);
-      }
-    } catch {
-      // 批量命令不存在，回退到单独调用
-      for (const request of requests) {
-        try {
-          const result = await this.invoke(request.command, request.args);
-          request.resolve(result);
-        } catch (error) {
-          request.reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-    }
-  }
+		// 按命令分组
+		const byCommand = new Map<string, BatchRequest[]>();
+		for (const request of this.pendingRequests.values()) {
+			const existing = byCommand.get(request.command) || [];
+			existing.push(request);
+			byCommand.set(request.command, existing);
+		}
 
-  /**
-   * 检查是否为可重试的错误
-   */
-  private isRetryableError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-      return (
-        message.includes('failed to fetch') ||
-        message.includes('network') ||
-        message.includes('timeout') ||
-        message.includes('connection')
-      );
-    }
-    return false;
-  }
+		this.pendingRequests.clear();
 
-  /**
-   * 睡眠
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
+		// 并行处理每个命令组
+		const promises: Promise<void>[] = [];
+		for (const [command, requests] of byCommand) {
+			promises.push(this.processCommandBatch(command, requests));
+		}
 
-  /**
-   * 取消所有待处理请求
-   */
-  cancelAll(): void {
-    if (this.batchTimer) {
-      clearTimeout(this.batchTimer);
-      this.batchTimer = null;
-    }
+		await Promise.all(promises);
+	}
 
-    for (const request of this.pendingRequests.values()) {
-      request.reject(new Error('Request cancelled'));
-    }
-    this.pendingRequests.clear();
-    this.requestDedup.clear();
-  }
+	/**
+	 * 处理单个命令的批次
+	 */
+	private async processCommandBatch(command: string, requests: BatchRequest[]): Promise<void> {
+		// 尝试使用批量命令（如果存在）
+		const batchCommand = `batch_${command}`;
 
-  /**
-   * 获取统计
-   */
-  getStats(): { pendingCount: number; dedup: ReturnType<RequestDeduplicator['getStats']> } {
-    return {
-      pendingCount: this.pendingRequests.size,
-      dedup: this.requestDedup.getStats(),
-    };
-  }
+		try {
+			// 尝试批量调用
+			const argsArray = requests.map((r) => r.args);
+			const results = await this.invoke<unknown[]>(batchCommand, { requests: argsArray });
+
+			// 分发结果
+			for (let i = 0; i < requests.length; i++) {
+				requests[i].resolve(results[i]);
+			}
+		} catch {
+			// 批量命令不存在，回退到单独调用
+			for (const request of requests) {
+				try {
+					const result = await this.invoke(request.command, request.args);
+					request.resolve(result);
+				} catch (error) {
+					request.reject(error instanceof Error ? error : new Error(String(error)));
+				}
+			}
+		}
+	}
+
+	/**
+	 * 检查是否为可重试的错误
+	 */
+	private isRetryableError(error: unknown): boolean {
+		if (error instanceof Error) {
+			const message = error.message.toLowerCase();
+			return (
+				message.includes('failed to fetch') ||
+				message.includes('network') ||
+				message.includes('timeout') ||
+				message.includes('connection')
+			);
+		}
+		return false;
+	}
+
+	/**
+	 * 睡眠
+	 */
+	private sleep(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * 取消所有待处理请求
+	 */
+	cancelAll(): void {
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer);
+			this.batchTimer = null;
+		}
+
+		for (const request of this.pendingRequests.values()) {
+			request.reject(new Error('Request cancelled'));
+		}
+		this.pendingRequests.clear();
+		this.requestDedup.clear();
+	}
+
+	/**
+	 * 获取统计
+	 */
+	getStats(): { pendingCount: number; dedup: ReturnType<RequestDeduplicator['getStats']> } {
+		return {
+			pendingCount: this.pendingRequests.size,
+			dedup: this.requestDedup.getStats()
+		};
+	}
 }
 
 // 单例导出

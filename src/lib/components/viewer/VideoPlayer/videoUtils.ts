@@ -73,12 +73,12 @@ export function getTempVideoElement(videoUrl: string): HTMLVideoElement {
 		tempVideoElement.muted = true;
 		tempVideoElement.preload = 'metadata';
 	}
-	
+
 	// 如果 src 变了才更新
 	if (tempVideoElement.src !== videoUrl) {
 		tempVideoElement.src = videoUrl;
 	}
-	
+
 	return tempVideoElement;
 }
 

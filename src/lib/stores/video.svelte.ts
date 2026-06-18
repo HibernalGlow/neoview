@@ -38,7 +38,8 @@ class VideoStore {
 		this._seekMode = value;
 		// 同步到 window 全局
 		if (typeof window !== 'undefined') {
-			(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode = value;
+			(window as unknown as { __neoview_video_seek_mode?: boolean }).__neoview_video_seek_mode =
+				value;
 		}
 	}
 

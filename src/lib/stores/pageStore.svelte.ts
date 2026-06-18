@@ -1,6 +1,6 @@
 /**
  * NeoView Page Store (NeeView 架构)
- * 
+ *
  * 简化的页面状态管理，后端主导加载
  * 前端只负责：
  * - 存储当前状态
@@ -59,12 +59,12 @@ function createPageStore() {
 		try {
 			const book = await pageManager.openBook(path);
 			state.book = book;
-			
+
 			// 自动加载第一页
 			if (book.totalPages > 0) {
 				await gotoPage(0);
 			}
-			
+
 			return book;
 		} catch (err) {
 			state.error = err instanceof Error ? err.message : String(err);
@@ -82,7 +82,7 @@ function createPageStore() {
 		state.book = null;
 		state.currentPageBlob = null;
 		state.error = null;
-		
+
 		await pageManager.closeBook();
 	}
 
@@ -103,12 +103,12 @@ function createPageStore() {
 
 		try {
 			const blob = await pageManager.gotoPage(index);
-			
+
 			// 更新状态
 			cleanupUrl();
 			state.currentPageBlob = blob;
 			state.currentPageUrl = pageManager.createObjectURL(blob);
-			
+
 			// 更新书籍信息中的当前页
 			if (state.book) {
 				state.book = { ...state.book, currentIndex: index };
@@ -162,19 +162,39 @@ function createPageStore() {
 
 	return {
 		// 状态 getters
-		get book() { return state.book; },
-		get currentPageUrl() { return state.currentPageUrl; },
-		get currentPageBlob() { return state.currentPageBlob; },
-		get isLoading() { return state.isLoading; },
-		get error() { return state.error; },
-		get stats() { return state.stats; },
-		
+		get book() {
+			return state.book;
+		},
+		get currentPageUrl() {
+			return state.currentPageUrl;
+		},
+		get currentPageBlob() {
+			return state.currentPageBlob;
+		},
+		get isLoading() {
+			return state.isLoading;
+		},
+		get error() {
+			return state.error;
+		},
+		get stats() {
+			return state.stats;
+		},
+
 		// 派生状态
-		get hasBook() { return state.book !== null; },
-		get currentIndex() { return state.book?.currentIndex ?? 0; },
-		get totalPages() { return state.book?.totalPages ?? 0; },
-		get isFirstPage() { return (state.book?.currentIndex ?? 0) === 0; },
-		get isLastPage() { 
+		get hasBook() {
+			return state.book !== null;
+		},
+		get currentIndex() {
+			return state.book?.currentIndex ?? 0;
+		},
+		get totalPages() {
+			return state.book?.totalPages ?? 0;
+		},
+		get isFirstPage() {
+			return (state.book?.currentIndex ?? 0) === 0;
+		},
+		get isLastPage() {
 			const book = state.book;
 			return book ? book.currentIndex >= book.totalPages - 1 : true;
 		},
@@ -183,7 +203,7 @@ function createPageStore() {
 			if (!stats) return '0%';
 			return `${stats.memory.usagePercent}%`;
 		},
-		
+
 		// 方法
 		openBook,
 		closeBook,
@@ -192,7 +212,7 @@ function createPageStore() {
 		prevPage,
 		refreshStats,
 		clearCache,
-		
+
 		// 工具方法
 		formatMemorySize: pageManager.formatMemorySize
 	};

@@ -1,112 +1,121 @@
 <script lang="ts">
-/**
- * PanelItemManager - 通用面板项管理器
- * 从 SidebarPanelManager 提取的可复用组件
- * 支持拖拽排序、显示/隐藏、位置切换等功能
- */
-import { Button } from '$lib/components/ui/button';
-import { GripVertical, Eye, EyeOff, ArrowLeft, ArrowRight, RotateCcw, ChevronDown, ChevronRight } from '@lucide/svelte';
-import type { Component } from 'svelte';
+	/**
+	 * PanelItemManager - 通用面板项管理器
+	 * 从 SidebarPanelManager 提取的可复用组件
+	 * 支持拖拽排序、显示/隐藏、位置切换等功能
+	 */
+	import { Button } from '$lib/components/ui/button';
+	import {
+		GripVertical,
+		Eye,
+		EyeOff,
+		ArrowLeft,
+		ArrowRight,
+		RotateCcw,
+		ChevronDown,
+		ChevronRight
+	} from '@lucide/svelte';
+	import type { Component } from 'svelte';
 
-// 通用项目接口
-export interface ManagedItem {
-	id: string;
-	title: string;
-	icon?: Component;
-	order: number;
-	visible: boolean;
-	canHide: boolean;
-	canMove: boolean;
-	// 可选：位置（用于边栏管理）
-	position?: 'left' | 'right';
-	// 可选：展开状态（用于卡片管理）
-	expanded?: boolean;
-}
-
-interface Props {
-	items: ManagedItem[];
-	title: string;
-	description?: string;
-	// 位置模式：显示左右切换按钮
-	showPositionSwitch?: boolean;
-	// 展开模式：显示展开/收起按钮
-	showExpandSwitch?: boolean;
-	// 回调
-	onMove?: (id: string, targetOrder: number) => void;
-	onVisibilityChange?: (id: string, visible: boolean) => void;
-	onPositionChange?: (id: string, position: 'left' | 'right') => void;
-	onExpandChange?: (id: string, expanded: boolean) => void;
-	onReset?: () => void;
-}
-
-let {
-	items,
-	title,
-	description = '',
-	showPositionSwitch = false,
-	showExpandSwitch = false,
-	onMove,
-	onVisibilityChange,
-	onPositionChange,
-	onExpandChange,
-	onReset
-}: Props = $props();
-
-// 拖拽状态
-let draggedId: string | null = $state(null);
-let dragOverId: string | null = $state(null);
-
-// 排序后的项目
-const sortedItems = $derived([...items].sort((a, b) => a.order - b.order));
-
-function handleDragStart(e: DragEvent, id: string) {
-	draggedId = id;
-	if (e.dataTransfer) {
-		e.dataTransfer.effectAllowed = 'move';
-		e.dataTransfer.setData('text/plain', id);
+	// 通用项目接口
+	export interface ManagedItem {
+		id: string;
+		title: string;
+		icon?: Component;
+		order: number;
+		visible: boolean;
+		canHide: boolean;
+		canMove: boolean;
+		// 可选：位置（用于边栏管理）
+		position?: 'left' | 'right';
+		// 可选：展开状态（用于卡片管理）
+		expanded?: boolean;
 	}
-}
 
-function handleDragOver(e: DragEvent, id: string) {
-	e.preventDefault();
-	if (draggedId && draggedId !== id) {
-		dragOverId = id;
+	interface Props {
+		items: ManagedItem[];
+		title: string;
+		description?: string;
+		// 位置模式：显示左右切换按钮
+		showPositionSwitch?: boolean;
+		// 展开模式：显示展开/收起按钮
+		showExpandSwitch?: boolean;
+		// 回调
+		onMove?: (id: string, targetOrder: number) => void;
+		onVisibilityChange?: (id: string, visible: boolean) => void;
+		onPositionChange?: (id: string, position: 'left' | 'right') => void;
+		onExpandChange?: (id: string, expanded: boolean) => void;
+		onReset?: () => void;
 	}
-}
 
-function handleDragLeave() {
-	dragOverId = null;
-}
+	let {
+		items,
+		title,
+		description = '',
+		showPositionSwitch = false,
+		showExpandSwitch = false,
+		onMove,
+		onVisibilityChange,
+		onPositionChange,
+		onExpandChange,
+		onReset
+	}: Props = $props();
 
-function handleDrop(e: DragEvent, targetId: string) {
-	e.preventDefault();
-	if (!draggedId || draggedId === targetId) return;
-	
-	const target = items.find(i => i.id === targetId);
-	if (target && onMove) {
-		onMove(draggedId, target.order);
+	// 拖拽状态
+	let draggedId: string | null = $state(null);
+	let dragOverId: string | null = $state(null);
+
+	// 排序后的项目
+	const sortedItems = $derived([...items].sort((a, b) => a.order - b.order));
+
+	function handleDragStart(e: DragEvent, id: string) {
+		draggedId = id;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', id);
+		}
 	}
-	
-	draggedId = null;
-	dragOverId = null;
-}
 
-function handleDragEnd() {
-	draggedId = null;
-	dragOverId = null;
-}
+	function handleDragOver(e: DragEvent, id: string) {
+		e.preventDefault();
+		if (draggedId && draggedId !== id) {
+			dragOverId = id;
+		}
+	}
 
-function toggleVisibility(id: string, current: boolean) {
-	onVisibilityChange?.(id, !current);
-}
+	function handleDragLeave() {
+		dragOverId = null;
+	}
 
-function changePosition(id: string, pos: 'left' | 'right') {
-	onPositionChange?.(id, pos);
-}
+	function handleDrop(e: DragEvent, targetId: string) {
+		e.preventDefault();
+		if (!draggedId || draggedId === targetId) return;
 
-function toggleExpanded(id: string, current: boolean) {
-	onExpandChange?.(id, !current);
-}
+		const target = items.find((i) => i.id === targetId);
+		if (target && onMove) {
+			onMove(draggedId, target.order);
+		}
+
+		draggedId = null;
+		dragOverId = null;
+	}
+
+	function handleDragEnd() {
+		draggedId = null;
+		dragOverId = null;
+	}
+
+	function toggleVisibility(id: string, current: boolean) {
+		onVisibilityChange?.(id, !current);
+	}
+
+	function changePosition(id: string, pos: 'left' | 'right') {
+		onPositionChange?.(id, pos);
+	}
+
+	function toggleExpanded(id: string, current: boolean) {
+		onExpandChange?.(id, !current);
+	}
 </script>
 
 <div class="panel-item-manager space-y-4">
@@ -119,15 +128,20 @@ function toggleExpanded(id: string, current: boolean) {
 			</Button>
 		{/if}
 	</div>
-	
+
 	{#if description}
-		<p class="text-sm text-muted-foreground">{description}</p>
+		<p class="text-muted-foreground text-sm">{description}</p>
 	{/if}
-	
+
 	<div class="space-y-2">
 		{#each sortedItems as item (item.id)}
 			<div
-				class="flex items-center gap-3 rounded-lg border p-3 transition-colors {dragOverId === item.id ? 'border-primary bg-accent' : 'bg-card'} {draggedId === item.id ? 'opacity-50' : ''} {!item.visible ? 'opacity-60' : ''}"
+				class="flex items-center gap-3 rounded-lg border p-3 transition-colors {dragOverId ===
+				item.id
+					? 'border-primary bg-accent'
+					: 'bg-card'} {draggedId === item.id ? 'opacity-50' : ''} {!item.visible
+					? 'opacity-60'
+					: ''}"
 				draggable={item.canMove}
 				ondragstart={(e) => handleDragStart(e, item.id)}
 				ondragover={(e) => handleDragOver(e, item.id)}
@@ -138,30 +152,30 @@ function toggleExpanded(id: string, current: boolean) {
 			>
 				<!-- 拖拽手柄 -->
 				{#if item.canMove}
-					<GripVertical class="h-5 w-5 cursor-grab text-muted-foreground" />
+					<GripVertical class="text-muted-foreground h-5 w-5 cursor-grab" />
 				{:else}
 					<div class="w-5"></div>
 				{/if}
-				
+
 				<!-- 图标和标题 -->
 				<div class="flex flex-1 items-center gap-2">
 					{#if item.icon}
 						{@const Icon = item.icon}
-						<Icon class="h-5 w-5 text-muted-foreground" />
+						<Icon class="text-muted-foreground h-5 w-5" />
 					{/if}
 					<span class="font-medium">{item.title}</span>
 					{#if showPositionSwitch && item.position}
-						<span class="text-xs text-muted-foreground">
+						<span class="text-muted-foreground text-xs">
 							({item.position === 'left' ? '左侧' : '右侧'})
 						</span>
 					{/if}
 					{#if showExpandSwitch && item.expanded !== undefined}
-						<span class="text-xs text-muted-foreground">
+						<span class="text-muted-foreground text-xs">
 							({item.expanded ? '展开' : '收起'})
 						</span>
 					{/if}
 				</div>
-				
+
 				<!-- 位置切换（边栏模式） -->
 				{#if showPositionSwitch && item.canMove && item.position}
 					<div class="flex items-center gap-1">
@@ -185,7 +199,7 @@ function toggleExpanded(id: string, current: boolean) {
 						</Button>
 					</div>
 				{/if}
-				
+
 				<!-- 展开/收起切换（卡片模式） -->
 				{#if showExpandSwitch && item.expanded !== undefined}
 					<Button
@@ -202,7 +216,7 @@ function toggleExpanded(id: string, current: boolean) {
 						{/if}
 					</Button>
 				{/if}
-				
+
 				<!-- 显示/隐藏开关 -->
 				{#if item.canHide}
 					<Button
@@ -215,12 +229,12 @@ function toggleExpanded(id: string, current: boolean) {
 						{#if item.visible}
 							<Eye class="h-4 w-4" />
 						{:else}
-							<EyeOff class="h-4 w-4 text-muted-foreground" />
+							<EyeOff class="text-muted-foreground h-4 w-4" />
 						{/if}
 					</Button>
 				{:else}
-					<div class="h-8 w-8 flex items-center justify-center" title="不可隐藏">
-						<Eye class="h-4 w-4 text-muted-foreground/50" />
+					<div class="flex h-8 w-8 items-center justify-center" title="不可隐藏">
+						<Eye class="text-muted-foreground/50 h-4 w-4" />
 					</div>
 				{/if}
 			</div>

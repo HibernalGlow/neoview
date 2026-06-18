@@ -66,7 +66,7 @@ Under `neoview/neoview-tauri`:
 Please make sure your system satisfies the official Tauri 2 prerequisites.
 
 - **Node.js**: 20+ (recommended via nvm / nvm-windows)
-- **Yarn**: used as the frontend package manager  
+- **Yarn**: used as the frontend package manager
   - On Node 16+, run `corepack enable` to enable Yarn
 - **Rust**: latest via [rustup](https://www.rust-lang.org/)
 - **Windows extra dependencies** (recommended, main development platform)

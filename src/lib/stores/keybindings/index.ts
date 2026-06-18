@@ -12,7 +12,7 @@ export type {
 	ActionBinding,
 	BindingWithContext,
 	ActionWithBinding,
-	MatchResult,
+	MatchResult
 } from './types';
 
 export {
@@ -22,14 +22,14 @@ export {
 	CONTEXT_NAMES,
 	AREA_NAMES,
 	BUTTON_NAMES,
-	ACTION_NAMES,
+	ACTION_NAMES
 } from './constants';
 
 export {
 	defaultBindings,
 	createDefaultBindings,
 	getAvailableActions,
-	getDefaultBinding,
+	getDefaultBinding
 } from './keyMappings.svelte';
 
 export type { InputMatcher } from './keyHandlers.svelte';
@@ -44,7 +44,7 @@ export {
 	findActionByTouchGestureInContext,
 	findActionByTouchGesture,
 	findActionByAreaClickInContext,
-	calculateClickArea,
+	calculateClickArea
 } from './keyHandlers.svelte';
 
 export {
@@ -54,7 +54,7 @@ export {
 	formatContext,
 	getAvailableContexts,
 	getAllBindingsForAction,
-	getBindingsForContext,
+	getBindingsForContext
 } from './keyCategories.svelte';
 
 export { keyBindingsStore } from './core.svelte';

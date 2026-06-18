@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 边栏管理卡片
- */
-import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
+	/**
+	 * 边栏管理卡片
+	 */
+	import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import SidebarManagementPanel from '$lib/components/panels/SidebarManagementPane
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

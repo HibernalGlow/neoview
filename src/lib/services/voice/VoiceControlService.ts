@@ -8,7 +8,7 @@ import type {
 	VoiceCommandMatch,
 	VoiceRecognitionResult,
 	VoiceControlConfig,
-	VoiceControlCallbacks,
+	VoiceControlCallbacks
 } from './types';
 import { DEFAULT_VOICE_CONFIG } from './types';
 import { findMatchingAction } from './commandDict';
@@ -132,7 +132,7 @@ export class VoiceControlService {
 	 */
 	public updateConfig(config: Partial<VoiceControlConfig>): void {
 		this.config = { ...this.config, ...config };
-		
+
 		// 如果已经初始化，更新识别器配置
 		if (this.recognition) {
 			this.recognition.lang = this.config.language;
@@ -274,7 +274,7 @@ export class VoiceControlService {
 	 */
 	private handleEnd(): void {
 		console.log('[VoiceControl] 识别结束');
-		
+
 		// 如果是持续模式且仍然启用，自动重启
 		if (this.config.continuous && this.config.enabled && this.status !== 'error') {
 			setTimeout(() => {
@@ -299,13 +299,15 @@ export class VoiceControlService {
 			const confidence = result[0].confidence;
 
 			if (result.isFinal) {
-				console.log(`[VoiceControl] 最终结果: "${transcript}" (置信度: ${(confidence * 100).toFixed(1)}%)`);
-				
+				console.log(
+					`[VoiceControl] 最终结果: "${transcript}" (置信度: ${(confidence * 100).toFixed(1)}%)`
+				);
+
 				// 处理最终结果
 				this.processTranscript({
 					transcript,
 					confidence,
-					isFinal: true,
+					isFinal: true
 				});
 			} else {
 				interimTranscript += transcript;
@@ -323,15 +325,16 @@ export class VoiceControlService {
 
 		// 预处理文本：去除末尾标点
 		const cleanTranscript = result.transcript.replace(/[。，、！？.?! ]+$/, '');
-		
+
 		// 查找匹配的命令（优先匹配，再检查置信度）
 		const match = findMatchingAction(cleanTranscript);
 
 		// 检查置信度
 		// 如果置信度为 0（某些引擎不返回置信度）且有匹配结果，则允许通过
 		// 否则需要满足最小置信度要求
-		const isConfidenceAcceptable = result.confidence === 0 || result.confidence >= this.config.minConfidence;
-		
+		const isConfidenceAcceptable =
+			result.confidence === 0 || result.confidence >= this.config.minConfidence;
+
 		if (!isConfidenceAcceptable) {
 			console.log(`[VoiceControl] 置信度过低，忽略: ${result.confidence}`);
 			return;
@@ -349,7 +352,7 @@ export class VoiceControlService {
 			action: match.action,
 			transcript: result.transcript,
 			confidence: result.confidence,
-			matchedPhrase: match.matchedPhrase,
+			matchedPhrase: match.matchedPhrase
 		};
 
 		console.log(`[VoiceControl] 匹配命令: ${match.action} (短语: "${match.matchedPhrase}")`);
@@ -366,7 +369,7 @@ export class VoiceControlService {
 	 */
 	private handleError(event: SpeechRecognitionErrorEvent): void {
 		console.error('[VoiceControl] 错误:', event.error, event.message);
-		
+
 		let errorMessage = '语音识别错误';
 		switch (event.error) {
 			case 'no-speech':

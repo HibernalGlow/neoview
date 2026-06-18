@@ -426,7 +426,11 @@
 						<Input
 							{value}
 							oninput={(e) =>
-								onThemeColorUpdate(editingVariant, key, (e.currentTarget as HTMLInputElement).value)}
+								onThemeColorUpdate(
+									editingVariant,
+									key,
+									(e.currentTarget as HTMLInputElement).value
+								)}
 						/>
 					</div>
 				</div>

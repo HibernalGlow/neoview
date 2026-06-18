@@ -10,291 +10,289 @@ import { pageFlipMonitor } from '$lib/utils/pageFlipMonitor';
 
 /** 页面导航状态 */
 export interface PageNavigationState {
-  currentPageIndex: number;
-  totalPages: number;
-  canNextPage: boolean;
-  canPreviousPage: boolean;
+	currentPageIndex: number;
+	totalPages: number;
+	canNextPage: boolean;
+	canPreviousPage: boolean;
 }
 
 /** 页面导航回调 */
 export interface PageNavigationCallbacks {
-  onPageChanged?: (index: number, page: Page | null) => void | Promise<void>;
-  getCurrentBook: () => BookInfo | null;
-  updateCurrentPage: (index: number) => void;
-  syncAppState: (source?: 'user' | 'system') => void;
-  syncInfoPanel: () => void | Promise<void>;
-  buildPathStack: () => ContentRef[];
-  isSingleFileMode: () => boolean;
-  getOriginalFilePath: () => string | null;
-  setOriginalFilePath: (path: string | null) => void;
+	onPageChanged?: (index: number, page: Page | null) => void | Promise<void>;
+	getCurrentBook: () => BookInfo | null;
+	updateCurrentPage: (index: number) => void;
+	syncAppState: (source?: 'user' | 'system') => void;
+	syncInfoPanel: () => void | Promise<void>;
+	buildPathStack: () => ContentRef[];
+	isSingleFileMode: () => boolean;
+	getOriginalFilePath: () => string | null;
+	setOriginalFilePath: (path: string | null) => void;
 }
 
 /** 页面导航管理器 */
 export class PageNavigationManager {
-  private callbacks: PageNavigationCallbacks;
+	private callbacks: PageNavigationCallbacks;
 
-  constructor(callbacks: PageNavigationCallbacks) {
-    this.callbacks = callbacks;
-  }
+	constructor(callbacks: PageNavigationCallbacks) {
+		this.callbacks = callbacks;
+	}
 
-  getCurrentPage(): Page | null {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return null;
-    return book.pages[book.currentPage] || null;
-  }
+	getCurrentPage(): Page | null {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return null;
+		return book.pages[book.currentPage] || null;
+	}
 
-  getCurrentPageIndex(): number {
-    return this.callbacks.getCurrentBook()?.currentPage ?? 0;
-  }
+	getCurrentPageIndex(): number {
+		return this.callbacks.getCurrentBook()?.currentPage ?? 0;
+	}
 
-  getTotalPages(): number {
-    return this.callbacks.getCurrentBook()?.totalPages ?? 0;
-  }
+	getTotalPages(): number {
+		return this.callbacks.getCurrentBook()?.totalPages ?? 0;
+	}
 
-  canGoNext(): boolean {
-    const book = this.callbacks.getCurrentBook();
-    return book !== null && book.currentPage < book.totalPages - 1;
-  }
+	canGoNext(): boolean {
+		const book = this.callbacks.getCurrentBook();
+		return book !== null && book.currentPage < book.totalPages - 1;
+	}
 
-  canGoPrevious(): boolean {
-    const book = this.callbacks.getCurrentBook();
-    return book !== null && book.currentPage > 0;
-  }
+	canGoPrevious(): boolean {
+		const book = this.callbacks.getCurrentBook();
+		return book !== null && book.currentPage > 0;
+	}
 
-  getNavigationState(): PageNavigationState {
-    const book = this.callbacks.getCurrentBook();
-    return {
-      currentPageIndex: book?.currentPage ?? 0,
-      totalPages: book?.totalPages ?? 0,
-      canNextPage: this.canGoNext(),
-      canPreviousPage: this.canGoPrevious(),
-    };
-  }
+	getNavigationState(): PageNavigationState {
+		const book = this.callbacks.getCurrentBook();
+		return {
+			currentPageIndex: book?.currentPage ?? 0,
+			totalPages: book?.totalPages ?? 0,
+			canNextPage: this.canGoNext(),
+			canPreviousPage: this.canGoPrevious()
+		};
+	}
 
+	/** 翻到指定页 */
+	async navigateToPage(index: number): Promise<void> {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return;
 
-  /** 翻到指定页 */
-  async navigateToPage(index: number): Promise<void> {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return;
+		const maxIndex = book.totalPages - 1;
+		if (index < 0 || index > maxIndex) {
+			console.warn('⚠️ Page index out of range:', index);
+			return;
+		}
 
-    const maxIndex = book.totalPages - 1;
-    if (index < 0 || index > maxIndex) {
-      console.warn('⚠️ Page index out of range:', index);
-      return;
-    }
+		try {
+			// 【性能监控】记录翻页开始
+			pageFlipMonitor.startFlip();
 
-    try {
-      // 【性能监控】记录翻页开始
-      pageFlipMonitor.startFlip();
-      
-      console.log(`📄 Navigating to page ${index + 1}/${book.totalPages}`);
-      await bookApi.navigateToPage(index);
-      this.callbacks.updateCurrentPage(index);
-      this.callbacks.syncAppState('user');
-      this.callbacks.syncInfoPanel();
-      await this.updateHistoryAfterNavigation(index);
+			console.log(`📄 Navigating to page ${index + 1}/${book.totalPages}`);
+			await bookApi.navigateToPage(index);
+			this.callbacks.updateCurrentPage(index);
+			this.callbacks.syncAppState('user');
+			this.callbacks.syncInfoPanel();
+			await this.updateHistoryAfterNavigation(index);
 
-      if (this.callbacks.onPageChanged) {
-        const page = this.getCurrentPage();
-        await this.callbacks.onPageChanged(index, page);
-      }
-      
-      // 【性能监控】记录翻页结束
-      pageFlipMonitor.endFlip();
-    } catch (err) {
-      console.error('❌ Error navigating to page:', err);
-      // 即使出错也要结束监控
-      pageFlipMonitor.endFlip();
-      throw err;
-    }
-  }
+			if (this.callbacks.onPageChanged) {
+				const page = this.getCurrentPage();
+				await this.callbacks.onPageChanged(index, page);
+			}
 
-  /** 通过图片路径导航 */
-  async navigateToImage(
-    imagePath: string,
-    options: { skipHistoryUpdate?: boolean } = {}
-  ): Promise<void> {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return;
+			// 【性能监控】记录翻页结束
+			pageFlipMonitor.endFlip();
+		} catch (err) {
+			console.error('❌ Error navigating to page:', err);
+			// 即使出错也要结束监控
+			pageFlipMonitor.endFlip();
+			throw err;
+		}
+	}
 
-    try {
-      const index = await bookApi.navigateToImage(imagePath);
-      const currentBook = this.callbacks.getCurrentBook();
-      if (!currentBook) return;
+	/** 通过图片路径导航 */
+	async navigateToImage(
+		imagePath: string,
+		options: { skipHistoryUpdate?: boolean } = {}
+	): Promise<void> {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return;
 
-      this.callbacks.updateCurrentPage(index);
-      this.callbacks.syncAppState('user');
-      await this.callbacks.syncInfoPanel();
+		try {
+			const index = await bookApi.navigateToImage(imagePath);
+			const currentBook = this.callbacks.getCurrentBook();
+			if (!currentBook) return;
 
-      if (!options.skipHistoryUpdate) {
-        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-        const pathStack = this.callbacks.buildPathStack();
-        unifiedHistoryStore.updateIndex(pathStack, index, currentBook.totalPages);
-      }
-    } catch (err) {
-      console.error('❌ Error navigating to image:', err);
-      throw err;
-    }
-  }
+			this.callbacks.updateCurrentPage(index);
+			this.callbacks.syncAppState('user');
+			await this.callbacks.syncInfoPanel();
 
-  /** 下一页 - 使用本地 PageFrameBuilder 计算 */
-  async nextPage(): Promise<number | undefined> {
-    if (!this.canGoNext()) {
-      console.log('📘 Already on last page');
-      return;
-    }
+			if (!options.skipHistoryUpdate) {
+				const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+				const pathStack = this.callbacks.buildPathStack();
+				unifiedHistoryStore.updateIndex(pathStack, index, currentBook.totalPages);
+			}
+		} catch (err) {
+			console.error('❌ Error navigating to image:', err);
+			throw err;
+		}
+	}
 
-    try {
-      const book = this.callbacks.getCurrentBook();
-      if (!book) return;
+	/** 下一页 - 使用本地 PageFrameBuilder 计算 */
+	async nextPage(): Promise<number | undefined> {
+		if (!this.canGoNext()) {
+			console.log('📘 Already on last page');
+			return;
+		}
 
-      // 使用后端 snapshot 的步长计算下一页
-      const { readerStore } = await import('$lib/stores/readerStore.svelte');
-      const step = readerStore.state.currentFrame?.step ?? 1;
-      const newIndex = Math.min(book.currentPage + step, book.totalPages - 1);
+		try {
+			const book = this.callbacks.getCurrentBook();
+			if (!book) return;
 
-      // 仍然通知后端以触发预加载
-      await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
+			// 使用后端 snapshot 的步长计算下一页
+			const { readerStore } = await import('$lib/stores/readerStore.svelte');
+			const step = readerStore.state.currentFrame?.step ?? 1;
+			const newIndex = Math.min(book.currentPage + step, book.totalPages - 1);
 
-      this.callbacks.updateCurrentPage(newIndex);
-      await this.callbacks.syncInfoPanel();
-      this.callbacks.syncAppState('user');
-      await this.updateHistoryAfterNavigation(newIndex);
+			// 仍然通知后端以触发预加载
+			await import('$lib/api/book').then((api) => api.navigateToPage(newIndex));
 
-      if (this.callbacks.onPageChanged) {
-        const page = this.getCurrentPage();
-        await this.callbacks.onPageChanged(newIndex, page);
-      }
-      
-      return newIndex;
-    } catch (err) {
-      console.error('❌ Error going to next page:', err);
-      throw err;
-    }
-  }
+			this.callbacks.updateCurrentPage(newIndex);
+			await this.callbacks.syncInfoPanel();
+			this.callbacks.syncAppState('user');
+			await this.updateHistoryAfterNavigation(newIndex);
 
-  /** 上一页 - 使用本地 PageFrameBuilder 计算 */
-  async previousPage(): Promise<number | undefined> {
-    if (!this.canGoPrevious()) {
-      console.log('📘 Already on first page');
-      return;
-    }
+			if (this.callbacks.onPageChanged) {
+				const page = this.getCurrentPage();
+				await this.callbacks.onPageChanged(newIndex, page);
+			}
 
-    try {
-      const book = this.callbacks.getCurrentBook();
-      if (!book) return;
+			return newIndex;
+		} catch (err) {
+			console.error('❌ Error going to next page:', err);
+			throw err;
+		}
+	}
 
-      // 使用后端 snapshot 的步长计算上一页
-      const { readerStore } = await import('$lib/stores/readerStore.svelte');
-      const step = readerStore.state.currentFrame?.step ?? 1;
-      const newIndex = Math.max(book.currentPage - step, 0);
+	/** 上一页 - 使用本地 PageFrameBuilder 计算 */
+	async previousPage(): Promise<number | undefined> {
+		if (!this.canGoPrevious()) {
+			console.log('📘 Already on first page');
+			return;
+		}
 
-      // 仍然通知后端以触发预加载
-      await import('$lib/api/book').then(api => api.navigateToPage(newIndex));
+		try {
+			const book = this.callbacks.getCurrentBook();
+			if (!book) return;
 
-      this.callbacks.updateCurrentPage(newIndex);
-      await this.callbacks.syncInfoPanel();
-      this.callbacks.syncAppState('user');
-      await this.updateHistoryAfterNavigation(newIndex);
+			// 使用后端 snapshot 的步长计算上一页
+			const { readerStore } = await import('$lib/stores/readerStore.svelte');
+			const step = readerStore.state.currentFrame?.step ?? 1;
+			const newIndex = Math.max(book.currentPage - step, 0);
 
-      if (this.callbacks.onPageChanged) {
-        const page = this.getCurrentPage();
-        await this.callbacks.onPageChanged(newIndex, page);
-      }
-      
-      return newIndex;
-    } catch (err) {
-      console.error('❌ Error going to previous page:', err);
-      throw err;
-    }
-  }
+			// 仍然通知后端以触发预加载
+			await import('$lib/api/book').then((api) => api.navigateToPage(newIndex));
 
-  /** 第一页 */
-  async firstPage(): Promise<void> {
-    await this.navigateToPage(0);
-  }
+			this.callbacks.updateCurrentPage(newIndex);
+			await this.callbacks.syncInfoPanel();
+			this.callbacks.syncAppState('user');
+			await this.updateHistoryAfterNavigation(newIndex);
 
-  /** 最后一页 */
-  async lastPage(): Promise<void> {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return;
-    await this.navigateToPage(book.totalPages - 1);
-  }
+			if (this.callbacks.onPageChanged) {
+				const page = this.getCurrentPage();
+				await this.callbacks.onPageChanged(newIndex, page);
+			}
 
-  /** 跳转到指定页（别名） */
-  async goToPage(index: number): Promise<void> {
-    await this.navigateToPage(index);
-  }
+			return newIndex;
+		} catch (err) {
+			console.error('❌ Error going to previous page:', err);
+			throw err;
+		}
+	}
 
-  /** 仅更新本地页码状态（不调用后端 API） */
-  setCurrentPageIndexLocal(index: number): void {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return;
-    const maxIndex = book.totalPages - 1;
-    if (index < 0 || index > maxIndex) return;
-    this.callbacks.updateCurrentPage(index);
-  }
+	/** 第一页 */
+	async firstPage(): Promise<void> {
+		await this.navigateToPage(0);
+	}
 
-  /** 导航后更新历史记录 */
-  private async updateHistoryAfterNavigation(newIndex: number): Promise<void> {
-    const book = this.callbacks.getCurrentBook();
-    if (!book) return;
+	/** 最后一页 */
+	async lastPage(): Promise<void> {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return;
+		await this.navigateToPage(book.totalPages - 1);
+	}
 
-    const isSingleFile = this.callbacks.isSingleFileMode();
+	/** 跳转到指定页（别名） */
+	async goToPage(index: number): Promise<void> {
+		await this.navigateToPage(index);
+	}
 
-    if (isSingleFile) {
-      const currentPage = book.pages?.[newIndex];
-      if (currentPage) {
-        this.callbacks.setOriginalFilePath(currentPage.path);
-        const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-        const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
-        const pathStack = this.callbacks.buildPathStack();
-        unifiedHistoryStore.add(pathStack, newIndex, book.totalPages, { displayName: name });
-      }
-    } else {
-      const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
-      const pathStack = this.callbacks.buildPathStack();
-      unifiedHistoryStore.updateIndex(pathStack, newIndex, book.totalPages);
-    }
-  }
+	/** 仅更新本地页码状态（不调用后端 API） */
+	setCurrentPageIndexLocal(index: number): void {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return;
+		const maxIndex = book.totalPages - 1;
+		if (index < 0 || index > maxIndex) return;
+		this.callbacks.updateCurrentPage(index);
+	}
+
+	/** 导航后更新历史记录 */
+	private async updateHistoryAfterNavigation(newIndex: number): Promise<void> {
+		const book = this.callbacks.getCurrentBook();
+		if (!book) return;
+
+		const isSingleFile = this.callbacks.isSingleFileMode();
+
+		if (isSingleFile) {
+			const currentPage = book.pages?.[newIndex];
+			if (currentPage) {
+				this.callbacks.setOriginalFilePath(currentPage.path);
+				const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+				const name = currentPage.name || currentPage.path.split(/[\\/]/).pop() || currentPage.path;
+				const pathStack = this.callbacks.buildPathStack();
+				unifiedHistoryStore.add(pathStack, newIndex, book.totalPages, { displayName: name });
+			}
+		} else {
+			const { unifiedHistoryStore } = await import('$lib/stores/unifiedHistory.svelte');
+			const pathStack = this.callbacks.buildPathStack();
+			unifiedHistoryStore.updateIndex(pathStack, newIndex, book.totalPages);
+		}
+	}
 }
-
 
 // ==================== 工具函数 ====================
 
 /** 验证页面索引是否有效 */
 export function isValidPageIndex(index: number, totalPages: number): boolean {
-  return index >= 0 && index < totalPages;
+	return index >= 0 && index < totalPages;
 }
 
 /** 限制页面索引到有效范围 */
 export function clampPageIndex(index: number, totalPages: number): number {
-  if (totalPages <= 0) return 0;
-  return Math.max(0, Math.min(index, totalPages - 1));
+	if (totalPages <= 0) return 0;
+	return Math.max(0, Math.min(index, totalPages - 1));
 }
 
 /** 计算页面窗口（用于预加载） */
 export function calculatePageWindow(
-  currentIndex: number,
-  totalPages: number,
-  windowSize: number
+	currentIndex: number,
+	totalPages: number,
+	windowSize: number
 ): { start: number; end: number; pages: number[] } {
-  const halfWindow = Math.floor(windowSize / 2);
-  let start = Math.max(0, currentIndex - halfWindow);
-  let end = Math.min(totalPages - 1, currentIndex + halfWindow);
+	const halfWindow = Math.floor(windowSize / 2);
+	let start = Math.max(0, currentIndex - halfWindow);
+	let end = Math.min(totalPages - 1, currentIndex + halfWindow);
 
-  if (end - start + 1 < windowSize) {
-    if (start === 0) {
-      end = Math.min(totalPages - 1, windowSize - 1);
-    } else if (end === totalPages - 1) {
-      start = Math.max(0, totalPages - windowSize);
-    }
-  }
+	if (end - start + 1 < windowSize) {
+		if (start === 0) {
+			end = Math.min(totalPages - 1, windowSize - 1);
+		} else if (end === totalPages - 1) {
+			start = Math.max(0, totalPages - windowSize);
+		}
+	}
 
-  const pages: number[] = [];
-  for (let i = start; i <= end; i++) {
-    pages.push(i);
-  }
+	const pages: number[] = [];
+	for (let i = start; i <= end; i++) {
+		pages.push(i);
+	}
 
-  return { start, end, pages };
+	return { start, end, pages };
 }

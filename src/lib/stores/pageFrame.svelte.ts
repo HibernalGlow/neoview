@@ -1,13 +1,13 @@
 /**
  * PageFrameStore - 页面帧状态管理
- * 
+ *
  * 基于 NeeView 架构的页面帧管理
  * 支持单页/双页模式、横向页面分割、RTL 阅读方向
- * 
+ *
  * v2.0: 重构为前端本地计算，消除 IPC 延迟
  */
 
-import { 
+import {
 	PageFrameBuilder,
 	type Page,
 	type PagePosition,
@@ -73,7 +73,7 @@ export type { PageMode, ReadOrder, CropRect, WidePageStretch, PageFrameContext }
 /** 将内部 PageFrame 转换为兼容格式 */
 function toPageFrameInfo(frame: PageFrame): PageFrameInfo {
 	return {
-		elements: frame.elements.map(e => ({
+		elements: frame.elements.map((e) => ({
 			pageIndex: e.page.index,
 			part: e.pageRange.min.part,
 			cropRect: e.cropRect,
@@ -132,7 +132,7 @@ const defaultState: PageFrameState = {
 
 function createPageFrameStore() {
 	let state = $state<PageFrameState>({ ...defaultState });
-	
+
 	// 本地 PageFrameBuilder 实例
 	let builder: PageFrameBuilder | null = null;
 
@@ -150,30 +150,34 @@ function createPageFrameStore() {
 
 		/**
 		 * 初始化页面列表
-		 * 
+		 *
 		 * 必须在使用其他方法前调用，设置页面数据
 		 */
 		setPages(pages: Page[]): void {
 			builder = new PageFrameBuilder(pages, state.context);
 			state.totalVirtualPages = builder.totalVirtualPages();
 			state.initialized = true;
-			console.log(`[PageFrameStore] 初始化 ${pages.length} 页, 虚拟页数: ${state.totalVirtualPages}`);
+			console.log(
+				`[PageFrameStore] 初始化 ${pages.length} 页, 虚拟页数: ${state.totalVirtualPages}`
+			);
 		},
 
 		/**
 		 * 从 BookInfo 的 pages 初始化
-		 * 
+		 *
 		 * 兼容层：将 BookInfo.pages 转换为 Page[]
 		 */
-		initFromBookPages(pages: Array<{
-			index?: number;
-			path?: string;
-			innerPath?: string;
-			name?: string;
-			size?: number;
-			width?: number;
-			height?: number;
-		}>): void {
+		initFromBookPages(
+			pages: Array<{
+				index?: number;
+				path?: string;
+				innerPath?: string;
+				name?: string;
+				size?: number;
+				width?: number;
+				height?: number;
+			}>
+		): void {
 			const convertedPages: Page[] = pages.map((p, i) => ({
 				index: p.index ?? i,
 				path: p.path ?? '',
@@ -182,26 +186,26 @@ function createPageFrameStore() {
 				size: p.size ?? 0,
 				width: p.width ?? 0,
 				height: p.height ?? 0,
-				aspectRatio: (p.height && p.height > 0) ? (p.width ?? 0) / p.height : 1.0
+				aspectRatio: p.height && p.height > 0 ? (p.width ?? 0) / p.height : 1.0
 			}));
 			this.setPages(convertedPages);
 		},
 
 		/**
 		 * 更新页面尺寸
-		 * 
+		 *
 		 * 当异步加载图片后获取到真实尺寸时调用
 		 */
 		updatePageSize(pageIndex: number, width: number, height: number): void {
 			if (!builder) return;
-			
+
 			const page = builder.getPage(pageIndex);
 			if (page) {
 				// 更新页面尺寸
 				page.width = width;
 				page.height = height;
 				page.aspectRatio = height > 0 ? width / height : 1.0;
-				
+
 				// 重新设置页面列表以更新分割缓存
 				const pages: Page[] = [];
 				for (let i = 0; i < builder.pageCount(); i++) {
@@ -216,7 +220,7 @@ function createPageFrameStore() {
 		updateContext(updates: Partial<PageFrameContext>): void {
 			// 更新本地状态
 			state.context = { ...state.context, ...updates };
-			
+
 			// 更新 builder 的上下文
 			if (builder) {
 				builder.setContext(state.context);
@@ -244,14 +248,14 @@ function createPageFrameStore() {
 
 			try {
 				const frame = builder.buildFrame(position);
-				
+
 				if (frame) {
 					const frameInfo = toPageFrameInfo(frame);
 					state.currentFrame = frameInfo;
 					state.currentPosition = position;
 					return frameInfo;
 				}
-				
+
 				return null;
 			} catch (error) {
 				console.error('[PageFrameStore] 构建帧失败:', error);

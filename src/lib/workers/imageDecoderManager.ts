@@ -1,7 +1,7 @@
 /**
  * Image Decoder Manager
  * 管理 Web Worker 池进行图片解码
- * 
+ *
  * 【性能优化】
  * - 使用 Worker 池（默认 4 个）并行解码
  * - 支持大图片自动缩放解码，减少内存和解码时间
@@ -49,10 +49,9 @@ class ImageDecoderManager {
 		this.initPromise = new Promise((resolve, reject) => {
 			try {
 				for (let i = 0; i < WORKER_POOL_SIZE; i++) {
-					const worker = new Worker(
-						new URL('./imageDecoder.worker.ts', import.meta.url),
-						{ type: 'module' }
-					);
+					const worker = new Worker(new URL('./imageDecoder.worker.ts', import.meta.url), {
+						type: 'module'
+					});
 
 					worker.onmessage = (event) => {
 						const { id, success, bitmap, width, height, error, workerIndex } = event.data;
@@ -142,9 +141,9 @@ class ImageDecoderManager {
 			}, 10000); // 10 秒超时
 
 			// 发送到 Worker
-			worker.postMessage({ 
-				id, 
-				blob, 
+			worker.postMessage({
+				id,
+				blob,
 				workerIndex,
 				maxWidth: options.maxWidth,
 				maxHeight: options.maxHeight
@@ -174,7 +173,7 @@ class ImageDecoderManager {
 	 */
 	private async decodeInMainThread(blob: Blob, options: DecodeOptions = {}): Promise<DecodeResult> {
 		const { maxWidth, maxHeight } = options;
-		
+
 		// 如果指定了最大尺寸，使用缩放解码
 		if (maxWidth || maxHeight) {
 			const bitmap = await createImageBitmap(blob, {
@@ -188,7 +187,7 @@ class ImageDecoderManager {
 				height: bitmap.height
 			};
 		}
-		
+
 		const bitmap = await createImageBitmap(blob);
 		return {
 			bitmap,
@@ -228,7 +227,10 @@ export const imageDecoderManager = new ImageDecoderManager();
 /**
  * 便捷函数：在 Worker 中解码图片
  */
-export async function decodeImageInWorker(blob: Blob, options: DecodeOptions = {}): Promise<DecodeResult> {
+export async function decodeImageInWorker(
+	blob: Blob,
+	options: DecodeOptions = {}
+): Promise<DecodeResult> {
 	return imageDecoderManager.decode(blob, options);
 }
 

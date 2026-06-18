@@ -1,39 +1,39 @@
 <script lang="ts">
-/**
- * 书签概览卡片
- */
-import { bookmarkStore } from '$lib/stores/bookmark.svelte';
-import { Badge } from '$lib/components/ui/badge';
-import { Progress } from '$lib/components/ui/progress';
+	/**
+	 * 书签概览卡片
+	 */
+	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Progress } from '$lib/components/ui/progress';
 
-let bookmarks = $state<ReturnType<typeof bookmarkStore.getAll>>([]);
+	let bookmarks = $state<ReturnType<typeof bookmarkStore.getAll>>([]);
 
-$effect(() => {
-	const unsubscribe = bookmarkStore.subscribe((value) => {
-		bookmarks = value ?? [];
+	$effect(() => {
+		const unsubscribe = bookmarkStore.subscribe((value) => {
+			bookmarks = value ?? [];
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-function buildBookmarkStats() {
-	const total = bookmarks.length;
-	const byType: Record<string, number> = {};
-	for (const bm of bookmarks) {
-		const type = bm.type ?? 'unknown';
-		byType[type] = (byType[type] ?? 0) + 1;
+	function buildBookmarkStats() {
+		const total = bookmarks.length;
+		const byType: Record<string, number> = {};
+		for (const bm of bookmarks) {
+			const type = bm.type ?? 'unknown';
+			byType[type] = (byType[type] ?? 0) + 1;
+		}
+		const topTypes = Object.entries(byType)
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 3);
+		return { total, topTypes };
 	}
-	const topTypes = Object.entries(byType)
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, 3);
-	return { total, topTypes };
-}
 
-const stats = $derived(buildBookmarkStats());
+	const stats = $derived(buildBookmarkStats());
 </script>
 
 <div class="space-y-3">
 	<div class="flex items-center justify-between">
-		<span class="text-xs text-muted-foreground">总计书签</span>
+		<span class="text-muted-foreground text-xs">总计书签</span>
 		<span class="text-lg font-semibold">{stats.total}</span>
 	</div>
 	{#if stats.topTypes.length > 0}
@@ -42,11 +42,11 @@ const stats = $derived(buildBookmarkStats());
 				<div class="flex items-center gap-2">
 					<Badge variant="outline" class="text-[10px]">{type}</Badge>
 					<Progress value={(count / stats.total) * 100} class="h-1.5 flex-1" />
-					<span class="text-xs text-muted-foreground">{count}</span>
+					<span class="text-muted-foreground text-xs">{count}</span>
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<p class="text-xs text-muted-foreground text-center py-4">暂无书签数据</p>
+		<p class="text-muted-foreground py-4 text-center text-xs">暂无书签数据</p>
 	{/if}
 </div>

@@ -1,9 +1,9 @@
 <script lang="ts">
-/**
- * 影像设置卡片
- */
-import ImageSettingsPanel from '$lib/components/panels/ImageSettingsPanel.svelte';
-import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
+	/**
+	 * 影像设置卡片
+	 */
+	import ImageSettingsPanel from '$lib/components/panels/ImageSettingsPanel.svelte';
+	import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper space-y-4">
@@ -29,7 +29,7 @@ import ViewerSettingsPanel from '$lib/components/dialogs/ViewerSettingsPanel.sve
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

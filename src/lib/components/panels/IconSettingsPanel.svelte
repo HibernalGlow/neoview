@@ -195,10 +195,22 @@
 				<Search class="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
 				<Input bind:value={searchQuery} placeholder="搜索图标..." class="h-10 rounded-xl pl-9" />
 			</div>
-			<Button variant="outline" size="icon" class="h-10 w-10 shrink-0 rounded-xl" title="导出设置" onclick={handleExport}>
+			<Button
+				variant="outline"
+				size="icon"
+				class="h-10 w-10 shrink-0 rounded-xl"
+				title="导出设置"
+				onclick={handleExport}
+			>
 				<FileUp class="h-4 w-4" />
 			</Button>
-			<Button variant="outline" size="icon" class="h-10 w-10 shrink-0 rounded-xl" title="导入设置" onclick={handleImport}>
+			<Button
+				variant="outline"
+				size="icon"
+				class="h-10 w-10 shrink-0 rounded-xl"
+				title="导入设置"
+				onclick={handleImport}
+			>
 				<FileDown class="h-4 w-4" />
 			</Button>
 		</div>

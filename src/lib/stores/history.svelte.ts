@@ -11,42 +11,42 @@ import { historySettingsStore } from './historySettings.svelte';
  * 内容引用（用于路径栈）
  */
 export interface ContentRef {
-  path: string;
-  innerPath?: string;
+	path: string;
+	innerPath?: string;
 }
 
 export interface HistoryEntry {
-  id: string;
-  path: string;
-  name: string;
-  timestamp: number;
-  currentPage: number;
-  totalPages: number;
-  thumbnail?: string;
-  videoPosition?: number;
-  videoDuration?: number;
-  videoCompleted?: boolean;
-  /** 路径栈（支持嵌套定位） */
-  pathStack?: ContentRef[];
+	id: string;
+	path: string;
+	name: string;
+	timestamp: number;
+	currentPage: number;
+	totalPages: number;
+	thumbnail?: string;
+	videoPosition?: number;
+	videoDuration?: number;
+	videoCompleted?: boolean;
+	/** 路径栈（支持嵌套定位） */
+	pathStack?: ContentRef[];
 }
 
 const STORAGE_KEY = 'neoview-history';
 
 // 从 localStorage 加载历史记录
 function loadHistory(): HistoryEntry[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.map((h: Partial<HistoryEntry>) => ({
-        ...h,
-        timestamp: h.timestamp || Date.now()
-      }));
-    }
-  } catch (err) {
-    console.error('Failed to load history:', err);
-  }
-  return [];
+	try {
+		const stored = localStorage.getItem(STORAGE_KEY);
+		if (stored) {
+			const parsed = JSON.parse(stored);
+			return parsed.map((h: Partial<HistoryEntry>) => ({
+				...h,
+				timestamp: h.timestamp || Date.now()
+			}));
+		}
+	} catch (err) {
+		console.error('Failed to load history:', err);
+	}
+	return [];
 }
 
 // 创建 writable store
@@ -54,358 +54,339 @@ const { subscribe, set, update } = writable<HistoryEntry[]>(loadHistory());
 
 // 保存历史记录到 localStorage
 function saveToStorage(history: HistoryEntry[]) {
-  try {
-    const limit = historySettingsStore.maxHistorySize;
-    const toSave = limit > 0 ? history.slice(0, limit) : history;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-  } catch (err) {
-    console.error('Failed to save history:', err);
-  }
+	try {
+		const limit = historySettingsStore.maxHistorySize;
+		const toSave = limit > 0 ? history.slice(0, limit) : history;
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+	} catch (err) {
+		console.error('Failed to save history:', err);
+	}
 }
 
 export const historyStore = {
-  subscribe,
+	subscribe,
 
-  /**
-   * 添加历史记录（如果已存在则更新）
-   */
-  add(path: string, name: string, currentPage: number = 0, totalPages: number = 0, thumbnail?: string) {
-    update(history => {
-      // 检查是否已存在相同路径的历史记录
-      const existingIndex = history.findIndex(h => h.path === path);
+	/**
+	 * 添加历史记录（如果已存在则更新）
+	 */
+	add(
+		path: string,
+		name: string,
+		currentPage: number = 0,
+		totalPages: number = 0,
+		thumbnail?: string
+	) {
+		update((history) => {
+			// 检查是否已存在相同路径的历史记录
+			const existingIndex = history.findIndex((h) => h.path === path);
 
-      const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
+			const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
 
-      // 对已存在的记录进行合并更新，保留视频进度等扩展字段
-      const entry: HistoryEntry = {
-        ...existing,
-        id: existing?.id ?? crypto.randomUUID(),
-        path,
-        name,
-        timestamp: Date.now(),
-        currentPage,
-        totalPages,
-        thumbnail: thumbnail ?? existing?.thumbnail,
-        videoPosition: existing?.videoPosition,
-        videoDuration: existing?.videoDuration,
-        videoCompleted: existing?.videoCompleted
-      };
+			// 对已存在的记录进行合并更新，保留视频进度等扩展字段
+			const entry: HistoryEntry = {
+				...existing,
+				id: existing?.id ?? crypto.randomUUID(),
+				path,
+				name,
+				timestamp: Date.now(),
+				currentPage,
+				totalPages,
+				thumbnail: thumbnail ?? existing?.thumbnail,
+				videoPosition: existing?.videoPosition,
+				videoDuration: existing?.videoDuration,
+				videoCompleted: existing?.videoCompleted
+			};
 
-      let newHistory: HistoryEntry[];
-      if (existingIndex >= 0) {
-        // 更新现有记录
-        newHistory = [...history];
-        newHistory[existingIndex] = entry;
-        // 移到最前面（最近访问）
-        newHistory = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
-      } else {
-        // 添加新记录
-        newHistory = [entry, ...history];
-      }
+			let newHistory: HistoryEntry[];
+			if (existingIndex >= 0) {
+				// 更新现有记录
+				newHistory = [...history];
+				newHistory[existingIndex] = entry;
+				// 移到最前面（最近访问）
+				newHistory = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
+			} else {
+				// 添加新记录
+				newHistory = [entry, ...history];
+			}
 
-      saveToStorage(newHistory);
-      return newHistory;
-    });
-  },
+			saveToStorage(newHistory);
+			return newHistory;
+		});
+	},
 
-  /**
-   * 添加历史记录（使用路径栈）
-   * 用于精确记录单个文件（视频/图片）的历史
-   */
-  addWithPathStack(
-    pathStack: ContentRef[],
-    name: string,
-    currentPage: number = 0,
-    totalPages: number = 0,
-    thumbnail?: string
-  ) {
-    if (pathStack.length === 0) return;
+	/**
+	 * 添加历史记录（使用路径栈）
+	 * 用于精确记录单个文件（视频/图片）的历史
+	 */
+	addWithPathStack(
+		pathStack: ContentRef[],
+		name: string,
+		currentPage: number = 0,
+		totalPages: number = 0,
+		thumbnail?: string
+	) {
+		if (pathStack.length === 0) return;
 
-    // 使用路径栈的字符串表示作为唯一键
-    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-    // 主路径使用第一个引用的 path
-    const mainPath = pathStack[0].path;
+		// 使用路径栈的字符串表示作为唯一键
+		const pathStackKey = pathStack
+			.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+			.join('>>');
+		// 主路径使用第一个引用的 path
+		const mainPath = pathStack[0].path;
 
-    update(history => {
-      // 按路径栈查找
-      const existingIndex = history.findIndex(h => {
-        if (!h.pathStack || h.pathStack.length === 0) {
-          // 兼容旧格式
-          return h.path === mainPath;
-        }
-        const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-        return existingKey === pathStackKey;
-      });
+		update((history) => {
+			// 按路径栈查找
+			const existingIndex = history.findIndex((h) => {
+				if (!h.pathStack || h.pathStack.length === 0) {
+					// 兼容旧格式
+					return h.path === mainPath;
+				}
+				const existingKey = h.pathStack
+					.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+					.join('>>');
+				return existingKey === pathStackKey;
+			});
 
-      const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
+			const existing = existingIndex >= 0 ? history[existingIndex] : undefined;
 
-      const entry: HistoryEntry = {
-        ...existing,
-        id: existing?.id ?? crypto.randomUUID(),
-        path: mainPath,
-        pathStack,
-        name,
-        timestamp: Date.now(),
-        currentPage,
-        totalPages,
-        thumbnail: thumbnail ?? existing?.thumbnail,
-        videoPosition: existing?.videoPosition,
-        videoDuration: existing?.videoDuration,
-        videoCompleted: existing?.videoCompleted
-      };
+			const entry: HistoryEntry = {
+				...existing,
+				id: existing?.id ?? crypto.randomUUID(),
+				path: mainPath,
+				pathStack,
+				name,
+				timestamp: Date.now(),
+				currentPage,
+				totalPages,
+				thumbnail: thumbnail ?? existing?.thumbnail,
+				videoPosition: existing?.videoPosition,
+				videoDuration: existing?.videoDuration,
+				videoCompleted: existing?.videoCompleted
+			};
 
-      let newHistory: HistoryEntry[];
-      if (existingIndex >= 0) {
-        newHistory = [...history];
-        newHistory[existingIndex] = entry;
-        newHistory = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
-      } else {
-        newHistory = [entry, ...history];
-      }
+			let newHistory: HistoryEntry[];
+			if (existingIndex >= 0) {
+				newHistory = [...history];
+				newHistory[existingIndex] = entry;
+				newHistory = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
+			} else {
+				newHistory = [entry, ...history];
+			}
 
-      saveToStorage(newHistory);
-      return newHistory;
-    });
-  },
+			saveToStorage(newHistory);
+			return newHistory;
+		});
+	},
 
-  /**
-   * 根据路径栈查找历史记录
-   */
-  findByPathStack(pathStack: ContentRef[]): HistoryEntry | undefined {
-    if (pathStack.length === 0) return undefined;
-    
-    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-    const history = this.getAll();
-    
-    return history.find(h => {
-      if (!h.pathStack || h.pathStack.length === 0) {
-        // 兼容旧格式：仅比较主路径
-        return h.path === pathStack[0].path && pathStack.length === 1;
-      }
-      const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-      return existingKey === pathStackKey;
-    });
-  },
+	/**
+	 * 根据路径栈查找历史记录
+	 */
+	findByPathStack(pathStack: ContentRef[]): HistoryEntry | undefined {
+		if (pathStack.length === 0) return undefined;
 
-  /**
-   * 更新历史记录的页数（使用路径栈）
-   */
-  updateWithPathStack(pathStack: ContentRef[], currentPage: number, totalPages: number) {
-    if (pathStack.length === 0) return;
-    
-    const pathStackKey = pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-    
-    update(history => {
-      const existingIndex = history.findIndex(h => {
-        if (!h.pathStack || h.pathStack.length === 0) {
-          return h.path === pathStack[0].path && pathStack.length === 1;
-        }
-        const existingKey = h.pathStack.map(r => r.innerPath ? `${r.path}::${r.innerPath}` : r.path).join('>>');
-        return existingKey === pathStackKey;
-      });
-      
-      if (existingIndex >= 0) {
-        const entry = history[existingIndex];
-        const updatedEntry: HistoryEntry = {
-          ...entry,
-          currentPage,
-          totalPages
-        };
-        const newHistory = [...history];
-        newHistory[existingIndex] = updatedEntry;
-        saveToStorage(newHistory);
-        return newHistory;
-      }
-      return history;
-    });
-  },
+		const pathStackKey = pathStack
+			.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+			.join('>>');
+		const history = this.getAll();
 
-  /**
-   * 移除历史记录
-   */
-  remove(id: string) {
-    update(history => {
-      const newHistory = history.filter(h => h.id !== id);
-      saveToStorage(newHistory);
-      return newHistory;
-    });
-  },
+		return history.find((h) => {
+			if (!h.pathStack || h.pathStack.length === 0) {
+				// 兼容旧格式：仅比较主路径
+				return h.path === pathStack[0].path && pathStack.length === 1;
+			}
+			const existingKey = h.pathStack
+				.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+				.join('>>');
+			return existingKey === pathStackKey;
+		});
+	},
 
-  /**
-   * 清空所有历史记录
-   */
-  clear() {
-    const newHistory: HistoryEntry[] = [];
-    set(newHistory);
-    saveToStorage(newHistory);
-  },
+	/**
+	 * 更新历史记录的页数（使用路径栈）
+	 */
+	updateWithPathStack(pathStack: ContentRef[], currentPage: number, totalPages: number) {
+		if (pathStack.length === 0) return;
 
-  /**
-   * 获取所有历史记录
-   */
-  getAll(): HistoryEntry[] {
-    let history: HistoryEntry[] = [];
-    subscribe(value => history = value)();
-    return history;
-  },
+		const pathStackKey = pathStack
+			.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+			.join('>>');
 
-  /**
-   * 根据路径查找历史记录（标准化路径比较）
-   */
-  findByPath(path: string): HistoryEntry | undefined {
-    const history = this.getAll();
-    // 标准化路径：统一斜杠方向和大小写
-    const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
-    const normalizedPath = normalizePath(path);
-    return history.find(h => normalizePath(h.path) === normalizedPath);
-  },
+		update((history) => {
+			const existingIndex = history.findIndex((h) => {
+				if (!h.pathStack || h.pathStack.length === 0) {
+					return h.path === pathStack[0].path && pathStack.length === 1;
+				}
+				const existingKey = h.pathStack
+					.map((r) => (r.innerPath ? `${r.path}::${r.innerPath}` : r.path))
+					.join('>>');
+				return existingKey === pathStackKey;
+			});
 
-  /**
-   * 更新历史记录的页数（不改变时间戳）
-   */
-  update(path: string, currentPage: number, totalPages: number) {
-    update(history => {
-      const existingIndex = history.findIndex(h => h.path === path);
-      if (existingIndex >= 0) {
-        const entry = history[existingIndex];
-        // 只更新页数，保持原有时间戳
-        const updatedEntry: HistoryEntry = {
-          ...entry,
-          currentPage,
-          totalPages
-        };
-        const newHistory = [...history];
-        newHistory[existingIndex] = updatedEntry;
-        saveToStorage(newHistory);
-        return newHistory;
-      }
-      return history;
-    });
-  },
+			if (existingIndex >= 0) {
+				const entry = history[existingIndex];
+				const updatedEntry: HistoryEntry = {
+					...entry,
+					currentPage,
+					totalPages
+				};
+				const newHistory = [...history];
+				newHistory[existingIndex] = updatedEntry;
+				saveToStorage(newHistory);
+				return newHistory;
+			}
+			return history;
+		});
+	},
 
-  /**
-   * 更新视频观看进度（基于路径），并同步到 currentPage/totalPages 以复用进度条和已读标记
-   */
-  updateVideoProgress(
-    path: string,
-    position: number,
-    duration: number,
-    completed: boolean,
-    progressPage?: number,
-    progressTotal?: number
-  ) {
-    update(history => {
-      const existingIndex = history.findIndex(h => h.path === path);
+	/**
+	 * 移除历史记录
+	 */
+	remove(id: string) {
+		update((history) => {
+			const newHistory = history.filter((h) => h.id !== id);
+			saveToStorage(newHistory);
+			return newHistory;
+		});
+	},
 
-      const scale = progressTotal && progressTotal > 0 ? progressTotal : 1000;
-      const safeDuration = duration > 0 && isFinite(duration) ? duration : 0;
-      const clampedPos = safeDuration > 0 ? Math.max(0, Math.min(position, safeDuration)) : 0;
+	/**
+	 * 清空所有历史记录
+	 */
+	clear() {
+		const newHistory: HistoryEntry[] = [];
+		set(newHistory);
+		saveToStorage(newHistory);
+	},
 
-      let derivedCurrentPage = progressPage ?? 0;
-      const derivedTotalPages = scale;
+	/**
+	 * 获取所有历史记录
+	 */
+	getAll(): HistoryEntry[] {
+		let history: HistoryEntry[] = [];
+		subscribe((value) => (history = value))();
+		return history;
+	},
 
-      if (safeDuration > 0) {
-        const ratio = clampedPos / safeDuration;
-        derivedCurrentPage = Math.floor(ratio * scale);
-      }
+	/**
+	 * 根据路径查找历史记录（标准化路径比较）
+	 */
+	findByPath(path: string): HistoryEntry | undefined {
+		const history = this.getAll();
+		// 标准化路径：统一斜杠方向和大小写
+		const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+		const normalizedPath = normalizePath(path);
+		return history.find((h) => normalizePath(h.path) === normalizedPath);
+	},
 
-      if (completed) {
-        derivedCurrentPage = derivedTotalPages;
-      }
+	/**
+	 * 更新历史记录的页数（不改变时间戳）
+	 */
+	update(path: string, currentPage: number, totalPages: number) {
+		update((history) => {
+			const existingIndex = history.findIndex((h) => h.path === path);
+			if (existingIndex >= 0) {
+				const entry = history[existingIndex];
+				// 只更新页数，保持原有时间戳
+				const updatedEntry: HistoryEntry = {
+					...entry,
+					currentPage,
+					totalPages
+				};
+				const newHistory = [...history];
+				newHistory[existingIndex] = updatedEntry;
+				saveToStorage(newHistory);
+				return newHistory;
+			}
+			return history;
+		});
+	},
 
-      // 仅在已有历史记录时更新，避免为压缩包内视频等创建新的条目
-      if (existingIndex < 0) {
-        return history;
-      }
+	/**
+	 * 更新视频观看进度（基于路径），并同步到 currentPage/totalPages 以复用进度条和已读标记
+	 */
+	updateVideoProgress(
+		path: string,
+		position: number,
+		duration: number,
+		completed: boolean,
+		progressPage?: number,
+		progressTotal?: number
+	) {
+		update((history) => {
+			const existingIndex = history.findIndex((h) => h.path === path);
 
-      const prev = history[existingIndex];
-      const entry: HistoryEntry = {
-        ...prev,
-        currentPage: derivedCurrentPage,
-        totalPages: derivedTotalPages,
-        videoPosition: clampedPos,
-        videoDuration: safeDuration,
-        videoCompleted: completed
-      };
+			const scale = progressTotal && progressTotal > 0 ? progressTotal : 1000;
+			const safeDuration = duration > 0 && isFinite(duration) ? duration : 0;
+			const clampedPos = safeDuration > 0 ? Math.max(0, Math.min(position, safeDuration)) : 0;
 
-      const newHistory = [...history];
-      newHistory[existingIndex] = entry;
-      const reordered = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
+			let derivedCurrentPage = progressPage ?? 0;
+			const derivedTotalPages = scale;
 
-      saveToStorage(reordered);
-      return reordered;
-    });
-  },
+			if (safeDuration > 0) {
+				const ratio = clampedPos / safeDuration;
+				derivedCurrentPage = Math.floor(ratio * scale);
+			}
 
-  /**
-   * 清理失效的历史记录（文件/文件夹不存在）
-   * 返回清理的条目数量
-   */
-  async cleanupInvalid(): Promise<number> {
-    const history = this.getAll();
-    if (history.length === 0) return 0;
+			if (completed) {
+				derivedCurrentPage = derivedTotalPages;
+			}
 
-    // 并发检查所有路径是否存在
-    const checkResults = await Promise.all(
-      history.map(async (entry) => {
-        try {
-          const exists = await pathExists(entry.path);
-          return { entry, exists };
-        } catch {
-          // 检查失败时保留条目
-          return { entry, exists: true };
-        }
-      })
-    );
+			// 仅在已有历史记录时更新，避免为压缩包内视频等创建新的条目
+			if (existingIndex < 0) {
+				return history;
+			}
 
-    // 过滤出存在的条目
-    const validEntries = checkResults
-      .filter(r => r.exists)
-      .map(r => r.entry);
+			const prev = history[existingIndex];
+			const entry: HistoryEntry = {
+				...prev,
+				currentPage: derivedCurrentPage,
+				totalPages: derivedTotalPages,
+				videoPosition: clampedPos,
+				videoDuration: safeDuration,
+				videoCompleted: completed
+			};
 
-    const removedCount = history.length - validEntries.length;
+			const newHistory = [...history];
+			newHistory[existingIndex] = entry;
+			const reordered = [entry, ...newHistory.filter((_, i) => i !== existingIndex)];
 
-    if (removedCount > 0) {
-      set(validEntries);
-      saveToStorage(validEntries);
-      console.log(`[History] 清理了 ${removedCount} 条失效记录`);
-    }
+			saveToStorage(reordered);
+			return reordered;
+		});
+	},
 
-    return removedCount;
-  }
+	/**
+	 * 清理失效的历史记录（文件/文件夹不存在）
+	 * 返回清理的条目数量
+	 */
+	async cleanupInvalid(): Promise<number> {
+		const history = this.getAll();
+		if (history.length === 0) return 0;
+
+		// 并发检查所有路径是否存在
+		const checkResults = await Promise.all(
+			history.map(async (entry) => {
+				try {
+					const exists = await pathExists(entry.path);
+					return { entry, exists };
+				} catch {
+					// 检查失败时保留条目
+					return { entry, exists: true };
+				}
+			})
+		);
+
+		// 过滤出存在的条目
+		const validEntries = checkResults.filter((r) => r.exists).map((r) => r.entry);
+
+		const removedCount = history.length - validEntries.length;
+
+		if (removedCount > 0) {
+			set(validEntries);
+			saveToStorage(validEntries);
+			console.log(`[History] 清理了 ${removedCount} 条失效记录`);
+		}
+
+		return removedCount;
+	}
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

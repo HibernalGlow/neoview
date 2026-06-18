@@ -34,10 +34,23 @@
 	// 模块化导入
 	import { FolderStackState, type FolderLayer } from './FolderStack/FolderStackState.svelte';
 	import { FolderDataLoader, createLayerFactory } from './FolderStack/FolderDataLoader';
-	import { handleItemSelection, type SelectionCallbacks, type ItemOpenCallbacks } from './FolderStack/FolderSelectionHandler';
-	import { normalizePathForCompare, isChildPath, getParentPath, getParentPaths, PRELOAD_PARENT_COUNT } from './FolderStack/folderStackUtils';
+	import {
+		handleItemSelection,
+		type SelectionCallbacks,
+		type ItemOpenCallbacks
+	} from './FolderStack/FolderSelectionHandler';
+	import {
+		normalizePathForCompare,
+		isChildPath,
+		getParentPath,
+		getParentPaths,
+		PRELOAD_PARENT_COUNT
+	} from './FolderStack/folderStackUtils';
 	import { analyzeHistoryNavigation, getPathsToPreload } from './FolderStack/folderStackNavigation';
-	import { shouldHandleEmptyClick, type EmptyClickAction } from './FolderStack/folderStackEventHandlers';
+	import {
+		shouldHandleEmptyClick,
+		type EmptyClickAction
+	} from './FolderStack/folderStackEventHandlers';
 
 	// 别名映射
 	const viewStyle = tabViewStyle;
@@ -99,12 +112,24 @@
 
 	// 条件执行全局 store 操作
 	const globalStore = {
-		setPath: (path: string, addToHistory = true) => { if (!skipGlobalStore) folderTabActions.setPath(path, addToHistory); },
-		setItems: (items: FsItem[]) => { if (!skipGlobalStore) folderTabActions.setItems(items); },
-		selectItem: (...args: Parameters<typeof folderTabActions.selectItem>) => { if (!skipGlobalStore) folderTabActions.selectItem(...args); },
-		setSelectedItems: (items: Set<string>) => { if (!skipGlobalStore) folderTabActions.setSelectedItems(items); },
-		selectRange: (...args: Parameters<typeof folderTabActions.selectRange>) => { if (!skipGlobalStore) folderTabActions.selectRange(...args); },
-		deselectAll: () => { if (!skipGlobalStore) folderTabActions.deselectAll(); }
+		setPath: (path: string, addToHistory = true) => {
+			if (!skipGlobalStore) folderTabActions.setPath(path, addToHistory);
+		},
+		setItems: (items: FsItem[]) => {
+			if (!skipGlobalStore) folderTabActions.setItems(items);
+		},
+		selectItem: (...args: Parameters<typeof folderTabActions.selectItem>) => {
+			if (!skipGlobalStore) folderTabActions.selectItem(...args);
+		},
+		setSelectedItems: (items: Set<string>) => {
+			if (!skipGlobalStore) folderTabActions.setSelectedItems(items);
+		},
+		selectRange: (...args: Parameters<typeof folderTabActions.selectRange>) => {
+			if (!skipGlobalStore) folderTabActions.selectRange(...args);
+		},
+		deselectAll: () => {
+			if (!skipGlobalStore) folderTabActions.deselectAll();
+		}
 	};
 
 	// 创建数据加载器和状态管理器
@@ -112,7 +137,7 @@
 	const createLayer = createLayerFactory(dataLoader, (layerId, items) => {
 		stackState.updateLayerItems(layerId, items);
 	});
-	
+
 	const stackState = new FolderStackState(createLayer, tick, {
 		onPathChange: globalStore.setPath,
 		onItemsChange: globalStore.setItems
@@ -133,7 +158,7 @@
 	// 排序版本（用于触发重新排序）
 	let collectTagVersion = $state(0);
 	let collectTagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-	
+
 	$effect(() => {
 		const unsubscribe = collectTagCountStore.subscribe((cache) => {
 			if (cache.lastUpdated > 0 && effectiveSortConfig.field === 'collectTagCount') {
@@ -154,7 +179,13 @@
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
 		const _ = collectTagVersion; // 依赖触发
 		const skipFolderFirst = isVirtualPath(layer.path);
-		const sorted = sortItems(layer.items, effectiveSortConfig.field, effectiveSortConfig.order, skipFolderFirst, layer.path);
+		const sorted = sortItems(
+			layer.items,
+			effectiveSortConfig.field,
+			effectiveSortConfig.order,
+			skipFolderFirst,
+			layer.path
+		);
 		// 当前活动层的排序结果缓存，供切换书籍时直接读取（不二次排序）
 		if (!skipGlobalStore && layer === stackState.activeLayer) {
 			folderTabActions.setCachedSortedItems(sorted, layer.path, `FolderStack:${tabId}`);
@@ -168,7 +199,7 @@
 	async function handleHistoryNavigation(targetPath: string): Promise<void> {
 		stackState.updateLastNavigatedPath(targetPath);
 		const action = analyzeHistoryNavigation(stackState.layers, targetPath);
-		
+
 		switch (action.type) {
 			case 'switchToLayer':
 				stackState.switchToLayer(action.layerIndex);
@@ -177,7 +208,10 @@
 				await stackState.truncateAndAppend(action.parentIndex, action.targetPath);
 				break;
 			case 'insertBeforeChild':
-				await stackState.insertBeforeChild(action.childIndex, [action.targetPath, ...action.parentPaths]);
+				await stackState.insertBeforeChild(action.childIndex, [
+					action.targetPath,
+					...action.parentPaths
+				]);
 				break;
 			case 'reinitialize':
 				await stackState.initRoot(action.targetPath, false);
@@ -213,12 +247,12 @@
 	async function preloadParentLayers(): Promise<void> {
 		const topLayer = stackState.layers[0];
 		if (!topLayer) return;
-		
+
 		const pathsToLoad = getPathsToPreload(stackState.layers, topLayer.path);
 		if (pathsToLoad.length === 0) return;
-		
+
 		try {
-			const newLayers = await Promise.all(pathsToLoad.map(p => createLayer(p)));
+			const newLayers = await Promise.all(pathsToLoad.map((p) => createLayer(p)));
 			stackState.layers = [...newLayers.reverse(), ...stackState.layers];
 			stackState.activeIndex += newLayers.length;
 		} catch {}
@@ -238,11 +272,21 @@
 
 		(async () => {
 			switch (cmd.type) {
-				case 'init': if (cmd.path) await stackState.initRoot(cmd.path); break;
-				case 'push': if (cmd.path) await pushLayer(cmd.path); break;
-				case 'pop': await popLayer(); break;
-				case 'goto': if (cmd.index !== undefined) stackState.switchToLayer(cmd.index); break;
-				case 'history': if (cmd.path) await handleHistoryNavigation(cmd.path); break;
+				case 'init':
+					if (cmd.path) await stackState.initRoot(cmd.path);
+					break;
+				case 'push':
+					if (cmd.path) await pushLayer(cmd.path);
+					break;
+				case 'pop':
+					await popLayer();
+					break;
+				case 'goto':
+					if (cmd.index !== undefined) stackState.switchToLayer(cmd.index);
+					break;
+				case 'history':
+					if (cmd.path) await handleHistoryNavigation(cmd.path);
+					break;
 			}
 			stackState.isProcessingNavCommand = false;
 		})();
@@ -255,26 +299,26 @@
 		const targetPath = initialPath;
 		if (!targetPath || stackState.isProcessingNavCommand) return;
 		if (normalizePath(stackState.lastNavigatedPath) === normalizePath(targetPath)) return;
-		
+
 		if (stackState.layers.length === 0) {
 			stackState.lastNavigatedPath = targetPath;
 			stackState.initRoot(targetPath, false);
 			return;
 		}
-		
+
 		const currentActivePath = stackState.activeLayer?.path;
 		if (currentActivePath && normalizePath(currentActivePath) === normalizePath(targetPath)) {
 			stackState.lastNavigatedPath = targetPath;
 			return;
 		}
-		
+
 		const targetLayerIndex = stackState.findLayerByPath(targetPath, normalizePath);
 		if (targetLayerIndex !== -1) {
 			stackState.lastNavigatedPath = targetPath;
 			stackState.switchToLayer(targetLayerIndex);
 			return;
 		}
-		
+
 		const pathToHandle = targetPath;
 		setTimeout(() => {
 			if (normalizePath(stackState.lastNavigatedPath) === normalizePath(pathToHandle)) return;
@@ -295,25 +339,28 @@
 		const focusPath = $tabPendingFocusPath;
 		if (!focusPath) return;
 		if (tabId !== get(activeTabId)) return;
-		
+
 		const currentLayer = stackState.activeLayer;
 		if (!currentLayer || currentLayer.loading) return;
-		
+
 		const displayItems = getDisplayItems(currentLayer);
-		const targetIndex = displayItems.findIndex(item => item.path === focusPath);
-		
+		const targetIndex = displayItems.findIndex((item) => item.path === focusPath);
+
 		if (targetIndex !== -1) {
 			stackState.updateSelectedIndex(stackState.activeIndex, targetIndex);
 			globalStore.selectItem(focusPath, false, targetIndex);
 			setTimeout(() => scrollToSelectedToken++, 250);
 		}
-		
+
 		folderTabActions.clearPendingFocusPath();
 	});
 
-	async function handleItemSelect(layerIndex: number, payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }) {
+	async function handleItemSelect(
+		layerIndex: number,
+		payload: { item: FsItem; index: number; multiSelect: boolean; shiftKey?: boolean }
+	) {
 		if (layerIndex !== stackState.activeIndex) return;
-		
+
 		stackState.updateSelectedIndex(layerIndex, payload.index);
 		const displayItems = getDisplayItems(stackState.layers[layerIndex]);
 
@@ -381,9 +428,10 @@
 		if (layerIndex !== stackState.activeIndex) return;
 		const currentLayer = stackState.layers[layerIndex];
 		if (!currentLayer || isVirtualPath(currentLayer.path)) return;
-		
+
 		const state = get(fileBrowserStore);
-		const action = actionType === 'double' ? state.doubleClickEmptyAction : state.singleClickEmptyAction;
+		const action =
+			actionType === 'double' ? state.doubleClickEmptyAction : state.singleClickEmptyAction;
 		if (shouldHandleEmptyClick(action as EmptyClickAction, false)) {
 			await popLayer();
 		}
@@ -395,7 +443,7 @@
 		if (currentLayer && isVirtualPath(currentLayer.path)) return;
 		await popLayer();
 	}
-	
+
 	function shouldShowBackButton(layerPath: string): boolean {
 		if (isVirtualPath(layerPath)) return false;
 		return showBackButtonValue;

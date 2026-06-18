@@ -56,14 +56,14 @@
 
 <!-- 鼠标触发区域（底部隐形条） -->
 <div
-	class="fixed bottom-0 left-0 right-0 h-4 z-40"
+	class="fixed right-0 bottom-0 left-0 z-40 h-4"
 	onmouseenter={handleMouseEnter}
 	role="presentation"
 ></div>
 
 <!-- 缩略图栏容器 -->
 <div
-	class="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 {isVisible
+	class="fixed right-0 bottom-0 left-0 z-50 transition-transform duration-300 {isVisible
 		? 'translate-y-0'
 		: 'translate-y-full'}"
 	onmouseenter={handleMouseEnter}
@@ -71,30 +71,30 @@
 	role="toolbar"
 	tabindex="0"
 >
-	<div class="bg-background/95 backdrop-blur-sm border-t shadow-lg">
+	<div class="bg-background/95 border-t shadow-lg backdrop-blur-sm">
 		<div class="h-32 p-2">
 			<!-- 缩略图滚动容器 -->
 			<div
 				id="thumbnail-container"
-				class="h-full overflow-x-auto overflow-y-hidden flex gap-2 items-center"
+				class="flex h-full items-center gap-2 overflow-x-auto overflow-y-hidden"
 			>
 				{#each thumbnails as thumb}
 					<button
 						id="thumb-{thumb.index}"
-						class="shrink-0 h-full aspect-3/4 rounded border-2 transition-all hover:border-primary {currentPage ===
+						class="hover:border-primary aspect-3/4 h-full shrink-0 rounded border-2 transition-all {currentPage ===
 						thumb.index
-							? 'border-primary ring-2 ring-primary/30 scale-105'
-							: 'border-transparent hover:border-muted-foreground/50'}"
+							? 'border-primary ring-primary/30 scale-105 ring-2'
+							: 'hover:border-muted-foreground/50 border-transparent'}"
 						onclick={() => goToPage(thumb.index)}
 					>
 						<div
-							class="w-full h-full rounded bg-muted flex flex-col items-center justify-center overflow-hidden"
+							class="bg-muted flex h-full w-full flex-col items-center justify-center overflow-hidden rounded"
 						>
 							{#if thumb.url}
-								<img src={thumb.url} alt="Page {thumb.index}" class="w-full h-full object-cover" />
+								<img src={thumb.url} alt="Page {thumb.index}" class="h-full w-full object-cover" />
 							{:else}
-								<ImageIcon class="h-8 w-8 text-muted-foreground mb-1" />
-								<span class="text-xs font-mono text-muted-foreground">{thumb.index}</span>
+								<ImageIcon class="text-muted-foreground mb-1 h-8 w-8" />
+								<span class="text-muted-foreground font-mono text-xs">{thumb.index}</span>
 							{/if}
 						</div>
 					</button>
@@ -104,7 +104,7 @@
 
 		<!-- 页码指示器 -->
 		<div
-			class="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full shadow-lg"
+			class="bg-primary text-primary-foreground absolute top-2 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold shadow-lg"
 		>
 			{currentPage} / {thumbnails.length}
 		</div>

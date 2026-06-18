@@ -1,56 +1,56 @@
 <script lang="ts">
-/**
- * 本书设置卡片
- * 从 EmmPanelSection 提取
- */
-import * as Button from '$lib/components/ui/button';
-import * as Switch from '$lib/components/ui/switch';
-import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
-import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
+	/**
+	 * 本书设置卡片
+	 * 从 EmmPanelSection 提取
+	 */
+	import * as Button from '$lib/components/ui/button';
+	import * as Switch from '$lib/components/ui/switch';
+	import { infoPanelStore, type ViewerBookInfo } from '$lib/stores/infoPanel.svelte';
+	import { bookSettingsStore, type PerBookSettings } from '$lib/stores/bookSettings.svelte';
 
-let bookInfo = $state<ViewerBookInfo | null>(null);
-let bookSettings = $state<PerBookSettings | null>(null);
+	let bookInfo = $state<ViewerBookInfo | null>(null);
+	let bookSettings = $state<PerBookSettings | null>(null);
 
-$effect(() => {
-	const unsubscribe = infoPanelStore.subscribe((state) => {
-		bookInfo = state.bookInfo;
+	$effect(() => {
+		const unsubscribe = infoPanelStore.subscribe((state) => {
+			bookInfo = state.bookInfo;
+		});
+		return unsubscribe;
 	});
-	return unsubscribe;
-});
 
-// 默认设置
-const defaultSettings: PerBookSettings = {
-	favorite: false,
-	rating: 0,
-	readingDirection: 'left-to-right',
-	doublePageView: false,
-	horizontalBook: false
-};
+	// 默认设置
+	const defaultSettings: PerBookSettings = {
+		favorite: false,
+		rating: 0,
+		readingDirection: 'left-to-right',
+		doublePageView: false,
+		horizontalBook: false
+	};
 
-$effect(() => {
-	if (bookInfo?.path) {
-		// 获取已保存的设置，如果没有则使用默认设置
-		bookSettings = bookSettingsStore.get(bookInfo.path) ?? defaultSettings;
-	} else {
-		bookSettings = null;
+	$effect(() => {
+		if (bookInfo?.path) {
+			// 获取已保存的设置，如果没有则使用默认设置
+			bookSettings = bookSettingsStore.get(bookInfo.path) ?? defaultSettings;
+		} else {
+			bookSettings = null;
+		}
+	});
+
+	function updateBookSetting(updates: Partial<PerBookSettings>) {
+		if (bookInfo?.path) {
+			bookSettingsStore.updateFor(bookInfo.path, updates);
+			bookSettings = bookSettingsStore.get(bookInfo.path) || null;
+		}
 	}
-});
-
-function updateBookSetting(updates: Partial<PerBookSettings>) {
-	if (bookInfo?.path) {
-		bookSettingsStore.updateFor(bookInfo.path, updates);
-		bookSettings = bookSettingsStore.get(bookInfo.path) || null;
-	}
-}
 </script>
 
 <div class="space-y-2 text-xs">
 	{#if !bookInfo}
-		<div class="text-center py-4 text-muted-foreground">
+		<div class="text-muted-foreground py-4 text-center">
 			<p>未打开书籍</p>
 		</div>
 	{:else if !bookSettings}
-		<div class="text-center py-4 text-muted-foreground">
+		<div class="text-muted-foreground py-4 text-center">
 			<p>加载中...</p>
 		</div>
 	{:else}
@@ -77,7 +77,10 @@ function updateBookSetting(updates: Partial<PerBookSettings>) {
 				{#each [1, 2, 3, 4, 5] as value}
 					<button
 						type="button"
-						class="h-6 w-6 flex items-center justify-center rounded text-[12px] {bs.rating && bs.rating >= value ? 'text-yellow-400' : 'text-muted-foreground'}"
+						class="flex h-6 w-6 items-center justify-center rounded text-[12px] {bs.rating &&
+						bs.rating >= value
+							? 'text-yellow-400'
+							: 'text-muted-foreground'}"
 						onclick={() => updateBookSetting({ rating: value })}
 						title={'评分 ' + value + ' 星'}
 					>
@@ -91,7 +94,9 @@ function updateBookSetting(updates: Partial<PerBookSettings>) {
 			<span>阅读方向</span>
 			<div class="flex gap-1">
 				<Button.Root
-					variant={bs.readingDirection === 'left-to-right' || !bs.readingDirection ? 'default' : 'outline'}
+					variant={bs.readingDirection === 'left-to-right' || !bs.readingDirection
+						? 'default'
+						: 'outline'}
 					size="sm"
 					class="h-7 px-2 text-[10px]"
 					onclick={() => updateBookSetting({ readingDirection: 'left-to-right' })}

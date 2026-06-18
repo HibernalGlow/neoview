@@ -20,7 +20,7 @@ export function applyCleanupRules(
 	rules: Array<{ pattern: string; enabled: boolean }>
 ): string {
 	if (!text) return '';
-	
+
 	let result = text;
 	for (const rule of rules) {
 		if (!rule.enabled || !rule.pattern) continue;
@@ -31,7 +31,7 @@ export function applyCleanupRules(
 			// 忽略无效正则
 		}
 	}
-	
+
 	// 清理多余空格
 	return result.replace(/\s+/g, ' ').trim();
 }
@@ -60,8 +60,8 @@ export function exportConfigToBlob(config: {
 			libreTranslateUrl: config.libreTranslateUrl,
 			sourceLanguage: config.sourceLanguage,
 			targetLanguage: config.targetLanguage,
-			cleanupRules: config.cleanupRules,
-		},
+			cleanupRules: config.cleanupRules
+		}
 	};
 	const json = JSON.stringify(exportData, null, 2);
 	return new Blob([json], { type: 'application/json' });
@@ -98,7 +98,7 @@ export function generateLibreTranslateCommand(
 		const parsedUrl = new URL(url || 'http://localhost:5000');
 		const host = parsedUrl.hostname;
 		const port = parsedUrl.port || '5000';
-		
+
 		// 收集需要的语言
 		const langs = new Set<string>();
 		if (sourceLanguage && sourceLanguage !== 'auto') {
@@ -110,9 +110,9 @@ export function generateLibreTranslateCommand(
 		langs.add(targetLanguage || 'zh');
 		// 英语作为中转语言
 		langs.add('en');
-		
+
 		const langList = Array.from(langs).sort().join(',');
-		
+
 		return `libretranslate --host ${host} --port ${port} --load-only ${langList}`;
 	} catch {
 		return 'libretranslate --host 0.0.0.0 --port 5000 --load-only en,ja,zh';
@@ -125,7 +125,7 @@ export function generateLibreTranslateCommand(
 export const SERVICE_TYPE_OPTIONS = [
 	{ value: 'disabled', label: '禁用' },
 	{ value: 'libretranslate', label: 'LibreTranslate' },
-	{ value: 'ollama', label: 'Ollama (本地模型)' },
+	{ value: 'ollama', label: 'Ollama (本地模型)' }
 ] as const;
 
 /**
@@ -135,7 +135,7 @@ export const SOURCE_LANGUAGE_OPTIONS = [
 	{ value: 'auto', label: '自动检测' },
 	{ value: 'ja', label: '日语' },
 	{ value: 'en', label: '英语' },
-	{ value: 'ko', label: '韩语' },
+	{ value: 'ko', label: '韩语' }
 ] as const;
 
 /**
@@ -143,5 +143,5 @@ export const SOURCE_LANGUAGE_OPTIONS = [
  */
 export const TARGET_LANGUAGE_OPTIONS = [
 	{ value: 'zh', label: '中文' },
-	{ value: 'en', label: '英语' },
+	{ value: 'en', label: '英语' }
 ] as const;

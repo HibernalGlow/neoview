@@ -7,25 +7,29 @@ import type { EMMTranslationDict } from '$lib/api/emm';
 
 // 命名空间缩写映射
 const NAMESPACE_ABBREVIATIONS: Record<string, string> = {
-	'language': 'l',
-	'parody': 'p',
-	'character': 'c',
-	'group': 'g',
-	'artist': 'a',
-	'male': 'm',
-	'female': 'f',
-	'mixed': 'x',
-	'reclass': 'r',
-	'cosplayer': 'cos',
-	'other': 'o'
+	language: 'l',
+	parody: 'p',
+	character: 'c',
+	group: 'g',
+	artist: 'a',
+	male: 'm',
+	female: 'f',
+	mixed: 'x',
+	reclass: 'r',
+	cosplayer: 'cos',
+	other: 'o'
 };
 
 // 反向映射：缩写 -> 全称
-const ABBREVIATION_TO_NAMESPACE: Record<string, string> = Object.entries(NAMESPACE_ABBREVIATIONS)
-	.reduce((acc, [k, v]) => {
+const ABBREVIATION_TO_NAMESPACE: Record<string, string> = Object.entries(
+	NAMESPACE_ABBREVIATIONS
+).reduce(
+	(acc, [k, v]) => {
 		acc[v] = k;
 		return acc;
-	}, {} as Record<string, string>);
+	},
+	{} as Record<string, string>
+);
 
 export const emmTranslationStore = {
 	/**
@@ -50,7 +54,11 @@ export const emmTranslationStore = {
 	 * @param namespace 命名空间 (e.g. "language" or "l")
 	 * @param dict 翻译字典
 	 */
-	translateTag(tag: string, namespace: string | undefined, dict: EMMTranslationDict | undefined): string {
+	translateTag(
+		tag: string,
+		namespace: string | undefined,
+		dict: EMMTranslationDict | undefined
+	): string {
 		if (!dict || !namespace) return tag;
 
 		// 尝试获取全称命名空间

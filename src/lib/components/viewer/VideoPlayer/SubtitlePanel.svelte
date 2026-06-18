@@ -46,7 +46,9 @@
 
 <div class="relative">
 	<button
-		class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle ? 'bg-white/20' : ''}"
+		class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {subtitle
+			? 'bg-white/20'
+			: ''}"
 		onclick={(event) => {
 			event.stopPropagation();
 			onSelectSubtitle();
@@ -56,16 +58,16 @@
 		aria-label={subtitle ? '更换字幕' : '选择字幕'}
 	>
 		{#if subtitle}
-			<Captions class="h-5 w-5 text-primary" />
+			<Captions class="text-primary h-5 w-5" />
 		{:else}
-			<CaptionsOff class="h-5 w-5 text-primary opacity-40" />
+			<CaptionsOff class="text-primary h-5 w-5 opacity-40" />
 		{/if}
 	</button>
 
 	<!-- 字幕设置面板 -->
 	{#if showSubtitleSettings}
 		<div
-			class="absolute bottom-full right-0 mb-2 w-64 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
+			class="absolute right-0 bottom-full mb-2 w-64 rounded-lg bg-black/90 p-4 shadow-lg backdrop-blur-sm"
 			onclick={(e) => e.stopPropagation()}
 			onmousedown={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}
@@ -75,12 +77,7 @@
 		>
 			<div class="mb-3 flex items-center justify-between">
 				<span class="text-sm font-medium text-white">字幕设置</span>
-				<button
-					class="text-white/60 hover:text-white"
-					onclick={onToggleSettings}
-				>
-					✕
-				</button>
+				<button class="text-white/60 hover:text-white" onclick={onToggleSettings}> ✕ </button>
 			</div>
 
 			<!-- 字体大小 -->
@@ -123,7 +120,10 @@
 				<div class="flex gap-2">
 					{#each colorPresets as color}
 						<button
-							class="h-6 w-6 rounded border-2 transition-transform hover:scale-110 {subtitleColor === color ? 'border-primary' : 'border-transparent'}"
+							class="h-6 w-6 rounded border-2 transition-transform hover:scale-110 {subtitleColor ===
+							color
+								? 'border-primary'
+								: 'border-transparent'}"
 							style="background-color: {color}"
 							onclick={() => onColorChange(color)}
 							title={color}
@@ -145,7 +145,9 @@
 						oninput={(e) => onBgOpacityChange(parseFloat((e.target as HTMLInputElement).value))}
 						class="subtitle-slider h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/20"
 					/>
-					<span class="w-10 text-right text-xs text-white">{Math.round(subtitleBgOpacity * 100)}%</span>
+					<span class="w-10 text-right text-xs text-white"
+						>{Math.round(subtitleBgOpacity * 100)}%</span
+					>
 				</div>
 			</div>
 
@@ -159,7 +161,7 @@
 					重置
 				</button>
 				<button
-					class="flex-1 rounded bg-primary/50 px-2 py-1 text-xs text-white hover:bg-primary/70"
+					class="bg-primary/50 hover:bg-primary/70 flex-1 rounded px-2 py-1 text-xs text-white"
 					onclick={onSave}
 					title="保存设置"
 				>

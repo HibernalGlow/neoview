@@ -464,6 +464,7 @@ const PROFILES: PerformanceProfile[] = [
    - 翻页反方向页面优先删除
    - 添加页面锁定机制 (`lock_page` / `unlock_page`)
 2. ✅ **Solid 压缩包预展开** - 新增 `solid_pre_extractor.rs`
+
    - 检测 Solid 7z/CB7 压缩包
    - 后台异步展开到临时目录
    - **混合解压策略**（参考 `SevenZipHybridExtractor.cs`）：

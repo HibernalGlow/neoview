@@ -92,7 +92,7 @@ export const emmSyncStore = writable<EMMSyncState>(initialState);
 
 /** 验证四个配置文件 */
 export async function validateEMMConfig(): Promise<EMMConfigValidation> {
-	emmSyncStore.update(s => ({
+	emmSyncStore.update((s) => ({
 		...s,
 		isValidating: true,
 		syncProgress: { ...s.syncProgress, phase: 'validating', message: '正在验证配置文件...' }
@@ -173,7 +173,7 @@ export async function validateEMMConfig(): Promise<EMMConfigValidation> {
 			}
 		}
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isValidating: false,
 			validation,
@@ -182,7 +182,7 @@ export async function validateEMMConfig(): Promise<EMMConfigValidation> {
 
 		return validation;
 	} catch (error) {
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isValidating: false,
 			error: `验证失败: ${error}`,
@@ -307,7 +307,11 @@ async function processInParallel<T, R>(
 }
 
 /** 执行完整同步（手动触发，优化版：并行 + rating 字段） */
-export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count: number; error?: string }> {
+export async function syncEMMToThumbnailDb(): Promise<{
+	success: boolean;
+	count: number;
+	error?: string;
+}> {
 	const state = get(emmSyncStore);
 
 	// 防止重复同步
@@ -315,7 +319,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		return { success: false, count: 0, error: '同步正在进行中' };
 	}
 
-	emmSyncStore.update(s => ({
+	emmSyncStore.update((s) => ({
 		...s,
 		isSyncing: true,
 		error: null,
@@ -330,7 +334,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		}
 
 		// 2. 获取所有缩略图键
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			syncProgress: { ...s.syncProgress, phase: 'loading', message: '获取缩略图列表...' }
 		}));
@@ -338,13 +342,13 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		const thumbnailKeys = await invoke<string[]>('get_all_thumbnail_keys');
 		const total = thumbnailKeys.length;
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			syncProgress: { total, current: 0, phase: 'loading', message: `找到 ${total} 个缩略图记录` }
 		}));
 
 		if (total === 0) {
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				isSyncing: false,
 				syncProgress: { total: 0, current: 0, phase: 'done', message: '没有需要同步的记录' }
@@ -377,20 +381,27 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		};
 
 		// 处理单个路径的函数
-		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
+		const processPath = async (
+			pathKey: string
+		): Promise<[string, string, string | null] | null> => {
 			// 如果是压缩包内文件（包含 ::），提取压缩包路径
 			const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
-			
+
 			for (const dbPath of mainDbPaths) {
 				try {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(
+						dbPath,
+						archivePath,
+						translationDbPath
+					);
 					if (metadata) {
-						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
-						return [
-							pathKey,
-							JSON.stringify(cacheEntry),
-							buildRatingData(metadata.rating ?? null)
-						];
+						const cacheEntry = convertToEMMCacheEntry(
+							metadata,
+							collectTags,
+							translationDict,
+							dbPath
+						);
+						return [pathKey, JSON.stringify(cacheEntry), buildRatingData(metadata.rating ?? null)];
 					}
 				} catch {
 					// 继续尝试下一个数据库
@@ -403,7 +414,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		for (let i = 0; i < thumbnailKeys.length; i += BATCH_SIZE) {
 			const batch = thumbnailKeys.slice(i, i + BATCH_SIZE);
 
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				syncProgress: {
 					...s.syncProgress,
@@ -420,7 +431,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		}
 
 		// 5. 批量保存
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			syncProgress: {
 				...s.syncProgress,
@@ -439,7 +450,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		const syncTime = new Date().toISOString();
 		localStorage.setItem('neoview-emm-last-sync', syncTime);
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			lastSyncTime: syncTime,
@@ -454,7 +465,7 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 		return { success: true, count: entries.length };
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			error: errorMsg,
@@ -465,14 +476,18 @@ export async function syncEMMToThumbnailDb(): Promise<{ success: boolean; count:
 }
 
 /** 增量同步（只更新 emm_json 为空的条目） */
-export async function syncEMMIncremental(): Promise<{ success: boolean; count: number; error?: string }> {
+export async function syncEMMIncremental(): Promise<{
+	success: boolean;
+	count: number;
+	error?: string;
+}> {
 	const state = get(emmSyncStore);
 
 	if (state.isSyncing) {
 		return { success: false, count: 0, error: '同步正在进行中' };
 	}
 
-	emmSyncStore.update(s => ({
+	emmSyncStore.update((s) => ({
 		...s,
 		isSyncing: true,
 		error: null,
@@ -490,13 +505,13 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		const thumbnailKeys = await invoke<string[]>('get_keys_without_emm_json');
 		const total = thumbnailKeys.length;
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			syncProgress: { total, current: 0, phase: 'loading', message: `找到 ${total} 个未同步条目` }
 		}));
 
 		if (total === 0) {
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				isSyncing: false,
 				syncProgress: { total: 0, current: 0, phase: 'done', message: '所有条目已同步' }
@@ -527,20 +542,27 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 			});
 		};
 
-		const processPath = async (pathKey: string): Promise<[string, string, string | null] | null> => {
+		const processPath = async (
+			pathKey: string
+		): Promise<[string, string, string | null] | null> => {
 			// 如果是压缩包内文件（包含 ::），提取压缩包路径
 			const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
-			
+
 			for (const dbPath of mainDbPaths) {
 				try {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(
+						dbPath,
+						archivePath,
+						translationDbPath
+					);
 					if (metadata) {
-						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
-						return [
-							pathKey,
-							JSON.stringify(cacheEntry),
-							buildRatingData(metadata.rating ?? null)
-						];
+						const cacheEntry = convertToEMMCacheEntry(
+							metadata,
+							collectTags,
+							translationDict,
+							dbPath
+						);
+						return [pathKey, JSON.stringify(cacheEntry), buildRatingData(metadata.rating ?? null)];
 					}
 				} catch {
 					// 继续尝试下一个数据库
@@ -552,7 +574,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		for (let i = 0; i < thumbnailKeys.length; i += BATCH_SIZE) {
 			const batch = thumbnailKeys.slice(i, i + BATCH_SIZE);
 
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				syncProgress: {
 					...s.syncProgress,
@@ -568,7 +590,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		}
 
 		// 保存
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			syncProgress: {
 				...s.syncProgress,
@@ -582,7 +604,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 			await invoke<number>('batch_save_emm_with_rating_data', { entries });
 		}
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			syncProgress: {
@@ -596,7 +618,7 @@ export async function syncEMMIncremental(): Promise<{ success: boolean; count: n
 		return { success: true, count: entries.length };
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			error: errorMsg,
@@ -616,7 +638,7 @@ export async function syncEMMForDirectory(
 		return { success: false, count: 0, error: '同步正在进行中' };
 	}
 
-	emmSyncStore.update(s => ({
+	emmSyncStore.update((s) => ({
 		...s,
 		isSyncing: true,
 		error: null,
@@ -625,11 +647,13 @@ export async function syncEMMForDirectory(
 
 	try {
 		// 获取目录下的缩略图键
-		const thumbnailKeys = await invoke<string[]>('get_thumbnail_keys_by_prefix', { prefix: dirPath });
+		const thumbnailKeys = await invoke<string[]>('get_thumbnail_keys_by_prefix', {
+			prefix: dirPath
+		});
 		const total = thumbnailKeys.length;
 
 		if (total === 0) {
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				isSyncing: false,
 				syncProgress: { total: 0, current: 0, phase: 'done', message: '没有需要同步的记录' }
@@ -648,7 +672,7 @@ export async function syncEMMForDirectory(
 
 		for (let i = 0; i < thumbnailKeys.length; i++) {
 			const pathKey = thumbnailKeys[i];
-			emmSyncStore.update(s => ({
+			emmSyncStore.update((s) => ({
 				...s,
 				syncProgress: {
 					total,
@@ -661,11 +685,20 @@ export async function syncEMMForDirectory(
 			try {
 				// 如果是压缩包内文件（包含 ::），提取压缩包路径
 				const archivePath = pathKey.includes('::') ? pathKey.split('::')[0] : pathKey;
-				
+
 				for (const dbPath of mainDbPaths) {
-					const metadata = await EMMAPI.loadEMMMetadataByPath(dbPath, archivePath, translationDbPath);
+					const metadata = await EMMAPI.loadEMMMetadataByPath(
+						dbPath,
+						archivePath,
+						translationDbPath
+					);
 					if (metadata) {
-						const cacheEntry = convertToEMMCacheEntry(metadata, collectTags, translationDict, dbPath);
+						const cacheEntry = convertToEMMCacheEntry(
+							metadata,
+							collectTags,
+							translationDict,
+							dbPath
+						);
 						entries.push([pathKey, JSON.stringify(cacheEntry)]);
 						break;
 					}
@@ -679,7 +712,7 @@ export async function syncEMMForDirectory(
 			await invoke<number>('batch_save_emm_json', { entries });
 		}
 
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			syncProgress: {
@@ -693,7 +726,7 @@ export async function syncEMMForDirectory(
 		return { success: true, count: entries.length };
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
-		emmSyncStore.update(s => ({
+		emmSyncStore.update((s) => ({
 			...s,
 			isSyncing: false,
 			error: errorMsg,

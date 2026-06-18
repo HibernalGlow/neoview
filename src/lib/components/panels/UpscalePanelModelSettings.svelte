@@ -29,15 +29,8 @@
 	<div class="setting-row">
 		<Label>放大倍数：</Label>
 		<div class="flex items-center gap-2">
-			<input
-				type="number"
-				bind:value={scale}
-				min="1"
-				max="4"
-				step="0.5"
-				class="input-number"
-			/>
-			<span class="text-sm text-muted-foreground">x</span>
+			<input type="number" bind:value={scale} min="1" max="4" step="0.5" class="input-number" />
+			<span class="text-muted-foreground text-sm">x</span>
 		</div>
 	</div>
 
@@ -85,8 +78,8 @@
 		</NativeSelect>
 	</div>
 
-	<Button onclick={handleApply} class="w-full mt-2" variant="outline">
-		<Settings class="w-4 h-4 mr-2" />
+	<Button onclick={handleApply} class="mt-2 w-full" variant="outline">
+		<Settings class="mr-2 h-4 w-4" />
 		应用设置
 	</Button>
 </div>

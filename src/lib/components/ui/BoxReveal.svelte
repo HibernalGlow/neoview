@@ -56,11 +56,7 @@
 	style="width: {width};"
 >
 	<!-- 内容区域：从下方滑入并淡入 -->
-	<div
-		class="content-wrapper"
-		class:visible={isVisible}
-		style="--duration: {duration}s;"
-	>
+	<div class="content-wrapper" class:visible={isVisible} style="--duration: {duration}s;">
 		{#if children}
 			{@render children()}
 		{/if}

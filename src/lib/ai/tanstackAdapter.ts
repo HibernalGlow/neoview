@@ -24,7 +24,7 @@ export interface TanStackAIConfig {
 /**
  * 将现有 AiProvider 配置转换为 TanStack AI 配置
  * 支持 OpenAI、Gemini 和 Ollama（OpenAI 兼容模式）
- * 
+ *
  * @param config - 现有的 AiProvider 配置
  * @returns TanStack AI 配置对象
  */
@@ -32,14 +32,14 @@ export function createTanStackProvider(config: AiProvider): TanStackAIConfig {
 	if (config.provider === 'gemini') {
 		// Google Gemini 提供商
 		const google = createGoogleGenerativeAI({
-			apiKey: config.apiKey,
+			apiKey: config.apiKey
 		});
 
 		return {
 			model: google(config.model),
 			temperature: config.temperature,
 			maxTokens: config.maxTokens,
-			providerName: config.name,
+			providerName: config.name
 		};
 	}
 
@@ -59,7 +59,7 @@ export function createTanStackProvider(config: AiProvider): TanStackAIConfig {
 		model: openai(config.model),
 		temperature: config.temperature,
 		maxTokens: config.maxTokens,
-		providerName: config.name,
+		providerName: config.name
 	};
 }
 

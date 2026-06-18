@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from "$lib/utils.js";
+	import { cn } from '$lib/utils.js';
 
 	let {
 		ref = $bindable(null),
@@ -13,7 +13,7 @@
 <span
 	bind:this={ref}
 	data-slot="select-value"
-	class={cn("flex-1 text-left", className)}
+	class={cn('flex-1 text-left', className)}
 	{...restProps}
 >
 	{#if children}

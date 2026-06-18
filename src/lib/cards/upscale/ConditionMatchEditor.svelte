@@ -1,74 +1,74 @@
 <script lang="ts">
-/**
- * 条件超分 - 匹配规则编辑器
- */
-import { createEventDispatcher } from 'svelte';
-import { Button } from '$lib/components/ui/button';
-import { Input } from '$lib/components/ui/input';
-import { Label } from '$lib/components/ui/label';
-import { Switch } from '$lib/components/ui/switch';
-import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
-import { Trash2, Plus } from '@lucide/svelte';
-import type { UpscaleCondition, ConditionExpression } from '$lib/components/panels/UpscalePanel';
+	/**
+	 * 条件超分 - 匹配规则编辑器
+	 */
+	import { createEventDispatcher } from 'svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { Switch } from '$lib/components/ui/switch';
+	import { NativeSelect, NativeSelectOption } from '$lib/components/ui/native-select';
+	import { Trash2, Plus } from '@lucide/svelte';
+	import type { UpscaleCondition, ConditionExpression } from '$lib/components/panels/UpscalePanel';
 
-interface Props {
-	condition: UpscaleCondition;
-}
+	interface Props {
+		condition: UpscaleCondition;
+	}
 
-let { condition }: Props = $props();
+	let { condition }: Props = $props();
 
-const dispatch = createEventDispatcher<{
-	update: { match: Partial<UpscaleCondition['match']> };
-}>();
+	const dispatch = createEventDispatcher<{
+		update: { match: Partial<UpscaleCondition['match']> };
+	}>();
 
-const dimensionModeOptions = [
-	{ value: 'and', label: '同时满足' },
-	{ value: 'or', label: '任一满足' }
-];
+	const dimensionModeOptions = [
+		{ value: 'and', label: '同时满足' },
+		{ value: 'or', label: '任一满足' }
+	];
 
-const operators = [
-	{ value: 'eq', label: '等于' },
-	{ value: 'ne', label: '不等于' },
-	{ value: 'gt', label: '大于' },
-	{ value: 'gte', label: '≥' },
-	{ value: 'lt', label: '小于' },
-	{ value: 'lte', label: '≤' },
-	{ value: 'regex', label: '正则' },
-	{ value: 'contains', label: '包含' }
-];
+	const operators = [
+		{ value: 'eq', label: '等于' },
+		{ value: 'ne', label: '不等于' },
+		{ value: 'gt', label: '大于' },
+		{ value: 'gte', label: '≥' },
+		{ value: 'lt', label: '小于' },
+		{ value: 'lte', label: '≤' },
+		{ value: 'regex', label: '正则' },
+		{ value: 'contains', label: '包含' }
+	];
 
-function parseNumericInput(value: string): number | undefined {
-	if (value === '' || value === null || value === undefined) return undefined;
-	const parsed = Number(value);
-	return Number.isNaN(parsed) ? undefined : parsed;
-}
+	function parseNumericInput(value: string): number | undefined {
+		if (value === '' || value === null || value === undefined) return undefined;
+		const parsed = Number(value);
+		return Number.isNaN(parsed) ? undefined : parsed;
+	}
 
-function updateMatch(updates: Partial<UpscaleCondition['match']>) {
-	console.log('📝 ConditionMatchEditor updateMatch:', updates);
-	dispatch('update', { match: updates });
-}
+	function updateMatch(updates: Partial<UpscaleCondition['match']>) {
+		console.log('📝 ConditionMatchEditor updateMatch:', updates);
+		dispatch('update', { match: updates });
+	}
 
-function addMetadata() {
-	const newKey = `key_${Object.keys(condition.match.metadata || {}).length + 1}`;
-	const newExpr: ConditionExpression = { operator: 'eq', value: '' };
-	updateMatch({ metadata: { ...condition.match.metadata, [newKey]: newExpr } });
-}
+	function addMetadata() {
+		const newKey = `key_${Object.keys(condition.match.metadata || {}).length + 1}`;
+		const newExpr: ConditionExpression = { operator: 'eq', value: '' };
+		updateMatch({ metadata: { ...condition.match.metadata, [newKey]: newExpr } });
+	}
 
-function deleteMetadata(key: string) {
-	const { [key]: _, ...rest } = condition.match.metadata || {};
-	updateMatch({ metadata: rest });
-}
+	function deleteMetadata(key: string) {
+		const { [key]: _, ...rest } = condition.match.metadata || {};
+		updateMatch({ metadata: rest });
+	}
 
-function updateMetadata(key: string, expr: ConditionExpression) {
-	updateMatch({ metadata: { ...condition.match.metadata, [key]: expr } });
-}
+	function updateMetadata(key: string, expr: ConditionExpression) {
+		updateMatch({ metadata: { ...condition.match.metadata, [key]: expr } });
+	}
 </script>
 
 <div class="space-y-3">
-	<h4 class="text-xs font-semibold text-muted-foreground">匹配规则</h4>
-	
+	<h4 class="text-muted-foreground text-xs font-semibold">匹配规则</h4>
+
 	<!-- 尺寸限制 -->
-	<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+	<div class="grid grid-cols-2 gap-2 md:grid-cols-4">
 		<div class="space-y-1">
 			<Label class="text-[10px]">最小宽度</Label>
 			<Input
@@ -139,13 +139,13 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 
 	<!-- 判定逻辑 -->
 	<div class="flex items-center gap-2">
-		<span class="text-[10px] text-muted-foreground">判定:</span>
+		<span class="text-muted-foreground text-[10px]">判定:</span>
 		{#each dimensionModeOptions as opt}
 			{@const mode = opt.value as 'and' | 'or'}
 			<Button
 				type="button"
 				size="sm"
-				class="h-6 text-[10px] px-2"
+				class="h-6 px-2 text-[10px]"
 				variant={condition.match.dimensionMode === opt.value ? 'default' : 'outline'}
 				onclick={() => updateMatch({ dimensionMode: mode })}
 			>
@@ -155,7 +155,7 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 	</div>
 
 	<!-- 路径正则 -->
-	<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+	<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
 		<div class="space-y-1">
 			<Label class="text-[10px]">书籍路径正则</Label>
 			<Input
@@ -184,7 +184,7 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 				onclick={() => updateMatch({ matchInnerPath: !condition.match.matchInnerPath })}
 			/>
 			<span>匹配内部路径</span>
-			<span class="text-[10px] text-muted-foreground">(默认只匹配book路径)</span>
+			<span class="text-muted-foreground text-[10px]">(默认只匹配book路径)</span>
 		</label>
 		<label class="flex items-center gap-2 text-xs">
 			<Switch
@@ -200,13 +200,13 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 		<div class="flex items-center justify-between">
 			<Label class="text-[10px]">自定义元数据</Label>
 			<Button size="sm" variant="outline" class="h-6 text-[10px]" onclick={addMetadata}>
-				<Plus class="w-3 h-3 mr-1" />
+				<Plus class="mr-1 h-3 w-3" />
 				添加
 			</Button>
 		</div>
 		{#if condition.match.metadata && Object.keys(condition.match.metadata).length > 0}
 			{#each Object.entries(condition.match.metadata) as [key, expr]}
-				<div class="grid grid-cols-4 gap-1 items-end">
+				<div class="grid grid-cols-4 items-end gap-1">
 					<Input
 						class="h-6 text-[10px]"
 						value={key}
@@ -219,7 +219,11 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 					<NativeSelect
 						class="h-6 text-[10px]"
 						value={expr.operator}
-						onchange={(e) => updateMetadata(key, { ...expr, operator: e.currentTarget.value as ConditionExpression['operator'] })}
+						onchange={(e) =>
+							updateMetadata(key, {
+								...expr,
+								operator: e.currentTarget.value as ConditionExpression['operator']
+							})}
 					>
 						{#each operators as op}
 							<NativeSelectOption value={op.value}>{op.label}</NativeSelectOption>
@@ -232,12 +236,12 @@ function updateMetadata(key: string, expr: ConditionExpression) {
 						placeholder="值"
 					/>
 					<Button variant="ghost" size="sm" class="h-6 w-6 p-0" onclick={() => deleteMetadata(key)}>
-						<Trash2 class="w-3 h-3" />
+						<Trash2 class="h-3 w-3" />
 					</Button>
 				</div>
 			{/each}
 		{:else}
-			<p class="text-[10px] text-muted-foreground">无自定义条件</p>
+			<p class="text-muted-foreground text-[10px]">无自定义条件</p>
 		{/if}
 	</div>
 </div>

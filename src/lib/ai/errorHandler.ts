@@ -6,7 +6,14 @@
 /**
  * AI 错误代码
  */
-export type AIErrorCode = 'NETWORK' | 'AUTH' | 'RATE_LIMIT' | 'PROVIDER' | 'STREAM' | 'TIMEOUT' | 'UNKNOWN';
+export type AIErrorCode =
+	| 'NETWORK'
+	| 'AUTH'
+	| 'RATE_LIMIT'
+	| 'PROVIDER'
+	| 'STREAM'
+	| 'TIMEOUT'
+	| 'UNKNOWN';
 
 /**
  * 标准化的 AI 错误
@@ -46,7 +53,7 @@ export function createAIError(
 		PROVIDER: false,
 		STREAM: true,
 		TIMEOUT: true,
-		UNKNOWN: false,
+		UNKNOWN: false
 	};
 
 	return {
@@ -55,7 +62,7 @@ export function createAIError(
 		retryable: options?.retryable ?? retryableByDefault[code],
 		retryAfter: options?.retryAfter,
 		originalError: options?.originalError,
-		provider: options?.provider,
+		provider: options?.provider
 	};
 }
 
@@ -82,7 +89,7 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 			return createAIError('NETWORK', `网络错误: ${error.message}`, {
 				originalError: error,
 				provider,
-				retryAfter: 1000,
+				retryAfter: 1000
 			});
 		}
 
@@ -95,12 +102,16 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 		) {
 			return createAIError('AUTH', `认证失败: ${error.message}`, {
 				originalError: error,
-				provider,
+				provider
 			});
 		}
 
 		// 速率限制
-		if (message.includes('rate limit') || message.includes('429') || message.includes('too many requests')) {
+		if (
+			message.includes('rate limit') ||
+			message.includes('429') ||
+			message.includes('too many requests')
+		) {
 			// 尝试从错误消息中提取重试时间
 			const retryMatch = message.match(/retry after (\d+)/i);
 			const retryAfter = retryMatch ? parseInt(retryMatch[1]) * 1000 : 60000;
@@ -108,7 +119,7 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 			return createAIError('RATE_LIMIT', `请求频率超限: ${error.message}`, {
 				originalError: error,
 				provider,
-				retryAfter,
+				retryAfter
 			});
 		}
 
@@ -117,7 +128,7 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 			return createAIError('TIMEOUT', `请求超时: ${error.message}`, {
 				originalError: error,
 				provider,
-				retryAfter: 2000,
+				retryAfter: 2000
 			});
 		}
 
@@ -125,7 +136,7 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 		if (message.includes('stream') || message.includes('abort')) {
 			return createAIError('STREAM', `流式响应错误: ${error.message}`, {
 				originalError: error,
-				provider,
+				provider
 			});
 		}
 
@@ -138,14 +149,14 @@ export function normalizeError(error: unknown, provider?: string): AIError {
 		) {
 			return createAIError('PROVIDER', `提供商错误: ${error.message}`, {
 				originalError: error,
-				provider,
+				provider
 			});
 		}
 
 		// 未知错误
 		return createAIError('UNKNOWN', error.message, {
 			originalError: error,
-			provider,
+			provider
 		});
 	}
 
@@ -175,7 +186,7 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * 带重试的异步函数执行器
- * 
+ *
  * @param fn - 要执行的异步函数
  * @param options - 重试选项
  * @returns 函数执行结果
@@ -203,7 +214,7 @@ export async function withRetry<T>(
 		maxDelay = 30000,
 		backoffMultiplier = 2,
 		onRetry,
-		provider,
+		provider
 	} = options || {};
 
 	let lastError: AIError | null = null;
@@ -249,7 +260,7 @@ export function getErrorMessage(error: AIError): string {
 		PROVIDER: 'AI 服务出错，请检查配置',
 		STREAM: '响应中断，请重试',
 		TIMEOUT: '请求超时，请重试',
-		UNKNOWN: '发生未知错误',
+		UNKNOWN: '发生未知错误'
 	};
 
 	return messages[error.code] || error.message;

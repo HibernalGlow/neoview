@@ -43,14 +43,14 @@
 </script>
 
 <div
-	class="rounded-lg border bg-muted/10 p-3 space-y-3 transition-all hover:border-primary/60"
+	class="bg-muted/10 hover:border-primary/60 space-y-3 rounded-lg border p-3 transition-all"
 	style={order !== undefined ? `order: ${order}` : ''}
 	role="region"
 	aria-label={title}
 >
 	<!-- 头部 -->
 	<div class="flex items-center justify-between">
-		<div class="flex items-center gap-2 font-semibold text-sm">
+		<div class="flex items-center gap-2 text-sm font-semibold">
 			<!-- svelte-ignore slot_element_deprecated -->
 			<slot name="icon" />
 			<span>{title}</span>
@@ -62,7 +62,7 @@
 				{#if showCollapseButton}
 					<button
 						type="button"
-						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+						class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded"
 						onclick={onToggle}
 						title={expanded ? '收起' : '展开'}
 					>
@@ -76,7 +76,7 @@
 				{#if showSortButtons}
 					<button
 						type="button"
-						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+						class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded disabled:opacity-40 disabled:hover:bg-transparent"
 						onclick={onMoveUp}
 						disabled={!canMoveUp}
 						title="上移"
@@ -85,7 +85,7 @@
 					</button>
 					<button
 						type="button"
-						class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+						class="text-muted-foreground hover:bg-muted inline-flex h-5 w-5 items-center justify-center rounded disabled:opacity-40 disabled:hover:bg-transparent"
 						onclick={onMoveDown}
 						disabled={!canMoveDown}
 						title="下移"

@@ -38,44 +38,43 @@
 		</Tabs.List>
 
 		<Tabs.Content value="display" class="mt-4 space-y-4">
-	<!-- 背景颜色 -->
-	<div class="space-y-2">
-		<Label for="bg-color">背景颜色</Label>
-		<div class="flex gap-2">
-			<Input id="bg-color" type="color" bind:value={backgroundColor} class="w-20 h-10" />
-			<Input type="text" bind:value={backgroundColor} class="flex-1" />
-		</div>
-	</div>
+			<!-- 背景颜色 -->
+			<div class="space-y-2">
+				<Label for="bg-color">背景颜色</Label>
+				<div class="flex gap-2">
+					<Input id="bg-color" type="color" bind:value={backgroundColor} class="h-10 w-20" />
+					<Input type="text" bind:value={backgroundColor} class="flex-1" />
+				</div>
+			</div>
 
-	<!-- 显示网格 -->
-	<div class="flex items-center justify-between">
-		<div class="space-y-1">
-			<Label>显示网格</Label>
-			<p class="text-sm text-muted-foreground">在图像背景显示网格</p>
-		</div>
-		<Switch bind:checked={showGrid} />
-	</div>
-
+			<!-- 显示网格 -->
+			<div class="flex items-center justify-between">
+				<div class="space-y-1">
+					<Label>显示网格</Label>
+					<p class="text-muted-foreground text-sm">在图像背景显示网格</p>
+				</div>
+				<Switch bind:checked={showGrid} />
+			</div>
 		</Tabs.Content>
 
 		<Tabs.Content value="zoom" class="mt-4 space-y-4">
-	<!-- 平滑缩放 -->
-	<div class="flex items-center justify-between">
-		<div class="space-y-1">
-			<Label>平滑缩放</Label>
-			<p class="text-sm text-muted-foreground">启用平滑的缩放动画</p>
-		</div>
-		<Switch bind:checked={smoothZoom} />
-	</div>
+			<!-- 平滑缩放 -->
+			<div class="flex items-center justify-between">
+				<div class="space-y-1">
+					<Label>平滑缩放</Label>
+					<p class="text-muted-foreground text-sm">启用平滑的缩放动画</p>
+				</div>
+				<Switch bind:checked={smoothZoom} />
+			</div>
 
-	<!-- 默认缩放 -->
-	<div class="space-y-2">
-		<div class="flex items-center justify-between">
-			<Label>默认缩放级别</Label>
-			<span class="text-sm text-muted-foreground">{defaultZoom[0]}%</span>
-		</div>
-		<Slider min={10} max={500} step={10} type="single" />
-	</div>
+			<!-- 默认缩放 -->
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<Label>默认缩放级别</Label>
+					<span class="text-muted-foreground text-sm">{defaultZoom[0]}%</span>
+				</div>
+				<Slider min={10} max={500} step={10} type="single" />
+			</div>
 		</Tabs.Content>
 	</Tabs.Root>
 </div>

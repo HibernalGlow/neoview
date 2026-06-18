@@ -28,7 +28,7 @@
 			isProcessing = true;
 			status = upscaleState.currentTask || '处理中';
 			progress = upscaleState.progress;
-			
+
 			// 根据模式设置不同的颜色
 			if (upscaleState.mode === 'auto') {
 				progressColorClass = 'bg-accent';
@@ -80,14 +80,14 @@
 
 	<Button
 		onclick={handlePerformClick}
-		class="w-full mt-3"
+		class="mt-3 w-full"
 		disabled={isProcessing || !currentImagePath}
 	>
 		{#if isProcessing}
-			<Loader2 class="w-4 h-4 mr-2 animate-spin" />
+			<Loader2 class="mr-2 h-4 w-4 animate-spin" />
 			处理中...
 		{:else}
-			<Sparkles class="w-4 h-4 mr-2" />
+			<Sparkles class="mr-2 h-4 w-4" />
 			执行超分
 		{/if}
 	</Button>

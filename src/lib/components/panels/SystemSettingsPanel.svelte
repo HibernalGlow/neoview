@@ -24,7 +24,7 @@
 
 	// 用户配置的排除路径
 	let excludedPaths = $derived(currentSettings.system.excludedPaths ?? []);
-	
+
 	// 预设的系统保护文件夹
 	const systemProtectedFolders = getSystemProtectedFolders();
 
@@ -79,12 +79,12 @@
 	</div>
 
 	<!-- 排除路径管理 -->
-	<div class="space-y-4 rounded-lg border bg-card p-4">
+	<div class="bg-card space-y-4 rounded-lg border p-4">
 		<div class="flex items-center gap-2">
-			<FolderX class="h-4 w-4 text-muted-foreground" />
+			<FolderX class="text-muted-foreground h-4 w-4" />
 			<Label class="text-sm font-semibold">排除路径</Label>
 		</div>
-		<p class="text-xs text-muted-foreground">
+		<p class="text-muted-foreground text-xs">
 			这些路径将被跳过元数据扫描，避免对系统保护文件夹的重复访问请求。
 		</p>
 
@@ -96,26 +96,29 @@
 				class="flex-1"
 				onkeydown={(e) => e.key === 'Enter' && addManualPath()}
 			/>
-			<Button variant="outline" size="sm" onclick={addManualPath} disabled={!newExcludedPath.trim()}>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={addManualPath}
+				disabled={!newExcludedPath.trim()}
+			>
 				<Plus class="h-4 w-4" />
 			</Button>
-			<Button variant="outline" size="sm" onclick={selectFolderToExclude}>
-				选择文件夹
-			</Button>
+			<Button variant="outline" size="sm" onclick={selectFolderToExclude}>选择文件夹</Button>
 		</div>
 
 		<!-- 用户配置的排除路径列表 -->
 		{#if excludedPaths.length > 0}
 			<div class="space-y-2">
-				<Label class="text-xs text-muted-foreground">已配置的排除路径：</Label>
+				<Label class="text-muted-foreground text-xs">已配置的排除路径：</Label>
 				<div class="max-h-48 space-y-1 overflow-auto">
 					{#each excludedPaths as path}
-						<div class="flex items-center justify-between rounded bg-secondary/50 px-2 py-1">
+						<div class="bg-secondary/50 flex items-center justify-between rounded px-2 py-1">
 							<span class="truncate text-xs" title={path}>{path}</span>
 							<Button
 								variant="ghost"
 								size="sm"
-								class="h-6 w-6 p-0 text-destructive hover:text-destructive"
+								class="text-destructive hover:text-destructive h-6 w-6 p-0"
 								onclick={() => removePath(path)}
 							>
 								<Trash2 class="h-3 w-3" />
@@ -125,15 +128,15 @@
 				</div>
 			</div>
 		{:else}
-			<p class="text-xs text-muted-foreground italic">暂无自定义排除路径</p>
+			<p class="text-muted-foreground text-xs italic">暂无自定义排除路径</p>
 		{/if}
 
 		<!-- 预设的系统保护文件夹 -->
 		<div class="space-y-2 border-t pt-4">
-			<Label class="text-xs text-muted-foreground">预设的系统保护文件夹（自动排除）：</Label>
+			<Label class="text-muted-foreground text-xs">预设的系统保护文件夹（自动排除）：</Label>
 			<div class="flex flex-wrap gap-1">
 				{#each systemProtectedFolders as folder}
-					<span class="rounded bg-muted px-2 py-0.5 text-xs">{folder}</span>
+					<span class="bg-muted rounded px-2 py-0.5 text-xs">{folder}</span>
 				{/each}
 			</div>
 		</div>
@@ -141,7 +144,7 @@
 		<!-- 运行时黑名单信息 -->
 		<div class="space-y-2 border-t pt-4">
 			<div class="flex items-center justify-between">
-				<Label class="text-xs text-muted-foreground">
+				<Label class="text-muted-foreground text-xs">
 					运行时黑名单（访问失败的路径，重启后清空）：
 				</Label>
 				<div class="flex items-center gap-1">

@@ -12,7 +12,10 @@ import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { folderTreePinStore } from '$lib/stores/folderTreePin.svelte';
 import { unifiedHistoryStore } from '$lib/stores/unifiedHistory.svelte';
 import { historySettingsStore } from '$lib/stores/historySettings.svelte';
-import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+import {
+	folderTabActions,
+	isVirtualPath
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { externalNavigationRequest } from '$lib/components/panels/folderPanel/stores/folderPanelStore';
 import { directoryTreeCache } from '$lib/components/panels/folderPanel/utils/directoryTreeCache';
 import type { FolderContextValue } from '../folder/context/FolderContext.svelte';
@@ -22,7 +25,9 @@ import type { FolderContextValue } from '../folder/context/FolderContext.svelte'
 
 export function isVideoPath(path: string): boolean {
 	const ext = path.split('.').pop()?.toLowerCase() || '';
-	return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext);
+	return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(
+		ext
+	);
 }
 
 export function isImagePath(path: string): boolean {
@@ -70,7 +75,7 @@ export function createNavigationActions(
 	initialPath?: string
 ): NavigationActions {
 	const handleRefresh = () => {
-		const path = ctx.isVirtualInstance ? initialPath : get(ctx.currentPath) as string;
+		const path = ctx.isVirtualInstance ? initialPath : (get(ctx.currentPath) as string);
 		if (path) {
 			if (!isVirtualPath(path)) directoryTreeCache.invalidate(path);
 			ctx.navigationCommand.set({ type: 'init', path });
@@ -186,9 +191,9 @@ export function createItemOpenActions(
 			// 如果是快捷方式，使用目标路径
 			const effectivePath = item.targetPath || item.path;
 			// 对于 .lnk 文件，文件名可能需要特殊处理，但这里我们主要关心打开行为
-			
+
 			const isArchive = await FileSystemAPI.isSupportedArchive(effectivePath);
-			
+
 			if (isArchive) {
 				const historyEntry = unifiedHistoryStore.findByPath(effectivePath);
 				const initialPage = historyEntry?.currentIndex ?? 0;
@@ -196,17 +201,22 @@ export function createItemOpenActions(
 			} else if (isVideoPath(effectivePath) || item.isImage || isImagePath(effectivePath)) {
 				const lastSep = Math.max(effectivePath.lastIndexOf('/'), effectivePath.lastIndexOf('\\'));
 				const parentPath = lastSep > 0 ? effectivePath.substring(0, lastSep) : effectivePath;
-				
+
 				await bookStore.openDirectoryAsBook(parentPath, { skipHistory: true });
 				await bookStore.navigateToImage(effectivePath, { skipHistoryUpdate: true });
 				bookStore.setSingleFileMode(true, effectivePath);
-				
+
 				const name = item.name || effectivePath.split(/[\\/]/).pop() || effectivePath;
 				const currentPage = bookStore.currentPageIndex;
 				const totalPages = bookStore.currentBook?.totalPages || 1;
 				// 使用 pathStack 精确记录历史
 				const pathStack = bookStore.buildPathStack();
-				console.log('📝 [History] Adding video/image history with pathStack:', { pathStack, name, currentPage, totalPages });
+				console.log('📝 [History] Adding video/image history with pathStack:', {
+					pathStack,
+					name,
+					currentPage,
+					totalPages
+				});
 				unifiedHistoryStore.add(pathStack, currentPage, totalPages, { displayName: name });
 			} else {
 				// Fallback for other files
@@ -325,7 +335,9 @@ export function createDeleteActions(
 		if (failCount > 0) {
 			showErrorToast(
 				'部分删除失败',
-				firstError ? `成功 ${successCount} 个，失败 ${failCount} 个：${firstError}` : `成功 ${successCount} 个，失败 ${failCount} 个`
+				firstError
+					? `成功 ${successCount} 个，失败 ${failCount} 个：${firstError}`
+					: `成功 ${successCount} 个，失败 ${failCount} 个`
 			);
 		} else {
 			showSuccessToast('删除成功', `已删除 ${successCount} 个文件`);
@@ -423,7 +435,7 @@ export function createDeleteActions(
 				handleRefresh();
 				const tip =
 					restoredPaths.length === 1
-						? (restoredPaths[0].split(/[\\/]/).pop() || restoredPaths[0])
+						? restoredPaths[0].split(/[\\/]/).pop() || restoredPaths[0]
 						: `已恢复 ${restoredPaths.length} 项`;
 				showSuccessToast('撤回成功', tip);
 			} else {
@@ -495,11 +507,11 @@ export function createClipboardActions(
 
 		try {
 			const clipboardState = await ClipboardAPI.readFiles();
-			
+
 			if (clipboardState && clipboardState.files.length > 0) {
 				const { files, isCut } = clipboardState;
 				let successCount = 0;
-				
+
 				for (const src of files) {
 					try {
 						if (isCut) {
@@ -512,12 +524,12 @@ export function createClipboardActions(
 						console.error('[Clipboard] Paste failed for:', src, err);
 					}
 				}
-				
+
 				if (isCut) {
 					ClipboardAPI.clearCutState();
 					ctx.clipboardItem = null;
 				}
-				
+
 				handleRefresh();
 				const actionText = isCut ? '移动' : '复制';
 				if (successCount === files.length) {
@@ -527,11 +539,11 @@ export function createClipboardActions(
 				}
 				return;
 			}
-			
+
 			if (ctx.clipboardItem) {
 				const { paths, operation } = ctx.clipboardItem;
 				let successCount = 0;
-				
+
 				for (const src of paths) {
 					try {
 						if (operation === 'cut') {
@@ -544,11 +556,11 @@ export function createClipboardActions(
 						console.error('[Clipboard] Paste failed for:', src, err);
 					}
 				}
-				
+
 				if (operation === 'cut') {
 					ctx.clipboardItem = null;
 				}
-				
+
 				handleRefresh();
 				const actionText = operation === 'cut' ? '移动' : '复制';
 				if (successCount === paths.length) {
@@ -558,7 +570,7 @@ export function createClipboardActions(
 				}
 				return;
 			}
-			
+
 			showErrorToast('剪贴板为空', '没有可粘贴的文件');
 		} catch (err) {
 			console.error('[Clipboard] Paste error:', err);
@@ -687,14 +699,14 @@ export function createContextMenuActions(ctx: FolderContextValue): ContextMenuAc
 
 // ==================== 组合所有操作 ====================
 
-export interface AllFileActions extends 
-	NavigationActions, 
-	ItemOpenActions, 
-	DeleteActions, 
-	ClipboardActions, 
-	RenameActions, 
-	SystemActions, 
-	ContextMenuActions {
+export interface AllFileActions
+	extends NavigationActions,
+		ItemOpenActions,
+		DeleteActions,
+		ClipboardActions,
+		RenameActions,
+		SystemActions,
+		ContextMenuActions {
 	openConfirmDialog: ConfirmDialogOpener;
 }
 
@@ -705,7 +717,12 @@ export function createAllFileActions(
 	const openConfirmDialog = createConfirmDialogOpener(ctx);
 	const navigationActions = createNavigationActions(ctx, initialPath);
 	const itemOpenActions = createItemOpenActions(ctx, navigationActions.handleNavigate, initialPath);
-	const deleteActions = createDeleteActions(ctx, openConfirmDialog, navigationActions.handleRefresh, initialPath);
+	const deleteActions = createDeleteActions(
+		ctx,
+		openConfirmDialog,
+		navigationActions.handleRefresh,
+		initialPath
+	);
 	const clipboardActions = createClipboardActions(ctx, navigationActions.handleRefresh);
 	const renameActions = createRenameActions(ctx, navigationActions.handleRefresh);
 	const systemActions = createSystemActions();

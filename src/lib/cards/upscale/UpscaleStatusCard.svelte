@@ -1,161 +1,188 @@
 <script lang="ts">
-/**
- * 超分状态信息卡片
- * 实时显示当前图片的超分状态
- */
-import { Loader2, Check, X, SkipForward, ImageOff } from '@lucide/svelte';
-import { upscaleStore, type UpscaleStatus } from '$lib/stackview/stores/upscaleStore.svelte';
-import { bookStore } from '$lib/stores/book.svelte';
-import { registerBookPath, getArchiveImageUrl } from '$lib/api/imageProtocol';
-import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svelte';
+	/**
+	 * 超分状态信息卡片
+	 * 实时显示当前图片的超分状态
+	 */
+	import { Loader2, Check, X, SkipForward, ImageOff } from '@lucide/svelte';
+	import { upscaleStore, type UpscaleStatus } from '$lib/stackview/stores/upscaleStore.svelte';
+	import { bookStore } from '$lib/stores/book.svelte';
+	import { registerBookPath, getArchiveImageUrl } from '$lib/api/imageProtocol';
+	import { selectedModel, scale } from '$lib/stores/upscale/upscalePanelStore.svelte';
 
-// 当前页面索引
-let currentPageIndex = $derived(upscaleStore.currentPageIndex);
+	// 当前页面索引
+	let currentPageIndex = $derived(upscaleStore.currentPageIndex);
 
-// 当前页面完整状态（包含模型信息）
-let pageFullStatus = $derived(upscaleStore.getPageFullStatus(currentPageIndex));
+	// 当前页面完整状态（包含模型信息）
+	let pageFullStatus = $derived(upscaleStore.getPageFullStatus(currentPageIndex));
 
-// 当前页面状态
-let pageStatus = $derived(pageFullStatus?.status ?? null);
+	// 当前页面状态
+	let pageStatus = $derived(pageFullStatus?.status ?? null);
 
-// 是否有超分图
-let hasUpscaled = $derived(upscaleStore.isPageUpscaled(currentPageIndex));
+	// 是否有超分图
+	let hasUpscaled = $derived(upscaleStore.isPageUpscaled(currentPageIndex));
 
-// 是否使用超分图（对比模式）
-let useUpscaled = $state(true);
+	// 是否使用超分图（对比模式）
+	let useUpscaled = $state(true);
 
-// 是否显示预览图
-let showPreview = $state(false);
+	// 是否显示预览图
+	let showPreview = $state(false);
 
-// 是否显示放大对比面板
-let showZoomCompare = $state(false);
+	// 是否显示放大对比面板
+	let showZoomCompare = $state(false);
 
-// 浮窗尺寸和位置
-let floatWindow = $state({
-	width: 400,
-	height: 450,
-	x: 0, // 由 CSS right 控制，这里不用
-	y: 0,
-});
+	// 浮窗尺寸和位置
+	let floatWindow = $state({
+		width: 400,
+		height: 450,
+		x: 0, // 由 CSS right 控制，这里不用
+		y: 0
+	});
 
-// 拖拽调整大小逻辑
-let resizing = $state<string | null>(null);
-let startPos = { x: 0, y: 0, width: 0, height: 0 };
+	// 拖拽调整大小逻辑
+	let resizing = $state<string | null>(null);
+	let startPos = { x: 0, y: 0, width: 0, height: 0 };
 
-function startResize(e: MouseEvent, direction: string) {
-	e.preventDefault();
-	resizing = direction;
-	startPos = {
-		x: e.clientX,
-		y: e.clientY,
-		width: floatWindow.width,
-		height: floatWindow.height,
-	};
-	window.addEventListener('mousemove', onResize);
-	window.addEventListener('mouseup', stopResize);
-}
-
-function onResize(e: MouseEvent) {
-	if (!resizing) return;
-	
-	const dx = e.clientX - startPos.x;
-	const dy = e.clientY - startPos.y;
-	
-	let newWidth = startPos.width;
-	let newHeight = startPos.height;
-	
-	// 根据方向调整
-	if (resizing.includes('e')) newWidth = Math.max(200, startPos.width + dx);
-	if (resizing.includes('w')) newWidth = Math.max(200, startPos.width - dx);
-	if (resizing.includes('s')) newHeight = Math.max(200, startPos.height + dy);
-	if (resizing.includes('n')) newHeight = Math.max(200, startPos.height - dy);
-	
-	floatWindow.width = newWidth;
-	floatWindow.height = newHeight;
-}
-
-function stopResize() {
-	resizing = null;
-	window.removeEventListener('mousemove', onResize);
-	window.removeEventListener('mouseup', stopResize);
-}
-
-// 原图 URL（使用 protocol URL，同步版本）
-let bookHash = $state<string>('');
-$effect(() => {
-	const book = bookStore.currentBook;
-	if (book) {
-		registerBookPath(book.path).then(h => { bookHash = h; });
-	}
-});
-let originalUrl = $derived(bookHash ? getArchiveImageUrl(bookHash, currentPageIndex) : null);
-
-// 超分图 URL
-let upscaledUrl = $derived(upscaleStore.getPageUpscaleUrl(currentPageIndex));
-
-// 当前显示的 URL
-let displayUrl = $derived(useUpscaled && upscaledUrl ? upscaledUrl : originalUrl);
-
-// 当前图片尺寸（从 bookStore 元数据获取）
-let originalDimensions = $derived.by(() => {
-	const book = bookStore.currentBook;
-	const page = book?.pages?.[currentPageIndex];
-	if (!page?.width || !page?.height) return null;
-	return { width: page.width, height: page.height };
-});
-
-// 实际使用的模型名称（优先从状态获取，否则用默认值）
-let actualModelName = $derived(pageFullStatus?.modelName ?? selectedModel.value);
-
-// 实际使用的放大倍率（优先从状态获取，否则用默认值）
-let actualScale = $derived(pageFullStatus?.scale ?? scale.value);
-
-// 状态显示信息
-interface StatusInfo {
-	label: string;
-	color: string;
-	icon: typeof Check;
-	description: string;
-}
-
-function getStatusInfo(status: UpscaleStatus | null): StatusInfo {
-	switch (status) {
-		case 'pending':
-			return { label: '等待中', color: 'text-muted-foreground', icon: Loader2, description: '排队等待超分' };
-		case 'processing':
-			return { label: '超分中', color: 'text-blue-500', icon: Loader2, description: '正在进行超分处理' };
-		case 'completed':
-			return { label: '已完成', color: 'text-green-500', icon: Check, description: '超分完成' };
-		case 'skipped':
-			return { label: '已跳过', color: 'text-yellow-500', icon: SkipForward, description: '不符合条件，已跳过' };
-		case 'failed':
-			return { label: '失败', color: 'text-red-500', icon: X, description: '超分处理失败' };
-		case 'cancelled':
-			return { label: '已取消', color: 'text-muted-foreground', icon: X, description: '任务已取消' };
-		default:
-			return { label: '未超分', color: 'text-muted-foreground', icon: ImageOff, description: '尚未进行超分' };
-	}
-}
-
-let statusInfo = $derived(getStatusInfo(pageStatus));
-
-// 超分后尺寸（优先从状态获取，否则计算）
-let upscaledDimensions = $derived.by(() => {
-	// 优先使用后端返回的实际尺寸
-	if (pageFullStatus?.upscaledSize) {
-		return {
-			width: pageFullStatus.upscaledSize[0],
-			height: pageFullStatus.upscaledSize[1],
+	function startResize(e: MouseEvent, direction: string) {
+		e.preventDefault();
+		resizing = direction;
+		startPos = {
+			x: e.clientX,
+			y: e.clientY,
+			width: floatWindow.width,
+			height: floatWindow.height
 		};
+		window.addEventListener('mousemove', onResize);
+		window.addEventListener('mouseup', stopResize);
 	}
-	// 否则根据原图尺寸和倍率计算
-	if (!originalDimensions || !hasUpscaled) return null;
-	const s = actualScale || 2;
-	return {
-		width: originalDimensions.width * s,
-		height: originalDimensions.height * s,
-	};
-});
+
+	function onResize(e: MouseEvent) {
+		if (!resizing) return;
+
+		const dx = e.clientX - startPos.x;
+		const dy = e.clientY - startPos.y;
+
+		let newWidth = startPos.width;
+		let newHeight = startPos.height;
+
+		// 根据方向调整
+		if (resizing.includes('e')) newWidth = Math.max(200, startPos.width + dx);
+		if (resizing.includes('w')) newWidth = Math.max(200, startPos.width - dx);
+		if (resizing.includes('s')) newHeight = Math.max(200, startPos.height + dy);
+		if (resizing.includes('n')) newHeight = Math.max(200, startPos.height - dy);
+
+		floatWindow.width = newWidth;
+		floatWindow.height = newHeight;
+	}
+
+	function stopResize() {
+		resizing = null;
+		window.removeEventListener('mousemove', onResize);
+		window.removeEventListener('mouseup', stopResize);
+	}
+
+	// 原图 URL（使用 protocol URL，同步版本）
+	let bookHash = $state<string>('');
+	$effect(() => {
+		const book = bookStore.currentBook;
+		if (book) {
+			registerBookPath(book.path).then((h) => {
+				bookHash = h;
+			});
+		}
+	});
+	let originalUrl = $derived(bookHash ? getArchiveImageUrl(bookHash, currentPageIndex) : null);
+
+	// 超分图 URL
+	let upscaledUrl = $derived(upscaleStore.getPageUpscaleUrl(currentPageIndex));
+
+	// 当前显示的 URL
+	let displayUrl = $derived(useUpscaled && upscaledUrl ? upscaledUrl : originalUrl);
+
+	// 当前图片尺寸（从 bookStore 元数据获取）
+	let originalDimensions = $derived.by(() => {
+		const book = bookStore.currentBook;
+		const page = book?.pages?.[currentPageIndex];
+		if (!page?.width || !page?.height) return null;
+		return { width: page.width, height: page.height };
+	});
+
+	// 实际使用的模型名称（优先从状态获取，否则用默认值）
+	let actualModelName = $derived(pageFullStatus?.modelName ?? selectedModel.value);
+
+	// 实际使用的放大倍率（优先从状态获取，否则用默认值）
+	let actualScale = $derived(pageFullStatus?.scale ?? scale.value);
+
+	// 状态显示信息
+	interface StatusInfo {
+		label: string;
+		color: string;
+		icon: typeof Check;
+		description: string;
+	}
+
+	function getStatusInfo(status: UpscaleStatus | null): StatusInfo {
+		switch (status) {
+			case 'pending':
+				return {
+					label: '等待中',
+					color: 'text-muted-foreground',
+					icon: Loader2,
+					description: '排队等待超分'
+				};
+			case 'processing':
+				return {
+					label: '超分中',
+					color: 'text-blue-500',
+					icon: Loader2,
+					description: '正在进行超分处理'
+				};
+			case 'completed':
+				return { label: '已完成', color: 'text-green-500', icon: Check, description: '超分完成' };
+			case 'skipped':
+				return {
+					label: '已跳过',
+					color: 'text-yellow-500',
+					icon: SkipForward,
+					description: '不符合条件，已跳过'
+				};
+			case 'failed':
+				return { label: '失败', color: 'text-red-500', icon: X, description: '超分处理失败' };
+			case 'cancelled':
+				return {
+					label: '已取消',
+					color: 'text-muted-foreground',
+					icon: X,
+					description: '任务已取消'
+				};
+			default:
+				return {
+					label: '未超分',
+					color: 'text-muted-foreground',
+					icon: ImageOff,
+					description: '尚未进行超分'
+				};
+		}
+	}
+
+	let statusInfo = $derived(getStatusInfo(pageStatus));
+
+	// 超分后尺寸（优先从状态获取，否则计算）
+	let upscaledDimensions = $derived.by(() => {
+		// 优先使用后端返回的实际尺寸
+		if (pageFullStatus?.upscaledSize) {
+			return {
+				width: pageFullStatus.upscaledSize[0],
+				height: pageFullStatus.upscaledSize[1]
+			};
+		}
+		// 否则根据原图尺寸和倍率计算
+		if (!originalDimensions || !hasUpscaled) return null;
+		const s = actualScale || 2;
+		return {
+			width: originalDimensions.width * s,
+			height: originalDimensions.height * s
+		};
+	});
 </script>
 
 <div class="space-y-3 text-xs">
@@ -166,7 +193,7 @@ let upscaledDimensions = $derived.by(() => {
 	</div>
 
 	<!-- 超分状态 -->
-	<div class="p-2 rounded-lg bg-muted/50 space-y-2">
+	<div class="bg-muted/50 space-y-2 rounded-lg p-2">
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">状态</span>
 			<span class="flex items-center gap-1.5 {statusInfo.color}">
@@ -179,17 +206,17 @@ let upscaledDimensions = $derived.by(() => {
 				<span class="font-medium">{statusInfo.label}</span>
 			</span>
 		</div>
-		<p class="text-[10px] text-muted-foreground">{statusInfo.description}</p>
+		<p class="text-muted-foreground text-[10px]">{statusInfo.description}</p>
 	</div>
 
 	<!-- 模型信息 -->
 	{#if upscaleStore.enabled}
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">模型</span>
-			<span class="font-mono text-[10px] truncate max-w-30" title={actualModelName}>
+			<span class="max-w-30 truncate font-mono text-[10px]" title={actualModelName}>
 				{actualModelName}
 				{#if pageFullStatus?.modelName}
-					<span class="text-green-500 ml-1">✓</span>
+					<span class="ml-1 text-green-500">✓</span>
 				{/if}
 			</span>
 		</div>
@@ -198,7 +225,7 @@ let upscaledDimensions = $derived.by(() => {
 			<span class="font-mono">
 				{actualScale}x
 				{#if pageFullStatus?.scale}
-					<span class="text-green-500 ml-1">✓</span>
+					<span class="ml-1 text-green-500">✓</span>
 				{/if}
 			</span>
 		</div>
@@ -224,11 +251,17 @@ let upscaledDimensions = $derived.by(() => {
 	<div class="flex items-center justify-between">
 		<span class="text-muted-foreground">显示预览</span>
 		<button
-			class="relative w-8 h-4 rounded-full transition-colors {showPreview ? 'bg-primary' : 'bg-muted'}"
-			onclick={() => showPreview = !showPreview}
+			class="relative h-4 w-8 rounded-full transition-colors {showPreview
+				? 'bg-primary'
+				: 'bg-muted'}"
+			onclick={() => (showPreview = !showPreview)}
 			aria-label="切换预览显示"
 		>
-			<span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform {showPreview ? 'translate-x-4' : ''}"></span>
+			<span
+				class="absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform {showPreview
+					? 'translate-x-4'
+					: ''}"
+			></span>
 		</button>
 	</div>
 
@@ -237,21 +270,23 @@ let upscaledDimensions = $derived.by(() => {
 		<div class="space-y-2">
 			<!-- 点击切换原图/超分图 -->
 			<button
-				class="w-full rounded-lg overflow-hidden border border-border/50 hover:border-primary/50 transition-colors"
-				onclick={() => { if (hasUpscaled) useUpscaled = !useUpscaled; }}
+				class="border-border/50 hover:border-primary/50 w-full overflow-hidden rounded-lg border transition-colors"
+				onclick={() => {
+					if (hasUpscaled) useUpscaled = !useUpscaled;
+				}}
 				disabled={!hasUpscaled}
 				aria-label="切换原图/超分图对比"
 			>
 				<img
 					src={displayUrl}
 					alt={useUpscaled && hasUpscaled ? '超分图' : '原图'}
-					class="w-full h-auto max-h-50 object-contain bg-muted/30"
+					class="bg-muted/30 h-auto max-h-50 w-full object-contain"
 				/>
 			</button>
 			<!-- 当前显示状态 -->
 			<div class="flex items-center justify-center gap-2 text-[10px]">
 				{#if hasUpscaled}
-					<span class="{useUpscaled ? 'text-green-500 font-medium' : 'text-muted-foreground'}">
+					<span class={useUpscaled ? 'font-medium text-green-500' : 'text-muted-foreground'}>
 						{useUpscaled ? '🔍 超分图' : '📷 原图'}
 					</span>
 					<span class="text-muted-foreground">（点击图片切换）</span>
@@ -261,9 +296,7 @@ let upscaledDimensions = $derived.by(() => {
 			</div>
 		</div>
 	{:else if showPreview && !displayUrl}
-		<div class="p-4 text-center text-muted-foreground bg-muted/30 rounded-lg">
-			暂无图片
-		</div>
+		<div class="text-muted-foreground bg-muted/30 rounded-lg p-4 text-center">暂无图片</div>
 	{/if}
 
 	<!-- 放大对比开关（仅在有超分图时显示） -->
@@ -271,11 +304,17 @@ let upscaledDimensions = $derived.by(() => {
 		<div class="flex items-center justify-between">
 			<span class="text-muted-foreground">放大对比</span>
 			<button
-				class="relative w-8 h-4 rounded-full transition-colors {showZoomCompare ? 'bg-primary' : 'bg-muted'}"
-				onclick={() => showZoomCompare = !showZoomCompare}
+				class="relative h-4 w-8 rounded-full transition-colors {showZoomCompare
+					? 'bg-primary'
+					: 'bg-muted'}"
+				onclick={() => (showZoomCompare = !showZoomCompare)}
 				aria-label="切换放大对比面板"
 			>
-				<span class="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform {showZoomCompare ? 'translate-x-4' : ''}"></span>
+				<span
+					class="absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform {showZoomCompare
+						? 'translate-x-4'
+						: ''}"
+				></span>
 			</button>
 		</div>
 	{/if}
@@ -287,17 +326,17 @@ let upscaledDimensions = $derived.by(() => {
 			<span>正在超分处理...</span>
 		</div>
 	{:else if !upscaleStore.enabled}
-		<p class="text-center text-muted-foreground py-2">
-			超分功能未启用
-		</p>
+		<p class="text-muted-foreground py-2 text-center">超分功能未启用</p>
 	{/if}
 
 	<!-- 服务统计 -->
 	{#if upscaleStore.enabled}
-		<div class="pt-2 border-t border-border/50 space-y-1 text-[10px] text-muted-foreground">
+		<div class="border-border/50 text-muted-foreground space-y-1 border-t pt-2 text-[10px]">
 			<div class="flex justify-between">
 				<span>队列</span>
-				<span>{upscaleStore.stats.pendingTasks} 等待 / {upscaleStore.stats.processingTasks} 处理中</span>
+				<span
+					>{upscaleStore.stats.pendingTasks} 等待 / {upscaleStore.stats.processingTasks} 处理中</span
+				>
 			</div>
 			<div class="flex justify-between">
 				<span>统计</span>
@@ -315,25 +354,65 @@ let upscaledDimensions = $derived.by(() => {
 
 <!-- 可调整大小的浮窗对比 -->
 {#if showZoomCompare && hasUpscaled && originalUrl && upscaledUrl}
-	<div 
-		class="fixed z-50 bg-background/95 backdrop-blur-sm border border-border rounded-lg shadow-2xl overflow-hidden"
+	<div
+		class="bg-background/95 border-border fixed z-50 overflow-hidden rounded-lg border shadow-2xl backdrop-blur-sm"
 		style="right: 16px; top: 50%; transform: translateY(-50%); width: {floatWindow.width}px; height: {floatWindow.height}px;"
 	>
 		<!-- 调整大小手柄 -->
 		<!-- 四边 -->
-		<button type="button" class="absolute top-0 left-2 right-2 h-1 cursor-n-resize hover:bg-primary/30" aria-label="向上调整大小" onmousedown={(e) => startResize(e, 'n')}></button>
-		<button type="button" class="absolute bottom-0 left-2 right-2 h-1 cursor-s-resize hover:bg-primary/30" aria-label="向下调整大小" onmousedown={(e) => startResize(e, 's')}></button>
-		<button type="button" class="absolute left-0 top-2 bottom-2 w-1 cursor-w-resize hover:bg-primary/30" aria-label="向左调整大小" onmousedown={(e) => startResize(e, 'w')}></button>
-		<button type="button" class="absolute right-0 top-2 bottom-2 w-1 cursor-e-resize hover:bg-primary/30" aria-label="向右调整大小" onmousedown={(e) => startResize(e, 'e')}></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute top-0 right-2 left-2 h-1 cursor-n-resize"
+			aria-label="向上调整大小"
+			onmousedown={(e) => startResize(e, 'n')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute right-2 bottom-0 left-2 h-1 cursor-s-resize"
+			aria-label="向下调整大小"
+			onmousedown={(e) => startResize(e, 's')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute top-2 bottom-2 left-0 w-1 cursor-w-resize"
+			aria-label="向左调整大小"
+			onmousedown={(e) => startResize(e, 'w')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute top-2 right-0 bottom-2 w-1 cursor-e-resize"
+			aria-label="向右调整大小"
+			onmousedown={(e) => startResize(e, 'e')}
+		></button>
 		<!-- 四角 -->
-		<button type="button" class="absolute top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-primary/30" aria-label="左上角调整大小" onmousedown={(e) => startResize(e, 'nw')}></button>
-		<button type="button" class="absolute top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-primary/30" aria-label="右上角调整大小" onmousedown={(e) => startResize(e, 'ne')}></button>
-		<button type="button" class="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-primary/30" aria-label="左下角调整大小" onmousedown={(e) => startResize(e, 'sw')}></button>
-		<button type="button" class="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-primary/30" aria-label="右下角调整大小" onmousedown={(e) => startResize(e, 'se')}></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute top-0 left-0 h-3 w-3 cursor-nw-resize"
+			aria-label="左上角调整大小"
+			onmousedown={(e) => startResize(e, 'nw')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute top-0 right-0 h-3 w-3 cursor-ne-resize"
+			aria-label="右上角调整大小"
+			onmousedown={(e) => startResize(e, 'ne')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize"
+			aria-label="左下角调整大小"
+			onmousedown={(e) => startResize(e, 'sw')}
+		></button>
+		<button
+			type="button"
+			class="hover:bg-primary/30 absolute right-0 bottom-0 h-3 w-3 cursor-se-resize"
+			aria-label="右下角调整大小"
+			onmousedown={(e) => startResize(e, 'se')}
+		></button>
 
 		<!-- 标题栏 -->
-		<div class="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/30">
-			<span class="text-xs font-medium flex items-center gap-1.5">
+		<div class="border-border/50 bg-muted/30 flex items-center justify-between border-b px-3 py-2">
+			<span class="flex items-center gap-1.5 text-xs font-medium">
 				{#if useUpscaled}
 					<span class="text-green-500">🔍 超分图</span>
 				{:else}
@@ -341,34 +420,36 @@ let upscaledDimensions = $derived.by(() => {
 				{/if}
 			</span>
 			<button
-				class="w-5 h-5 flex items-center justify-center rounded hover:bg-muted"
-				onclick={() => showZoomCompare = false}
+				class="hover:bg-muted flex h-5 w-5 items-center justify-center rounded"
+				onclick={() => (showZoomCompare = false)}
 				aria-label="关闭对比浮窗"
 			>
 				<X class="h-3.5 w-3.5" />
 			</button>
 		</div>
-		
+
 		<!-- 可点击切换的图片 -->
-		<button 
-			class="w-full h-[calc(100%-60px)] flex items-center justify-center bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
-			onclick={() => useUpscaled = !useUpscaled}
+		<button
+			class="bg-muted/20 hover:bg-muted/40 flex h-[calc(100%-60px)] w-full cursor-pointer items-center justify-center transition-colors"
+			onclick={() => (useUpscaled = !useUpscaled)}
 			aria-label="点击切换原图/超分图"
 		>
 			<img
 				src={useUpscaled ? upscaledUrl : originalUrl}
 				alt={useUpscaled ? '超分图' : '原图'}
-				class="max-w-full max-h-full object-contain"
+				class="max-h-full max-w-full object-contain"
 			/>
 		</button>
-		
+
 		<!-- 底部信息 -->
-		<div class="absolute bottom-0 left-0 right-0 px-3 py-1.5 bg-background/80 border-t border-border/50 text-[10px] flex justify-between items-center">
+		<div
+			class="bg-background/80 border-border/50 absolute right-0 bottom-0 left-0 flex items-center justify-between border-t px-3 py-1.5 text-[10px]"
+		>
 			<span class="text-muted-foreground">
-				{useUpscaled && upscaledDimensions 
-					? `${upscaledDimensions.width}×${upscaledDimensions.height}` 
-					: originalDimensions 
-						? `${originalDimensions.width}×${originalDimensions.height}` 
+				{useUpscaled && upscaledDimensions
+					? `${upscaledDimensions.width}×${upscaledDimensions.height}`
+					: originalDimensions
+						? `${originalDimensions.width}×${originalDimensions.height}`
 						: ''}
 			</span>
 			<span class="text-muted-foreground">点击切换 | 拖拽边缘调整</span>

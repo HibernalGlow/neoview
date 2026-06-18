@@ -182,14 +182,14 @@
 		<!-- 页签列表 -->
 		<Tabs.List
 			class={isVertical
-				? 'flex flex-col h-auto gap-1 bg-transparent p-0 w-full'
+				? 'flex h-auto w-full flex-col gap-1 bg-transparent p-0'
 				: 'flex h-auto flex-wrap gap-1 bg-transparent p-0'}
 		>
 			{#each $allTabs as tab (tab.id)}
 				<Tabs.Trigger
 					value={tab.id}
 					class={isVertical
-						? 'group h-7 w-full gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm justify-start'
+						? 'group h-7 w-full justify-start gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm'
 						: 'group h-7 max-w-[180px] min-w-[80px] gap-1 rounded-md px-2.5 text-xs data-[state=active]:shadow-sm'}
 					onauxclick={(e) => handleMiddleClick(tab.id, e)}
 					title={tab.currentPath || tab.title}
@@ -197,7 +197,7 @@
 					<!-- 点击图标触发下拉菜单 -->
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger
-							class="flex items-center justify-center shrink-0 hover:bg-accent rounded p-0.5 -ml-1"
+							class="hover:bg-accent -ml-1 flex shrink-0 items-center justify-center rounded p-0.5"
 							onclick={(e: MouseEvent) => e.stopPropagation()}
 						>
 							{#if tab.pinned}

@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 卡片管理卡片
- */
-import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
+	/**
+	 * 卡片管理卡片
+	 */
+	import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import CardPanelManager from '$lib/components/settings/CardPanelManager.svelte';
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

@@ -7,7 +7,10 @@ import type { FsItem } from '$lib/types';
 import type { FolderState } from './useFolderState.svelte';
 import type { ConfirmDialogConfig } from '../types';
 import { get } from 'svelte/store';
-import { folderTabActions, isVirtualPath } from '$lib/components/panels/folderPanel/stores/folderTabStore';
+import {
+	folderTabActions,
+	isVirtualPath
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import { bookStore } from '$lib/stores/book.svelte';
 import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 import { FileSystemAPI } from '$lib/api';
@@ -79,7 +82,9 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 
 	function isVideoPath(path: string): boolean {
 		const ext = path.split('.').pop()?.toLowerCase() || '';
-		return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(ext);
+		return ['mp4', 'mkv', 'avi', 'mov', 'nov', 'flv', 'webm', 'wmv', 'm4v', 'mpg', 'mpeg'].includes(
+			ext
+		);
 	}
 
 	function isImagePath(path: string): boolean {
@@ -126,7 +131,9 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 	async function executeBatchDelete(paths: string[]) {
 		// 虚拟路径模式：从书签/历史中移除
 		if (state.isVirtualInstance && initialPath) {
-			const { removeVirtualPathItem } = await import('$lib/components/panels/folderPanel/utils/virtualPathLoader');
+			const { removeVirtualPathItem } = await import(
+				'$lib/components/panels/folderPanel/utils/virtualPathLoader'
+			);
 			let successCount = 0;
 			for (const path of paths) {
 				if (removeVirtualPathItem(initialPath, path)) {
@@ -173,7 +180,9 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 	async function executeSingleDelete(item: FsItem) {
 		// 虚拟路径模式：从书签/历史中移除
 		if (state.isVirtualInstance && initialPath) {
-			const { removeVirtualPathItem } = await import('$lib/components/panels/folderPanel/utils/virtualPathLoader');
+			const { removeVirtualPathItem } = await import(
+				'$lib/components/panels/folderPanel/utils/virtualPathLoader'
+			);
 			removeVirtualPathItem(initialPath, item.path);
 			const typeText = initialPath.includes('bookmark') ? '书签' : '历史';
 			showSuccessToast('移除成功', `已从${typeText}中移除`);
@@ -206,7 +215,11 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		const isVirtualMode = state.isVirtualInstance && initialPath;
 		const typeText = isVirtualMode ? (initialPath!.includes('bookmark') ? '书签' : '历史') : '';
 		const strategy = get(state.deleteStrategy);
-		const actionText = isVirtualMode ? `从${typeText}移除` : (strategy === 'trash' ? '删除' : '永久删除');
+		const actionText = isVirtualMode
+			? `从${typeText}移除`
+			: strategy === 'trash'
+				? '删除'
+				: '永久删除';
 
 		// 勾选模式下批量删除
 		if (get(state.multiSelectMode) && selected.size > 0) {
@@ -252,7 +265,11 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		const isVirtualMode = state.isVirtualInstance && initialPath;
 		const typeText = isVirtualMode ? (initialPath!.includes('bookmark') ? '书签' : '历史') : '';
 		const strategy = get(state.deleteStrategy);
-		const actionText = isVirtualMode ? `从${typeText}移除` : (strategy === 'trash' ? '删除' : '永久删除');
+		const actionText = isVirtualMode
+			? `从${typeText}移除`
+			: strategy === 'trash'
+				? '删除'
+				: '永久删除';
 		const paths = Array.from(selected);
 
 		openConfirmDialog({

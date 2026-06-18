@@ -136,24 +136,31 @@
 	}
 </script>
 
-<div class="list-slider-container group/slider flex flex-col items-center h-full transition-all duration-200">
+<div
+	class="list-slider-container group/slider flex h-full flex-col items-center transition-all duration-200"
+>
 	<!-- 回顶按钮（悬停显示） -->
 	<button
-		class="h-0 overflow-hidden group-hover/slider:h-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
-		onclick={() => { onScrollToProgress?.(0); onJumpToIndex?.(0); }}
+		class="hover:bg-accent text-muted-foreground hover:text-foreground h-0 overflow-hidden rounded p-0 transition-all group-hover/slider:h-auto group-hover/slider:p-0.5"
+		onclick={() => {
+			onScrollToProgress?.(0);
+			onJumpToIndex?.(0);
+		}}
 		title="回到顶部"
 	>
 		<ChevronsUp class="h-3 w-3" />
 	</button>
 
 	<!-- 索引显示（悬停显示） -->
-	<div class="h-0 overflow-hidden group-hover/slider:h-auto text-[9px] text-muted-foreground font-mono transition-all">
+	<div
+		class="text-muted-foreground h-0 overflow-hidden font-mono text-[9px] transition-all group-hover/slider:h-auto"
+	>
 		{#if showInput && showIndexInput}
 			<input
 				type="number"
 				min="1"
 				max={totalItems}
-				class="w-8 h-4 text-center text-[8px] rounded border bg-background"
+				class="bg-background h-4 w-8 rounded border text-center text-[8px]"
 				bind:value={inputValue}
 				onkeydown={handleInputKeydown}
 				onblur={handleInputBlur}
@@ -172,8 +179,8 @@
 	<!-- 滑块轨道 -->
 	<div
 		bind:this={sliderRef}
-		class="slider-track relative flex-1 rounded-full bg-muted/40 cursor-pointer transition-all duration-200
-			w-[3px] group-hover/slider:w-2.5"
+		class="slider-track bg-muted/40 relative w-[3px] flex-1 cursor-pointer rounded-full transition-all
+			duration-200 group-hover/slider:w-2.5"
 		onclick={handleTrackClick}
 		onwheel={handleWheel}
 		onkeydown={handleTrackKeydown}
@@ -185,29 +192,37 @@
 	>
 		<!-- 已滚动区域 -->
 		<div
-			class="absolute left-0 right-0 top-0 rounded-t-full bg-primary/30"
+			class="bg-primary/30 absolute top-0 right-0 left-0 rounded-t-full"
 			style="height: {thumbPosition}%"
 		></div>
 
 		<!-- 滑块 -->
 		<div
-			class="slider-thumb absolute left-0 right-0 rounded-full transition-colors
+			class="slider-thumb absolute right-0 left-0 rounded-full transition-colors
 				{isDragging ? 'bg-primary' : 'bg-primary/60 hover:bg-primary'}"
-			style="top: {thumbPosition}%; height: {Math.max(6, thumbHeight)}%; min-height: 10px; transform: translateY(-50%);"
+			style="top: {thumbPosition}%; height: {Math.max(
+				6,
+				thumbHeight
+			)}%; min-height: 10px; transform: translateY(-50%);"
 			onmousedown={handleThumbMouseDown}
 			role="presentation"
 		></div>
 	</div>
 
 	<!-- 总数显示（悬停显示） -->
-	<div class="h-0 overflow-hidden group-hover/slider:h-auto text-[9px] text-muted-foreground font-mono transition-all">
+	<div
+		class="text-muted-foreground h-0 overflow-hidden font-mono text-[9px] transition-all group-hover/slider:h-auto"
+	>
 		{totalItems}
 	</div>
 
 	<!-- 回底按钮（悬停显示） -->
 	<button
-		class="h-0 overflow-hidden group-hover/slider:h-auto p-0 group-hover/slider:p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-all"
-		onclick={() => { onScrollToProgress?.(1); onJumpToIndex?.(totalItems - 1); }}
+		class="hover:bg-accent text-muted-foreground hover:text-foreground h-0 overflow-hidden rounded p-0 transition-all group-hover/slider:h-auto group-hover/slider:p-0.5"
+		onclick={() => {
+			onScrollToProgress?.(1);
+			onJumpToIndex?.(totalItems - 1);
+		}}
 		title="回到底部"
 	>
 		<ChevronsDown class="h-3 w-3" />

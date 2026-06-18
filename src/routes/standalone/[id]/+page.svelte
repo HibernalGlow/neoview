@@ -20,7 +20,7 @@
 		// 从URL参数获取窗口ID
 		const pathSegments = $page.url.pathname.split('/');
 		windowId = pathSegments[pathSegments.length - 1];
-		
+
 		// 根据窗口ID设置标题和内容
 		switch (windowId) {
 			case 'left-sidebar':
@@ -92,22 +92,32 @@
 	async function getPanelComponent() {
 		switch (panelContent) {
 			case 'folder':
-				const { default: FolderPanel } = await import('$lib/components/panels/folderPanel/FolderPanel.svelte');
+				const { default: FolderPanel } = await import(
+					'$lib/components/panels/folderPanel/FolderPanel.svelte'
+				);
 				return FolderPanel;
 			case 'history':
-				const { default: HistoryPanel } = await import('$lib/components/panels/HistoryPanel.svelte');
+				const { default: HistoryPanel } = await import(
+					'$lib/components/panels/HistoryPanel.svelte'
+				);
 				return HistoryPanel;
 			case 'bookmark':
-				const { default: BookmarkPanel } = await import('$lib/components/panels/BookmarkPanel.svelte');
+				const { default: BookmarkPanel } = await import(
+					'$lib/components/panels/BookmarkPanel.svelte'
+				);
 				return BookmarkPanel;
 			case 'info':
 				const { default: InfoPanel } = await import('$lib/components/panels/InfoPanel.svelte');
 				return InfoPanel;
 			case 'properties':
-				const { default: ImagePropertiesPanel } = await import('$lib/components/panels/ImagePropertiesPanel.svelte');
+				const { default: ImagePropertiesPanel } = await import(
+					'$lib/components/panels/ImagePropertiesPanel.svelte'
+				);
 				return ImagePropertiesPanel;
 			case 'thumbnails':
-				const { default: BottomThumbnailBar } = await import('$lib/components/layout/BottomThumbnailBar.svelte');
+				const { default: BottomThumbnailBar } = await import(
+					'$lib/components/layout/BottomThumbnailBar.svelte'
+				);
 				return BottomThumbnailBar;
 			default:
 				return null;
@@ -127,9 +137,11 @@
 	<title>{windowTitle} - NeoView</title>
 </svelte:head>
 
-<div class="h-screen w-screen flex flex-col bg-background">
+<div class="bg-background flex h-screen w-screen flex-col">
 	<!-- 标题栏 -->
-	<div class="h-8 bg-secondary/95 backdrop-blur-sm flex items-center justify-between px-2 select-none border-b">
+	<div
+		class="bg-secondary/95 flex h-8 items-center justify-between border-b px-2 backdrop-blur-sm select-none"
+	>
 		<span class="text-sm font-semibold">{windowTitle}</span>
 		<div class="flex items-center gap-1">
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={minimizeWindow}>
@@ -138,7 +150,12 @@
 			<Button variant="ghost" size="icon" class="h-6 w-6" onclick={maximizeWindow}>
 				<Maximize class="h-3 w-3" />
 			</Button>
-			<Button variant="ghost" size="icon" class="h-6 w-6 hover:bg-destructive" onclick={closeWindow}>
+			<Button
+				variant="ghost"
+				size="icon"
+				class="hover:bg-destructive h-6 w-6"
+				onclick={closeWindow}
+			>
 				<X class="h-4 w-4" />
 			</Button>
 		</div>
@@ -157,17 +174,17 @@
 				<PanelComponent />
 			{/if}
 		{:else if panelContent === 'thumbnail'}
-			<div class="p-4 text-center text-muted-foreground">
+			<div class="text-muted-foreground p-4 text-center">
 				<p>缩略图面板</p>
-				<p class="text-xs mt-2">开发中...</p>
+				<p class="mt-2 text-xs">开发中...</p>
 			</div>
 		{:else if panelContent === 'playlist'}
-			<div class="p-4 text-center text-muted-foreground">
+			<div class="text-muted-foreground p-4 text-center">
 				<p>播放列表面板</p>
-				<p class="text-xs mt-2">开发中...</p>
+				<p class="mt-2 text-xs">开发中...</p>
 			</div>
 		{:else}
-			<div class="p-4 text-center text-muted-foreground">
+			<div class="text-muted-foreground p-4 text-center">
 				<p>选择一个面板</p>
 			</div>
 		{/if}

@@ -33,7 +33,6 @@
 	import { getArchiveImageUrl } from '$lib/api/imageProtocol';
 	import { getBookHash } from '$lib/components/viewer/flow/imageReader';
 
-
 	// 视频操作事件监听器
 	let viewerActionListener: ((event: CustomEvent) => void) | null = null;
 
@@ -44,11 +43,7 @@
 		onError?: (error: any) => void;
 	}
 
-	let {
-		page = null,
-		onEnded = () => {},
-		onError = (error: any) => {}
-	}: Props = $props();
+	let { page = null, onEnded = () => {}, onError = (error: any) => {} }: Props = $props();
 
 	// 视频播放器引用
 	let videoPlayerRef = $state<any>(null);
@@ -211,9 +206,9 @@
 				// 【优化】使用 neoview:// 协议直连，避免磁盘解压等待
 				const archivePath = bookStore.currentBook.path;
 				const bookHash = await getBookHash(archivePath);
-				
+
 				if (requestId !== currentVideoRequestId) return;
-				
+
 				// 如果有 entryIndex，使用 protocol 直连
 				if (videoPage.entryIndex != null) {
 					const url = getArchiveImageUrl(bookHash, videoPage.entryIndex);
@@ -330,9 +325,9 @@
 			const pathStack = bookStore.buildPathStack();
 			unifiedHistoryStore.updateVideoProgress(
 				pathStack,
-				clampedTime,       // 真实的当前时间（秒）
-				safeDuration,      // 真实的总时长（秒）
-				completed          // 是否已完成
+				clampedTime, // 真实的当前时间（秒）
+				safeDuration, // 真实的总时长（秒）
+				completed // 是否已完成
 			);
 		} catch (err) {
 			console.error('Failed to update video progress history:', err);
@@ -438,7 +433,11 @@
 
 	// 暴露控制方法
 	export function playPause() {
-		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.playPause === 'function') {
+		if (
+			frontendAnimatedUrl &&
+			animatedPlayerRef &&
+			typeof animatedPlayerRef.playPause === 'function'
+		) {
 			animatedPlayerRef.playPause();
 			return;
 		}
@@ -448,7 +447,11 @@
 	}
 
 	export function seekForward() {
-		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.seekForward === 'function') {
+		if (
+			frontendAnimatedUrl &&
+			animatedPlayerRef &&
+			typeof animatedPlayerRef.seekForward === 'function'
+		) {
 			animatedPlayerRef.seekForward();
 			return;
 		}
@@ -458,7 +461,11 @@
 	}
 
 	export function seekBackward() {
-		if (frontendAnimatedUrl && animatedPlayerRef && typeof animatedPlayerRef.seekBackward === 'function') {
+		if (
+			frontendAnimatedUrl &&
+			animatedPlayerRef &&
+			typeof animatedPlayerRef.seekBackward === 'function'
+		) {
 			animatedPlayerRef.seekBackward();
 			return;
 		}

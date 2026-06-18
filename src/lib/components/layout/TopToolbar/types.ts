@@ -26,7 +26,14 @@ export interface ZoomModeOption {
 /**
  * 自动旋转模式类型
  */
-export type AutoRotateMode = 'none' | 'left' | 'right' | 'horizontalLeft' | 'horizontalRight' | 'forcedLeft' | 'forcedRight';
+export type AutoRotateMode =
+	| 'none'
+	| 'left'
+	| 'right'
+	| 'horizontalLeft'
+	| 'horizontalRight'
+	| 'forcedLeft'
+	| 'forcedRight';
 
 /**
  * 排序面板属性

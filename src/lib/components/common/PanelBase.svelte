@@ -56,7 +56,7 @@
 </script>
 
 <div
-	class="bg-background border rounded-lg shadow-sm overflow-hidden {className}"
+	class="bg-background overflow-hidden rounded-lg border shadow-sm {className}"
 	role="region"
 	aria-labelledby="panel-title"
 >
@@ -64,8 +64,8 @@
 	{#if collapsible}
 		<button
 			type="button"
-			class="flex items-center justify-between w-full px-4 py-3 border-b bg-muted/30 
-				   cursor-pointer hover:bg-muted/50 transition-colors select-none text-left"
+			class="bg-muted/30 hover:bg-muted/50 flex w-full cursor-pointer items-center justify-between border-b
+				   px-4 py-3 text-left transition-colors select-none"
 			onclick={toggleCollapse}
 			aria-expanded={!isCollapsed}
 			aria-controls="panel-content"
@@ -96,7 +96,7 @@
 		</button>
 	{:else}
 		<!-- 面板头部 - 不可折叠模式使用 div -->
-		<div class="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+		<div class="bg-muted/30 flex items-center justify-between border-b px-4 py-3">
 			<div class="flex items-center gap-2">
 				<!-- 标题 -->
 				<h3 id="panel-title" class="text-sm font-medium">
@@ -117,7 +117,7 @@
 	<div
 		id="panel-content"
 		class="transition-all duration-200 ease-out {isCollapsed
-			? 'max-h-0 opacity-0 overflow-hidden'
+			? 'max-h-0 overflow-hidden opacity-0'
 			: 'max-h-500 opacity-100'}"
 	>
 		<div class="p-4">

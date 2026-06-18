@@ -32,7 +32,7 @@
 
 		<!-- 顶部悬停区域 -->
 		<div
-			class="absolute left-0 right-0 top-0 flex justify-center"
+			class="absolute top-0 right-0 left-0 flex justify-center"
 			style={`height: ${hoverAreas.topTriggerHeight || 4}px;`}
 		>
 			<div class="h-full w-full border-b border-white/70 bg-white/15"></div>
@@ -40,7 +40,7 @@
 
 		<!-- 底部悬停区域 -->
 		<div
-			class="absolute bottom-0 left-0 right-0 flex justify-center"
+			class="absolute right-0 bottom-0 left-0 flex justify-center"
 			style={`height: ${hoverAreas.bottomTriggerHeight || 4}px;`}
 		>
 			<div class="h-full w-full border-t border-white/70 bg-white/15"></div>
@@ -48,7 +48,7 @@
 
 		<!-- 左侧悬停区域 -->
 		<div
-			class="absolute bottom-0 left-0 top-0 flex items-center"
+			class="absolute top-0 bottom-0 left-0 flex items-center"
 			style={`width: ${hoverAreas.leftTriggerWidth || 32}px;`}
 		>
 			<div class="h-full w-full border-r border-white/70 bg-white/15"></div>
@@ -56,7 +56,7 @@
 
 		<!-- 右侧悬停区域 -->
 		<div
-			class="absolute bottom-0 right-0 top-0 flex items-center justify-end"
+			class="absolute top-0 right-0 bottom-0 flex items-center justify-end"
 			style={`width: ${hoverAreas.rightTriggerWidth || 32}px;`}
 		>
 			<div class="h-full w-full border-l border-white/70 bg-white/15"></div>

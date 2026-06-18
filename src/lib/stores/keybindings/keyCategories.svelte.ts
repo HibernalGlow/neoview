@@ -11,7 +11,7 @@ import type {
 	BindingContext,
 	ActionBinding,
 	BindingWithContext,
-	ActionWithBinding,
+	ActionWithBinding
 } from './types';
 import { CONTEXT_NAMES, AREA_NAMES, BUTTON_NAMES, ACTION_NAMES } from './constants';
 
@@ -19,7 +19,10 @@ export function getCategories(bindings: ActionBinding[]): string[] {
 	return [...new Set(bindings.map((b) => b.category))];
 }
 
-export function getBindingsByCategory(bindings: ActionBinding[], category: string): ActionBinding[] {
+export function getBindingsByCategory(
+	bindings: ActionBinding[],
+	category: string
+): ActionBinding[] {
 	return bindings.filter((b) => b.category === category);
 }
 

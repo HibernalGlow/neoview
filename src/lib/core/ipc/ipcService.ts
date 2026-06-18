@@ -14,14 +14,20 @@ export class IpcService {
 		this.mockCommands = options.mockCommands;
 	}
 
-	async invoke<TResult = unknown>(command: string, payload?: Record<string, unknown>): Promise<TResult> {
+	async invoke<TResult = unknown>(
+		command: string,
+		payload?: Record<string, unknown>
+	): Promise<TResult> {
 		if (this.mockCommands && this.mockCommands[command]) {
 			return (this.mockCommands[command] as (...args: any[]) => Promise<TResult>)(payload);
 		}
 		return tauriInvoke<TResult>(command, payload);
 	}
 
-	async on<TPayload = unknown>(event: string, handler: (payload: TPayload) => void): Promise<() => void> {
+	async on<TPayload = unknown>(
+		event: string,
+		handler: (payload: TPayload) => void
+	): Promise<() => void> {
 		const unlisten = await listen<TPayload>(event, (emitted) => handler(emitted.payload));
 		return () => {
 			void unlisten();
@@ -30,13 +36,3 @@ export class IpcService {
 }
 
 export const ipcService = new IpcService();
-
-
-
-
-
-
-
-
-
-

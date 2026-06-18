@@ -123,13 +123,13 @@
 </script>
 
 <!-- 设置内容（无固定定位，填充父容器） -->
-<div class="flex h-full w-full flex-col text-foreground">
+<div class="text-foreground flex h-full w-full flex-col">
 	<!-- 主内容区 -->
 	<div class="flex flex-1 overflow-hidden">
 		<!-- 左侧标签栏 - 带 Dock 放大效果 -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="w-12 sm:w-40 shrink-0 space-y-1 border-r p-1.5 overflow-x-hidden overflow-y-auto"
+			class="w-12 shrink-0 space-y-1 overflow-x-hidden overflow-y-auto border-r p-1.5 sm:w-40"
 			style="background-color: color-mix(in oklch, var(--sidebar) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 			onmousemove={handleSidebarMouseMove}
 			onmouseleave={handleSidebarMouseLeave}
@@ -139,7 +139,7 @@
 				{@const scale = getIconScale(index)}
 				<button
 					bind:this={tabRefs[index]}
-					class="hover:bg-accent flex w-full items-center justify-center sm:justify-start gap-0 sm:gap-2.5 rounded-lg px-0 sm:px-3 py-2.5 transition-all {activeTab ===
+					class="hover:bg-accent flex w-full items-center justify-center gap-0 rounded-lg px-0 py-2.5 transition-all sm:justify-start sm:gap-2.5 sm:px-3 {activeTab ===
 					tab.value
 						? 'bg-primary text-primary-foreground shadow-sm'
 						: 'text-muted-foreground'}"
@@ -153,13 +153,13 @@
 					>
 						<IconComponent class="h-4.5 w-4.5 sm:h-4 sm:w-4" />
 					</div>
-					<span class="hidden sm:block truncate text-xs font-medium">{tab.label}</span>
+					<span class="hidden truncate text-xs font-medium sm:block">{tab.label}</span>
 				</button>
 			{/each}
 		</div>
 
 		<!-- 右侧内容区 - 路由到对应的面板组件 -->
-		<div 
+		<div
 			class="flex-1 overflow-auto"
 			style="background-color: color-mix(in oklch, var(--popover) {settingsOpacity}%, transparent); backdrop-filter: blur({settingsBlur}px);"
 		>
@@ -170,7 +170,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">通用设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">通用设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'system'}
 				{#await getPanelPromise('system') then panelModule}
@@ -179,7 +179,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">系统设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">系统设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'view'}
 				{#await getPanelPromise('view') then panelModule}
@@ -188,7 +188,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">视图设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">视图设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'notify'}
 				{#await getPanelPromise('notify') then panelModule}
@@ -197,7 +197,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">通知设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">通知设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'viewer' || activeTab === 'image'}
 				{#if activeTab === 'image'}
@@ -205,9 +205,9 @@
 						{@const ImagePanel = imagePanels[0].default as any}
 						{@const ViewerPanel = imagePanels[1].default as any}
 						<div class="space-y-4 p-6">
-							<div class="rounded-lg border bg-card text-card-foreground p-4">
+							<div class="bg-card text-card-foreground rounded-lg border p-4">
 								<h3 class="text-base font-semibold">影像</h3>
-								<p class="text-sm text-muted-foreground mt-1">
+								<p class="text-muted-foreground mt-1 text-sm">
 									这里将放置全局影像（图片和视频）相关设置，例如格式支持、默认超分行为等。
 								</p>
 							</div>
@@ -215,14 +215,14 @@
 							<ViewerPanel />
 						</div>
 					{:catch}
-						<div class="p-6 text-sm text-destructive">影像设置加载失败</div>
+						<div class="text-destructive p-6 text-sm">影像设置加载失败</div>
 					{/await}
 				{:else}
 					{#await getImagePanelsPromise() then imagePanels}
 						{@const ViewerPanel = imagePanels[1].default as any}
 						<ViewerPanel />
 					{:catch}
-						<div class="p-6 text-sm text-destructive">阅读器设置加载失败</div>
+						<div class="text-destructive p-6 text-sm">阅读器设置加载失败</div>
 					{/await}
 				{/if}
 			{:else if activeTab === 'bindings'}
@@ -232,7 +232,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">操作绑定加载失败</div>
+					<div class="text-destructive p-6 text-sm">操作绑定加载失败</div>
 				{/await}
 			{:else if activeTab === 'radial'}
 				{#await getPanelPromise('radial') then panelModule}
@@ -241,7 +241,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">轮盘设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">轮盘设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'panels'}
 				{#await getPanelPromise('panels') then panelModule}
@@ -250,7 +250,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">边栏管理加载失败</div>
+					<div class="text-destructive p-6 text-sm">边栏管理加载失败</div>
 				{/await}
 			{:else if activeTab === 'cards'}
 				{#await getPanelPromise('cards') then panelModule}
@@ -261,7 +261,7 @@
 						{/if}
 					</div>
 				{:catch}
-					<div class="p-6 text-sm text-destructive">卡片管理加载失败</div>
+					<div class="text-destructive p-6 text-sm">卡片管理加载失败</div>
 				{/await}
 			{:else if activeTab === 'theme'}
 				{#await getPanelPromise('theme') then panelModule}
@@ -270,7 +270,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">外观设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">外观设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'book'}
 				{#await getPanelPromise('book') then panelModule}
@@ -279,7 +279,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">书籍设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">书籍设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'performance'}
 				{#await getPanelPromise('performance') then panelModule}
@@ -288,7 +288,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">性能设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">性能设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'data'}
 				{#await getPanelPromise('data') then panelModule}
@@ -297,7 +297,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">数据设置加载失败</div>
+					<div class="text-destructive p-6 text-sm">数据设置加载失败</div>
 				{/await}
 			{:else if activeTab === 'about'}
 				{#await getPanelPromise('about') then panelModule}
@@ -306,7 +306,7 @@
 						<PanelComponent />
 					{/if}
 				{:catch}
-					<div class="p-6 text-sm text-destructive">关于页面加载失败</div>
+					<div class="text-destructive p-6 text-sm">关于页面加载失败</div>
 				{/await}
 			{:else}
 				<!-- 其他标签暂未实现 -->

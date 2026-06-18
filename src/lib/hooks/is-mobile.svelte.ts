@@ -1,4 +1,4 @@
-import { MediaQuery } from "svelte/reactivity";
+import { MediaQuery } from 'svelte/reactivity';
 
 // 设置为 0 以禁用移动端模式，始终使用桌面端悬停触发逻辑
 const DEFAULT_MOBILE_BREAKPOINT = 0;

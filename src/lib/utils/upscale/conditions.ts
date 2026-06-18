@@ -3,7 +3,11 @@
  * 提供多条件匹配、优先级排序和参数绑定功能
  */
 
-import type { UpscaleCondition, ConditionResult, ConditionExpression } from '$lib/components/panels/UpscalePanel';
+import type {
+	UpscaleCondition,
+	ConditionResult,
+	ConditionExpression
+} from '$lib/components/panels/UpscalePanel';
 
 export type ConditionPresetKey = 'A' | 'B' | 'C' | 'D';
 
@@ -34,8 +38,8 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 		minHeight: safeMatch.minHeight,
 		maxWidth: safeMatch.maxWidth,
 		maxHeight: safeMatch.maxHeight,
-		minPixels: safeMatch.minPixels,  // 最小像素量（MPx）
-		maxPixels: safeMatch.maxPixels,  // 最大像素量（MPx）
+		minPixels: safeMatch.minPixels, // 最小像素量（MPx）
+		maxPixels: safeMatch.maxPixels, // 最大像素量（MPx）
 		dimensionMode: safeMatch.dimensionMode ?? 'and',
 		createdBetween: safeMatch.createdBetween,
 		modifiedBetween: safeMatch.modifiedBetween,
@@ -47,12 +51,17 @@ function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleConditio
 	};
 	// 调试日志
 	if (safeMatch.minPixels !== undefined || safeMatch.maxPixels !== undefined) {
-		console.log('🔧 ensureMatchDefaults pixels:', { input: { minPixels: safeMatch.minPixels, maxPixels: safeMatch.maxPixels }, output: { minPixels: result.minPixels, maxPixels: result.maxPixels } });
+		console.log('🔧 ensureMatchDefaults pixels:', {
+			input: { minPixels: safeMatch.minPixels, maxPixels: safeMatch.maxPixels },
+			output: { minPixels: result.minPixels, maxPixels: result.maxPixels }
+		});
 	}
 	return result;
 }
 
-function ensureActionDefaults(action?: Partial<UpscaleCondition['action']>): UpscaleCondition['action'] {
+function ensureActionDefaults(
+	action?: Partial<UpscaleCondition['action']>
+): UpscaleCondition['action'] {
 	return {
 		model: action?.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
 		scale: action?.scale ?? 2,
@@ -64,7 +73,10 @@ function ensureActionDefaults(action?: Partial<UpscaleCondition['action']>): Ups
 	};
 }
 
-export function normalizeCondition(condition: UpscaleCondition, priorityFallback = 0): UpscaleCondition {
+export function normalizeCondition(
+	condition: UpscaleCondition,
+	priorityFallback = 0
+): UpscaleCondition {
 	return {
 		id: condition.id || createConditionId(),
 		name: condition.name || '自定义条件',
@@ -149,7 +161,10 @@ export const CONDITION_PRESET_OPTIONS = CONDITION_PRESET_DEFINITIONS.map((preset
 	description: preset.description
 }));
 
-function composePresetCondition(def: ConditionPresetDefinition, priority: number): UpscaleCondition {
+function composePresetCondition(
+	def: ConditionPresetDefinition,
+	priority: number
+): UpscaleCondition {
 	const base = createBlankCondition(def.name);
 	const overrides = def.build();
 	const merged: UpscaleCondition = {
@@ -173,7 +188,10 @@ export function getDefaultConditionPresets(): UpscaleCondition[] {
 	return CONDITION_PRESET_DEFINITIONS.map((preset, index) => composePresetCondition(preset, index));
 }
 
-export function createPresetCondition(key: ConditionPresetKey, priority = 0): UpscaleCondition | null {
+export function createPresetCondition(
+	key: ConditionPresetKey,
+	priority = 0
+): UpscaleCondition | null {
 	const preset = CONDITION_PRESET_DEFINITIONS.find((item) => item.key === key);
 	if (!preset) {
 		return null;
@@ -193,8 +211,8 @@ export interface PageMetadata {
 }
 
 /**
-	 * 评估页面元数据是否匹配条件
-	 */
+ * 评估页面元数据是否匹配条件
+ */
 function matchesCondition(condition: UpscaleCondition, meta: PageMetadata): boolean {
 	const match = ensureMatchDefaults(condition.match);
 	const conditionId = condition.id;
@@ -423,7 +441,7 @@ export function getConditionById(
 	conditions: UpscaleCondition[]
 ): UpscaleCondition | null {
 	if (!conditionId) return null;
-	return conditions.find(c => c.id === conditionId) || null;
+	return conditions.find((c) => c.id === conditionId) || null;
 }
 
 /**

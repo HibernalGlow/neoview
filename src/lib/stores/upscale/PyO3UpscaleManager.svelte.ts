@@ -198,14 +198,14 @@ export class PyO3UpscaleManager {
 			console.log('  tileSize:', this._currentModel.tileSize);
 			console.log('  noiseLevel:', this._currentModel.noiseLevel);
 			console.log('  timeout:', timeout);
-			
+
 			// 添加超时保护，避免无限等待
 			const timeoutPromise = new Promise<never>((_, reject) => {
 				setTimeout(() => {
 					reject(new Error(`PyO3 超分超时 (${timeout}s)`));
 				}, timeout * 1000);
 			});
-			
+
 			const upscalePromise = invoke<number[]>('pyo3_upscale_image_memory', {
 				imageData: Array.from(imageData),
 				modelName: this._currentModel.modelName,
@@ -231,10 +231,7 @@ export class PyO3UpscaleManager {
 	/**
 	 * 保存超分结果到缓存
 	 */
-	async saveUpscaleCache(
-		imageHash: string,
-		resultData: Uint8Array
-	): Promise<string> {
+	async saveUpscaleCache(imageHash: string, resultData: Uint8Array): Promise<string> {
 		if (resultData.length === 0) {
 			console.warn('saveUpscaleCache 跳过：数据为空', imageHash);
 			return '';
@@ -268,10 +265,7 @@ export class PyO3UpscaleManager {
 	/**
 	 * 执行超分处理 (文件路径版本，保持兼容性)
 	 */
-	async upscaleImage(
-		imagePath: string,
-		timeout: number = 120.0
-	): Promise<Uint8Array> {
+	async upscaleImage(imagePath: string, timeout: number = 120.0): Promise<Uint8Array> {
 		if (!this.initialized) {
 			throw new Error('PyO3 超分管理器未初始化');
 		}

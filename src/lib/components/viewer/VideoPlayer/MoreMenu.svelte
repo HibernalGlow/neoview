@@ -56,12 +56,15 @@
 
 <div class="relative">
 	<button
-		class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showMoreMenu || abLoopActive ? 'bg-white/20' : ''}"
+		class="control-btn rounded-full p-2 transition-colors hover:bg-white/20 {showMoreMenu ||
+		abLoopActive
+			? 'bg-white/20'
+			: ''}"
 		onclick={onToggleMenu}
 		title="更多功能"
 		aria-label="更多功能"
 	>
-		<MoreVertical class="h-5 w-5 text-primary" />
+		<MoreVertical class="text-primary h-5 w-5" />
 	</button>
 
 	{#if showMoreMenu}
@@ -83,17 +86,21 @@
 			</button>
 
 			<!-- AB循环 -->
-			<div class="border-t border-white/10 pt-2 mt-2">
+			<div class="mt-2 border-t border-white/10 pt-2">
 				<div class="px-3 py-1 text-xs text-white/50">AB循环</div>
 				<div class="flex items-center gap-1 px-3 py-1">
 					<button
-						class="rounded px-3 py-1 text-xs transition-colors {abLoop.a !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
+						class="rounded px-3 py-1 text-xs transition-colors {abLoop.a !== null
+							? 'bg-primary text-white'
+							: 'bg-white/10 text-white hover:bg-white/20'}"
 						onclick={onSetLoopPointA}
 					>
 						A{abLoop.a !== null ? `: ${formatTime(abLoop.a)}` : ''}
 					</button>
 					<button
-						class="rounded px-3 py-1 text-xs transition-colors {abLoop.b !== null ? 'bg-primary text-white' : 'bg-white/10 text-white hover:bg-white/20'}"
+						class="rounded px-3 py-1 text-xs transition-colors {abLoop.b !== null
+							? 'bg-primary text-white'
+							: 'bg-white/10 text-white hover:bg-white/20'}"
 						onclick={onSetLoopPointB}
 						disabled={abLoop.a === null}
 					>
@@ -112,7 +119,7 @@
 			</div>
 
 			<!-- 滤镜 -->
-			<div class="border-t border-white/10 pt-2 mt-2">
+			<div class="mt-2 border-t border-white/10 pt-2">
 				<button
 					class="flex w-full items-center justify-between gap-2 rounded px-3 py-2 text-sm text-white hover:bg-white/10"
 					onclick={onToggleFilterPanel}
@@ -122,35 +129,54 @@
 						视频滤镜
 					</span>
 					{#if brightness !== 100 || contrast !== 100 || saturate !== 100}
-						<span class="text-xs text-primary">已调整</span>
+						<span class="text-primary text-xs">已调整</span>
 					{/if}
 				</button>
-				
+
 				{#if showFilterPanel}
-					<div class="px-3 py-2 space-y-2">
+					<div class="space-y-2 px-3 py-2">
 						<div>
-							<div class="flex justify-between text-xs text-white/70 mb-1">
+							<div class="mb-1 flex justify-between text-xs text-white/70">
 								<span>亮度</span><span>{brightness}%</span>
 							</div>
-							<input type="range" min="0" max="200" step="5" value={brightness}
-								oninput={(e) => onBrightnessChange(parseFloat((e.target as HTMLInputElement).value))}
-								class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+							<input
+								type="range"
+								min="0"
+								max="200"
+								step="5"
+								value={brightness}
+								oninput={(e) =>
+									onBrightnessChange(parseFloat((e.target as HTMLInputElement).value))}
+								class="h-1 w-full cursor-pointer appearance-none rounded bg-white/20"
+							/>
 						</div>
 						<div>
-							<div class="flex justify-between text-xs text-white/70 mb-1">
+							<div class="mb-1 flex justify-between text-xs text-white/70">
 								<span>对比度</span><span>{contrast}%</span>
 							</div>
-							<input type="range" min="0" max="200" step="5" value={contrast}
+							<input
+								type="range"
+								min="0"
+								max="200"
+								step="5"
+								value={contrast}
 								oninput={(e) => onContrastChange(parseFloat((e.target as HTMLInputElement).value))}
-								class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+								class="h-1 w-full cursor-pointer appearance-none rounded bg-white/20"
+							/>
 						</div>
 						<div>
-							<div class="flex justify-between text-xs text-white/70 mb-1">
+							<div class="mb-1 flex justify-between text-xs text-white/70">
 								<span>饱和度</span><span>{saturate}%</span>
 							</div>
-							<input type="range" min="0" max="200" step="5" value={saturate}
+							<input
+								type="range"
+								min="0"
+								max="200"
+								step="5"
+								value={saturate}
 								oninput={(e) => onSaturateChange(parseFloat((e.target as HTMLInputElement).value))}
-								class="w-full h-1 bg-white/20 rounded appearance-none cursor-pointer" />
+								class="h-1 w-full cursor-pointer appearance-none rounded bg-white/20"
+							/>
 						</div>
 						<button
 							class="w-full rounded bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20"
@@ -163,9 +189,9 @@
 			</div>
 
 			<!-- 视频信息 -->
-			<div class="border-t border-white/10 pt-2 mt-2">
+			<div class="mt-2 border-t border-white/10 pt-2">
 				<div class="px-3 py-1 text-xs text-white/50">视频信息</div>
-				<div class="px-3 py-1 space-y-1 text-xs text-white/80">
+				<div class="space-y-1 px-3 py-1 text-xs text-white/80">
 					{#if videoWidth > 0}
 						<div class="flex justify-between">
 							<span>分辨率</span>

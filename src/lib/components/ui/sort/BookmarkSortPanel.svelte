@@ -1,187 +1,205 @@
 <script lang="ts">
-  import { ArrowUpDown, ArrowUp, ArrowDown, Type, Calendar, Star, Hash, Shuffle, FolderOpen } from '@lucide/svelte';
+	import {
+		ArrowUpDown,
+		ArrowUp,
+		ArrowDown,
+		Type,
+		Calendar,
+		Star,
+		Hash,
+		Shuffle,
+		FolderOpen
+	} from '@lucide/svelte';
 
-  interface BookmarkEntry {
-    id: string;
-    path: string;
-    name: string;
-    isDir: boolean;
-    timestamp: number;
-    starred: boolean;
-  }
+	interface BookmarkEntry {
+		id: string;
+		path: string;
+		name: string;
+		isDir: boolean;
+		timestamp: number;
+		starred: boolean;
+	}
 
-  let { 
-    bookmarks = [], 
-    onSort = () => {} 
-  }: {
-    bookmarks: BookmarkEntry[];
-    onSort: (sortedBookmarks: BookmarkEntry[]) => void;
-  } = $props();
+	let {
+		bookmarks = [],
+		onSort = () => {}
+	}: {
+		bookmarks: BookmarkEntry[];
+		onSort: (sortedBookmarks: BookmarkEntry[]) => void;
+	} = $props();
 
-  // 排序选项
-  type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random';
-  type SortOrder = 'asc' | 'desc';
+	// 排序选项
+	type SortField = 'name' | 'timestamp' | 'path' | 'starred' | 'type' | 'random';
+	type SortOrder = 'asc' | 'desc';
 
-  let sortField: SortField = $state('timestamp');
-  let sortOrder: SortOrder = $state('desc');
-  let showSortMenu = $state(false);
+	let sortField: SortField = $state('timestamp');
+	let sortOrder: SortOrder = $state('desc');
+	let showSortMenu = $state(false);
 
-  // 排序配置
-  const sortOptions = [
-    { field: 'timestamp' as SortField, label: '添加时间', icon: Calendar },
-    { field: 'name' as SortField, label: '名称', icon: Type },
-    { field: 'path' as SortField, label: '路径', icon: FolderOpen },
-    { field: 'type' as SortField, label: '类型', icon: Type },
-    { field: 'starred' as SortField, label: '星标', icon: Star },
-    { field: 'random' as SortField, label: '随机', icon: Shuffle }
-  ];
+	// 排序配置
+	const sortOptions = [
+		{ field: 'timestamp' as SortField, label: '添加时间', icon: Calendar },
+		{ field: 'name' as SortField, label: '名称', icon: Type },
+		{ field: 'path' as SortField, label: '路径', icon: FolderOpen },
+		{ field: 'type' as SortField, label: '类型', icon: Type },
+		{ field: 'starred' as SortField, label: '星标', icon: Star },
+		{ field: 'random' as SortField, label: '随机', icon: Shuffle }
+	];
 
-  /**
-   * 执行排序
-   */
-  function performSort() {
-    // 随机排序特殊处理
-    if (sortField === 'random') {
-      const shuffled = [...bookmarks];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      onSort(shuffled);
-      showSortMenu = false;
-      return;
-    }
+	/**
+	 * 执行排序
+	 */
+	function performSort() {
+		// 随机排序特殊处理
+		if (sortField === 'random') {
+			const shuffled = [...bookmarks];
+			for (let i = shuffled.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+			}
+			onSort(shuffled);
+			showSortMenu = false;
+			return;
+		}
 
-    const sorted = [...bookmarks].sort((a, b) => {
-      let comparison = 0;
+		const sorted = [...bookmarks].sort((a, b) => {
+			let comparison = 0;
 
-      switch (sortField) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
-          break;
-        case 'path':
-          comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
-          break;
-        case 'timestamp':
-          comparison = a.timestamp - b.timestamp;
-          break;
-        case 'type': {
-          // 按文件扩展名排序
-          const extA = a.name.split('.').pop()?.toLowerCase() || '';
-          const extB = b.name.split('.').pop()?.toLowerCase() || '';
-          comparison = extA.localeCompare(extB);
-          break;
-        }
-        case 'starred':
-          // 星标的书签排在前面
-          if (a.starred !== b.starred) {
-            comparison = a.starred ? -1 : 1;
-          } else {
-            comparison = a.name.localeCompare(b.name);
-          }
-          break;
-      }
+			switch (sortField) {
+				case 'name':
+					comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+					break;
+				case 'path':
+					comparison = a.path.localeCompare(b.path, undefined, { numeric: true });
+					break;
+				case 'timestamp':
+					comparison = a.timestamp - b.timestamp;
+					break;
+				case 'type': {
+					// 按文件扩展名排序
+					const extA = a.name.split('.').pop()?.toLowerCase() || '';
+					const extB = b.name.split('.').pop()?.toLowerCase() || '';
+					comparison = extA.localeCompare(extB);
+					break;
+				}
+				case 'starred':
+					// 星标的书签排在前面
+					if (a.starred !== b.starred) {
+						comparison = a.starred ? -1 : 1;
+					} else {
+						comparison = a.name.localeCompare(b.name);
+					}
+					break;
+			}
 
-      return sortOrder === 'asc' ? comparison : -comparison;
-    });
+			return sortOrder === 'asc' ? comparison : -comparison;
+		});
 
-    onSort(sorted);
-    showSortMenu = false;
-  }
+		onSort(sorted);
+		showSortMenu = false;
+	}
 
-  /**
-   * 切换排序字段
-   */
-  function setSortField(field: SortField) {
-    if (sortField === field) {
-      // 如果点击相同字段，切换排序顺序
-      sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortField = field;
-      sortOrder = 'asc';
-    }
-    performSort();
-  }
+	/**
+	 * 切换排序字段
+	 */
+	function setSortField(field: SortField) {
+		if (sortField === field) {
+			// 如果点击相同字段，切换排序顺序
+			sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortField = field;
+			sortOrder = 'asc';
+		}
+		performSort();
+	}
 
-  /**
-   * 获取当前排序图标
-   */
-  function getSortIcon(field: SortField) {
-    if (sortField !== field) {
-      return ArrowUpDown;
-    }
-    return sortOrder === 'asc' ? ArrowUp : ArrowDown;
-  }
+	/**
+	 * 获取当前排序图标
+	 */
+	function getSortIcon(field: SortField) {
+		if (sortField !== field) {
+			return ArrowUpDown;
+		}
+		return sortOrder === 'asc' ? ArrowUp : ArrowDown;
+	}
 
-  // 全局点击事件
-  $effect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.bookmark-sort-panel')) {
-        showSortMenu = false;
-      }
-    };
+	// 全局点击事件
+	$effect(() => {
+		const handleClick = (e: MouseEvent) => {
+			const target = e.target as HTMLElement;
+			if (!target.closest('.bookmark-sort-panel')) {
+				showSortMenu = false;
+			}
+		};
 
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  });
+		document.addEventListener('click', handleClick);
+		return () => document.removeEventListener('click', handleClick);
+	});
 </script>
 
 <div class="bookmark-sort-panel relative">
-  <!-- 排序按钮 -->
-  <button
-    class="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent rounded transition-colors"
-    onclick={() => showSortMenu = !showSortMenu}
-    title="排序书签"
-  >
-    <ArrowUpDown class="h-4 w-4" />
-    <span>排序</span>
-  </button>
+	<!-- 排序按钮 -->
+	<button
+		class="hover:bg-accent flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors"
+		onclick={() => (showSortMenu = !showSortMenu)}
+		title="排序书签"
+	>
+		<ArrowUpDown class="h-4 w-4" />
+		<span>排序</span>
+	</button>
 
-  <!-- 排序菜单 -->
-  {#if showSortMenu}
-    <div class="absolute top-full left-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 min-w-[180px] py-1">
-      {#each sortOptions as option}
-        {@const IconComponent = option.icon}
-        {@const SortIconComponent = getSortIcon(option.field)}
-        <button
-          class="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between group"
-          onclick={() => setSortField(option.field)}
-        >
-          <div class="flex items-center gap-2">
-            <IconComponent class="h-4 w-4 text-muted-foreground" />
-            <span>{option.label}</span>
-          </div>
-          <SortIconComponent class="h-4 w-4 text-muted-foreground {sortField === option.field ? 'text-primary' : ''}" />
-        </button>
-      {/each}
-      
-      <div class="border-t border-border my-1"></div>
-      
-      <!-- 排序顺序 -->
-      <div class="px-3 py-2">
-        <div class="text-xs text-muted-foreground mb-2">排序顺序</div>
-        <div class="flex gap-2">
-          <button
-            class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} rounded transition-colors"
-            onclick={() => {
-              sortOrder = 'asc';
-              performSort();
-            }}
-          >
-            升序
-          </button>
-          <button
-            class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'} rounded transition-colors"
-            onclick={() => {
-              sortOrder = 'desc';
-              performSort();
-            }}
-          >
-            降序
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+	<!-- 排序菜单 -->
+	{#if showSortMenu}
+		<div
+			class="bg-popover border-border absolute top-full left-0 z-50 mt-1 min-w-[180px] rounded-lg border py-1 shadow-lg"
+		>
+			{#each sortOptions as option}
+				{@const IconComponent = option.icon}
+				{@const SortIconComponent = getSortIcon(option.field)}
+				<button
+					class="hover:bg-accent group flex w-full items-center justify-between px-3 py-2 text-left text-sm"
+					onclick={() => setSortField(option.field)}
+				>
+					<div class="flex items-center gap-2">
+						<IconComponent class="text-muted-foreground h-4 w-4" />
+						<span>{option.label}</span>
+					</div>
+					<SortIconComponent
+						class="text-muted-foreground h-4 w-4 {sortField === option.field ? 'text-primary' : ''}"
+					/>
+				</button>
+			{/each}
+
+			<div class="border-border my-1 border-t"></div>
+
+			<!-- 排序顺序 -->
+			<div class="px-3 py-2">
+				<div class="text-muted-foreground mb-2 text-xs">排序顺序</div>
+				<div class="flex gap-2">
+					<button
+						class="flex-1 px-2 py-1 text-xs {sortOrder === 'asc'
+							? 'bg-primary text-primary-foreground'
+							: 'bg-muted text-muted-foreground'} rounded transition-colors"
+						onclick={() => {
+							sortOrder = 'asc';
+							performSort();
+						}}
+					>
+						升序
+					</button>
+					<button
+						class="flex-1 px-2 py-1 text-xs {sortOrder === 'desc'
+							? 'bg-primary text-primary-foreground'
+							: 'bg-muted text-muted-foreground'} rounded transition-colors"
+						onclick={() => {
+							sortOrder = 'desc';
+							performSort();
+						}}
+					>
+						降序
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>

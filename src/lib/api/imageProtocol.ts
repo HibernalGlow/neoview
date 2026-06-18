@@ -74,7 +74,7 @@ export async function resolveProtocolBaseUrl(): Promise<string | null> {
 			}
 		}
 		if (attempt < 2) {
-			await new Promise(r => setTimeout(r, 300));
+			await new Promise((r) => setTimeout(r, 300));
 		}
 	}
 	console.warn(`[Protocol] 协议不可用，已尝试: ${candidates.join(', ')}`);

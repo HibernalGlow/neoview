@@ -38,7 +38,7 @@
 
 	// 获取标签颜色
 	const tagColor = $derived(color || categoryColors[category] || '#666');
-	
+
 	// 尺寸类名
 	const sizeClass = $derived(size === 'sm' ? 'text-[10px] px-1 py-0.5' : 'text-xs px-1.5 py-0.5');
 </script>
@@ -47,10 +47,19 @@
 	<span
 		role="button"
 		tabindex="0"
-		class="tag-chip inline-flex items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 cursor-pointer {sizeClass} {isMixedVariant || isManual ? 'border-dashed' : ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex cursor-pointer items-center gap-0.5 rounded border transition-all hover:-translate-y-0.5 {sizeClass} {isMixedVariant ||
+		isManual
+			? 'border-dashed'
+			: ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isManual ? '12%' : isCollect ? '15%' : '10%'}, transparent);
+			background: color-mix(in srgb, {tagColor} {isMixedVariant
+			? '8%'
+			: isManual
+				? '12%'
+				: isCollect
+					? '15%'
+					: '10%'}, transparent);
 			color: {isCollect || isMixedVariant || isManual ? tagColor : 'inherit'};
 			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
@@ -64,13 +73,19 @@
 		oncontextmenu={onContextMenu}
 		title={isManual ? `手动标签 - ${tag}` : isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
-		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
+		<span
+			class="h-1.5 w-1.5 shrink-0 rounded-full"
+			style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"
+		></span>
 		<span>{display}</span>
 		{#if showRemove && onRemove}
 			<button
 				type="button"
-				class="ml-0.5 hover:bg-accent rounded p-0.5"
-				onclick={(e) => { e.stopPropagation(); onRemove?.(); }}
+				class="hover:bg-accent ml-0.5 rounded p-0.5"
+				onclick={(e) => {
+					e.stopPropagation();
+					onRemove?.();
+				}}
 				title="移除"
 			>
 				<X class="h-2.5 w-2.5" />
@@ -79,16 +94,28 @@
 	</span>
 {:else}
 	<span
-		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant || isManual ? 'border-dashed' : ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
+		class="tag-chip inline-flex items-center gap-0.5 rounded border {sizeClass} {isMixedVariant ||
+		isManual
+			? 'border-dashed'
+			: ''} {isManual ? 'border-2' : ''} {isCollect && !isMixedVariant ? 'font-semibold' : ''}"
 		style="
 			border-color: {tagColor};
-			background: color-mix(in srgb, {tagColor} {isMixedVariant ? '8%' : isManual ? '12%' : isCollect ? '15%' : '10%'}, transparent);
+			background: color-mix(in srgb, {tagColor} {isMixedVariant
+			? '8%'
+			: isManual
+				? '12%'
+				: isCollect
+					? '15%'
+					: '10%'}, transparent);
 			color: {isCollect || isMixedVariant || isManual ? tagColor : 'inherit'};
 			opacity: {isMixedVariant ? '0.65' : '1'};
 		"
 		title={isManual ? `手动标签 - ${tag}` : isMixedVariant ? `混合匹配 - ${tag}` : tag}
 	>
-		<span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"></span>
+		<span
+			class="h-1.5 w-1.5 shrink-0 rounded-full"
+			style="background: {tagColor}; opacity: {isMixedVariant ? '0.6' : '1'};"
+		></span>
 		<span>{display}</span>
 	</span>
 {/if}

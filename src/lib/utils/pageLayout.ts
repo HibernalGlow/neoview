@@ -7,7 +7,9 @@ export interface DimensionLike {
 
 export const HORIZONTAL_RATIO_THRESHOLD = 1.2;
 
-function hasValidDimensions(dimensions?: DimensionLike | null): dimensions is { width: number; height: number } {
+function hasValidDimensions(
+	dimensions?: DimensionLike | null
+): dimensions is { width: number; height: number } {
 	if (!dimensions) return false;
 	const { width, height } = dimensions;
 	return typeof width === 'number' && typeof height === 'number' && height !== 0 && width !== 0;

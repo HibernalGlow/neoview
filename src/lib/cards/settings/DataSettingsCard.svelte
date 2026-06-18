@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 数据设置卡片
- */
-import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
+	/**
+	 * 数据设置卡片
+	 */
+	import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -28,7 +28,7 @@ import DataSettingsPanel from '$lib/components/panels/DataSettingsPanel.svelte';
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

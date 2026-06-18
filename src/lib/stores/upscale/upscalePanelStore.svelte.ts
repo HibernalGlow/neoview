@@ -25,15 +25,15 @@ export interface CacheStats {
 
 // ==================== 模型配置 ====================
 export const MODEL_LABELS: Record<string, string> = {
-	'MODEL_WAIFU2X_CUNET_UP2X': 'CUNet 2x (推荐)',
-	'MODEL_WAIFU2X_PHOTO_UP2X': 'Photo 2x (照片)',
-	'MODEL_WAIFU2X_ANIME_UP2X': 'Anime 2x',
-	'MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X': 'CUNet 2x + Denoise 3x',
-	'MODEL_REALCUGAN_PRO_UP2X': 'Real-CUGAN Pro 2x',
-	'MODEL_REALCUGAN_SE_UP2X': 'Real-CUGAN SE 2x',
-	'MODEL_REALCUGAN_PRO_UP3X': 'Real-CUGAN Pro 3x',
-	'MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X': 'Real-ESRGAN Anime 2x',
-	'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X': 'Real-ESRGAN 4x+ Anime',
+	MODEL_WAIFU2X_CUNET_UP2X: 'CUNet 2x (推荐)',
+	MODEL_WAIFU2X_PHOTO_UP2X: 'Photo 2x (照片)',
+	MODEL_WAIFU2X_ANIME_UP2X: 'Anime 2x',
+	MODEL_WAIFU2X_CUNET_UP2X_DENOISE3X: 'CUNet 2x + Denoise 3x',
+	MODEL_REALCUGAN_PRO_UP2X: 'Real-CUGAN Pro 2x',
+	MODEL_REALCUGAN_SE_UP2X: 'Real-CUGAN SE 2x',
+	MODEL_REALCUGAN_PRO_UP3X: 'Real-CUGAN Pro 3x',
+	MODEL_REALESRGAN_ANIMAVIDEOV3_UP2X: 'Real-ESRGAN Anime 2x',
+	MODEL_REALESRGAN_X4PLUS_ANIME_UP4X: 'Real-ESRGAN 4x+ Anime'
 };
 
 export const GPU_OPTIONS = [
@@ -235,21 +235,24 @@ export function clearCurrentImage() {
 
 export async function initializeUpscale() {
 	if (isInitialized.value) return;
-	
+
 	console.log('🚀 初始化超分面板状态...');
-	
+
 	// 加载保存的设置
 	const loaded = loadUpscalePanelSettings();
 	applySettings(loaded);
-	
+
 	// 初始化 PyO3 管理器
 	try {
-		const pythonModulePath = 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src-tauri/python/upscale_wrapper.py';
+		const pythonModulePath =
+			'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/neoview-tauri/src-tauri/python/upscale_wrapper.py';
 		const globalSettings = settingsManager.getSettings();
-		const thumbnailRoot = normalizeThumbnailDirectoryPath(globalSettings.system?.thumbnailDirectory);
-		
+		const thumbnailRoot = normalizeThumbnailDirectoryPath(
+			globalSettings.system?.thumbnailDirectory
+		);
+
 		await pyo3UpscaleManager.initialize(pythonModulePath, thumbnailRoot);
-		
+
 		if (pyo3UpscaleManager.isAvailable()) {
 			availableModels.value = pyo3UpscaleManager.getAvailableModels();
 			isPyO3Available.value = true;
@@ -260,7 +263,7 @@ export async function initializeUpscale() {
 	} catch (error) {
 		console.error('❌ 初始化 PyO3 超分管理器失败:', error);
 	}
-	
+
 	isInitialized.value = true;
 }
 
@@ -302,7 +305,7 @@ export const upscalePanelStore = {
 	availableModels,
 	isInitialized,
 	isPyO3Available,
-	
+
 	// 方法
 	applySettings,
 	gatherSettings,
@@ -311,12 +314,12 @@ export const upscalePanelStore = {
 	setProcessingStatus,
 	setError,
 	initializeUpscale,
-	
+
 	// 工具函数
 	formatFileSize,
 	getResolutionString,
 	getModelLabel,
-	
+
 	// 常量
 	MODEL_LABELS,
 	GPU_OPTIONS,

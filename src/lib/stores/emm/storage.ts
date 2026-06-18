@@ -73,33 +73,33 @@ export function saveSettings(
 ): void {
 	try {
 		localStorage.setItem(STORAGE_KEYS.DB_PATHS, JSON.stringify(databasePaths));
-		
+
 		if (translationDbPath) {
 			localStorage.setItem(STORAGE_KEYS.TRANSLATION_DB_PATH, translationDbPath);
 		} else {
 			localStorage.removeItem(STORAGE_KEYS.TRANSLATION_DB_PATH);
 		}
-		
+
 		if (settingPath) {
 			localStorage.setItem(STORAGE_KEYS.SETTING_PATH, settingPath);
 		} else {
 			localStorage.removeItem(STORAGE_KEYS.SETTING_PATH);
 		}
-		
+
 		if (translationDictPath) {
 			localStorage.setItem(STORAGE_KEYS.TRANSLATION_DICT_PATH, translationDictPath);
 		} else {
 			localStorage.removeItem(STORAGE_KEYS.TRANSLATION_DICT_PATH);
 		}
-		
+
 		if (enableEMM !== undefined) {
 			localStorage.setItem(STORAGE_KEYS.ENABLE_EMM, String(enableEMM));
 		}
-		
+
 		if (fileListTagDisplayMode) {
 			localStorage.setItem(STORAGE_KEYS.FILE_LIST_TAG_MODE, fileListTagDisplayMode);
 		}
-		
+
 		if (defaultRating !== undefined) {
 			localStorage.setItem(STORAGE_KEYS.DEFAULT_RATING, String(defaultRating));
 		}

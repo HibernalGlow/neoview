@@ -1,6 +1,6 @@
 /**
  * Base64 解码管理器
- * 
+ *
  * 使用 fast-base64 (WebAssembly + SIMD) 进行高速解码
  * 比原生 atob 快 10-30 倍，比 fetch + data URL 快 2-5 倍
  */
@@ -19,7 +19,10 @@ export async function decodeBase64(base64: string, _mimeType?: string): Promise<
 /**
  * 解码 Base64 字符串为 Blob
  */
-export async function decodeBase64ToBlob(base64: string, mimeType = 'application/octet-stream'): Promise<Blob> {
+export async function decodeBase64ToBlob(
+	base64: string,
+	mimeType = 'application/octet-stream'
+): Promise<Blob> {
 	const bytes = await toBytes(base64);
 	return new Blob([bytes], { type: mimeType });
 }
@@ -41,5 +44,7 @@ export function decodeBase64Sync(base64: string): ArrayBuffer {
 export const base64DecoderManager = {
 	decode: decodeBase64,
 	decodeSync2: decodeBase64Sync,
-	destroy: () => { /* no-op for fast-base64 */ }
+	destroy: () => {
+		/* no-op for fast-base64 */
+	}
 };

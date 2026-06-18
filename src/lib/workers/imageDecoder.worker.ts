@@ -1,7 +1,7 @@
 /**
  * Image Decoder Web Worker
  * 在 Worker 线程中解码图片，避免阻塞主线程
- * 
+ *
  * 【性能优化】
  * - 支持大图片缩放解码（减少内存和解码时间）
  * - 返回 workerIndex 用于负载均衡追踪
@@ -27,10 +27,10 @@ interface DecodeResponse {
 
 self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
 	const { id, blob, workerIndex, maxWidth, maxHeight } = event.data;
-	
+
 	try {
 		let bitmap: ImageBitmap;
-		
+
 		// 如果指定了最大尺寸，使用缩放解码
 		if (maxWidth || maxHeight) {
 			bitmap = await createImageBitmap(blob, {
@@ -42,7 +42,7 @@ self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
 			// 标准解码
 			bitmap = await createImageBitmap(blob);
 		}
-		
+
 		const response: DecodeResponse = {
 			id,
 			success: true,
@@ -51,7 +51,7 @@ self.onmessage = async (event: MessageEvent<DecodeRequest>) => {
 			height: bitmap.height,
 			workerIndex
 		};
-		
+
 		// 传输 ImageBitmap（零拷贝）
 		self.postMessage(response, { transfer: [bitmap] });
 	} catch (error) {

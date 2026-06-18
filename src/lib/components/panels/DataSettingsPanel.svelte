@@ -651,6 +651,5 @@
 		<Tabs.Content value="startup" class="mt-4">
 			<StartupConfigPanel />
 		</Tabs.Content>
-
 	</Tabs.Root>
 </div>

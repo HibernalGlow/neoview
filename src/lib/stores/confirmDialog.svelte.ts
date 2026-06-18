@@ -42,7 +42,7 @@ const dialogState = $state<ConfirmDialogState>({
 export function confirm(options: ConfirmDialogOptions | string): Promise<boolean> {
 	return new Promise((resolve) => {
 		const opts = typeof options === 'string' ? { description: options } : options;
-		
+
 		dialogState.title = opts.title ?? '确认操作';
 		dialogState.description = opts.description ?? '确定要执行此操作吗？';
 		dialogState.confirmText = opts.confirmText ?? '确定';
@@ -85,13 +85,27 @@ export function handleOpenChange(open: boolean): void {
  */
 export function getDialogState() {
 	return {
-		get open() { return dialogState.open; },
-		set open(v: boolean) { dialogState.open = v; },
-		get title() { return dialogState.title; },
-		get description() { return dialogState.description; },
-		get confirmText() { return dialogState.confirmText; },
-		get cancelText() { return dialogState.cancelText; },
-		get variant() { return dialogState.variant; }
+		get open() {
+			return dialogState.open;
+		},
+		set open(v: boolean) {
+			dialogState.open = v;
+		},
+		get title() {
+			return dialogState.title;
+		},
+		get description() {
+			return dialogState.description;
+		},
+		get confirmText() {
+			return dialogState.confirmText;
+		},
+		get cancelText() {
+			return dialogState.cancelText;
+		},
+		get variant() {
+			return dialogState.variant;
+		}
 	};
 }
 
@@ -101,7 +115,7 @@ export const confirmDialog = {
 	 * 显示确认对话框
 	 */
 	confirm,
-	
+
 	/**
 	 * 显示删除确认对话框
 	 */
@@ -114,7 +128,7 @@ export const confirmDialog = {
 			variant: 'destructive'
 		});
 	},
-	
+
 	/**
 	 * 显示警告确认对话框
 	 */
@@ -127,7 +141,7 @@ export const confirmDialog = {
 			variant: 'warning'
 		});
 	},
-	
+
 	/**
 	 * 显示重置确认对话框
 	 */

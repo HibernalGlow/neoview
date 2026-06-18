@@ -27,9 +27,18 @@
 	import TagChip from '$lib/components/ui/TagChip.svelte';
 	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import type { EMMTranslationDict } from '$lib/api/emm';
-	import { hoverPreviewEnabled, hoverPreviewDelayMs } from '$lib/stores/hoverPreviewSettings.svelte';
+	import {
+		hoverPreviewEnabled,
+		hoverPreviewDelayMs
+	} from '$lib/stores/hoverPreviewSettings.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
-	import { formatDuration, formatRelativeTime, formatBytes, formatSize, getFolderSizeDisplay } from '$lib/utils/formatters';
+	import {
+		formatDuration,
+		formatRelativeTime,
+		formatBytes,
+		formatSize,
+		getFolderSizeDisplay
+	} from '$lib/utils/formatters';
 
 	interface Props {
 		item: FsItem;
@@ -55,14 +64,29 @@
 		isBookmarked: boolean;
 		isArchive: boolean;
 		isReadCompleted: boolean;
-		emmMetadata: { translatedTitle?: string; tags?: Record<string, string[]>; rating?: number } | null;
+		emmMetadata: {
+			translatedTitle?: string;
+			tags?: Record<string, string[]>;
+			rating?: number;
+		} | null;
 		// 穿透模式：内部压缩包信息列表（支持多个）
-		penetrateInfoList?: Array<{ originalName: string; translatedTitle?: string | null; isAiTranslated: boolean }>;
+		penetrateInfoList?: Array<{
+			originalName: string;
+			translatedTitle?: string | null;
+			isAiTranslated: boolean;
+		}>;
 		// 穿透模式：纯媒体文件夹（只包含图片/视频/文本，点击直接作为 book 打开）
 		isPureMediaFolder?: boolean;
 		folderAverageRating: number | null;
 		folderManualRating: number | null;
-		displayTags: () => { tag: string; display: string; isCollect: boolean; color?: string; isMixedVariant?: boolean; isManual?: boolean }[];
+		displayTags: () => {
+			tag: string;
+			display: string;
+			isCollect: boolean;
+			color?: string;
+			isMixedVariant?: boolean;
+			isManual?: boolean;
+		}[];
 		getEffectiveRating: () => number | null;
 		// 预览相关
 		showPreview: boolean;
@@ -148,7 +172,6 @@
 		onDoubleClick?.();
 	}}
 	oncontextmenu={onContextMenu}
-
 	role="button"
 	tabindex="0"
 	onkeydown={(e) => {
@@ -161,7 +184,7 @@
 	<!-- 勾选框（勾选模式）- 正方形图标，扩大透明点击区域 -->
 	{#if isCheckMode}
 		<button
-			class="group/checkbox shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 self-stretch flex items-center px-2"
+			class="group/checkbox focus-visible:ring-ring flex shrink-0 items-center self-stretch px-2 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
 			onclick={(e) => {
 				e.stopPropagation();
 				onToggleSelection?.();
@@ -174,7 +197,7 @@
 					: 'border-input bg-background hover:border-primary hover:bg-accent'}"
 			>
 				{#if isChecked}
-					<Check class="h-3.5 w-3.5 animate-in zoom-in-50 duration-200" />
+					<Check class="animate-in zoom-in-50 h-3.5 w-3.5 duration-200" />
 				{/if}
 			</div>
 		</button>
@@ -183,7 +206,7 @@
 	<!-- 删除按钮（删除模式）- 正方形图标，扩大透明点击区域 -->
 	{#if isDeleteMode}
 		<button
-			class="group/delete shrink-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive focus-visible:ring-offset-2 self-stretch flex items-center px-2"
+			class="group/delete focus-visible:ring-destructive flex shrink-0 items-center self-stretch px-2 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
 			onclick={(e) => {
 				e.stopPropagation();
 				onDelete?.();
@@ -192,7 +215,7 @@
 			aria-label="删除"
 		>
 			<div
-				class="flex h-5 w-5 items-center justify-center rounded-md bg-destructive text-destructive-foreground shadow-md transition-all duration-200 hover:bg-destructive/90 hover:shadow-lg"
+				class="bg-destructive text-destructive-foreground hover:bg-destructive/90 flex h-5 w-5 items-center justify-center rounded-md shadow-md transition-all duration-200 hover:shadow-lg"
 			>
 				<X class="h-3.5 w-3.5" />
 			</div>
@@ -202,8 +225,8 @@
 	<!-- 缩略图或图标（带悬停预览） -->
 	<Tooltip.Root delayDuration={$hoverPreviewDelayMs}>
 		<Tooltip.Trigger>
-			<div 
-				class="relative flex self-stretch shrink-0 items-center justify-center overflow-hidden rounded"
+			<div
+				class="relative flex shrink-0 items-center justify-center self-stretch overflow-hidden rounded"
 				style="width: {thumbnailSize}px; min-width: {thumbnailSize}px;"
 			>
 				{#if thumbnail}
@@ -216,27 +239,37 @@
 					/>
 				{:else}
 					<!-- 骨架屏占位：缩略图加载中显示动画 -->
-					<div class="absolute inset-0 bg-accent animate-pulse rounded"></div>
+					<div class="bg-accent absolute inset-0 animate-pulse rounded"></div>
 					<!-- 图标叠加在骨架屏上 -->
 					{#if item.isDir}
-						<Folder class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+						<Folder
+							class="text-primary/50 group-hover/item:text-primary relative h-8 w-8 transition-colors"
+						/>
 					{:else if isArchive}
-						<FileArchive class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+						<FileArchive
+							class="text-primary/50 group-hover/item:text-primary relative h-8 w-8 transition-colors"
+						/>
 					{:else if item.isImage}
-						<Image class="relative text-primary/50 group-hover/item:text-primary h-8 w-8 transition-colors" />
+						<Image
+							class="text-primary/50 group-hover/item:text-primary relative h-8 w-8 transition-colors"
+						/>
 					{:else}
-						<File class="relative h-8 w-8 text-muted-foreground/50 transition-colors group-hover/item:text-muted-foreground" />
+						<File
+							class="text-muted-foreground/50 group-hover/item:text-muted-foreground relative h-8 w-8 transition-colors"
+						/>
 					{/if}
 				{/if}
 
 				<!-- 阅读标记 -->
 				{#if showReadMark}
 					{#if isReadCompleted}
-						<div class="bg-primary absolute right-0 top-0 rounded-full p-0.5">
+						<div class="bg-primary absolute top-0 right-0 rounded-full p-0.5">
 							<Check class="h-3 w-3 text-white" />
 						</div>
 					{:else}
-						<div class="border-primary bg-background/80 absolute right-0 top-0 rounded-full border border-dashed p-0.5">
+						<div
+							class="border-primary bg-background/80 absolute top-0 right-0 rounded-full border border-dashed p-0.5"
+						>
 							<Check class="text-primary h-3 w-3" />
 						</div>
 					{/if}
@@ -244,7 +277,7 @@
 
 				<!-- 收藏标记 -->
 				{#if isBookmarked}
-					<div class="bg-primary absolute bottom-0 right-0 rounded-full p-0.5">
+					<div class="bg-primary absolute right-0 bottom-0 rounded-full p-0.5">
 						<Star class="h-3 w-3 fill-white text-white" />
 					</div>
 				{/if}
@@ -252,11 +285,11 @@
 		</Tooltip.Trigger>
 		<!-- 悬停预览大图（仅在启用时显示） -->
 		{#if thumbnail && $hoverPreviewEnabled}
-			<Tooltip.Content side="right" class="p-0 border-0 bg-transparent shadow-xl">
+			<Tooltip.Content side="right" class="border-0 bg-transparent p-0 shadow-xl">
 				<img
 					src={thumbnail}
 					alt={item.name}
-					class="max-w-75 max-h-100 rounded-lg object-contain bg-background border shadow-lg"
+					class="bg-background max-h-100 max-w-75 rounded-lg border object-contain shadow-lg"
 				/>
 			</Tooltip.Content>
 		{/if}
@@ -265,7 +298,7 @@
 	<!-- 信息 -->
 	<div class="min-w-0 flex-1">
 		<!-- 原文件名 -->
-		<div class="flex flex-wrap items-center gap-2 wrap-break-word font-medium" title={item.name}>
+		<div class="flex flex-wrap items-center gap-2 font-medium wrap-break-word" title={item.name}>
 			<span>{item.name}</span>
 			<!-- 文件夹统计信息 -->
 			{#if item.isDir}
@@ -273,7 +306,9 @@
 					{#if item.imageCount !== undefined && item.imageCount > 0}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								>
 									<Images class="h-3 w-3" />
 									<span class="font-medium">{item.imageCount}</span>
 								</span>
@@ -284,7 +319,9 @@
 					{#if item.folderCount !== undefined && item.folderCount > 0}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								>
 									<FolderOpen class="h-3 w-3" />
 									<span class="font-medium">{item.folderCount}</span>
 								</span>
@@ -295,7 +332,9 @@
 					{#if item.archiveCount !== undefined && item.archiveCount > 0}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								>
 									<Package class="h-3 w-3" />
 									<span class="font-medium">{item.archiveCount}</span>
 								</span>
@@ -306,7 +345,9 @@
 					{#if item.videoCount !== undefined && item.videoCount > 0}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<span class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5"
+								>
 									<Video class="h-3 w-3" />
 									<span class="font-medium">{item.videoCount}</span>
 								</span>
@@ -318,9 +359,11 @@
 					{#if isPureMediaFolder}
 						<Tooltip.Root>
 							<Tooltip.Trigger>
-								<span class="bg-primary/20 text-primary inline-flex items-center gap-1 rounded-md px-2 py-0.5 border border-primary/30">
+								<span
+									class="bg-primary/20 text-primary border-primary/30 inline-flex items-center gap-1 rounded-md border px-2 py-0.5"
+								>
 									<Image class="h-3 w-3" />
-									<span class="font-medium text-xs">媒体</span>
+									<span class="text-xs font-medium">媒体</span>
 								</span>
 							</Tooltip.Trigger>
 							<Tooltip.Content><p>纯媒体文件夹，点击直接打开</p></Tooltip.Content>
@@ -332,7 +375,7 @@
 							manualRating={folderManualRating}
 							averageRating={folderAverageRating}
 							size="md"
-							onSetRating={onSetRating}
+							{onSetRating}
 						/>
 					{/if}
 					<!-- 预览图标 -->
@@ -392,7 +435,7 @@
 		<!-- 预览弹窗 -->
 		{#if item.isDir && showPreview}
 			<div
-				class="border-border bg-popover/80 backdrop-blur-md absolute left-0 top-full z-50 mt-1 w-64 rounded-md border p-2 shadow-lg"
+				class="border-border bg-popover/80 absolute top-full left-0 z-50 mt-1 w-64 rounded-md border p-2 shadow-lg backdrop-blur-md"
 				role="tooltip"
 				tabindex="-1"
 				onmouseenter={onPreviewEnter}
@@ -414,13 +457,15 @@
 								{:else if previewItem.name.endsWith('.zip') || previewItem.name.endsWith('.cbz') || previewItem.name.endsWith('.rar') || previewItem.name.endsWith('.cbr')}
 									<FileArchive class="h-3 w-3 shrink-0 text-purple-500" />
 								{:else}
-									<File class="h-3 w-3 shrink-0 text-muted-foreground" />
+									<File class="text-muted-foreground h-3 w-3 shrink-0" />
 								{/if}
 								<span class="text-foreground truncate">{previewItem.name}</span>
 							</div>
 						{/each}
 						{#if item.size > 10}
-							<div class="text-muted-foreground border-border mt-1 border-t px-2 py-1 text-center text-xs">
+							<div
+								class="text-muted-foreground border-border mt-1 border-t px-2 py-1 text-center text-xs"
+							>
 								还有 {item.size - 10} 个项目...
 							</div>
 						{/if}
@@ -433,7 +478,7 @@
 		{#if emmMetadata && emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
 			<div class="mt-1">
 				<span
-					class="border-primary/20 bg-primary/10 text-primary wrap-break-word rounded border px-1.5 py-0.5 text-xs"
+					class="border-primary/20 bg-primary/10 text-primary rounded border px-1.5 py-0.5 text-xs wrap-break-word"
 					title={emmMetadata.translatedTitle}
 				>
 					{emmMetadata.translatedTitle}
@@ -445,15 +490,15 @@
 		{#if penetrateInfoList && penetrateInfoList.length > 0}
 			<div class="mt-1 space-y-1">
 				{#each penetrateInfoList as info, idx}
-					<div class="space-y-0.5 {idx > 0 ? 'pt-0.5 border-t border-dashed border-muted' : ''}">
+					<div class="space-y-0.5 {idx > 0 ? 'border-muted border-t border-dashed pt-0.5' : ''}">
 						<div class="flex items-start gap-1">
-							<Package class="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-							<span class="text-xs text-muted-foreground break-all leading-tight">
+							<Package class="text-muted-foreground mt-0.5 h-3 w-3 shrink-0" />
+							<span class="text-muted-foreground text-xs leading-tight break-all">
 								{info.originalName}
 							</span>
 						</div>
 						{#if info.translatedTitle}
-							<div class="pl-4 text-xs text-primary break-all leading-tight">
+							<div class="text-primary pl-4 text-xs leading-tight break-all">
 								{info.isAiTranslated ? '🤖 ' : ''}{info.translatedTitle}
 							</div>
 						{/if}
@@ -486,7 +531,9 @@
 			{/if}
 			{#if showSizeAndModified}
 				<MetadataBadge
-					text={item.isDir ? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size) : formatSize(item.size || 0, false)}
+					text={item.isDir
+						? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+						: formatSize(item.size || 0, false)}
 					icon={HardDrive}
 					tooltip="文件大小"
 					size="sm"
@@ -513,7 +560,9 @@
 				{/if}
 				{#if !currentPage && !timestamp}
 					<MetadataBadge
-						text={item.isDir ? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size) : formatSize(item.size || 0, false)}
+						text={item.isDir
+							? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+							: formatSize(item.size || 0, false)}
 						icon={HardDrive}
 						tooltip="文件大小"
 						size="sm"

@@ -1,8 +1,8 @@
 <script lang="ts">
-/**
- * 视图设置卡片
- */
-import ViewSettingsPanel from '$lib/components/panels/ViewSettingsPanel.svelte';
+	/**
+	 * 视图设置卡片
+	 */
+	import ViewSettingsPanel from '$lib/components/panels/ViewSettingsPanel.svelte';
 </script>
 
 <div class="settings-card-wrapper">
@@ -27,7 +27,7 @@ import ViewSettingsPanel from '$lib/components/panels/ViewSettingsPanel.svelte';
 	.settings-card-wrapper :global(select) {
 		max-width: 100%;
 	}
-	.settings-card-wrapper :global([role="tablist"]) {
+	.settings-card-wrapper :global([role='tablist']) {
 		width: 100%;
 	}
 	.settings-card-wrapper :global(.flex.items-center.gap-2) {

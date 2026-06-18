@@ -96,7 +96,9 @@
 		onload(fakeEvent);
 	}
 
-	async function decodeFromBlob(imageBlob: Blob): Promise<{ bitmap: ImageBitmap; width: number; height: number }> {
+	async function decodeFromBlob(
+		imageBlob: Blob
+	): Promise<{ bitmap: ImageBitmap; width: number; height: number }> {
 		const result = await decodeImageInWorker(imageBlob);
 		return {
 			bitmap: result.bitmap,

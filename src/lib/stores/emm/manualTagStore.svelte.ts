@@ -38,7 +38,7 @@ function normalizePath(path: string): string {
  */
 function loadFromStorage(): ManualTagData {
 	if (isLoaded) return get(manualTagStore);
-	
+
 	try {
 		const json = localStorage.getItem(STORAGE_KEY);
 		const data: ManualTagData = json ? JSON.parse(json) : {};
@@ -99,8 +99,8 @@ export function getManualTagsSync(path: string): ManualTag[] {
  */
 export async function updateManualTags(path: string, tags: ManualTag[]): Promise<boolean> {
 	const key = normalizePath(path);
-	
-	manualTagStore.update(data => {
+
+	manualTagStore.update((data) => {
 		if (tags.length > 0) {
 			data[key] = tags;
 		} else {
@@ -109,10 +109,10 @@ export async function updateManualTags(path: string, tags: ManualTag[]): Promise
 		saveToStorage(data);
 		return data;
 	});
-	
+
 	// 异步同步到后端
 	syncToBackend(path, tags);
-	
+
 	return true;
 }
 
@@ -121,33 +121,37 @@ export async function updateManualTags(path: string, tags: ManualTag[]): Promise
  */
 export async function addManualTag(path: string, namespace: string, tag: string): Promise<boolean> {
 	const existingTags = await getManualTags(path);
-	
+
 	// 检查是否已存在
-	const exists = existingTags.some(t => t.namespace === namespace && t.tag === tag);
+	const exists = existingTags.some((t) => t.namespace === namespace && t.tag === tag);
 	if (exists) {
 		return true;
 	}
-	
+
 	const newTag: ManualTag = {
 		namespace,
 		tag,
 		timestamp: Date.now()
 	};
-	
+
 	return updateManualTags(path, [...existingTags, newTag]);
 }
 
 /**
  * 删除手动标签
  */
-export async function removeManualTag(path: string, namespace: string, tag: string): Promise<boolean> {
+export async function removeManualTag(
+	path: string,
+	namespace: string,
+	tag: string
+): Promise<boolean> {
 	const existingTags = await getManualTags(path);
-	const filteredTags = existingTags.filter(t => !(t.namespace === namespace && t.tag === tag));
-	
+	const filteredTags = existingTags.filter((t) => !(t.namespace === namespace && t.tag === tag));
+
 	if (filteredTags.length === existingTags.length) {
 		return true;
 	}
-	
+
 	return updateManualTags(path, filteredTags);
 }
 
@@ -168,9 +172,9 @@ export function searchByManualTag(namespace: string | null, tag: string): string
 	const data = loadFromStorage();
 	const results: string[] = [];
 	const tagLower = tag.toLowerCase();
-	
+
 	for (const [path, tags] of Object.entries(data)) {
-		const matched = tags.some(t => {
+		const matched = tags.some((t) => {
 			const tagMatch = t.tag.toLowerCase().includes(tagLower);
 			const nsMatch = namespace ? t.namespace === namespace : true;
 			return tagMatch && nsMatch;
@@ -179,7 +183,7 @@ export function searchByManualTag(namespace: string | null, tag: string): string
 			results.push(path);
 		}
 	}
-	
+
 	return results;
 }
 
@@ -189,7 +193,7 @@ export function searchByManualTag(namespace: string | null, tag: string): string
 export function getAllUniqueManualTags(): Array<{ namespace: string; tag: string; count: number }> {
 	const data = loadFromStorage();
 	const tagMap = new SvelteMap<string, { namespace: string; tag: string; count: number }>();
-	
+
 	for (const tags of Object.values(data)) {
 		for (const t of tags) {
 			const key = `${t.namespace}:${t.tag}`;
@@ -201,7 +205,7 @@ export function getAllUniqueManualTags(): Array<{ namespace: string; tag: string
 			}
 		}
 	}
-	
+
 	return Array.from(tagMap.values()).sort((a, b) => b.count - a.count);
 }
 
@@ -251,10 +255,10 @@ export const TAG_NAMESPACES = [
 	'other',
 	'language',
 	'reclass',
-	'custom'  // 用户自定义
+	'custom' // 用户自定义
 ] as const;
 
-export type TagNamespace = typeof TAG_NAMESPACES[number];
+export type TagNamespace = (typeof TAG_NAMESPACES)[number];
 
 /**
  * 命名空间显示名称

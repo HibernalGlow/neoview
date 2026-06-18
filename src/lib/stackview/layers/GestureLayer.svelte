@@ -10,7 +10,14 @@
 	import { keyBindingsStore } from '$lib/stores/keybindings';
 	import { generateKeyCombo } from '$lib/stores/keyboard.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
-	import { rotate180, rotateClockwise, zoomIn, zoomOut, resetZoom, toggleFullscreen } from '$lib/stores';
+	import {
+		rotate180,
+		rotateClockwise,
+		zoomIn,
+		zoomOut,
+		resetZoom,
+		toggleFullscreen
+	} from '$lib/stores';
 	import { bookStore } from '$lib/stores/book.svelte';
 	import { showToast } from '$lib/utils/toast';
 	import { executeProvidedActionSync } from '$lib/actions/actionRegistry';
@@ -78,16 +85,15 @@
 			const gestureLayer = layerRef;
 			const originalPointerEvents = gestureLayer.style.pointerEvents;
 			gestureLayer.style.pointerEvents = 'none';
-			
+
 			const elementBelow = document.elementFromPoint(x, y);
-			
+
 			gestureLayer.style.pointerEvents = originalPointerEvents;
-			
+
 			if (elementBelow) {
 				// 检查元素是否有 data-video-controls 属性或在视频控件内
 				return !!(
-					elementBelow.closest('[data-video-controls]') ||
-					elementBelow.closest('.video-controls')
+					elementBelow.closest('[data-video-controls]') || elementBelow.closest('.video-controls')
 				);
 			}
 		}

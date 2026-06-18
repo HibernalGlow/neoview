@@ -16,6 +16,8 @@
   import { generateCssFilter } from '$lib/utils/colorFilters';
   import { imageTrimStore, trimToClipPath, mergeClipPaths, type ImageTrimSettings } from '$lib/stores/imageTrimStore.svelte';
   import CanvasImage from './CanvasImage.svelte';
+  import { getBitmapCacheEntry, preloadBitmap } from '../utils/bitmapPreloader';
+  import { getDecodedImageEntry, predecodeImage } from '../utils/imageDecodePreloader';
   
   interface Props {
     pageIndex: number;
@@ -153,17 +155,48 @@
     }
 
     const swapToken = ++pendingSwapToken;
-    const preloader = new Image();
-
-    const commitIfCurrent = () => {
+    const commitIfCurrent = (width: number, height: number) => {
       if (swapToken !== pendingSwapToken) return;
-      emitPreloadedDimensions(preloader.naturalWidth, preloader.naturalHeight);
+      emitPreloadedDimensions(width, height);
       commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
     };
 
-    preloader.onload = commitIfCurrent;
-    preloader.onerror = commitIfCurrent;
-    preloader.src = targetUrl;
+    if (loadModeStore.isCanvasMode) {
+      const bitmapEntry = getBitmapCacheEntry(targetUrl);
+      if (bitmapEntry) {
+        commitIfCurrent(bitmapEntry.width, bitmapEntry.height);
+        return;
+      }
+
+      preloadBitmap(targetUrl)
+        .then((entry) => {
+          commitIfCurrent(entry.width, entry.height);
+        })
+        .catch(() => {
+          commitIfCurrent(0, 0);
+        });
+      return;
+    }
+
+    const decodedEntry = getDecodedImageEntry(targetUrl);
+    if (decodedEntry) {
+      commitIfCurrent(decodedEntry.width, decodedEntry.height);
+      return;
+    }
+
+    predecodeImage(targetUrl, { priority: 'high' })
+      .then((entry) => {
+        commitIfCurrent(entry.width, entry.height);
+      })
+      .catch(() => {
+        if (swapToken !== pendingSwapToken) return;
+        const fallback = new Image();
+        fallback.decoding = 'async';
+        fallback.onload = fallback.onerror = () => {
+          commitIfCurrent(fallback.naturalWidth, fallback.naturalHeight);
+        };
+        fallback.src = targetUrl;
+      });
   });
 
   // 【Phase 1 修复】缩略图仅用于冷启动

@@ -22,8 +22,11 @@
 import { bookStore } from '$lib/stores/book.svelte';
 import { getFrameSnapshot, getReaderWindow, reportViewport, triggerPreload, type FrameSnapshot, type FrameImageInfo, type GetFrameSnapshotParams, type ReaderWindow } from '$lib/api/frameApi';
 import { settingsManager } from '$lib/settings/settingsManager';
+import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
+import { clearBitmapCache, enqueueBitmapPreload } from '../utils/bitmapPreloader';
+import { clearImageDecodeCache, enqueueImagePredecode } from '../utils/imageDecodePreloader';
 
 
 // ============================================================================
@@ -51,7 +54,6 @@ const preloadedUrlSet = new Set<string>();
 const preloadedUrlQueue: string[] = [];
 const preloadedWindowSet = new Set<string>();
 const preloadedWindowQueue: string[] = [];
-const activePreloadImages = new Set<HTMLImageElement>();
 
 function rememberLimited(set: Set<string>, queue: string[], value: string, limit: number): boolean {
   if (set.has(value)) return false;
@@ -103,16 +105,12 @@ function collectPreloadUrls(window: ReaderWindow, currentFrameId: string): strin
 }
 
 function preloadImageUrl(url: string): void {
-  if (typeof Image === 'undefined') return;
   if (!rememberLimited(preloadedUrlSet, preloadedUrlQueue, url, PRELOAD_URL_CACHE_LIMIT)) return;
-
-  const image = new Image();
-  image.decoding = 'async';
-  image.onload = image.onerror = () => {
-    activePreloadImages.delete(image);
-  };
-  activePreloadImages.add(image);
-  image.src = url;
+  if (loadModeStore.isCanvasMode) {
+    enqueueBitmapPreload(url);
+  } else {
+    enqueueImagePredecode(url, 'low');
+  }
 }
 
 
@@ -262,6 +260,8 @@ export function createImageStore() {
       state.currentFrame = null;
       state.previousFrame = null;
       state.loading = false;
+      clearImageDecodeCache();
+      clearBitmapCache();
     }
 
     // 避免重复加载
@@ -422,6 +422,12 @@ export function createImageStore() {
     state.error = null;
     lastBookPath = null;
     pendingRequestToken++;
+    preloadedUrlSet.clear();
+    preloadedUrlQueue.length = 0;
+    preloadedWindowSet.clear();
+    preloadedWindowQueue.length = 0;
+    clearImageDecodeCache();
+    clearBitmapCache();
   }
 
   return {

@@ -32,16 +32,38 @@
 	let hasError = $state(false);
 	let renderedUrl = '';
 	let pendingUrl = '';
+	let settledTransform = $state('');
+	let settledClipPath = $state('');
+	let settledStyle = $state('');
 
 	let displayUrl = $derived(url);
 
 	$effect(() => {
 		const currentUrl = displayUrl;
 		const currentBlob = blob;
-		if (currentUrl && currentUrl !== renderedUrl) {
+		const currentTransform = transform;
+		const currentClipPath = clipPath;
+		const currentStyle = style;
+
+		if (currentUrl && currentUrl === renderedUrl) {
+			pendingUrl = currentUrl;
+			settledTransform = currentTransform;
+			settledClipPath = currentClipPath;
+			settledStyle = currentStyle;
+			return;
+		}
+
+		if (currentUrl && currentUrl !== renderedUrl && currentUrl !== pendingUrl) {
 			void loadAndRender(currentUrl, currentBlob);
 		}
 	});
+
+	function commitRenderState(imageUrl: string): void {
+		renderedUrl = imageUrl;
+		settledTransform = transform;
+		settledClipPath = clipPath;
+		settledStyle = style;
+	}
 
 	function drawBitmap(bitmap: ImageBitmap, width: number, height: number): void {
 		canvas.width = width;
@@ -93,7 +115,7 @@
 			const cached = getBitmapCacheEntry(imageUrl);
 			if (cached?.bitmap) {
 				drawBitmap(cached.bitmap, cached.width, cached.height);
-				renderedUrl = imageUrl;
+				commitRenderState(imageUrl);
 				emitLoad(cached.width, cached.height);
 				return;
 			}
@@ -103,7 +125,7 @@
 				if (pendingUrl !== imageUrl) return;
 				if (entry.bitmap) {
 					drawBitmap(entry.bitmap, entry.width, entry.height);
-					renderedUrl = imageUrl;
+					commitRenderState(imageUrl);
 					emitLoad(entry.width, entry.height);
 					return;
 				}
@@ -128,7 +150,7 @@
 
 			drawBitmap(result.bitmap, result.width, result.height);
 			result.bitmap.close();
-			renderedUrl = imageUrl;
+			commitRenderState(imageUrl);
 			emitLoad(result.width, result.height);
 		} catch (error) {
 			if (pendingUrl === imageUrl) {
@@ -147,9 +169,9 @@
 	bind:this={canvas}
 	class="canvas-image {className}"
 	class:error={hasError}
-	style:transform={transform || undefined}
-	style:clip-path={clipPath || undefined}
-	style={style || undefined}
+	style:transform={settledTransform || undefined}
+	style:clip-path={settledClipPath || undefined}
+	style={settledStyle || undefined}
 	aria-label={alt}
 	data-page-index={pageIndex}
 	draggable="false"

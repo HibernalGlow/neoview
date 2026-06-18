@@ -84,6 +84,7 @@
 	import RadialInputLayer from '$lib/components/radial/RadialInputLayer.svelte';
 	import RadialMenuOverlay from '$lib/components/radial/RadialMenuOverlay.svelte';
 	import { radialMenuStore } from '$lib/stores/radialMenu';
+	import GlobalWorkflowPreview from '$lib/components/workflows/GlobalWorkflowPreview.svelte';
 
 	const WINDOW_STATE_SAFE_FLAGS = StateFlags.SIZE | StateFlags.POSITION | StateFlags.MAXIMIZED;
 
@@ -676,6 +677,7 @@
 	<!-- 轮盘菜单系统 -->
 	<RadialInputLayer />
 	<RadialMenuOverlay onselect={(action: string) => dispatchAction(action)} />
+	<GlobalWorkflowPreview />
 
 	<!-- 仅使用传统布局模式，禁用 Flow 画布以提升性能 -->
 	<MainLayout>

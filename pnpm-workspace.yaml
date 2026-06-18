@@ -1,5 +1,9 @@
 packages:
   - '.'
 
+overrides:
+  yaml: ^2.4.2
+  supports-color: ^7.2.0
+
 allowBuilds:
   esbuild: true

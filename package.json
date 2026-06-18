@@ -8,10 +8,6 @@
     "email": "contato@HibernalGlow.dev"
   },
   "type": "module",
-  "resolutions": {
-    "yaml": "^2.4.2",
-    "supports-color": "^7.2.0"
-  },
   "scripts": {
     "dev": "vite",
     "dev:web": "cross-env WEB_ONLY=true vite",

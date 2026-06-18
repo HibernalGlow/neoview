@@ -10,6 +10,8 @@
   - 图像裁剪（四边百分比裁剪 + 自动去黑边/白边）
 -->
 <script lang="ts">
+  import { tick } from 'svelte';
+
   import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
   import { bookStore } from '$lib/stores/book.svelte';
   import { filterStore, type FilterSettings } from '$lib/stores/filterStore.svelte';
@@ -155,45 +157,47 @@
     }
 
     const swapToken = ++pendingSwapToken;
-    const commitIfCurrent = (width: number, height: number) => {
+    const commitIfCurrent = async (width: number, height: number) => {
       if (swapToken !== pendingSwapToken) return;
       emitPreloadedDimensions(width, height);
-      commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
+      await tick();
+      if (swapToken !== pendingSwapToken || displayUrl !== targetUrl) return;
+      commitSettledRender(targetUrl, transform, effectiveClipPath, combinedStyle);
     };
 
     if (loadModeStore.isCanvasMode) {
       const bitmapEntry = getBitmapCacheEntry(targetUrl);
       if (bitmapEntry) {
-        commitIfCurrent(bitmapEntry.width, bitmapEntry.height);
+        void commitIfCurrent(bitmapEntry.width, bitmapEntry.height);
         return;
       }
 
       preloadBitmap(targetUrl)
         .then((entry) => {
-          commitIfCurrent(entry.width, entry.height);
+          void commitIfCurrent(entry.width, entry.height);
         })
         .catch(() => {
-          commitIfCurrent(0, 0);
+          void commitIfCurrent(0, 0);
         });
       return;
     }
 
     const decodedEntry = getDecodedImageEntry(targetUrl);
     if (decodedEntry) {
-      commitIfCurrent(decodedEntry.width, decodedEntry.height);
+      void commitIfCurrent(decodedEntry.width, decodedEntry.height);
       return;
     }
 
     predecodeImage(targetUrl, { priority: 'high' })
       .then((entry) => {
-        commitIfCurrent(entry.width, entry.height);
+        void commitIfCurrent(entry.width, entry.height);
       })
       .catch(() => {
         if (swapToken !== pendingSwapToken) return;
         const fallback = new Image();
         fallback.decoding = 'async';
         fallback.onload = fallback.onerror = () => {
-          commitIfCurrent(fallback.naturalWidth, fallback.naturalHeight);
+          void commitIfCurrent(fallback.naturalWidth, fallback.naturalHeight);
         };
         fallback.src = targetUrl;
       });
@@ -254,16 +258,18 @@
   <!-- Canvas 渲染模式：Worker 预解码，性能更好 -->
   <div class="image-container {className}" style:background-image={showThumbnail && thumbnailUrl ? `url(${thumbnailUrl})` : 'none'}>
     {#if hasSettledUrl}
-      <CanvasImage
-        {pageIndex}
-        url={settledUrl}
-        {alt}
-        transform={settledTransform}
-        clipPath={settledClipPath}
-        style={settledStyle}
-        class={settledClipPath && settledClipPath !== 'none' ? 'is-split' : ''}
-        onload={handleMainImageLoad}
-      />
+      {#key settledUrl}
+        <CanvasImage
+          {pageIndex}
+          url={settledUrl}
+          {alt}
+          transform={settledTransform}
+          clipPath={settledClipPath}
+          style={settledStyle}
+          class={settledClipPath && settledClipPath !== 'none' ? 'is-split' : ''}
+          onload={handleMainImageLoad}
+        />
+      {/key}
     {/if}
   </div>
 {:else}

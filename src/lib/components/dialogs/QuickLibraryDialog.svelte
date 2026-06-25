@@ -61,35 +61,44 @@
 
 		let left = 0;
 		let top = 0;
+		let currentWidth = cardWidth;
+		let currentHeight = cardHeight;
+		let borderStyle = '';
 
-		// 横屏模式 (横向偏置，置于轮盘左侧或右侧剩余空间最大的位置)
+		// 横屏模式 (让卡片占满高度，纵向 height 为 H，top 为 0，横向跟随轮盘并贴紧)
 		if (W >= H) {
-			// 纵向居中对齐轮盘，同时确保不超出屏幕上下边界
-			top = Math.max(20, Math.min(H - cardHeight - 20, cY - cardHeight / 2));
+			top = 0;
+			currentHeight = H;
 
 			if (cX > W / 2) {
 				// 轮盘在右侧，面板放左侧
-				left = Math.max(20, cX - margin - cardWidth);
+				left = Math.max(0, cX - margin - cardWidth);
 			} else {
 				// 轮盘在左侧，面板放右侧
-				left = Math.min(W - cardWidth - 20, cX + margin);
+				left = Math.min(W - cardWidth, cX + margin);
 			}
-		}
-		// 竖屏模式 (纵向偏置，置于轮盘上方或下方剩余空间最大的位置)
+
+			// 只有左右边框，无上下边框，无圆角
+			borderStyle = 'border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-top: none; border-bottom: none; border-radius: 0px;';
+		} 
+		// 竖屏模式 (让卡片占满宽度，横向 width 为 W，left 为 0，纵向跟随轮盘并贴紧)
 		else {
-			// 横向居中对齐轮盘，同时确保不超出屏幕左右边界
-			left = Math.max(20, Math.min(W - cardWidth - 20, cX - cardWidth / 2));
+			left = 0;
+			currentWidth = W;
 
 			if (cY > H / 2) {
 				// 轮盘在下方，面板放上方
-				top = Math.max(20, cY - margin - cardHeight);
+				top = Math.max(0, cY - margin - cardHeight);
 			} else {
 				// 轮盘在上方，面板放下方
-				top = Math.min(H - cardHeight - 20, cY + margin);
+				top = Math.min(H - cardHeight, cY + margin);
 			}
+
+			// 只有上下边框，无左右边框，无圆角
+			borderStyle = 'border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); border-left: none; border-right: none; border-radius: 0px;';
 		}
 
-		return `position: fixed; left: ${left}px; top: ${top}px; width: ${cardWidth}px; height: ${cardHeight}px; z-index: 58;`;
+		return `position: fixed; left: ${left}px; top: ${top}px; width: ${currentWidth}px; height: ${currentHeight}px; z-index: 58; ${borderStyle}`;
 	});
 
 	// 阻止事件冒泡到轮盘组件的辅助函数
@@ -103,21 +112,14 @@
 	<div
 		data-radial-exclude
 		style="{cardStyle} background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
-		class="pointer-events-auto flex flex-col overflow-hidden rounded-xl border p-4 shadow-2xl select-none"
+		class="pointer-events-auto flex flex-col overflow-hidden p-3 shadow-2xl select-none"
 		onpointerdown={stopPropagation}
 		onpointerup={stopPropagation}
 		onmousedown={stopPropagation}
 		onmouseup={stopPropagation}
 		onclick={stopPropagation}
 	>
-		<div class="flex items-center justify-between border-b pb-2">
-			<div class="flex flex-col">
-				<span class="text-sm font-semibold">快捷书库</span>
-				<span class="text-muted-foreground text-[10px]">双击目录或书籍进行切换</span>
-			</div>
-		</div>
-
-		<div class="bg-card/40 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
+		<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<FolderPanel />
 		</div>
 	</div>

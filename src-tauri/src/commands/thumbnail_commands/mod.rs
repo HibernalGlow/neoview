@@ -29,9 +29,8 @@ pub use generation::{
 };
 
 // 重导出检索命令
-// [4图预览功能已禁用] 注释 get_folder_preview_thumbnails
 pub use retrieval::{
-    /* get_folder_preview_thumbnails, */ get_thumbnail_blob_data, has_thumbnail,
+    get_folder_preview_thumbnails, get_thumbnail_blob_data, has_thumbnail,
     has_thumbnail_by_key_category, load_thumbnail_from_db, load_thumbnail_with_emm_json,
 };
 

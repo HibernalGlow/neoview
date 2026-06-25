@@ -203,12 +203,11 @@
 	let penetrateShowInnerFile = $state<'none' | 'penetrate' | 'always'>('penetrate');
 	let penetrateInnerFileCount = $state<'single' | 'all'>('single');
 	let penetratePureMediaFolderOpen = $state(true);
-	// [4图预览功能已禁用] 文件夹预览缩略图 URL 数组
-	// let folderThumbnails = $state<string[]>([]);
-	let folderThumbnails: string[] = []; // 保持为空数组
-	// 文件夹 4 图预览：使用响应式 store（必须在 $effect 之前定义）
-	// [4图预览功能已禁用] const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
-	const folderPreviewGridEnabled = false; // 强制禁用
+	// 文件夹预览缩略图 URL 数组
+	let folderThumbnails = $state<string[]>([]);
+	// 文件夹预览网格模式和预览数量
+	const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
+	const folderPreviewCount = $derived($fileBrowserStore.folderPreviewCount);
 	// 支持多个内部文件
 	let penetrateChildFiles = $state<
 		Array<{
@@ -239,74 +238,63 @@
 		return unsubscribe;
 	});
 
-	// [4图预览功能已禁用] 不再加载文件夹预览缩略图
-	// $effect(() => {
-	// 	// 仅在文件夹项目、开启 4 图预览时加载（对所有视图模式生效）
-	// 	const isDir = item.isDir;
-	// 	const enabled = folderPreviewGridEnabled;
-	// 	const itemPath = item.path;
-	//
-	// 	console.log('📂 [4图预览] effect 触发:', {
-	// 		itemPath,
-	// 		isDir,
-	// 		enabled,
-	// 		viewMode
-	// 	});
-	//
-	// 	if (!isDir || !enabled) {
-	// 		console.log('📂 [4图预览] 条件不满足，跳过');
-	// 		folderThumbnails = [];
-	// 		return;
-	// 	}
-	//
-	// 	// 延迟加载，避免影响初始渲染
-	// 	const timeoutId = setTimeout(async () => {
-	// 		try {
-	// 			console.log('📂 [4图预览] 请求:', itemPath, 'enabled:', enabled);
-	// 			// 调用后端获取文件夹预览缩略图
-	// 			const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
-	// 				folderPath: itemPath,
-	// 				count: 4
-	// 			});
-	//
-	// 			console.log('📂 [4图预览] 返回 blobKeys:', blobKeys.length, blobKeys);
-	//
-	// 			if (blobKeys.length === 0) {
-	// 				folderThumbnails = [];
-	// 				return;
-	// 			}
-	//
-	// 			// 将 blob keys 转换为 blob URLs
-	// 			const urls: string[] = [];
-	// 			for (const blobKey of blobKeys) {
-	// 				try {
-	// 					const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
-	// 					if (blobData) {
-	// 						const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
-	// 						urls.push(URL.createObjectURL(blob));
-	// 					}
-	// 				} catch {
-	// 					// 忽略单个缩略图加载失败
-	// 				}
-	// 			}
-	// 			console.log('📂 [4图预览] 最终 URLs:', urls.length, urls);
-	// 			folderThumbnails = urls;
-	// 		} catch (e) {
-	// 			console.debug('加载文件夹预览缩略图失败:', e);
-	// 			folderThumbnails = [];
-	// 		}
-	// 	}, 100);
-	//
-	// 	return () => {
-	// 		clearTimeout(timeoutId);
-	// 		// 清理 blob URLs
-	// 		folderThumbnails.forEach(url => {
-	// 			if (url.startsWith('blob:')) {
-	// 				URL.revokeObjectURL(url);
-	// 			}
-	// 		});
-	// 	};
-	// });
+	// 文件夹多图预览加载
+	$effect(() => {
+		// 仅在文件夹项目、开启多图预览时加载
+		const isDir = item.isDir;
+		const enabled = folderPreviewGridEnabled;
+		const count = folderPreviewCount;
+		const itemPath = item.path;
+
+		if (!isDir || !enabled) {
+			folderThumbnails = [];
+			return;
+		}
+
+		// 延迟加载，避免影响初始列表加载性能
+		const timeoutId = setTimeout(async () => {
+			try {
+				// 调用后端获取文件夹预览缩略图
+				const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
+					folderPath: itemPath,
+					count: count
+				});
+
+				if (blobKeys.length === 0) {
+					folderThumbnails = [];
+					return;
+				}
+
+				// 将 blob keys 转换为 blob URLs
+				const urls: string[] = [];
+				for (const blobKey of blobKeys) {
+					try {
+						const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
+						if (blobData) {
+							const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
+							urls.push(URL.createObjectURL(blob));
+						}
+					} catch {
+						// 忽略单个缩略图加载失败
+					}
+				}
+				folderThumbnails = urls;
+			} catch (e) {
+				console.debug('加载文件夹预览缩略图失败:', e);
+				folderThumbnails = [];
+			}
+		}, 100);
+
+		return () => {
+			clearTimeout(timeoutId);
+			// 清理 blob URLs
+			folderThumbnails.forEach(url => {
+				if (url.startsWith('blob:')) {
+					URL.revokeObjectURL(url);
+				}
+			});
+		};
+	});
 
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
@@ -902,6 +890,8 @@
 	<FileItemGridView
 		{item}
 		{thumbnail}
+		{folderThumbnails}
+		{folderPreviewGridEnabled}
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

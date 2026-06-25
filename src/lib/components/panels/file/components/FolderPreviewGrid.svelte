@@ -1,14 +1,13 @@
 <script lang="ts">
 	/**
-	 * FolderPreviewGrid - 文件夹 2x2 预览网格组件
+	 * FolderPreviewGrid - 文件夹多图自适应网格预览组件
 	 *
-	 * 显示文件夹内前 4 张图片的缩略图预览
-	 * 参考 OpenComic 的文件夹预览实现
+	 * 显示文件夹内任意数量图片的缩略图自适应网格预览（支持 2x2, 3x3 等）
 	 */
 	import { Folder, Image } from '@lucide/svelte';
 
 	interface Props {
-		/** 预览图 URL 数组，最多 4 个 */
+		/** 预览图 URL 数组 */
 		thumbnails: string[];
 		/** 文件夹名称，用于 alt 属性 */
 		folderName?: string;
@@ -18,12 +17,25 @@
 
 	let { thumbnails = [], folderName = '', loading = false }: Props = $props();
 
-	// 计算网格布局：1 张图占满，2-4 张图为 2x2 网格
-	const gridClass = $derived(() => {
-		if (thumbnails.length === 1) {
-			return 'grid-cols-1 grid-rows-1';
+	// 动态计算行数、列数 and 总格数，支持任意数量预览
+	const gridInfo = $derived.by(() => {
+		const len = thumbnails.length;
+		if (len <= 1) {
+			return { cols: 1, rows: 1, size: 1 };
 		}
-		return 'grid-cols-2 grid-rows-2';
+		if (len <= 4) {
+			return { cols: 2, rows: 2, size: 4 };
+		}
+		if (len <= 9) {
+			return { cols: 3, rows: 3, size: 9 };
+		}
+		// 支持更大网格（如 4x4 等）
+		const cols = Math.ceil(Math.sqrt(len));
+		return {
+			cols,
+			rows: cols,
+			size: cols * cols
+		};
 	});
 </script>
 
@@ -50,9 +62,12 @@
 			class="h-full w-full object-cover"
 		/>
 	{:else}
-		<!-- 2-4 张图显示为 2x2 网格 -->
-		<div class="grid h-full w-full grid-cols-2 grid-rows-2 gap-0.5">
-			{#each [0, 1, 2, 3] as index}
+		<!-- 多图自适应网格 -->
+		<div
+			class="grid h-full w-full gap-0.5"
+			style="grid-template-columns: repeat({gridInfo.cols}, minmax(0, 1fr)); grid-template-rows: repeat({gridInfo.rows}, minmax(0, 1fr));"
+		>
+			{#each Array(gridInfo.size) as _, index}
 				<div class="bg-secondary relative overflow-hidden">
 					{#if thumbnails[index]}
 						<img
@@ -63,9 +78,9 @@
 							class="h-full w-full object-cover"
 						/>
 					{:else}
-						<!-- 不足 4 张时显示占位 -->
+						<!-- 空置预览位占位 -->
 						<div class="flex h-full w-full items-center justify-center">
-							<Image class="text-primary/30 h-6 w-6" />
+							<Image class="text-primary/30 h-4 w-4" />
 						</div>
 					{/if}
 				</div>

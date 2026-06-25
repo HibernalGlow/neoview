@@ -50,8 +50,10 @@ interface FileBrowserState {
 	penetrateMaxDepth: number;
 	// 纯媒体文件夹点击直接打开
 	penetratePureMediaFolderOpen: boolean;
-	// 文件夹预览网格模式（显示前4张图片的2x2预览）
-	// [4图预览功能已禁用] folderPreviewGrid: boolean;
+	// 文件夹预览网格模式（显示多图预览，如 2x2 或 3x3）
+	folderPreviewGrid: boolean;
+	// 文件夹预览图数量（4、9等）
+	folderPreviewCount: number;
 	compactGridMode: boolean;
 	showSearchBar: boolean;
 	showMigrationBar: boolean;
@@ -199,7 +201,8 @@ interface PenetrateSettings {
 	penetrateInnerFileCount: 'single' | 'all';
 	penetrateMaxDepth: number;
 	penetratePureMediaFolderOpen: boolean;
-	// [4图预览功能已禁用] folderPreviewGrid: boolean;
+	folderPreviewGrid: boolean;
+	folderPreviewCount: number;
 	compactGridMode?: boolean;
 }
 
@@ -272,7 +275,8 @@ const initialState: FileBrowserState = {
 	penetrateInnerFileCount: savedPenetrateSettings.penetrateInnerFileCount ?? 'single',
 	penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
 	penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
-	// [4图预览功能已禁用] folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
+	folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
+	folderPreviewCount: savedPenetrateSettings.folderPreviewCount ?? 4,
 	compactGridMode: savedPenetrateSettings.compactGridMode ?? false,
 	showSearchBar: false,
 	showMigrationBar: false,
@@ -468,18 +472,18 @@ function createFileBrowserStore() {
 				});
 				return newState;
 			}),
-		// [4图预览功能已禁用]
-		// setFolderPreviewGrid: (value: boolean) => update(state => {
-		//   const newState = { ...state, folderPreviewGrid: value };
-		//   savePenetrateSettings({
-		//     penetrateShowInnerFile: state.penetrateShowInnerFile,
-		//     penetrateInnerFileCount: state.penetrateInnerFileCount,
-		//     penetrateMaxDepth: state.penetrateMaxDepth,
-		//     penetratePureMediaFolderOpen: state.penetratePureMediaFolderOpen,
-		//     folderPreviewGrid: value
-		//   });
-		//   return newState;
-		// }),
+		setFolderPreviewGrid: (value: boolean) =>
+			update((state) => {
+				const newState = { ...state, folderPreviewGrid: value };
+				savePenetrateSettings({ folderPreviewGrid: value });
+				return newState;
+			}),
+		setFolderPreviewCount: (value: number) =>
+			update((state) => {
+				const newState = { ...state, folderPreviewCount: value };
+				savePenetrateSettings({ folderPreviewCount: value });
+				return newState;
+			}),
 		setCompactGridMode: (value: boolean) =>
 			update((state) => {
 				const newState = { ...state, compactGridMode: value };

@@ -251,104 +251,102 @@ fn find_images_recursive_impl(
     }
 }
 
-// [4图预览功能已禁用]
-// /// 获取文件夹前 N 张图片路径（用于 4 图预览）
-// /// 返回 Vec<String>，最多返回 count 个图片路径
-// /// 如果 count == 1，优先返回封面图片；否则返回多张图片（封面作为第一张）
-// pub fn get_folder_preview_images(
-//     folder_path: &str,
-//     count: usize,
-// ) -> Result<Vec<String>, String> {
-//     println!("📂 [4图预览] 请求: folder={}, count={}", folder_path, count);
-//
-//     // count == 1 时：单图模式，优先封面
-//     if count == 1 {
-//         if let Ok(Some(cover)) = find_cover_image(folder_path) {
-//             println!("📂 [4图预览] 单图模式，找到封面: {}", cover);
-//             return Ok(vec![cover]);
-//         }
-//         // 没有封面，找第一张图片
-//         let mut results = Vec::new();
-//         find_images_only_recursive(folder_path, 3, 1, &mut results, true);
-//         println!("📂 [4图预览] 单图模式，找到 {} 张图片", results.len());
-//         return Ok(results);
-//     }
-//
-//     // count > 1 时：多图预览模式，排除封面图片
-//     let mut results = Vec::new();
-//     find_images_only_recursive(folder_path, 3, count, &mut results, false); // 排除封面
-//
-//     println!("📂 [4图预览] 多图模式，找到 {} 张图片: {:?}", results.len(), results);
-//
-//     Ok(results)
-// }
+/// 获取文件夹前 N 张图片路径（用于 4 图预览）
+/// 返回 Vec<String>，最多返回 count 个图片路径
+/// 如果 count == 1，优先返回封面图片；否则返回多张图片（封面作为第一张）
+pub fn get_folder_preview_images(
+    folder_path: &str,
+    count: usize,
+) -> Result<Vec<String>, String> {
+    println!("📂 [4图预览] 请求: folder={}, count={}", folder_path, count);
 
-// [4图预览功能已禁用]
-// /// 递归查找图片文件（仅图片，不包含压缩包和视频）
-// /// include_cover: 是否包含封面图片（cover.*, folder.*, thumb.*）
-// fn find_images_only_recursive(
-//     folder: &str,
-//     depth: u32,
-//     max_count: usize,
-//     results: &mut Vec<String>,
-//     include_cover: bool,
-// ) {
-//     if depth == 0 || results.len() >= max_count {
-//         return;
-//     }
-//
-//     let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
-//     let cover_patterns = ["cover", "folder", "thumb"];
-//
-//     let entries = match std::fs::read_dir(folder) {
-//         Ok(e) => e,
-//         Err(_) => return,
-//     };
-//
-//     let mut sorted_entries: Vec<_> = entries.flatten().collect();
-//     sorted_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
-//
-//     let mut subdirs = Vec::new();
-//
-//     // 先收集当前目录的图片
-//     for entry in &sorted_entries {
-//         if results.len() >= max_count {
-//             break;
-//         }
-//
-//         let path = entry.path();
-//
-//         if path.is_file() {
-//             if let Some(ext) = path.extension() {
-//                 let ext = ext.to_string_lossy().to_lowercase();
-//                 if image_exts.contains(&ext.as_str()) {
-//                     // 检查是否需要排除封面
-//                     if !include_cover {
-//                         let name = entry.file_name().to_string_lossy().to_lowercase();
-//                         let is_cover = cover_patterns.iter().any(|p| name.starts_with(p));
-//                         if is_cover {
-//                             continue; // 跳过封面图片
-//                         }
-//                     }
-//                     results.push(path.to_string_lossy().to_string());
-//                 }
-//             }
-//         } else if path.is_dir() {
-//             subdirs.push(path);
-//         }
-//     }
-//
-//     // 如果还不够，递归子目录
-//     for subdir in subdirs {
-//         if results.len() >= max_count {
-//             break;
-//         }
-//         find_images_only_recursive(
-//             &subdir.to_string_lossy(),
-//             depth - 1,
-//             max_count,
-//             results,
-//             include_cover,
-//         );
-//     }
-// }
+    // count == 1 时：单图模式，优先封面
+    if count == 1 {
+        if let Ok(Some(cover)) = find_cover_image(folder_path) {
+            println!("📂 [4图预览] 单图模式，找到封面: {}", cover);
+            return Ok(vec![cover]);
+        }
+        // 没有封面，找第一张图片
+        let mut results = Vec::new();
+        find_images_only_recursive(folder_path, 3, 1, &mut results, true);
+        println!("📂 [4图预览] 单图模式，找到 {} 张图片", results.len());
+        return Ok(results);
+    }
+
+    // count > 1 时：多图预览模式，排除封面图片
+    let mut results = Vec::new();
+    find_images_only_recursive(folder_path, 3, count, &mut results, false); // 排除封面
+
+    println!("📂 [4图预览] 多图模式，找到 {} 张图片: {:?}", results.len(), results);
+
+    Ok(results)
+}
+
+/// 递归查找图片文件（仅图片，不包含压缩包和视频）
+/// include_cover: 是否包含封面图片（cover.*, folder.*, thumb.*）
+fn find_images_only_recursive(
+    folder: &str,
+    depth: u32,
+    max_count: usize,
+    results: &mut Vec<String>,
+    include_cover: bool,
+) {
+    if depth == 0 || results.len() >= max_count {
+        return;
+    }
+
+    let image_exts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif", "jxl"];
+    let cover_patterns = ["cover", "folder", "thumb"];
+
+    let entries = match std::fs::read_dir(folder) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let mut sorted_entries: Vec<_> = entries.flatten().collect();
+    sorted_entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+    let mut subdirs = Vec::new();
+
+    // 先收集当前目录的图片
+    for entry in &sorted_entries {
+        if results.len() >= max_count {
+            break;
+        }
+
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                let ext = ext.to_string_lossy().to_lowercase();
+                if image_exts.contains(&ext.as_str()) {
+                    // 检查是否需要排除封面
+                    if !include_cover {
+                        let name = entry.file_name().to_string_lossy().to_lowercase();
+                        let is_cover = cover_patterns.iter().any(|p| name.starts_with(p));
+                        if is_cover {
+                            continue; // 跳过封面图片
+                        }
+                    }
+                    results.push(path.to_string_lossy().to_string());
+                }
+            }
+        } else if path.is_dir() {
+            subdirs.push(path);
+        }
+    }
+
+    // 如果还不够，递归子目录
+    for subdir in subdirs {
+        if results.len() >= max_count {
+            break;
+        }
+        find_images_only_recursive(
+            &subdir.to_string_lossy(),
+            depth - 1,
+            max_count,
+            results,
+            include_cover,
+        );
+    }
+}

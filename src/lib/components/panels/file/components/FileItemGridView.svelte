@@ -24,7 +24,7 @@
 	import TagChip from '$lib/components/ui/TagChip.svelte';
 	import MetadataBadge from '$lib/components/ui/MetadataBadge.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
-	// [4图预览功能已禁用] import FolderPreviewGrid from './FolderPreviewGrid.svelte';
+	import FolderPreviewGrid from './FolderPreviewGrid.svelte';
 	import {
 		formatDuration,
 		formatRelativeTime,
@@ -36,8 +36,8 @@
 	interface Props {
 		item: FsItem;
 		thumbnail?: string;
-		// [4图预览功能已禁用] folderThumbnails?: string[];
-		// [4图预览功能已禁用] folderPreviewGridEnabled?: boolean;
+		folderThumbnails?: string[];
+		folderPreviewGridEnabled?: boolean;
 		isSelected?: boolean;
 		showReadMark?: boolean;
 		showSizeAndModified?: boolean;
@@ -82,8 +82,8 @@
 	let {
 		item,
 		thumbnail,
-		// [4图预览功能已禁用] folderThumbnails = [],
-		// [4图预览功能已禁用] folderPreviewGridEnabled = false,
+		folderThumbnails = [],
+		folderPreviewGridEnabled = false,
 		isSelected = false,
 		showReadMark = false,
 		showSizeAndModified = false,
@@ -114,10 +114,9 @@
 	const isCompact = $derived($fileBrowserStore.compactGridMode);
 
 	// [4图预览功能已禁用]
-	const showFolderPreviewGrid = false;
-	/* const showFolderPreviewGrid = $derived(
+	const showFolderPreviewGrid = $derived(
 		item.isDir && folderPreviewGridEnabled && folderThumbnails.length > 0
-	); */
+	);
 
 	import { globalImageAspectRatios } from './scrollCache.svelte';
 
@@ -156,9 +155,9 @@
 >
 	<!-- 缩略图区域 -->
 	<div class="bg-secondary relative w-full overflow-hidden {isCompact ? 'h-full flex-1' : 'h-[148px]'}">
-		{#if false}
-			<!-- 文件夹 4 图预览模式 -->
-			<!-- <FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} /> -->
+		{#if showFolderPreviewGrid}
+			<!-- 文件夹多图自适应网格预览模式 -->
+			<FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} />
 		{:else if thumbnail}
 			<img
 				src={thumbnail}

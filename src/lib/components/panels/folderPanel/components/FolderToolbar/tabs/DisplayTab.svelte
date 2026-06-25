@@ -59,20 +59,31 @@
 		{/if}
 	</div>
 
-	<!-- [4图预览功能已禁用]
+	<!-- 文件夹多图自适应预览 -->
 	<div class="flex items-center gap-2">
 		<LayoutGrid class="h-3.5 w-3.5 text-muted-foreground" />
-		<span class="text-muted-foreground">文件夹预览:</span>
+		<span class="text-muted-foreground">多图预览:</span>
 		<Button 
 			variant={$fileBrowserStore.folderPreviewGrid ? 'default' : 'outline'} 
 			size="sm" 
 			class="h-6 text-xs px-2"
 			onclick={() => fileBrowserStore.setFolderPreviewGrid(!$fileBrowserStore.folderPreviewGrid)}
 		>
-			{$fileBrowserStore.folderPreviewGrid ? '4图' : '单图'}
+			{$fileBrowserStore.folderPreviewGrid ? '开' : '关'}
 		</Button>
+		{#if $fileBrowserStore.folderPreviewGrid}
+			<select
+				class="bg-background h-6 rounded border px-1 text-xs"
+				value={$fileBrowserStore.folderPreviewCount}
+				onchange={(e) =>
+					fileBrowserStore.setFolderPreviewCount(parseInt((e.target as HTMLSelectElement).value))}
+			>
+				<option value="4">4图 (2x2)</option>
+				<option value="9">9图 (3x3)</option>
+				<option value="16">16图 (4x4)</option>
+			</select>
+		{/if}
 	</div>
-	-->
 
 	<!-- 缩略图大小 -->
 	<div class="flex items-center gap-2">

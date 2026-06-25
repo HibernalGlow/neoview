@@ -1,9 +1,8 @@
 <script lang="ts">
 	/**
-	 * NeoView - Quick Library HUD Panel (Split-Screen Docked Layout)
-	 * 悬浮式沉浸图库 HUD 面板（屏幕边缘切分对齐布局）
+	 * NeoView - Quick Library HUD Panel
+	 * 悬浮式沉浸图库 HUD 面板（贴合轮盘自适应布局）
 	 */
-	import { fly } from 'svelte/transition';
 	import FolderPanel from '$lib/components/panels/folderPanel/FolderPanel.svelte';
 	import { radialMenuStore } from '$lib/stores/radialMenu';
 	import { bookStore } from '$lib/stores/book.svelte';
@@ -48,64 +47,49 @@
 		}
 	});
 
-	// 根据右击鼠标位置计算库面板应当贴靠哪一侧屏幕边缘
-	const dockSide = $derived.by(() => {
-		if (!radialMenuStore.isOpen) return 'left';
-
-		const cX = radialMenuStore.centerX;
-		const cY = radialMenuStore.centerY;
-
-		if (W >= H) {
-			// 横屏下，鼠标点击在右半屏则面板贴靠左侧边缘，反之贴靠右侧边缘
-			return cX > W / 2 ? 'left' : 'right';
-		} else {
-			// 竖屏下，鼠标点击在下半屏则面板贴靠顶侧边缘，反之贴靠底侧边缘
-			return cY > H / 2 ? 'top' : 'bottom';
-		}
-	});
-
-	// 面板容器的绝对/固定定位 CSS 样式
-	const cardStyle = $derived.by(() => {
+	// 自适应计算库面板位置
+	let cardStyle = $derived.by(() => {
 		if (!radialMenuStore.isOpen) return 'display: none;';
 
-		const cardWidth = 420; // 横屏模式侧边栏宽度
-		const cardHeight = Math.min(500, H * 0.45); // 竖屏模式上下栏高度
+		const cX = radialMenuStore.visualX;
+		const cY = radialMenuStore.visualY;
 
+		const cardWidth = 400; // 宽度
+		const cardHeight = Math.min(550, H - 40); // 高度限制
+		const menuRadius = radialMenuStore.config.radius ?? 120;
+		const margin = menuRadius + 120; // 偏离轮盘中心点的距离（轮盘半径 + 120px 标签和扩张状态缓冲）
+
+		let left = 0;
+		let top = 0;
+
+		// 横屏模式 (横向偏置，置于轮盘左侧或右侧剩余空间最大的位置)
 		if (W >= H) {
-			// 横屏模式：铺满高度，切分左右半屏
-			if (dockSide === 'left') {
-				return `position: fixed; left: 0; top: 0; width: ${cardWidth}px; height: 100vh; z-index: 58; border-right-width: 1px; border-left-width: 0; border-top-width: 0; border-bottom-width: 0; border-radius: 0;`;
+			// 纵向居中对齐轮盘，同时确保不超出屏幕上下边界
+			top = Math.max(20, Math.min(H - cardHeight - 20, cY - cardHeight / 2));
+
+			if (cX > W / 2) {
+				// 轮盘在右侧，面板放左侧
+				left = Math.max(20, cX - margin - cardWidth);
 			} else {
-				return `position: fixed; right: 0; top: 0; width: ${cardWidth}px; height: 100vh; z-index: 58; border-left-width: 1px; border-right-width: 0; border-top-width: 0; border-bottom-width: 0; border-radius: 0;`;
-			}
-		} else {
-			// 竖屏模式：铺满宽度，切分上下半屏
-			if (dockSide === 'top') {
-				return `position: fixed; left: 0; top: 0; width: 100vw; height: ${cardHeight}px; z-index: 58; border-bottom-width: 1px; border-top-width: 0; border-left-width: 0; border-right-width: 0; border-radius: 0;`;
-			} else {
-				return `position: fixed; left: 0; bottom: 0; width: 100vw; height: ${cardHeight}px; z-index: 58; border-top-width: 1px; border-bottom-width: 0; border-left-width: 0; border-right-width: 0; border-radius: 0;`;
+				// 轮盘在左侧，面板放右侧
+				left = Math.min(W - cardWidth - 20, cX + margin);
 			}
 		}
-	});
+		// 竖屏模式 (纵向偏置，置于轮盘上方或下方剩余空间最大的位置)
+		else {
+			// 横向居中对齐轮盘，同时确保不超出屏幕左右边界
+			left = Math.max(20, Math.min(W - cardWidth - 20, cX - cardWidth / 2));
 
-	// 滑入滑出过渡动画参数
-	const transitionParams = $derived.by(() => {
-		const cardWidth = 420;
-		const cardHeight = Math.min(500, H * 0.45);
-
-		if (W >= H) {
-			return {
-				x: dockSide === 'left' ? -cardWidth : cardWidth,
-				duration: 300,
-				opacity: 0.8
-			};
-		} else {
-			return {
-				y: dockSide === 'top' ? -cardHeight : cardHeight,
-				duration: 300,
-				opacity: 0.8
-			};
+			if (cY > H / 2) {
+				// 轮盘在下方，面板放上方
+				top = Math.max(20, cY - margin - cardHeight);
+			} else {
+				// 轮盘在上方，面板放下方
+				top = Math.min(H - cardHeight - 20, cY + margin);
+			}
 		}
+
+		return `position: fixed; left: ${left}px; top: ${top}px; width: ${cardWidth}px; height: ${cardHeight}px; z-index: 58;`;
 	});
 
 	// 阻止事件冒泡到轮盘组件的辅助函数
@@ -117,24 +101,23 @@
 {#if radialMenuStore.isOpen}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		transition:fly={transitionParams}
 		data-radial-exclude
 		style="{cardStyle} background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
-		class="pointer-events-auto flex flex-col overflow-hidden border p-5 shadow-2xl select-none"
+		class="pointer-events-auto flex flex-col overflow-hidden rounded-xl border p-4 shadow-2xl select-none"
 		onpointerdown={stopPropagation}
 		onpointerup={stopPropagation}
 		onmousedown={stopPropagation}
 		onmouseup={stopPropagation}
 		onclick={stopPropagation}
 	>
-		<div class="flex items-center justify-between border-b pb-3">
+		<div class="flex items-center justify-between border-b pb-2">
 			<div class="flex flex-col">
 				<span class="text-sm font-semibold">快捷书库</span>
 				<span class="text-muted-foreground text-[10px]">双击目录或书籍进行切换</span>
 			</div>
 		</div>
 
-		<div class="bg-card/40 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
+		<div class="bg-card/40 mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
 			<FolderPanel />
 		</div>
 	</div>

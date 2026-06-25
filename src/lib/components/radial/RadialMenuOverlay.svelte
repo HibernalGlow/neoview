@@ -29,44 +29,6 @@
 			.map((binding) => binding.key)
 	);
 
-	let W = $state(window.innerWidth);
-	let H = $state(window.innerHeight);
-
-	const handleResize = () => {
-		W = window.innerWidth;
-		H = window.innerHeight;
-	};
-
-	$effect(() => {
-		window.addEventListener('resize', handleResize);
-		return () => window.removeEventListener('resize', handleResize);
-	});
-
-	const viewportOverride = $derived.by(() => {
-		if (!radialMenuStore.isOpen) return null;
-
-		const cX = radialMenuStore.centerX;
-		const cY = radialMenuStore.centerY;
-		const cardWidth = 420;
-		const cardHeight = Math.min(500, H * 0.45);
-
-		if (W >= H) {
-			const dockLeft = cX > W / 2;
-			if (dockLeft) {
-				return { left: cardWidth };
-			} else {
-				return { right: W - cardWidth };
-			}
-		} else {
-			const dockTop = cY > H / 2;
-			if (dockTop) {
-				return { top: cardHeight };
-			} else {
-				return { bottom: H - cardHeight };
-			}
-		}
-	});
-
 	$effect(() => {
 		const el = menuEl;
 		if (!el) return;
@@ -115,7 +77,6 @@
 
 		el.items = rayItems;
 		el.layers = rayLayers;
-		el.viewportOverride = viewportOverride;
 		el.setAttribute('radius', String(radialMenuStore.config.radius));
 		el.setAttribute('inner-radius', String(radialMenuStore.config.innerRadius));
 		el.setAttribute('start-angle', String(radialMenuStore.config.startAngle));

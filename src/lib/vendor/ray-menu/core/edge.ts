@@ -8,10 +8,6 @@ import type { Point } from './angle';
 export interface Viewport {
 	width: number;
 	height: number;
-	left?: number;
-	top?: number;
-	right?: number;
-	bottom?: number;
 }
 
 export interface EdgeConstraints {
@@ -45,15 +41,11 @@ export function getAvailableSpace(
 	viewport: Viewport,
 	padding: number = 0
 ): EdgeConstraints {
-	const leftLimit = viewport.left ?? 0;
-	const topLimit = viewport.top ?? 0;
-	const rightLimit = viewport.right ?? viewport.width;
-	const bottomLimit = viewport.bottom ?? viewport.height;
 	return {
-		top: point.y - topLimit - padding,
-		right: rightLimit - point.x - padding,
-		bottom: bottomLimit - point.y - padding,
-		left: point.x - leftLimit - padding
+		top: point.y - padding,
+		right: viewport.width - point.x - padding,
+		bottom: viewport.height - point.y - padding,
+		left: point.x - padding
 	};
 }
 
@@ -134,13 +126,9 @@ export function calculateAngularOffset(edgeState: EdgeState): number {
  * Clamp a point to stay within viewport bounds
  */
 export function clampToViewport(point: Point, viewport: Viewport, padding: number = 0): Point {
-	const leftLimit = viewport.left ?? 0;
-	const topLimit = viewport.top ?? 0;
-	const rightLimit = viewport.right ?? viewport.width;
-	const bottomLimit = viewport.bottom ?? viewport.height;
 	return {
-		x: Math.max(leftLimit + padding, Math.min(rightLimit - padding, point.x)),
-		y: Math.max(topLimit + padding, Math.min(bottomLimit - padding, point.y))
+		x: Math.max(padding, Math.min(viewport.width - padding, point.x)),
+		y: Math.max(padding, Math.min(viewport.height - padding, point.y))
 	};
 }
 

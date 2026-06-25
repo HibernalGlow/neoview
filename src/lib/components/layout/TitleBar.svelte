@@ -45,10 +45,21 @@
 		const isMaximized = await appWindow.isMaximized();
 
 		if (isFullscreen || isMaximized) {
-			const percent = event.clientX / window.innerWidth;
+			const scaleFactor = await appWindow.scaleFactor();
+			const maximizedSize = await appWindow.outerSize();
+			const maximizedLogicalWidth = maximizedSize.width / scaleFactor;
+
+			const percent = event.clientX / maximizedLogicalWidth;
 			const clientY = event.clientY;
-			const screenX = event.screenX;
-			const screenY = event.screenY;
+
+			let currentScreenX = event.screenX;
+			let currentScreenY = event.screenY;
+
+			const handlePointerMove = (e: PointerEvent) => {
+				currentScreenX = e.screenX;
+				currentScreenY = e.screenY;
+			};
+			window.addEventListener('pointermove', handlePointerMove);
 
 			if (isFullscreen) {
 				await appWindow.setFullscreen(false);
@@ -56,20 +67,29 @@
 			if (isMaximized) {
 				await appWindow.unmaximize();
 			}
-			// 等待窗口大小和状态转换完成
-			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// 轮询等待窗口大小改变（说明操作系统已完成窗口状态恢复）
+			let size = maximizedSize;
+			const startTime = Date.now();
+			while (Date.now() - startTime < 300) {
+				size = await appWindow.outerSize();
+				if (size.width !== maximizedSize.width || size.height !== maximizedSize.height) {
+					break;
+				}
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			}
 
 			try {
-				const size = await appWindow.outerSize();
-				const scaleFactor = await appWindow.scaleFactor();
 				const logicalWidth = size.width / scaleFactor;
-				const x = screenX - percent * logicalWidth;
-				const y = screenY - clientY;
+				const x = currentScreenX - percent * logicalWidth;
+				const y = currentScreenY - clientY;
 				await appWindow.setPosition(new LogicalPosition(x, y));
 				// 等待位置生效
 				await new Promise((resolve) => setTimeout(resolve, 16));
 			} catch (error) {
 				console.warn('调整窗口拖拽位置失败:', error);
+			} finally {
+				window.removeEventListener('pointermove', handlePointerMove);
 			}
 		}
 

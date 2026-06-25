@@ -27,6 +27,7 @@ export interface UpscaleConditionConfig {
 	modelName: string;
 	scale: number;
 	tileSize: number;
+	tileEnabled?: boolean;
 	noiseLevel: number;
 	skip: boolean;
 }

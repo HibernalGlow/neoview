@@ -1,14 +1,14 @@
 //! 超分任务处理模块
-//! 
+//!
 //! 包含任务处理逻辑、图片加载、条件匹配、超分执行
 
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Instant;
-use regex::Regex;
 
 use crate::commands::pyo3_upscale_commands::PyO3UpscalerState;
 use crate::commands::upscale_service_commands::FrontendCondition;
@@ -16,10 +16,10 @@ use crate::core::pyo3_upscaler::UpscaleModel;
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
 use crate::core::wic_decoder::decode_image_from_memory_with_wic;
 
-use super::events::{UpscaleStatus, UpscaleReadyPayload};
-use super::types::{TaskPriority, UpscaleTask, CacheEntry};
 use super::cache::cache_key;
-use super::{log_info, log_debug};
+use super::events::{UpscaleReadyPayload, UpscaleStatus};
+use super::types::{CacheEntry, TaskPriority, UpscaleTask};
+use super::{log_debug, log_info};
 
 static REGEX_CACHE: OnceLock<RwLock<HashMap<String, Option<Regex>>>> = OnceLock::new();
 static REGEX_CACHE_HIT_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -57,27 +57,26 @@ pub fn load_image_data(image_path: &str) -> Result<Vec<u8>, String> {
     if let Some(inner_idx) = image_path.find(" inner=") {
         let archive_path = &image_path[..inner_idx];
         let inner_path = &image_path[inner_idx + 7..];
-        
+
         log_debug!("📦 从压缩包读取: {} -> {}", archive_path, inner_path);
-        
+
         // 使用 zip crate 读取
-        let file = fs::File::open(archive_path)
-            .map_err(|e| format!("打开压缩包失败: {}", e))?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| format!("解析压缩包失败: {}", e))?;
-        
-        let mut entry = archive.by_name(inner_path)
+        let file = fs::File::open(archive_path).map_err(|e| format!("打开压缩包失败: {}", e))?;
+        let mut archive =
+            zip::ZipArchive::new(file).map_err(|e| format!("解析压缩包失败: {}", e))?;
+
+        let mut entry = archive
+            .by_name(inner_path)
             .map_err(|e| format!("在压缩包中找不到文件 {}: {}", inner_path, e))?;
-        
+
         let mut data = Vec::new();
         std::io::Read::read_to_end(&mut entry, &mut data)
             .map_err(|e| format!("读取压缩包内文件失败: {}", e))?;
-        
+
         Ok(data)
     } else {
         // 普通文件
-        fs::read(image_path)
-            .map_err(|e| format!("读取文件失败: {}", e))
+        fs::read(image_path).map_err(|e| format!("读取文件失败: {}", e))
     }
 }
 
@@ -109,19 +108,19 @@ pub fn process_task_v2(
     ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     let decode_result = decode_image_from_memory_with_wic(&raw_image_data)
         .map_err(|e| format!("WIC 解码失败: {}", e))?;
-    
+
     let width = decode_result.width;
     let height = decode_result.height;
     log_debug!("📐 WIC 解码完成: {}x{}", width, height);
 
     // 3. 条件匹配决定模型
-    let matched_model = match match_model_from_conditions(
-        task, condition_settings, conditions_list, width, height,
-    ) {
-        Ok(model) => model,
-        Err(skipped_payload) => return Ok(skipped_payload),
-    };
-    
+    let matched_model =
+        match match_model_from_conditions(task, condition_settings, conditions_list, width, height)
+        {
+            Ok(model) => model,
+            Err(skipped_payload) => return Ok(skipped_payload),
+        };
+
     // 如果没有匹配到模型，跳过超分
     let final_model = match matched_model {
         Some(m) => m,
@@ -134,15 +133,27 @@ pub fn process_task_v2(
     // 4. 执行超分
     ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     let result_bytes = execute_upscale(
-        py_state, &final_model, &decode_result, &raw_image_data, 
-        &task.image_path, width, height, timeout, &task.job_key,
+        py_state,
+        &final_model,
+        &decode_result,
+        &raw_image_data,
+        &task.image_path,
+        width,
+        height,
+        timeout,
+        &task.job_key,
     )?;
 
     // 5. 保存缓存并返回结果
     ensure_not_cancelled(cancelled_jobs, &task.job_key)?;
     save_and_return_result(
-        task, cache_dir, cache_map, &final_model, 
-        &result_bytes, width, height,
+        task,
+        cache_dir,
+        cache_map,
+        &final_model,
+        &result_bytes,
+        width,
+        height,
     )
 }
 
@@ -191,14 +202,15 @@ fn execute_upscale(
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
     let needs_transcode = matches!(ext.as_str(), "avif" | "jxl" | "heic" | "heif");
-    
+
     let image_data = if needs_transcode {
         log_debug!("🔄 检测到 AVIF/JXL 格式，使用 WIC 转码");
-        let rgb_pixels: Vec<u8> = decode_result.pixels
+        let rgb_pixels: Vec<u8> = decode_result
+            .pixels
             .chunks_exact(4)
             .flat_map(|c| [c[2], c[1], c[0]]) // BGRA -> RGB
             .collect();
-        
+
         let mut output = Vec::new();
         {
             use image::codecs::jpeg::JpegEncoder;
@@ -208,7 +220,11 @@ fn execute_upscale(
                 .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
                 .map_err(|e| format!("JPEG 编码失败: {}", e))?;
         }
-        log_debug!("✅ WIC 转码完成: {} bytes -> {} bytes", raw_image_data.len(), output.len());
+        log_debug!(
+            "✅ WIC 转码完成: {} bytes -> {} bytes",
+            raw_image_data.len(),
+            output.len()
+        );
         output
     } else {
         raw_image_data.to_vec()
@@ -216,12 +232,17 @@ fn execute_upscale(
 
     // 解析模型 ID
     let model = if final_model.model_id == 0 && !final_model.model_name.is_empty() {
-        let model_id = manager.get_model_id(&final_model.model_name)
+        let model_id = manager
+            .get_model_id(&final_model.model_name)
             .unwrap_or_else(|e| {
                 log_debug!("⚠️ 解析模型 ID 失败 ({}), 使用默认值 8", e);
                 8
             });
-        log_debug!("📋 模型 ID 解析: {} -> {}", final_model.model_name, model_id);
+        log_debug!(
+            "📋 模型 ID 解析: {} -> {}",
+            final_model.model_name,
+            model_id
+        );
         UpscaleModel {
             model_id,
             ..final_model.clone()
@@ -260,15 +281,14 @@ fn save_and_return_result(
     let filename = format!("{}_sr[{}].webp", hash, final_model.model_name);
     let cache_path = cache_dir.join(&filename);
     log_debug!("💾 缓存路径: {} (key: {})", cache_path.display(), key);
-    
+
     // 确保缓存目录存在
     if let Some(parent) = cache_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
 
     // 写入缓存文件
-    fs::write(&cache_path, result_bytes)
-        .map_err(|e| format!("写入缓存文件失败: {}", e))?;
+    fs::write(&cache_path, result_bytes).map_err(|e| format!("写入缓存文件失败: {}", e))?;
 
     let cache_path_str = cache_path.to_string_lossy().to_string();
 
@@ -285,7 +305,12 @@ fn save_and_return_result(
 
     log_info!(
         "✅ 超分完成 page {} ({}x{} -> {}x{}) -> {}",
-        task.page_index, width, height, upscaled_width, upscaled_height, cache_path_str
+        task.page_index,
+        width,
+        height,
+        upscaled_width,
+        upscaled_height,
+        cache_path_str
     );
 
     Ok(UpscaleReadyPayload {
@@ -338,16 +363,16 @@ fn match_model_from_conditions(
         log_debug!("📋 使用任务指定的模型: {}", task.model.model_name);
         return Ok(Some(task.model.clone()));
     }
-    
+
     // 检查条件超分是否启用
     let conditions_enabled = condition_settings
         .read()
         .ok()
         .map(|s| s.enabled)
         .unwrap_or(false);
-    
+
     log_debug!("📋 条件超分启用状态: {}", conditions_enabled);
-    
+
     if !conditions_enabled {
         // 条件超分禁用，但前端也没传模型，使用默认模型
         log_debug!("📋 条件超分禁用，使用默认模型 cunet 2x");
@@ -359,57 +384,68 @@ fn match_model_from_conditions(
             noise_level: 0,
         }));
     }
-    
+
     let conditions = conditions_list
         .read()
         .ok()
         .map(|list| list.clone())
         .unwrap_or_default();
-    
+
     log_debug!("📋 条件列表数量: {}", conditions.len());
-    
+
     // 遍历条件（已按优先级排序）
     for cond in conditions.iter() {
         if !cond.enabled {
             continue;
         }
-        
+
         // 检查尺寸条件
         if !check_size_condition(cond, width, height) {
             log_debug!("📋 条件 '{}' 尺寸不匹配 ({}x{})", cond.name, width, height);
             continue;
         }
-        
+
         // 检查路径正则条件
         let (match_book, match_image) = check_path_regex(task, cond);
         if !match_book || !match_image {
             log_debug!("📋 条件 '{}' 路径不匹配", cond.name);
             continue;
         }
-        
+
         // 条件匹配成功
         if cond.skip {
-            log_debug!("⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})", cond.name, width, height);
+            log_debug!(
+                "⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})",
+                cond.name,
+                width,
+                height
+            );
             return Err(create_skipped_payload(
-                task, width, height, 
+                task,
+                width,
+                height,
                 Some(format!("条件 '{}' 要求跳过", cond.name)),
             ));
         }
-        
+
         log_debug!(
             "✅ 条件 '{}' 匹配 ({}x{}) -> 模型: {}, 缩放: {}x",
-            cond.name, width, height, cond.model_name, cond.scale
+            cond.name,
+            width,
+            height,
+            cond.model_name,
+            cond.scale
         );
-        
+
         return Ok(Some(UpscaleModel {
             model_id: 0,
             model_name: cond.model_name.clone(),
             scale: cond.scale,
-            tile_size: cond.tile_size,
+            tile_size: if cond.tile_enabled { cond.tile_size } else { 0 },
             noise_level: cond.noise_level,
         }));
     }
-    
+
     // 条件超分启用但没有匹配的条件，跳过
     log_debug!("⚠️ 条件超分启用但无匹配条件 ({}x{})", width, height);
     Ok(None)
@@ -422,13 +458,18 @@ fn check_size_condition(cond: &FrontendCondition, width: u32, height: u32) -> bo
     let match_height = cond.min_height == 0 || height >= cond.min_height;
     let match_max_width = cond.max_width == 0 || width <= cond.max_width;
     let match_max_height = cond.max_height == 0 || height <= cond.max_height;
-    
+
     // 总像素量检查（单位：百万像素 MPx）
     let total_pixels_mpx = (width as f64 * height as f64) / 1_000_000.0;
     let match_min_pixels = cond.min_pixels <= 0.0 || total_pixels_mpx >= cond.min_pixels;
     let match_max_pixels = cond.max_pixels <= 0.0 || total_pixels_mpx <= cond.max_pixels;
-    
-    match_width && match_height && match_max_width && match_max_height && match_min_pixels && match_max_pixels
+
+    match_width
+        && match_height
+        && match_max_width
+        && match_max_height
+        && match_min_pixels
+        && match_max_pixels
 }
 
 /// 检查路径正则匹配
@@ -439,19 +480,20 @@ fn check_path_regex(task: &UpscaleTask, cond: &FrontendCondition) -> (bool, bool
     } else {
         &task.book_path
     };
-    
+
     // 提取 inner_path
-    let inner_path = task.image_path
+    let inner_path = task
+        .image_path
         .find(" inner=")
         .map(|idx| &task.image_path[idx + 7..]);
-    
+
     // 统一使用正斜杠
     let normalized_book_path = book_path_for_match.replace('\\', "/");
     let normalized_inner_path = inner_path.map(|p| p.replace('\\', "/"));
-    
+
     // 书籍路径正则匹配
     let match_book = match_regex(&cond.regex_book_path, &normalized_book_path, "书籍路径");
-    
+
     // 图片路径正则匹配
     let path_to_match = if cond.match_inner_path {
         normalized_inner_path.as_deref().unwrap_or("")
@@ -459,29 +501,30 @@ fn check_path_regex(task: &UpscaleTask, cond: &FrontendCondition) -> (bool, bool
         &task.image_path.replace('\\', "/")
     };
     let match_image = match_regex(&cond.regex_image_path, path_to_match, "图片路径");
-    
+
     (match_book, match_image)
 }
 
 /// 匹配正则表达式
 fn match_regex(regex_opt: &Option<String>, path: &str, path_type: &str) -> bool {
     match regex_opt {
-        Some(regex_str) if !regex_str.is_empty() => {
-            match get_compiled_regex(regex_str) {
-                Some(re) => {
-                    let matched = re.is_match(path);
-                    log_debug!(
-                        "📁 {}正则匹配: pattern='{}' path='{}' matched={}",
-                        path_type, regex_str, path, matched
-                    );
+        Some(regex_str) if !regex_str.is_empty() => match get_compiled_regex(regex_str) {
+            Some(re) => {
+                let matched = re.is_match(path);
+                log_debug!(
+                    "📁 {}正则匹配: pattern='{}' path='{}' matched={}",
+                    path_type,
+                    regex_str,
+                    path,
                     matched
-                }
-                None => {
-                    log_debug!("⚠️ 无效的{}正则: {}", path_type, regex_str);
-                    true
-                }
+                );
+                matched
             }
-        }
+            None => {
+                log_debug!("⚠️ 无效的{}正则: {}", path_type, regex_str);
+                true
+            }
+        },
         _ => true,
     }
 }

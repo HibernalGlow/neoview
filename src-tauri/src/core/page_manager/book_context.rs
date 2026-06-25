@@ -24,7 +24,7 @@ pub enum PageContentType {
 
 impl PageContentType {
     /// 从文件扩展名推断内容类型
-    /// 
+    ///
     /// 参考 NeeView 支持的格式
     pub fn from_extension(ext: &str) -> Self {
         let ext = ext.to_lowercase();
@@ -71,7 +71,7 @@ impl PageContentType {
     pub fn needs_temp_file(&self) -> bool {
         matches!(self, Self::Video)
     }
-    
+
     /// 是否是嵌套压缩包（需要递归展开）
     pub fn is_nested_archive(&self) -> bool {
         matches!(self, Self::Archive)
@@ -154,7 +154,7 @@ impl BookContext {
     /// 从压缩包创建
     pub fn from_archive(path: &str, page_paths: Vec<String>) -> Self {
         let mut nested_archives: Vec<String> = Vec::new();
-        
+
         let pages: Vec<PageInfo> = page_paths
             .into_iter()
             .enumerate()
@@ -166,14 +166,15 @@ impl BookContext {
                     .to_string();
 
                 let content_type = PageContentType::from_path(&inner_path);
-                
+
                 // 检测嵌套压缩包
                 if content_type == PageContentType::Archive {
                     nested_archives.push(inner_path.clone());
                 }
 
                 PageInfo {
-                    index, entry_index: index,
+                    index,
+                    entry_index: index,
                     content_type,
                     inner_path,
                     name,
@@ -218,7 +219,8 @@ impl BookContext {
                     .to_string();
 
                 PageInfo {
-                    index, entry_index: index,
+                    index,
+                    entry_index: index,
                     content_type: PageContentType::Image, // EPUB 内的图片
                     inner_path,
                     name,
@@ -406,7 +408,6 @@ impl BookContext {
         indices
     }
 
-
     /// 是否为第一页
     pub fn is_first_page(&self) -> bool {
         self.current_index == 0
@@ -482,7 +483,11 @@ mod tests {
 
     #[test]
     fn test_navigation() {
-        let pages = vec!["1.jpg".to_string(), "2.jpg".to_string(), "3.jpg".to_string()];
+        let pages = vec![
+            "1.jpg".to_string(),
+            "2.jpg".to_string(),
+            "3.jpg".to_string(),
+        ];
         let mut ctx = BookContext::from_archive("test.zip", pages);
 
         assert!(ctx.next());

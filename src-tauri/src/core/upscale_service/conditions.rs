@@ -1,12 +1,12 @@
 //! 超分服务条件匹配模块
-//! 
+//!
 //! 包含条件同步、条件匹配、条件设置更新等功能
 
-use std::sync::RwLock;
+use super::{log_debug, log_info};
 use crate::commands::upscale_service_commands::FrontendCondition;
 use crate::core::pyo3_upscaler::UpscaleModel;
 use crate::core::upscale_settings::ConditionalUpscaleSettings;
-use super::{log_info, log_debug};
+use std::sync::RwLock;
 
 /// 同步条件配置（从前端接收完整的条件列表）
 pub fn sync_conditions(
@@ -15,8 +15,12 @@ pub fn sync_conditions(
     enabled: bool,
     conditions: Vec<FrontendCondition>,
 ) {
-    log_info!("📋 收到条件配置同步请求: enabled={}, 条件数={}", enabled, conditions.len());
-    
+    log_info!(
+        "📋 收到条件配置同步请求: enabled={}, 条件数={}",
+        enabled,
+        conditions.len()
+    );
+
     // 打印每个条件的详细信息
     for (i, cond) in conditions.iter().enumerate() {
         log_info!(
@@ -37,24 +41,28 @@ pub fn sync_conditions(
             cond.match_inner_path
         );
     }
-    
+
     // 更新启用状态
     if let Ok(mut s) = condition_settings.write() {
         s.enabled = enabled;
     }
-    
+
     // 存储条件列表（按优先级排序，priority 越小优先级越高）
     let mut sorted_conditions = conditions;
     sorted_conditions.sort_by(|a, b| a.priority.cmp(&b.priority)); // 小数字优先级高，排在前面
-    
+
     if let Ok(mut list) = conditions_list.write() {
         *list = sorted_conditions;
     }
-    
+
     log_info!(
         "✅ 条件配置已同步: enabled={}, 条件数={}",
         enabled,
-        if let Ok(list) = conditions_list.read() { list.len() } else { 0 }
+        if let Ok(list) = conditions_list.read() {
+            list.len()
+        } else {
+            0
+        }
     );
 }
 
@@ -70,50 +78,59 @@ pub fn match_condition(
     } else {
         false
     };
-    
+
     if !conditions_enabled {
         return None;
     }
-    
+
     let conditions = if let Ok(list) = conditions_list.read() {
         list.clone()
     } else {
         return None;
     };
-    
+
     // 遍历条件（已按优先级排序）
     for cond in conditions.iter() {
         if !cond.enabled {
             continue;
         }
-        
+
         // 检查尺寸条件
         let match_width = cond.min_width == 0 || width >= cond.min_width;
         let match_height = cond.min_height == 0 || height >= cond.min_height;
         let match_max_width = cond.max_width == 0 || width <= cond.max_width;
         let match_max_height = cond.max_height == 0 || height <= cond.max_height;
-        
+
         if match_width && match_height && match_max_width && match_max_height {
             if cond.skip {
-                log_debug!("⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})", cond.name, width, height);
+                log_debug!(
+                    "⏭️ 条件 '{}' 匹配，跳过超分 ({}x{})",
+                    cond.name,
+                    width,
+                    height
+                );
                 return None; // 返回 None 表示跳过
             }
-            
+
             log_debug!(
                 "✅ 条件 '{}' 匹配 ({}x{}) -> 模型: {}, 缩放: {}x",
-                cond.name, width, height, cond.model_name, cond.scale
+                cond.name,
+                width,
+                height,
+                cond.model_name,
+                cond.scale
             );
-            
+
             return Some(UpscaleModel {
                 model_id: 0, // 稍后通过 model_name 解析
                 model_name: cond.model_name.clone(),
                 scale: cond.scale,
-                tile_size: cond.tile_size,
+                tile_size: if cond.tile_enabled { cond.tile_size } else { 0 },
                 noise_level: cond.noise_level,
             });
         }
     }
-    
+
     log_debug!("⚠️ 无条件匹配 ({}x{}), 跳过超分", width, height);
     None // 无条件匹配时跳过
 }

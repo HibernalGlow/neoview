@@ -32,6 +32,8 @@
 	function updateAction(updates: Partial<UpscaleCondition['action']>) {
 		dispatch('update', { action: updates });
 	}
+
+	let tileEnabled = $derived(condition.action.tileEnabled ?? true);
 </script>
 
 <div class="space-y-3">
@@ -66,11 +68,18 @@
 			</select>
 		</div>
 		<div class="space-y-1">
-			<Label class="text-[10px]">Tile</Label>
+			<div class="flex items-center justify-between gap-2">
+				<Label class="text-[10px]">Tile</Label>
+				<Switch
+					checked={tileEnabled}
+					disabled={condition.action.skip}
+					onclick={() => updateAction({ tileEnabled: !tileEnabled })}
+				/>
+			</div>
 			<select
 				class="bg-muted h-7 w-full rounded border-0 px-2 text-xs"
 				value={condition.action.tileSize}
-				disabled={condition.action.skip}
+				disabled={condition.action.skip || !tileEnabled}
 				onchange={(e) => updateAction({ tileSize: parseInt(e.currentTarget.value) })}
 			>
 				{#each tileSizeOptions as opt}

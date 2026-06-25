@@ -205,7 +205,11 @@ pub fn run() {
             let page_manager = {
                 let protocol_state = app.state::<ProtocolState>();
                 let path_registry = Arc::clone(&protocol_state.path_registry);
-                PageContentManager::new(Arc::clone(&job_engine), archive_manager_for_pm, path_registry)
+                PageContentManager::new(
+                    Arc::clone(&job_engine),
+                    archive_manager_for_pm,
+                    path_registry,
+                )
             };
 
             app.manage(PageManagerState {
@@ -405,6 +409,7 @@ pub fn run() {
             commands::debug_models_info,
             // PyO3 Upscale commands
             commands::init_pyo3_upscaler,
+            commands::set_pyo3_manga_janai_model_dir,
             commands::check_pyo3_upscaler_availability,
             commands::get_pyo3_available_models,
             commands::get_pyo3_model_id,

@@ -47,7 +47,11 @@ export class PyO3UpscaleManager {
 	/**
 	 * 初始化 PyO3 超分管理器
 	 */
-	async initialize(pythonModulePath: string, cacheDir: string): Promise<void> {
+	async initialize(
+		pythonModulePath: string,
+		cacheDir: string,
+		mangaJanaiModelDir?: string
+	): Promise<void> {
 		if (this.initialized) {
 			console.log('PyO3 超分管理器已初始化');
 			return;
@@ -60,7 +64,8 @@ export class PyO3UpscaleManager {
 
 			await invoke('init_pyo3_upscaler', {
 				pythonModulePath,
-				cacheDir
+				cacheDir,
+				mangaJanaiModelDir: mangaJanaiModelDir ?? null
 			});
 
 			// 检查可用性
@@ -101,6 +106,17 @@ export class PyO3UpscaleManager {
 	 */
 	getAvailableModels(): string[] {
 		return this.availableModels;
+	}
+
+	async refreshAvailableModels(): Promise<void> {
+		if (!this.initialized || !this.available) return;
+		this.availableModels = await invoke('get_pyo3_available_models');
+	}
+
+	async setMangaJanaiModelDir(modelDir: string): Promise<void> {
+		if (!this.initialized) return;
+		await invoke('set_pyo3_manga_janai_model_dir', { modelDir });
+		await this.refreshAvailableModels();
 	}
 
 	/**

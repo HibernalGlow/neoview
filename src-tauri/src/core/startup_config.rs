@@ -35,8 +35,14 @@ pub struct UpscaleConditionConfig {
     pub model_name: String,
     pub scale: i32,
     pub tile_size: i32,
+    #[serde(default = "default_true")]
+    pub tile_enabled: bool,
     pub noise_level: i32,
     pub skip: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// 启动配置

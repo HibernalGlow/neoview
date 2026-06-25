@@ -28,6 +28,7 @@ function toConfigFormat(conditions: UpscaleCondition[]): UpscaleConditionConfig[
 		modelName: c.action.model,
 		scale: c.action.scale,
 		tileSize: c.action.tileSize,
+		tileEnabled: c.action.tileEnabled ?? true,
 		noiseLevel: c.action.noiseLevel,
 		skip: c.action.skip ?? false
 	}));
@@ -54,6 +55,7 @@ function toBackendFormat(conditions: UpscaleCondition[]) {
 		modelName: c.action.model,
 		scale: c.action.scale,
 		tileSize: c.action.tileSize,
+		tileEnabled: c.action.tileEnabled ?? true,
 		noiseLevel: c.action.noiseLevel,
 		skip: c.action.skip ?? false
 	}));

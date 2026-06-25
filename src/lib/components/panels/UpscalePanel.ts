@@ -37,6 +37,7 @@ export interface UpscaleCondition {
 		model: string;
 		scale: number;
 		tileSize: number;
+		tileEnabled: boolean;
 		noiseLevel: number;
 		gpuId: number;
 		useCache: boolean;
@@ -64,8 +65,10 @@ export interface UpscalePanelSettings extends UpscaleSettings {
 	selectedModel: string;
 	scale: number;
 	tileSize: number;
+	tileEnabled: boolean;
 	noiseLevel: number;
 	gpuId: number;
+	mangaJanaiModelDir: string;
 	// 递进超分配置
 	progressiveUpscaleEnabled?: boolean;
 	progressiveDwellTime?: number;
@@ -101,6 +104,16 @@ const initialImageSettings = (() => {
 
 const DEFAULT_CONDITION_PRESETS = getDefaultConditionPresets();
 
+function normalizeLegacyModel(model?: string): string | undefined {
+	if (model === 'MANGAJANAI_AUTO_X2') {
+		return '2x_MangaJaNai_1600p_V1_ESRGAN_90k.pth';
+	}
+	if (model === 'MANGAJANAI_AUTO_X4') {
+		return '4x_MangaJaNai_1600p_V1_ESRGAN_70k.pth';
+	}
+	return model;
+}
+
 export const defaultPanelSettings: UpscalePanelSettings = {
 	...DEFAULT_UPSCALE_SETTINGS,
 	currentImageUpscaleEnabled: initialImageSettings.enableSuperResolution,
@@ -114,8 +127,10 @@ export const defaultPanelSettings: UpscalePanelSettings = {
 	selectedModel: 'MODEL_WAIFU2X_CUNET_UP2X',
 	scale: 2,
 	tileSize: 64,
+	tileEnabled: true,
 	noiseLevel: 0,
-	gpuId: 0
+	gpuId: 0,
+	mangaJanaiModelDir: 'D:/1VSCODE/Projects/ImageAll/NeeWaifu/neoview/model/MangaJaNai_V1_ModelsOnly'
 };
 
 export function loadUpscalePanelSettings(): UpscalePanelSettings {
@@ -154,6 +169,7 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 						model: oldCondition.model || 'real-cugan',
 						scale: oldCondition.scale || 2,
 						tileSize: oldCondition.tileSize || 400,
+						tileEnabled: oldCondition.tileEnabled ?? true,
 						noiseLevel: oldCondition.noiseLevel || -1,
 						gpuId: oldCondition.gpuId || 0,
 						useCache: oldCondition.useCache ?? true
@@ -162,9 +178,13 @@ export function loadUpscalePanelSettings(): UpscalePanelSettings {
 			];
 		}
 
+		const selectedModel = normalizeLegacyModel(parsed.selectedModel);
+
 		return {
 			...defaultPanelSettings,
 			...parsed,
+			selectedModel: selectedModel ?? defaultPanelSettings.selectedModel,
+			tileEnabled: parsed.tileEnabled ?? defaultPanelSettings.tileEnabled,
 			conditionalUpscaleEnabled:
 				parsed.conditionalUpscaleEnabled ?? defaultPanelSettings.conditionalUpscaleEnabled,
 			conditionsList

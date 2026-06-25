@@ -879,8 +879,8 @@ impl ThumbnailGenerator {
         entry_index: usize,
         entry_file_size: u64,
     ) -> Result<Vec<u8>, String> {
-        let metadata =
-            std::fs::metadata(archive_path).map_err(|e| format!("archive metadata failed: {}", e))?;
+        let metadata = std::fs::metadata(archive_path)
+            .map_err(|e| format!("archive metadata failed: {}", e))?;
         let archive_size = metadata.len() as i64;
         let cache_size = archive_size.wrapping_add(entry_file_size as i64);
         let entry_key = format!("{}#{}", inner_path, entry_index);
@@ -904,18 +904,13 @@ impl ThumbnailGenerator {
                         && normalize_archive_entry_name(&entry.name) == normalized_target
                 })
                 .or_else(|| {
-                    entries
-                        .iter()
-                        .find(|entry| normalize_archive_entry_name(&entry.name) == normalized_target)
+                    entries.iter().find(|entry| {
+                        normalize_archive_entry_name(&entry.name) == normalized_target
+                    })
                 })
                 .or_else(|| entries.iter().find(|entry| entry.index == entry_index))
                 .cloned()
-                .ok_or_else(|| {
-                    format!(
-                        "archive entry not found: {}#{}",
-                        inner_path, entry_index
-                    )
-                })?
+                .ok_or_else(|| format!("archive entry not found: {}#{}", inner_path, entry_index))?
         };
 
         let data = handler.read_entry(target_entry.index)?;

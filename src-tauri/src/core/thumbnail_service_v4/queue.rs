@@ -3,10 +3,10 @@
 //! 按 lane 调度：visible > reader-visible > prefetch > background
 //! 同一个 key 全局去重，多个消费者只挂 waiter
 
+use crate::core::thumbnail_service_v4::types::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::Notify;
-use crate::core::thumbnail_service_v4::types::*;
 
 /// 队列中的任务
 pub struct QueueTask {
@@ -45,7 +45,13 @@ impl ThumbnailQueue {
     }
 
     /// 入队请求（去重）
-    pub fn enqueue(&mut self, request: ThumbnailRequest, lane: ThumbnailLane, center_index: Option<usize>, generation: u32) -> bool {
+    pub fn enqueue(
+        &mut self,
+        request: ThumbnailRequest,
+        lane: ThumbnailLane,
+        center_index: Option<usize>,
+        generation: u32,
+    ) -> bool {
         if self.in_flight.contains(&request.key) {
             return false; // 去重
         }
@@ -93,7 +99,8 @@ impl ThumbnailQueue {
 
     /// 取消上下文
     pub fn cancel_context(&mut self, context_id: &str, new_generation: u32) {
-        self.context_generations.insert(context_id.to_string(), new_generation);
+        self.context_generations
+            .insert(context_id.to_string(), new_generation);
     }
 
     /// 获取通知（用于 async 等待）

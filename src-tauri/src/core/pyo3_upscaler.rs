@@ -114,6 +114,21 @@ impl PyO3Upscaler {
     }
 
     /// 初始化 Python 模块
+    pub fn set_manga_janai_model_dir(&self, model_dir: &str) -> Result<(), String> {
+        let module_guard = self
+            .python_module
+            .lock()
+            .map_err(|e| format!("鑾峰彇閿佸け璐? {}", e))?;
+
+        if let Some(module) = module_guard.as_ref() {
+            module
+                .set_manga_janai_model_dir(model_dir)
+                .map_err(|e| format!("璁剧疆 MangaJaNai 妯″瀷鐩綍澶辫触: {}", e))
+        } else {
+            Err("Python 妯″潡鏈垵濮嬪寲".to_string())
+        }
+    }
+
     pub fn initialize(&self) -> Result<(), String> {
         let mut initialized = self
             .initialized
@@ -185,6 +200,7 @@ impl PyO3Upscaler {
             let result = module
                 .upscale_image(
                     image_data,
+                    &model.model_name,
                     model.model_id,
                     model.scale,
                     model.tile_size,

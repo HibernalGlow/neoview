@@ -31,6 +31,16 @@ function normalizePathForMatch(path: string): string {
 	return path.replace(/\\/g, '/');
 }
 
+function normalizeLegacyModel(model?: string): string | undefined {
+	if (model === 'MANGAJANAI_AUTO_X2') {
+		return '2x_MangaJaNai_1600p_V1_ESRGAN_90k.pth';
+	}
+	if (model === 'MANGAJANAI_AUTO_X4') {
+		return '4x_MangaJaNai_1600p_V1_ESRGAN_70k.pth';
+	}
+	return model;
+}
+
 function ensureMatchDefaults(match?: UpscaleCondition['match']): UpscaleCondition['match'] {
 	const safeMatch = match ?? {};
 	const result = {
@@ -63,9 +73,10 @@ function ensureActionDefaults(
 	action?: Partial<UpscaleCondition['action']>
 ): UpscaleCondition['action'] {
 	return {
-		model: action?.model ?? 'MODEL_WAIFU2X_CUNET_UP2X',
+		model: normalizeLegacyModel(action?.model) ?? 'MODEL_WAIFU2X_CUNET_UP2X',
 		scale: action?.scale ?? 2,
 		tileSize: action?.tileSize ?? 400,
+		tileEnabled: action?.tileEnabled ?? true,
 		noiseLevel: action?.noiseLevel ?? -1,
 		gpuId: action?.gpuId ?? 0,
 		useCache: action?.useCache ?? true,
@@ -116,6 +127,7 @@ const CONDITION_PRESET_DEFINITIONS: ConditionPresetDefinition[] = [
 				model: 'MODEL_REALESRGAN_X4PLUS_ANIME_UP4X',
 				scale: 4,
 				tileSize: 256,
+				tileEnabled: true,
 				noiseLevel: 0,
 				useCache: true
 			}
@@ -133,6 +145,7 @@ const CONDITION_PRESET_DEFINITIONS: ConditionPresetDefinition[] = [
 				model: 'MODEL_REALCUGAN_PRO_UP2X',
 				scale: 2,
 				tileSize: 400,
+				tileEnabled: true,
 				noiseLevel: -1
 			}
 		})
@@ -149,6 +162,7 @@ const CONDITION_PRESET_DEFINITIONS: ConditionPresetDefinition[] = [
 				model: 'MODEL_REALCUGAN_PRO_UP3X',
 				scale: 4,
 				tileSize: 256,
+				tileEnabled: true,
 				noiseLevel: -1
 			}
 		})
@@ -463,6 +477,7 @@ export function createBlankCondition(name: string): UpscaleCondition {
 			model: 'MODEL_WAIFU2X_CUNET_UP2X',
 			scale: 2,
 			tileSize: 400,
+			tileEnabled: true,
 			noiseLevel: -1,
 			gpuId: 0,
 			useCache: true,

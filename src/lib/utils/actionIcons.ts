@@ -216,6 +216,7 @@ export function getActionIcon(action: string, _category = ''): Component {
 	if (action === 'deleteCurrentPage') return FileMinus;
 
 	if (action === 'toggleAutoUpscale') return Zap;
+	if (action === 'upscale.toggleTile') return Sliders;
 
 	if (action === 'slideshowToggle') return Play;
 	if (action === 'slideshowPlayPause') return Pause;
@@ -442,6 +443,7 @@ export function getActionIconSvg(action: string): string {
 		);
 
 	if (action === 'toggleAutoUpscale') return svg('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>');
+	if (action === 'upscale.toggleTile') return svg(iconSvgPaths.Sliders);
 	if (action === 'slideshowToggle' || action === 'slideshowPlayPause')
 		return svg('<path d="m8 5 11 7-11 7V5Z"/>');
 	if (action === 'slideshowStop') return svg('<rect width="14" height="14" x="5" y="5" rx="2"/>');

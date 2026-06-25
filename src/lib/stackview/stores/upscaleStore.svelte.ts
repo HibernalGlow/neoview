@@ -304,6 +304,7 @@ class UpscaleStore {
 				model: string;
 				scale: number;
 				tileSize: number;
+				tileEnabled?: boolean;
 				noiseLevel: number;
 				skip?: boolean;
 			};
@@ -608,9 +609,14 @@ class UpscaleStore {
 		if (!this.state.enabled) return;
 
 		// 从 upscalePanelStore 获取当前模型设置和条件超分开关
-		const { selectedModel, scale, tileSize, noiseLevel, conditionalUpscaleEnabled } = await import(
-			'$lib/stores/upscale/upscalePanelStore.svelte'
-		);
+		const {
+			selectedModel,
+			scale,
+			tileSize,
+			tileEnabled,
+			noiseLevel,
+			conditionalUpscaleEnabled
+		} = await import('$lib/stores/upscale/upscalePanelStore.svelte');
 
 		try {
 			// 如果条件超分启用，不传模型参数，让后端条件匹配决定
@@ -625,7 +631,8 @@ class UpscaleStore {
 				priority,
 				modelName: useConditionMatch ? null : selectedModel.value,
 				scale: useConditionMatch ? null : scale.value,
-				tileSize: useConditionMatch ? null : tileSize.value,
+				tileSize: useConditionMatch ? null : tileEnabled.value ? tileSize.value : 0,
+				tileEnabled: useConditionMatch ? null : tileEnabled.value,
 				noiseLevel: useConditionMatch ? null : noiseLevel.value
 			});
 

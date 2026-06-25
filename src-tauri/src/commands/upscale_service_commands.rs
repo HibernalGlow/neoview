@@ -50,6 +50,8 @@ pub struct UpscaleRequest {
     #[serde(default)]
     pub tile_size: Option<i32>,
     #[serde(default)]
+    pub tile_enabled: Option<bool>,
+    #[serde(default)]
     pub noise_level: Option<i32>,
 }
 
@@ -65,6 +67,7 @@ pub struct PreloadRangeRequest {
     pub model_name: Option<String>,
     pub scale: Option<i32>,
     pub tile_size: Option<i32>,
+    pub tile_enabled: Option<bool>,
     pub noise_level: Option<i32>,
 }
 
@@ -106,8 +109,14 @@ pub struct FrontendCondition {
     pub model_name: String,
     pub scale: i32,
     pub tile_size: i32,
+    #[serde(default = "default_true")]
+    pub tile_enabled: bool,
     pub noise_level: i32,
     pub skip: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 // ============================================================================
@@ -157,13 +166,13 @@ pub async fn upscale_service_init(
         log::info!("📁 使用默认缓存目录");
         app_data_dir.join("pyo3-upscale")
     };
-    
+
     log::info!("📁 超分缓存目录: {}", cache_dir.display());
 
     let config = UpscaleServiceConfig::default();
     let py_state = Arc::new(pyo3_state.inner().clone());
     let mut service = UpscaleService::new(py_state, config, cache_dir);
-    
+
     // 从启动配置加载超分条件
     if !startup_config.upscale_conditions.is_empty() {
         let conditions: Vec<FrontendCondition> = startup_config
@@ -186,15 +195,16 @@ pub async fn upscale_service_init(
                 model_name: c.model_name,
                 scale: c.scale,
                 tile_size: c.tile_size,
+                tile_enabled: c.tile_enabled,
                 noise_level: c.noise_level,
                 skip: c.skip,
             })
             .collect();
-        
+
         service.sync_conditions(startup_config.upscale_conditions_enabled, conditions);
         log::info!("📋 从启动配置加载超分条件");
     }
-    
+
     service.start(app);
 
     *guard = Some(service);
@@ -260,7 +270,7 @@ pub async fn upscale_service_request(
 
     // 根据请求类型计算分数
     use crate::core::upscale_service::{TaskScore, UpscaleTask as Task};
-    
+
     let score = match request.priority.as_str() {
         "current" => TaskScore {
             priority: TaskPriority::Current,
@@ -276,11 +286,17 @@ pub async fn upscale_service_request(
         },
     };
 
+    let tile_size = if request.tile_enabled.unwrap_or(true) {
+        request.tile_size.unwrap_or(0)
+    } else {
+        0
+    };
+
     let model = UpscaleModel {
-        model_id: 0, // 会在执行时解析
+        model_id: 0,                                        // 会在执行时解析
         model_name: request.model_name.unwrap_or_default(), // 空字符串表示由条件匹配决定
         scale: request.scale.unwrap_or(2),
-        tile_size: request.tile_size.unwrap_or(0),
+        tile_size,
         noise_level: request.noise_level.unwrap_or(0),
     };
 
@@ -320,11 +336,17 @@ pub async fn upscale_service_request_preload_range(
 
     // 使用请求中的模型配置
     // 如果 model_name 为空，后续 process_task_v2 会通过条件匹配决定模型
+    let tile_size = if request.tile_enabled.unwrap_or(true) {
+        request.tile_size.unwrap_or(0)
+    } else {
+        0
+    };
+
     let model = UpscaleModel {
         model_id: 0,
         model_name: request.model_name.unwrap_or_default(), // 空字符串表示由条件匹配决定
         scale: request.scale.unwrap_or(2),
-        tile_size: request.tile_size.unwrap_or(0),
+        tile_size,
         noise_level: request.noise_level.unwrap_or(0),
     };
 
@@ -348,10 +370,10 @@ pub async fn upscale_service_sync_conditions(
 ) -> Result<(), String> {
     let guard = state.service.lock().await;
     let service = guard.as_ref().ok_or("UpscaleService 未初始化")?;
-    
+
     // 转换为内部格式并存储
     service.sync_conditions(enabled, conditions);
-    
+
     Ok(())
 }
 
@@ -432,9 +454,7 @@ pub async fn upscale_service_update_conditions(
 
 /// 停止服务
 #[tauri::command]
-pub async fn upscale_service_stop(
-    state: State<'_, UpscaleServiceState>,
-) -> Result<(), String> {
+pub async fn upscale_service_stop(state: State<'_, UpscaleServiceState>) -> Result<(), String> {
     let guard = state.service.lock().await;
     if let Some(service) = guard.as_ref() {
         service.stop();

@@ -44,9 +44,8 @@ pub struct ThumbnailItem {
 use crate::core::archive::ArchiveManager;
 use crate::core::job_engine::{Job, JobEngine, JobOutput, JobPriority, JobResult};
 use crate::core::page_frame::{
-    FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow,
-    PageFrameBuilder, PageFrameContext, PagePosition, PageMode, ReadOrder,
-    Page as FramePage,
+    FrameImageInfo, FrameLayoutType, FrameSnapshot, Page as FramePage, PageFrameBuilder,
+    PageFrameContext, PageMode, PagePosition, ReadOrder, ReaderWindow, SplitHalf,
 };
 use crate::models::{BookInfo as ModelBookInfo, BookType as ModelBookType, Page as ModelPage};
 use std::path::Path;
@@ -430,9 +429,10 @@ impl PageContentManager {
                         .map(ToString::to_string)
                 })
                 .unwrap_or_else(|| page.path.clone()),
-            BookType::Directory | BookType::SingleImage | BookType::SingleVideo | BookType::Playlist => {
-                page.path.clone()
-            }
+            BookType::Directory
+            | BookType::SingleImage
+            | BookType::SingleVideo
+            | BookType::Playlist => page.path.clone(),
         }
     }
 
@@ -443,7 +443,10 @@ impl PageContentManager {
 
     /// 检查是否为图片文件
     fn is_image_file(path: &str) -> bool {
-        Self::path_ext_matches_any(path, &["jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp"])
+        Self::path_ext_matches_any(
+            path,
+            &["jpg", "jpeg", "png", "gif", "webp", "avif", "jxl", "bmp"],
+        )
     }
 
     /// 检查是否为视频文件
@@ -743,7 +746,10 @@ impl PageContentManager {
             let stats = pool.stats();
             // 内存池使用率 > 90% 时减少预加载范围
             if stats.usage_percent > 90 {
-                log::debug!("⚡ PageManager: 内存压力 ({:.0}%)，跳过预加载", stats.usage_percent);
+                log::debug!(
+                    "⚡ PageManager: 内存压力 ({:.0}%)，跳过预加载",
+                    stats.usage_percent
+                );
                 return;
             }
         }
@@ -765,7 +771,10 @@ impl PageContentManager {
         log::debug!(
             "⚡ PageManager: 渐进预加载 {} 页: {:?}",
             indices_to_load.len(),
-            indices_to_load.iter().map(|(_, idx)| idx).collect::<Vec<_>>()
+            indices_to_load
+                .iter()
+                .map(|(_, idx)| idx)
+                .collect::<Vec<_>>()
         );
 
         // 创建预加载任务（带渐进优先级）
@@ -1149,7 +1158,9 @@ impl PageContentManager {
                 format!("neoview://localhost/image/{}/{}", book_hash, entry_index)
             } else {
                 // Register each page's file path and use file URL
-                let page_hash = self.path_registry.register(std::path::Path::new(&page.path));
+                let page_hash = self
+                    .path_registry
+                    .register(std::path::Path::new(&page.path));
                 format!("neoview://localhost/file/{}", page_hash)
             };
 
@@ -1358,7 +1369,9 @@ impl PageContentManager {
                     .unwrap_or(page.index);
                 format!("neoview://localhost/image/{}/{}", book_hash, entry_index)
             } else {
-                let page_hash = self.path_registry.register(std::path::Path::new(&page.path));
+                let page_hash = self
+                    .path_registry
+                    .register(std::path::Path::new(&page.path));
                 format!("neoview://localhost/file/{}", page_hash)
             };
 

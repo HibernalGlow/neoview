@@ -5,14 +5,14 @@
 //! 注意：ThumbnailGenerator 的方法均为同步方法（非 async），
 //! 因此实际生成操作通过 tokio::task::spawn_blocking 在阻塞线程池执行。
 
+use crate::core::thumbnail_db::ThumbnailDb;
+use crate::core::thumbnail_generator::ThumbnailGenerator;
+use crate::core::thumbnail_service_v4::queue::ThumbnailQueue;
+use crate::core::thumbnail_service_v4::types::*;
+use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
-use futures::stream::{self, StreamExt};
 use tokio::sync::RwLock;
-use crate::core::thumbnail_generator::ThumbnailGenerator;
-use crate::core::thumbnail_db::ThumbnailDb;
-use crate::core::thumbnail_service_v4::types::*;
-use crate::core::thumbnail_service_v4::queue::ThumbnailQueue;
 
 /// 统一缩略图服务
 pub struct UnifiedThumbnailService {
@@ -38,12 +38,7 @@ impl UnifiedThumbnailService {
     pub async fn request_thumbnails(&self, params: RequestThumbnailsParams) {
         let mut queue = self.queue.write().await;
         for item in params.items {
-            queue.enqueue(
-                item,
-                params.lane,
-                params.center_index,
-                params.generation,
-            );
+            queue.enqueue(item, params.lane, params.center_index, params.generation);
         }
     }
 
@@ -118,7 +113,8 @@ impl UnifiedThumbnailService {
 
                 async move {
                     if let Some(data) = { memory_cache.read().get(&item.key).cloned() } {
-                        let version = url_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                        let version =
+                            url_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                         let (width, height) = image_dimensions(data.as_ref());
                         return Some(ThumbnailReadyItem {
                             key: item.key,
@@ -157,7 +153,8 @@ impl UnifiedThumbnailService {
                         .write()
                         .insert(key.clone(), Arc::<[u8]>::from(blob.into_boxed_slice()));
 
-                    let version = url_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let version =
+                        url_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                     Some(ThumbnailReadyItem {
                         key,
                         url_version: version,
@@ -211,15 +208,17 @@ fn generate_thumbnail_blob(
             inner_path,
             entry_index,
             file_size,
-        } => {
-            generator
-                .generate_archive_entry_thumbnail(archive_path, inner_path, *entry_index, *file_size)
-                .ok()
-        }
+        } => generator
+            .generate_archive_entry_thumbnail(archive_path, inner_path, *entry_index, *file_size)
+            .ok(),
         ThumbnailSource::DirectoryCover { representative, .. } => {
             generate_path_thumbnail(generator, db, representative)
         }
-        ThumbnailSource::BookPage { book_path, page_path, .. } => {
+        ThumbnailSource::BookPage {
+            book_path,
+            page_path,
+            ..
+        } => {
             if std::path::Path::new(page_path).is_file() {
                 generate_path_thumbnail(generator, db, page_path)
             } else {
@@ -229,7 +228,11 @@ fn generate_thumbnail_blob(
     }
 }
 
-fn generate_path_thumbnail(generator: &ThumbnailGenerator, db: &ThumbnailDb, path: &str) -> Option<Vec<u8>> {
+fn generate_path_thumbnail(
+    generator: &ThumbnailGenerator,
+    db: &ThumbnailDb,
+    path: &str,
+) -> Option<Vec<u8>> {
     let path_ref = std::path::Path::new(path);
     if path_ref.is_dir() {
         return generate_folder_cover_thumbnail(generator, db, path_ref);
@@ -261,12 +264,8 @@ fn generate_folder_cover_thumbnail(
         return Some(blob);
     }
 
-    let candidates = find_folder_cover_candidates(
-        dir,
-        MAX_FOLDER_DEPTH,
-        MAX_ENTRIES_PER_DIR,
-        MAX_CANDIDATES,
-    );
+    let candidates =
+        find_folder_cover_candidates(dir, MAX_FOLDER_DEPTH, MAX_ENTRIES_PER_DIR, MAX_CANDIDATES);
 
     for candidate in candidates {
         let candidate_str = candidate.to_string_lossy();
@@ -277,7 +276,8 @@ fn generate_folder_cover_thumbnail(
         };
 
         if let Some(blob) = blob.filter(|b| !b.is_empty()) {
-            let _ = db.save_thumbnail_with_category(folder_key.as_ref(), 0, 0, &blob, Some("folder"));
+            let _ =
+                db.save_thumbnail_with_category(folder_key.as_ref(), 0, 0, &blob, Some("folder"));
             return Some(blob);
         }
     }
@@ -328,7 +328,11 @@ fn find_folder_cover_candidates_impl(
         return;
     }
 
-    paths.sort_by(|a, b| natural_cover_rank(a).cmp(&natural_cover_rank(b)).then_with(|| a.cmp(b)));
+    paths.sort_by(|a, b| {
+        natural_cover_rank(a)
+            .cmp(&natural_cover_rank(b))
+            .then_with(|| a.cmp(b))
+    });
 
     for path in &paths {
         if candidates.len() >= max_candidates {
@@ -363,7 +367,10 @@ fn natural_cover_rank(path: &std::path::Path) -> u8 {
         .to_ascii_lowercase();
 
     if path.is_file() {
-        if matches!(name.as_str(), "cover" | "folder" | "thumb" | "thumbnail" | "front") {
+        if matches!(
+            name.as_str(),
+            "cover" | "folder" | "thumb" | "thumbnail" | "front"
+        ) {
             return 0;
         }
         if is_image_file(path) {
@@ -387,7 +394,12 @@ fn natural_cover_rank(path: &std::path::Path) -> u8 {
 fn is_archive_file(path: &std::path::Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7"))
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7"
+            )
+        })
         .unwrap_or(false)
 }
 

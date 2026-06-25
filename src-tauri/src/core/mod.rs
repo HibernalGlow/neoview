@@ -32,6 +32,7 @@ pub mod generic_upscaler;
 pub mod image_cache;
 pub mod image_loader;
 pub mod image_loader_mode;
+pub mod manga_janai_backend;
 pub mod path_utils;
 pub mod pyo3_upscaler;
 pub mod python_upscale_wrapper;

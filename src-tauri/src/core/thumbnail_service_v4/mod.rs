@@ -8,9 +8,9 @@
 //!
 //! 统一缓存键、统一队列、统一事件
 
-pub mod types;
-pub mod service;
 pub mod queue;
+pub mod service;
+pub mod types;
 
-pub use types::*;
 pub use service::UnifiedThumbnailService;
+pub use types::*;

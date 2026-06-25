@@ -3,6 +3,7 @@ import {
 	Activity,
 	ArrowLeft,
 	ArrowLeftRight,
+	ArrowUpDown,
 	ArrowRight,
 	Archive,
 	BarChart3,
@@ -206,6 +207,7 @@ export function getActionIcon(action: string, _category = ''): Component {
 	if (action === 'toggleTopToolbarPin') return Pin;
 	if (action === 'toggleBottomThumbnailBarPin') return Layout;
 	if (action === 'toggleReadingDirection') return ArrowLeftRight;
+	if (action === 'toggleOrientation') return ArrowUpDown;
 	if (action === 'toggleBookMode') return BookOpen;
 	if (action === 'rotate') return RotateCw;
 	if (action === 'rotate180') return RotateCw;
@@ -428,6 +430,10 @@ export function getActionIconSvg(action: string): string {
 	if (action === 'toggleSinglePanoramaView')
 		return svg(
 			'<path d="M12 2v20"/><path d="M2 12h20"/><rect width="18" height="18" x="3" y="3" rx="2"/>'
+		);
+	if (action === 'toggleOrientation')
+		return svg(
+			'<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>'
 		);
 
 	if (action === 'openFile')

@@ -183,6 +183,13 @@ const viewBindings: ActionBinding[] = [
 		category: '视图',
 		description: '在其他模式和单页视图模式之间互相切换（视图模式被锁定时不生效）',
 		bindings: []
+	},
+	{
+		action: 'toggleOrientation',
+		name: '转置/布局方向切换',
+		category: '视图',
+		description: '在双页模式下切换横向（左右拼接）和纵向（上下拼接）布局',
+		bindings: []
 	}
 ];
 

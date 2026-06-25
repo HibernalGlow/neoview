@@ -164,15 +164,57 @@
 		return { width: size.height, height: size.width };
 	}
 
+	function getFrameCombinedSize(images: Array<{ width?: number; height?: number }>): { width: number; height: number } {
+		if (images.length === 0) {
+			return { width: 0, height: 0 };
+		}
+
+		if (images.length === 1) {
+			return {
+				width: images[0].width || 0,
+				height: images[0].height || 0
+			};
+		}
+
+		let totalWidth = 0;
+		let maxHeight = 0;
+		let maxWidth = 0;
+		let totalHeight = 0;
+
+		for (const img of images) {
+			const w = img.width || 0;
+			const h = img.height || 0;
+			totalWidth += w;
+			maxHeight = Math.max(maxHeight, h);
+			maxWidth = Math.max(maxWidth, w);
+			totalHeight += h;
+		}
+
+		if ($viewerState.orientation === 'vertical') {
+			return { width: maxWidth, height: totalHeight };
+		} else {
+			return { width: totalWidth, height: maxHeight };
+		}
+	}
+
 	function getZoomCalculationSize(size: { width: number; height: number }) {
 		const autoRotation = computeAutoRotateAngle(autoRotateMode, size) ?? 0;
 		return rotateSizeForAngle(size, normalizeAngle(rotation + autoRotation));
 	}
 
 	// 根据 zoomMode 计算的基础缩放
-	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
+	// 【后端主导架构】使用 imageStore.getMainImageSize() 或多页组合尺寸获取尺寸
 	let modeScale = $derived.by(() => {
-		const dims = getZoomCalculationSize(hoverImageSize);
+		const frameImages = displayFrameData.images;
+		let baseSize = { width: 0, height: 0 };
+
+		if (frameImages && frameImages.length > 0) {
+			baseSize = getFrameCombinedSize(frameImages);
+		} else {
+			baseSize = hoverImageSize;
+		}
+
+		const dims = getZoomCalculationSize(baseSize);
 		if (
 			dims &&
 			dims.width > 0 &&
@@ -186,7 +228,13 @@
 		// 降级：使用 bookStore 元数据
 		const page = bookStore.currentPage;
 		if (page?.width && page?.height && viewportSize.width > 0 && viewportSize.height > 0) {
-			const pageSize = getZoomCalculationSize({ width: page.width, height: page.height });
+			const fallbackImages = pageMode === 'double' ? [
+				{ width: page.width, height: page.height },
+				{ width: page.width, height: page.height }
+			] : [
+				{ width: page.width, height: page.height }
+			];
+			const pageSize = getZoomCalculationSize(getFrameCombinedSize(fallbackImages));
 			return calculateTargetScale(pageSize, viewportSize, currentZoomMode);
 		}
 
@@ -197,9 +245,18 @@
 	let effectiveScale = $derived(modeScale * manualScale);
 
 	// 缩放后的实际显示尺寸
-	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
+	// 【后端主导架构】使用组合尺寸或单一尺寸获取尺寸
 	let displaySize = $derived.by(() => {
-		const dims = getZoomCalculationSize(hoverImageSize);
+		const frameImages = displayFrameData.images;
+		let baseSize = { width: 0, height: 0 };
+
+		if (frameImages && frameImages.length > 0) {
+			baseSize = getFrameCombinedSize(frameImages);
+		} else {
+			baseSize = hoverImageSize;
+		}
+
+		const dims = getZoomCalculationSize(baseSize);
 		if (!dims.width || !dims.height) {
 			return { width: 0, height: 0 };
 		}

@@ -547,6 +547,8 @@
 	}
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
+		// 如果事件已被其他层（如 GestureLayer）处理过，跳过
+		if (e.defaultPrevented) return;
 		// 轮盘打开时优先消费事件
 		if (radialMenuStore.isOpen) return;
 		// 设置覆盖层打开时不响应全局快捷键

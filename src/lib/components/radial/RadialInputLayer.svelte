@@ -37,6 +37,10 @@
 		if (target.closest('[data-radial-exclude]')) return true;
 		if (target.closest('.dialog-content')) return true;
 		if (target.closest('[role="dialog"]')) return true;
+		// 排除侧栏、工具栏、底栏等 UI 区域（与 App.svelte 的区域判定保持一致）
+		if (target.closest('[data-sidebar]')) return true;
+		if (target.closest('[data-top-toolbar]')) return true;
+		if (target.closest('[data-bottom-bar]')) return true;
 		return false;
 	}
 

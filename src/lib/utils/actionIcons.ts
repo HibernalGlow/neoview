@@ -202,6 +202,7 @@ export function getActionIcon(action: string, _category = ''): Component {
 	if (action === 'fullscreen') return Fullscreen;
 	if (action === 'toggleLeftSidebar') return PanelLeftIcon;
 	if (action === 'toggleRightSidebar') return PanelRightIcon;
+	if (action === 'toggleLibrary') return FolderOpen;
 	if (action === 'toggleTopToolbarPin') return Pin;
 	if (action === 'toggleBottomThumbnailBarPin') return Layout;
 	if (action === 'toggleReadingDirection') return ArrowLeftRight;

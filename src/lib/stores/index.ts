@@ -80,3 +80,5 @@ export {
 	colorPresets,
 	defaultFilterSettings
 } from './filterStore.svelte';
+
+export * from './quickLibrary.svelte';

@@ -20,7 +20,8 @@ import {
 	bottomThumbnailBarPinned,
 	toggleReadingDirection,
 	toggleSinglePanoramaView,
-	toggleTemporaryFitZoom
+	toggleTemporaryFitZoom,
+	quickLibraryStore
 } from '$lib/stores';
 import { settingsManager } from '$lib/settings/settingsManager';
 import { dispatchApplyZoomMode } from '$lib/utils/zoomMode';
@@ -63,6 +64,10 @@ export const SIMPLE_ACTION_HANDLERS: Record<string, () => void> = {
 	toggleRightSidebar: () => {
 		console.log('执行切换右侧边栏操作');
 		toggleRightSidebar();
+	},
+	toggleLibrary: () => {
+		console.log('执行切换快捷书库操作');
+		quickLibraryStore.toggle();
 	},
 	toggleBookMode: () => {
 		console.log('执行切换书籍模式操作');

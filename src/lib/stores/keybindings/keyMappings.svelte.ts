@@ -129,6 +129,13 @@ const viewBindings: ActionBinding[] = [
 		bindings: []
 	},
 	{
+		action: 'toggleLibrary',
+		name: '快捷书库',
+		category: '视图',
+		description: '显示/隐藏快捷沉浸书库视窗',
+		bindings: [{ type: 'keyboard', key: 'L' }]
+	},
+	{
 		action: 'toggleTopToolbarPin',
 		name: '固定顶部工具栏',
 		category: '视图',

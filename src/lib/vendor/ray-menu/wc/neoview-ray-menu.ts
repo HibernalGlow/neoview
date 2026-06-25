@@ -342,6 +342,12 @@ export class NeoViewRayMenu extends BaseElement {
 
 	private _onPointerUp(event: PointerEvent): void {
 		if (!this._isOpen) return;
+		if (
+			event.target instanceof HTMLElement &&
+			event.target.closest('[data-radial-exclude], .radial-menu-exclude')
+		) {
+			return;
+		}
 		event.preventDefault();
 		event.stopPropagation();
 		this.updateHoverFromPoint(event.clientX, event.clientY);

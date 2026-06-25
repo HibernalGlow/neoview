@@ -88,6 +88,8 @@
 	import RadialInputLayer from '$lib/components/radial/RadialInputLayer.svelte';
 	import RadialMenuOverlay from '$lib/components/radial/RadialMenuOverlay.svelte';
 	import { radialMenuStore } from '$lib/stores/radialMenu';
+	import QuickLibraryDialog from '$lib/components/dialogs/QuickLibraryDialog.svelte';
+	import { quickLibraryStore } from '$lib/stores';
 
 	const WINDOW_STATE_SAFE_FLAGS = StateFlags.SIZE | StateFlags.POSITION | StateFlags.MAXIMIZED;
 
@@ -509,6 +511,12 @@
 			return;
 		}
 
+		// 快捷书库特殊处理
+		if (action === 'toggleLibrary' || action === 'openLibrary') {
+			quickLibraryStore.toggle();
+			return;
+		}
+
 		// 添加调试信息
 		// keyBindingsStore.debugBindings();
 
@@ -677,6 +685,7 @@
 	<Toast />
 	<GlobalConfirmDialog />
 	<SettingsOverlay />
+	<QuickLibraryDialog />
 
 	<!-- 轮盘菜单系统 -->
 	<RadialInputLayer />

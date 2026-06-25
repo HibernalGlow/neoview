@@ -50,10 +50,12 @@
 		PanelTop,
 		PanelBottom,
 		PanelLeft,
-		PanelRight
+		PanelRight,
+		FolderOpen
 	} from '@lucide/svelte';
 	import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 	import { pageTransferModeStore } from '$lib/stores/pageTransferMode.svelte';
+	import { quickLibraryStore } from '$lib/stores';
 
 	// Props
 	interface Props {
@@ -651,6 +653,24 @@
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>{$topToolbarPinned ? '松开工具栏（自动隐藏）' : '钉住工具栏（始终显示）'}</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+
+		<!-- 快捷书库 -->
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6"
+					style="pointer-events: auto;"
+					onclick={() => quickLibraryStore.toggle()}
+				>
+					<FolderOpen class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>打开快捷书库 (L)</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 

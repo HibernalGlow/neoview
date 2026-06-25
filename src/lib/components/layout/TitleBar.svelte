@@ -8,8 +8,16 @@
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Menu, Minimize, Maximize, X, Settings, PanelRightOpen } from '@lucide/svelte';
-	import { toggleLeftSidebar, toggleRightSidebar } from '$lib/stores';
+	import {
+		Menu,
+		Minimize,
+		Maximize,
+		X,
+		Settings,
+		PanelRightOpen,
+		FolderOpen
+	} from '@lucide/svelte';
+	import { toggleLeftSidebar, toggleRightSidebar, quickLibraryStore } from '$lib/stores';
 
 	const appWindow = getCurrentWebviewWindow();
 
@@ -126,6 +134,21 @@
 			</Tooltip.Trigger>
 			<Tooltip.Content>
 				<p>右侧边栏</p>
+			</Tooltip.Content>
+		</Tooltip.Root>
+		<Tooltip.Root>
+			<Tooltip.Trigger>
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-6 w-6"
+					onclick={() => quickLibraryStore.toggle()}
+				>
+					<FolderOpen class="h-4 w-4" />
+				</Button>
+			</Tooltip.Trigger>
+			<Tooltip.Content>
+				<p>快捷书库 (L)</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
 		<Tooltip.Root>

@@ -110,6 +110,9 @@
 		onSetRating
 	}: Props = $props();
 
+	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
+	const isCompact = $derived($fileBrowserStore.compactGridMode);
+
 	// [4图预览功能已禁用]
 	const showFolderPreviewGrid = false;
 	/* const showFolderPreviewGrid = $derived(
@@ -139,8 +142,8 @@
 		}
 	}}
 >
-	<!-- 缩略图区域 - 自动扩展填充可用空间 -->
-	<div class="bg-secondary relative min-h-20 w-full flex-1 overflow-hidden">
+	<!-- 缩略图区域 -->
+	<div class="bg-secondary relative w-full overflow-hidden {isCompact ? 'h-full flex-1' : 'h-[148px]'}">
 		{#if false}
 			<!-- 文件夹 4 图预览模式 -->
 			<!-- <FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} /> -->
@@ -206,167 +209,240 @@
 				></div>
 			</div>
 		{/if}
+
+		<!-- 紧凑模式信息叠加层 -->
+		{#if isCompact}
+			<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-2 text-white flex flex-col gap-1 pointer-events-none">
+				<!-- 文件/文件夹名 -->
+				<div class="text-[11px] font-semibold line-clamp-2 leading-tight drop-shadow-md break-all text-white/95" title={item.name}>
+					{#if emmMetadata?.translatedTitle}
+						<span class="text-primary-foreground font-semibold">{emmMetadata.translatedTitle}</span>
+					{:else}
+						<span>{item.name}</span>
+					{/if}
+				</div>
+
+				<div class="flex flex-wrap items-center gap-1">
+					<!-- 文件类型 icon -->
+					<FileTypeIcon name={item.targetPath ?? item.name} isDir={item.isDir} size="xs" />
+					
+					<!-- 视频/阅读进度 -->
+					{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
+						<span class="bg-primary/90 rounded px-1 text-[9px] font-medium text-white">
+							{formatDuration(videoPosition)}/{formatDuration(videoDuration)}
+						</span>
+					{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
+						<span class="bg-primary/90 rounded px-1 text-[9px] font-medium text-white">
+							{currentPage}/{totalPages}
+						</span>
+					{/if}
+
+					<!-- 文件夹统计 -->
+					{#if item.isDir}
+						{#if item.imageCount !== undefined && item.imageCount > 0}
+							<span class="bg-black/60 rounded px-1 text-[9px] font-medium text-white inline-flex items-center gap-0.5">
+								<Images class="h-2.5 w-2.5" /> {item.imageCount}
+							</span>
+						{/if}
+						{#if item.folderCount !== undefined && item.folderCount > 0}
+							<span class="bg-black/60 rounded px-1 text-[9px] font-medium text-white inline-flex items-center gap-0.5">
+								<FolderOpen class="h-2.5 w-2.5" /> {item.folderCount}
+							</span>
+						{/if}
+						{#if item.archiveCount !== undefined && item.archiveCount > 0}
+							<span class="bg-black/60 rounded px-1 text-[9px] font-medium text-white inline-flex items-center gap-0.5">
+								<Package class="h-2.5 w-2.5" /> {item.archiveCount}
+							</span>
+						{/if}
+					{/if}
+
+					<!-- 文件大小 -->
+					<span class="bg-black/45 rounded px-1 text-[9px] font-medium text-white/90">
+						{item.isDir
+							? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+							: formatSize(item.size || 0, false)}
+					</span>
+
+					<!-- 评分 -->
+					{#if getEffectiveRating() !== null}
+						<span class="bg-yellow-500/90 rounded px-1 text-[9px] font-bold text-white inline-flex items-center gap-0.5">
+							<Star class="h-2 w-2 fill-white" /> {getEffectiveRating()?.toFixed(1)}
+						</span>
+					{/if}
+				</div>
+			</div>
+		{/if}
 	</div>
 
 	<!-- 信息区域 -->
-	<div class="bg-background p-2">
-		<!-- 原文件名 -->
-		<div class="text-sm font-medium wrap-break-word" title={item.name}>
-			<span class="truncate">{item.name}</span>
-		</div>
-
-		<!-- 文件夹统计信息 -->
-		{#if item.isDir}
-			<div class="mt-1 flex flex-wrap items-center gap-1">
-				{#if item.imageCount !== undefined && item.imageCount > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							>
-								<Images class="h-2.5 w-2.5" />
-								<span class="font-medium">{item.imageCount}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>图片数量</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				{#if item.folderCount !== undefined && item.folderCount > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							>
-								<FolderOpen class="h-2.5 w-2.5" />
-								<span class="font-medium">{item.folderCount}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>子文件夹数量</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				{#if item.archiveCount !== undefined && item.archiveCount > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							>
-								<Package class="h-2.5 w-2.5" />
-								<span class="font-medium">{item.archiveCount}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>压缩包数量</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				{#if item.videoCount !== undefined && item.videoCount > 0}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span
-								class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
-							>
-								<Video class="h-2.5 w-2.5" />
-								<span class="font-medium">{item.videoCount}</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>视频数量</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				<!-- 纯媒体文件夹标识（穿透模式下点击直接打开） -->
-				{#if isPureMediaFolder}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<span
-								class="bg-primary/20 text-primary border-primary/30 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px]"
-							>
-								<Image class="h-2.5 w-2.5" />
-								<span class="font-medium">媒体</span>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>纯媒体文件夹，点击直接打开</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
-				{#if getEffectiveRating() !== null || item.isDir}
-					<FolderRatingBadge
-						effectiveRating={getEffectiveRating()}
-						manualRating={folderManualRating}
-						averageRating={folderAverageRating}
-						size="sm"
-						{onSetRating}
-					/>
-				{/if}
-				{#if onOpenAsBook}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							<button
-								class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 text-[10px] transition-colors"
-								onclick={(e) => {
-									e.stopPropagation();
-									onOpenAsBook?.();
-								}}
-							>
-								<BookOpen class="text-muted-foreground h-3 w-3" />
-							</button>
-						</Tooltip.Trigger>
-						<Tooltip.Content><p>作为书籍打开此文件夹</p></Tooltip.Content>
-					</Tooltip.Root>
-				{/if}
+	{#if !isCompact}
+		<div class="bg-background p-2">
+			<!-- 原文件名 -->
+			<div class="text-sm font-medium wrap-break-word" title={item.name}>
+				<span class="truncate">{item.name}</span>
 			</div>
-		{/if}
 
-		<!-- 翻译标题和评分 -->
-		{#if emmMetadata && (emmMetadata.translatedTitle || emmMetadata.rating !== undefined)}
-			<div class="mt-1 flex flex-wrap items-center gap-1">
-				{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
-					<span
-						class="border-primary/20 bg-primary/10 text-primary rounded border px-1 py-0.5 text-[10px] wrap-break-word"
-						title={emmMetadata.translatedTitle}
-					>
-						{emmMetadata.translatedTitle}
-					</span>
-				{/if}
-				{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
-					<MetadataBadge
-						text={emmMetadata.rating.toFixed(1)}
-						icon={Star}
-						tooltip="评分: {emmMetadata.rating.toFixed(2)}"
-						size="xs"
-						variant="accent"
-					/>
-				{/if}
-			</div>
-		{/if}
-
-		<div class="mt-1 flex flex-wrap items-center gap-1">
-			<!-- 文件类型 icon -->
-			<FileTypeIcon name={item.targetPath ?? item.name} isDir={item.isDir} size="xs" />
-			<!-- 视频进度信息（时:分:秒格式） -->
-			{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
-				<MetadataBadge
-					text="{formatDuration(videoPosition)}/{formatDuration(videoDuration)}"
-					icon={Play}
-					tooltip="视频进度"
-					size="xs"
-					variant="primary"
-				/>
-			{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
-				<MetadataBadge
-					text="{currentPage}/{totalPages}"
-					icon={BookOpen}
-					tooltip="阅读进度"
-					size="xs"
-					variant="primary"
-				/>
+			<!-- 文件夹统计信息 -->
+			{#if item.isDir}
+				<div class="mt-1 flex flex-wrap items-center gap-1">
+					{#if item.imageCount !== undefined && item.imageCount > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<Images class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.imageCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>图片数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					{#if item.folderCount !== undefined && item.folderCount > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<FolderOpen class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.folderCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>子文件夹数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					{#if item.archiveCount !== undefined && item.archiveCount > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<Package class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.archiveCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>压缩包数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					{#if item.videoCount !== undefined && item.videoCount > 0}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-secondary text-secondary-foreground inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px]"
+								>
+									<Video class="h-2.5 w-2.5" />
+									<span class="font-medium">{item.videoCount}</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>视频数量</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					<!-- 纯媒体文件夹标识（穿透模式下点击直接打开） -->
+					{#if isPureMediaFolder}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<span
+									class="bg-primary/20 text-primary border-primary/30 inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px]"
+								>
+									<Image class="h-2.5 w-2.5" />
+									<span class="font-medium">媒体</span>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>纯媒体文件夹，点击直接打开</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+					{#if getEffectiveRating() !== null || item.isDir}
+						<FolderRatingBadge
+							effectiveRating={getEffectiveRating()}
+							manualRating={folderManualRating}
+							averageRating={folderAverageRating}
+							size="sm"
+							{onSetRating}
+						/>
+					{/if}
+					{#if onOpenAsBook}
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								<button
+									class="hover:bg-accent inline-flex items-center justify-center rounded-md p-1 text-[10px] transition-colors"
+									onclick={(e) => {
+										e.stopPropagation();
+										onOpenAsBook?.();
+									}}
+								>
+									<BookOpen class="text-muted-foreground h-3 w-3" />
+								</button>
+							</Tooltip.Trigger>
+							<Tooltip.Content><p>作为书籍打开此文件夹</p></Tooltip.Content>
+						</Tooltip.Root>
+					{/if}
+				</div>
 			{/if}
-			{#if showSizeAndModified}
-				<MetadataBadge
-					text={item.isDir
-						? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
-						: formatSize(item.size || 0, false)}
-					icon={HardDrive}
-					tooltip="文件大小"
-					size="xs"
-					variant="secondary"
-				/>
-				{#if timestamp}
+
+			<!-- 翻译标题和评分 -->
+			{#if emmMetadata && (emmMetadata.translatedTitle || emmMetadata.rating !== undefined)}
+				<div class="mt-1 flex flex-wrap items-center gap-1">
+					{#if emmMetadata.translatedTitle && emmMetadata.translatedTitle !== item.name}
+						<span
+							class="border-primary/20 bg-primary/10 text-primary rounded border px-1 py-0.5 text-[10px] wrap-break-word"
+							title={emmMetadata.translatedTitle}
+						>
+							{emmMetadata.translatedTitle}
+						</span>
+					{/if}
+					{#if emmMetadata.rating !== undefined && emmMetadata.rating > 0}
+						<MetadataBadge
+							text={emmMetadata.rating.toFixed(1)}
+							icon={Star}
+							tooltip="评分: {emmMetadata.rating.toFixed(2)}"
+							size="xs"
+							variant="accent"
+						/>
+					{/if}
+				</div>
+			{/if}
+
+			<div class="mt-1 flex flex-wrap items-center gap-1">
+				<!-- 文件类型 icon -->
+				<FileTypeIcon name={item.targetPath ?? item.name} isDir={item.isDir} size="xs" />
+				<!-- 视频进度信息（时:分:秒格式） -->
+				{#if videoPosition !== undefined && videoDuration !== undefined && videoDuration > 0}
+					<MetadataBadge
+						text="{formatDuration(videoPosition)}/{formatDuration(videoDuration)}"
+						icon={Play}
+						tooltip="视频进度"
+						size="xs"
+						variant="primary"
+					/>
+				{:else if currentPage !== undefined && totalPages !== undefined && totalPages > 0}
+					<MetadataBadge
+						text="{currentPage}/{totalPages}"
+						icon={BookOpen}
+						tooltip="阅读进度"
+						size="xs"
+						variant="primary"
+					/>
+				{/if}
+				{#if showSizeAndModified}
+					<MetadataBadge
+						text={item.isDir
+							? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+							: formatSize(item.size || 0, false)}
+						icon={HardDrive}
+						tooltip="文件大小"
+						size="xs"
+						variant="secondary"
+					/>
+					{#if timestamp}
+						<MetadataBadge
+							text={formatRelativeTime(timestamp)}
+							icon={Clock}
+							tooltip="修改时间"
+							size="xs"
+							variant="secondary"
+						/>
+					{/if}
+				{:else if timestamp}
 					<MetadataBadge
 						text={formatRelativeTime(timestamp)}
 						icon={Clock}
@@ -374,42 +450,34 @@
 						size="xs"
 						variant="secondary"
 					/>
+				{:else if !(currentPage !== undefined && totalPages !== undefined && totalPages > 0)}
+					<MetadataBadge
+						text={item.isDir
+							? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
+							: formatSize(item.size || 0, false)}
+						icon={HardDrive}
+						tooltip="文件大小"
+						size="xs"
+						variant="secondary"
+					/>
 				{/if}
-			{:else if timestamp}
-				<MetadataBadge
-					text={formatRelativeTime(timestamp)}
-					icon={Clock}
-					tooltip="修改时间"
-					size="xs"
-					variant="secondary"
-				/>
-			{:else if !(currentPage !== undefined && totalPages !== undefined && totalPages > 0)}
-				<MetadataBadge
-					text={item.isDir
-						? getFolderSizeDisplay(folderSizeLoading, folderTotalSize, item.size)
-						: formatSize(item.size || 0, false)}
-					icon={HardDrive}
-					tooltip="文件大小"
-					size="xs"
-					variant="secondary"
-				/>
+			</div>
+
+			{#if displayTags().length > 0}
+				<div class="mt-1 flex flex-wrap items-center gap-1">
+					{#each displayTags() as tagInfo}
+						<TagChip
+							tag={tagInfo.tag}
+							display={tagInfo.display}
+							color={tagInfo.color}
+							isCollect={tagInfo.isCollect}
+							isMixedVariant={tagInfo.isMixedVariant}
+							isManual={tagInfo.isManual}
+							size="sm"
+						/>
+					{/each}
+				</div>
 			{/if}
 		</div>
-
-		{#if displayTags().length > 0}
-			<div class="mt-1 flex flex-wrap items-center gap-1">
-				{#each displayTags() as tagInfo}
-					<TagChip
-						tag={tagInfo.tag}
-						display={tagInfo.display}
-						color={tagInfo.color}
-						isCollect={tagInfo.isCollect}
-						isMixedVariant={tagInfo.isMixedVariant}
-						isManual={tagInfo.isManual}
-						size="sm"
-					/>
-				{/each}
-			</div>
-		{/if}
-	</div>
+	{/if}
 </div>

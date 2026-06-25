@@ -52,6 +52,7 @@ interface FileBrowserState {
 	penetratePureMediaFolderOpen: boolean;
 	// 文件夹预览网格模式（显示前4张图片的2x2预览）
 	// [4图预览功能已禁用] folderPreviewGrid: boolean;
+	compactGridMode: boolean;
 	showSearchBar: boolean;
 	showMigrationBar: boolean;
 	showMigrationManager: boolean;
@@ -199,6 +200,7 @@ interface PenetrateSettings {
 	penetrateMaxDepth: number;
 	penetratePureMediaFolderOpen: boolean;
 	// [4图预览功能已禁用] folderPreviewGrid: boolean;
+	compactGridMode?: boolean;
 }
 
 function loadEmptyClickSettings(): Partial<EmptyClickSettings> {
@@ -236,10 +238,12 @@ function loadPenetrateSettings(): Partial<PenetrateSettings> {
 	return {};
 }
 
-function savePenetrateSettings(settings: PenetrateSettings) {
+function savePenetrateSettings(settings: Partial<PenetrateSettings>) {
 	try {
 		if (typeof window === 'undefined' || !window.localStorage) return;
-		localStorage.setItem(PENETRATE_SETTINGS_KEY, JSON.stringify(settings));
+		const current = loadPenetrateSettings();
+		const merged = { ...current, ...settings };
+		localStorage.setItem(PENETRATE_SETTINGS_KEY, JSON.stringify(merged));
 	} catch (e) {
 		console.error('[FileBrowserStore] 保存穿透设置失败:', e);
 	}
@@ -269,6 +273,7 @@ const initialState: FileBrowserState = {
 	penetrateMaxDepth: savedPenetrateSettings.penetrateMaxDepth ?? 3,
 	penetratePureMediaFolderOpen: savedPenetrateSettings.penetratePureMediaFolderOpen ?? true,
 	// [4图预览功能已禁用] folderPreviewGrid: savedPenetrateSettings.folderPreviewGrid ?? true,
+	compactGridMode: savedPenetrateSettings.compactGridMode ?? false,
 	showSearchBar: false,
 	showMigrationBar: false,
 	showMigrationManager: false,
@@ -475,6 +480,12 @@ function createFileBrowserStore() {
 		//   });
 		//   return newState;
 		// }),
+		setCompactGridMode: (value: boolean) =>
+			update((state) => {
+				const newState = { ...state, compactGridMode: value };
+				savePenetrateSettings({ compactGridMode: value });
+				return newState;
+			}),
 		setShowSearchBar: (value: boolean) => update((state) => ({ ...state, showSearchBar: value })),
 		setShowMigrationBar: (value: boolean) =>
 			update((state) => ({ ...state, showMigrationBar: value })),

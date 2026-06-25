@@ -2,7 +2,7 @@
 	// V2: Migrating to @tanstack/svelte-virtual
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
-	import { globalScrollPositions } from './scrollCache';
+	import { globalScrollPositions, globalImageAspectRatios } from './scrollCache.svelte';
 	import type { FsItem } from '$lib/types';
 	// 统一缩略图系统
 	import {
@@ -683,7 +683,8 @@
 							{@const isSelected = selectedIndex === itemIndex}
 							{@const isChecked = selectedItems.has(item.path)}
 							{@const historyEntry = unifiedHistoryStore.findByPath(item.path)}
-							<div style="flex: 1; padding: 4px; box-sizing: border-box;">
+							{@const aspect = columns > 1 ? (globalImageAspectRatios.get(item.path) ?? 1) : 1}
+							<div style="flex: {aspect}; padding: 4px; box-sizing: border-box; min-width: 0;">
 								<FileItemCard
 									{item}
 									thumbnail={getThumbUrl(item.path) ?? thumbnails.get(toRelativeKey(item.path))}

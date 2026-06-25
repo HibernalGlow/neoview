@@ -118,6 +118,18 @@
 	/* const showFolderPreviewGrid = $derived(
 		item.isDir && folderPreviewGridEnabled && folderThumbnails.length > 0
 	); */
+
+	import { globalImageAspectRatios } from './scrollCache.svelte';
+
+	function handleImageLoad(e: Event) {
+		const img = e.target as HTMLImageElement;
+		if (img.naturalWidth && img.naturalHeight) {
+			const aspect = img.naturalWidth / img.naturalHeight;
+			// 限制宽高比在合理范围内，避免极度扁平或高瘦的卡片导致布局畸形
+			const clampedAspect = Math.max(0.5, Math.min(2.5, aspect));
+			globalImageAspectRatios.set(item.path, clampedAspect);
+		}
+	}
 </script>
 
 <div
@@ -154,6 +166,7 @@
 				loading="lazy"
 				decoding="async"
 				class="h-full w-full object-cover transition-transform group-hover/card:scale-105"
+				onload={handleImageLoad}
 			/>
 		{:else}
 			<!-- 骨架屏占位：缩略图加载中显示动画 -->

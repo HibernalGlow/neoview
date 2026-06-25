@@ -656,7 +656,7 @@
 			</Tooltip.Content>
 		</Tooltip.Root>
 
-		<!-- 快捷书库 -->
+		<!-- 暂时注释快捷书库按钮
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
@@ -673,6 +673,7 @@
 				<p>打开快捷书库 (L)</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
+		-->
 
 		<!-- 主题模式切换 -->
 		<Tooltip.Root>

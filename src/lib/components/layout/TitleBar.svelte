@@ -136,6 +136,7 @@
 				<p>右侧边栏</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
+		<!-- 暂时注释快捷书库按钮
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button
@@ -151,6 +152,7 @@
 				<p>快捷书库 (L)</p>
 			</Tooltip.Content>
 		</Tooltip.Root>
+		-->
 		<Tooltip.Root>
 			<Tooltip.Trigger>
 				<Button variant="ghost" size="icon" class="h-6 w-6" onclick={openSettings}>

@@ -130,6 +130,8 @@ class RadialMenuStore {
 	mode = $state<RadialMode>('pointer');
 	centerX = $state(0);
 	centerY = $state(0);
+	visualX = $state(0);
+	visualY = $state(0);
 
 	constructor() {
 		this.loadFromStorage();
@@ -364,6 +366,8 @@ class RadialMenuStore {
 	open(x: number, y: number, mode: RadialMode = 'pointer') {
 		this.centerX = x;
 		this.centerY = y;
+		this.visualX = x;
+		this.visualY = y;
 		this.mode = mode;
 		this.state = 'open';
 	}

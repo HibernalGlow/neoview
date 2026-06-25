@@ -122,6 +122,12 @@ export class NeoViewRayMenu extends BaseElement {
 	private _handlePointerMove = this._onPointerMove.bind(this);
 	private _handlePointerUp = this._onPointerUp.bind(this);
 	private _handleKeyDown = this._onKeyDown.bind(this);
+	private _viewportOverride: {
+		left?: number;
+		right?: number;
+		top?: number;
+		bottom?: number;
+	} | null = null;
 
 	static get observedAttributes() {
 		return ['radius', 'inner-radius', 'start-angle', 'sweep-angle', 'layer-count', 'confirm-keys'];
@@ -131,6 +137,17 @@ export class NeoViewRayMenu extends BaseElement {
 		super();
 		this.attachShadow({ mode: 'open' });
 		this._initStyles();
+	}
+
+	get viewportOverride(): { left?: number; right?: number; top?: number; bottom?: number } | null {
+		return this._viewportOverride;
+	}
+
+	set viewportOverride(
+		value: { left?: number; right?: number; top?: number; bottom?: number } | null
+	) {
+		this._viewportOverride = value;
+		if (this._isOpen) this._render();
 	}
 
 	get items(): NeoViewRayMenuItem[] {
@@ -162,7 +179,11 @@ export class NeoViewRayMenu extends BaseElement {
 
 	open(x: number, y: number): void {
 		const outerRadius = this._getOuterRadius();
-		const viewport = { width: window.innerWidth, height: window.innerHeight };
+		const viewport = {
+			width: window.innerWidth,
+			height: window.innerHeight,
+			...this._viewportOverride
+		};
 		const edgeState = detectEdgeConstraints({ x, y }, outerRadius, viewport);
 		this._position = { x: x + edgeState.offset.x, y: y + edgeState.offset.y };
 		this._isOpen = true;

@@ -38,6 +38,8 @@
 		zoomLevel,
 		rotationAngle,
 		setZoomLevel,
+		pageLeft,
+		pageRight,
 		viewerPageInfoVisible,
 		viewerProgressVisible,
 		currentPageShouldSplit,
@@ -1300,8 +1302,8 @@
 		{isVideoMode}
 		enablePan={false}
 		enableTap={false}
-		onNextPage={handleNextPage}
-		onPrevPage={handlePrevPage}
+		onNextPage={() => void pageRight()}
+		onPrevPage={() => void pageLeft()}
 		onResetZoom={resetView}
 	/>
 

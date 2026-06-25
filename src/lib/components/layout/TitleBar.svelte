@@ -4,6 +4,7 @@
 	 * 标题栏组件
 	 */
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+	import { LogicalPosition } from '@tauri-apps/api/dpi';
 	import { openSettingsOverlay } from '$lib/stores/settingsOverlay.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Tooltip from '$lib/components/ui/tooltip';
@@ -27,14 +28,65 @@
 	async function closeWindow() {
 		await appWindow.close();
 	}
+
+	function isInteractiveElement(target: EventTarget | null): boolean {
+		const element = target as HTMLElement | null;
+		if (!element) return false;
+		return Boolean(
+			element.closest('button,a,input,select,textarea,[role="button"],[data-no-window-drag]')
+		);
+	}
+
+	async function handleTitleBarDragStart(event: PointerEvent): Promise<void> {
+		if (event.button !== 0) return;
+		if (isInteractiveElement(event.target)) return;
+
+		const isFullscreen = await appWindow.isFullscreen();
+		const isMaximized = await appWindow.isMaximized();
+
+		if (isFullscreen || isMaximized) {
+			const percent = event.clientX / window.innerWidth;
+			const clientY = event.clientY;
+			const screenX = event.screenX;
+			const screenY = event.screenY;
+
+			if (isFullscreen) {
+				await appWindow.setFullscreen(false);
+			}
+			if (isMaximized) {
+				await appWindow.unmaximize();
+			}
+			// 等待窗口大小和状态转换完成
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			try {
+				const size = await appWindow.outerSize();
+				const scaleFactor = await appWindow.scaleFactor();
+				const logicalWidth = size.width / scaleFactor;
+				const x = screenX - percent * logicalWidth;
+				const y = screenY - clientY;
+				await appWindow.setPosition(new LogicalPosition(x, y));
+				// 等待位置生效
+				await new Promise((resolve) => setTimeout(resolve, 16));
+			} catch (error) {
+				console.warn('调整窗口拖拽位置失败:', error);
+			}
+		}
+
+		try {
+			await appWindow.startDragging();
+		} catch (error) {
+			console.warn('拖拽窗口失败:', error);
+		}
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-	data-tauri-drag-region
 	class="bg-secondary/50 flex h-8 items-center justify-between border-b px-2 select-none"
 	role="banner"
 	aria-label="窗口标题栏"
+	onpointerdown={handleTitleBarDragStart}
 >
 	<!-- 左侧：菜单按钮 -->
 	<div class="flex items-center gap-1">

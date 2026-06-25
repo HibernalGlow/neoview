@@ -38,6 +38,8 @@
 		thumbnail?: string;
 		folderThumbnails?: string[];
 		folderPreviewGridEnabled?: boolean;
+		folderPreviewLoading?: boolean;
+		folderPreviewExpectedCount?: number;
 		isSelected?: boolean;
 		showReadMark?: boolean;
 		showSizeAndModified?: boolean;
@@ -84,6 +86,8 @@
 		thumbnail,
 		folderThumbnails = [],
 		folderPreviewGridEnabled = false,
+		folderPreviewLoading = false,
+		folderPreviewExpectedCount = 0,
 		isSelected = false,
 		showReadMark = false,
 		showSizeAndModified = false,
@@ -113,9 +117,8 @@
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	const isCompact = $derived($fileBrowserStore.compactGridMode);
 
-	// [4图预览功能已禁用]
 	const showFolderPreviewGrid = $derived(
-		item.isDir && folderPreviewGridEnabled && folderThumbnails.length > 0
+		item.isDir && folderPreviewGridEnabled && (folderPreviewLoading || folderThumbnails.length > 0)
 	);
 
 	import { globalImageAspectRatios } from './scrollCache.svelte';
@@ -157,7 +160,12 @@
 	<div class="bg-secondary relative w-full overflow-hidden {isCompact ? 'h-full flex-1' : 'h-[148px]'}">
 		{#if showFolderPreviewGrid}
 			<!-- 文件夹多图自适应网格预览模式 -->
-			<FolderPreviewGrid thumbnails={folderThumbnails} folderName={item.name} />
+			<FolderPreviewGrid
+				thumbnails={folderThumbnails}
+				folderName={item.name}
+				loading={folderPreviewLoading}
+				expectedCount={folderPreviewExpectedCount}
+			/>
 		{:else if thumbnail}
 			<img
 				src={thumbnail}

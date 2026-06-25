@@ -22,7 +22,7 @@
 	import { calculateTargetScale } from './utils/imageTransitionManager';
 	import type { AutoRotateMode, ZoomMode } from '$lib/settings/settingsManager';
 	import { applyZoomModeEventName, type ApplyZoomModeDetail } from '$lib/utils/zoomMode';
-	import type { Frame } from './types/frame';
+	import type { Frame, FrameImage } from './types/frame';
 	import type { GetFrameSnapshotParams } from '$lib/api/frameApi';
 	import { emptyFrame } from './types/frame';
 	import { computeAutoRotateAngle, normalizeAngle } from '$lib/utils/pageLayout';
@@ -171,10 +171,49 @@
 		return rotateSizeForAngle(size, normalizeAngle(rotation + autoRotation));
 	}
 
-	// 根据 zoomMode 计算的基础缩放
-	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
+	function getFrameImageZoomSize(img: FrameImage): { width: number; height: number } {
+		const rawWidth = img.width || hoverImageSize.width || 0;
+		const rawHeight = img.height || hoverImageSize.height || 0;
+		if (!rawWidth || !rawHeight) {
+			return { width: 0, height: 0 };
+		}
+
+		const frameScale = img.scale ?? 1.0;
+		const splitFactor = img.splitHalf ? 2 : 1;
+		const size = {
+			width: rawWidth * frameScale * splitFactor,
+			height: rawHeight * frameScale
+		};
+		const autoRotation =
+			computeAutoRotateAngle(autoRotateMode, { width: rawWidth, height: rawHeight }) ?? 0;
+		const angle = normalizeAngle((img.rotation ?? 0) + rotation + autoRotation);
+		return rotateSizeForAngle(size, angle);
+	}
+
+	function getCurrentFrameZoomCalculationSize(): { width: number; height: number } {
+		const frame = imageStore.getCurrentFrame();
+		if (frame.layout !== 'double' || frame.images.length <= 1) {
+			return getZoomCalculationSize(hoverImageSize);
+		}
+
+		let totalWidth = 0;
+		let maxHeight = 0;
+		for (const img of frame.images) {
+			const size = getFrameImageZoomSize(img);
+			totalWidth += size.width;
+			maxHeight = Math.max(maxHeight, size.height);
+		}
+
+		if (!totalWidth || !maxHeight) {
+			return getZoomCalculationSize(hoverImageSize);
+		}
+
+		return { width: totalWidth, height: maxHeight };
+	}
+
+	// 根据 zoomMode 计算基础缩放；双页按整帧尺寸适配窗口。
 	let modeScale = $derived.by(() => {
-		const dims = getZoomCalculationSize(hoverImageSize);
+		const dims = getCurrentFrameZoomCalculationSize();
 		if (
 			dims &&
 			dims.width > 0 &&
@@ -198,10 +237,9 @@
 	// 最终缩放 = modeScale * manualScale
 	let effectiveScale = $derived(modeScale * manualScale);
 
-	// 缩放后的实际显示尺寸
-	// 【后端主导架构】使用 imageStore.getMainImageSize() 获取尺寸
+	// 缩放后的实际显示尺寸，和 modeScale 使用同一套帧尺寸。
 	let displaySize = $derived.by(() => {
-		const dims = getZoomCalculationSize(hoverImageSize);
+		const dims = getCurrentFrameZoomCalculationSize();
 		if (!dims.width || !dims.height) {
 			return { width: 0, height: 0 };
 		}

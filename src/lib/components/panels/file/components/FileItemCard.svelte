@@ -4,7 +4,6 @@
 	 * 负责数据获取和状态管理，根据 viewMode 渲染对应视图组件
 	 * 用于 FileBrowser、HistoryPanel、BookmarkPanel
 	 */
-	import { invoke } from '@tauri-apps/api/core';
 	import type { FsItem } from '$lib/types';
 	import { bookmarkStore } from '$lib/stores/bookmark.svelte';
 	import {
@@ -34,6 +33,12 @@
 	import { FileSystemAPI } from '$lib/api';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import {
+		generateThumbKey,
+		unifiedThumbnailStore,
+		type ThumbnailRequest,
+		type ThumbnailSource
+	} from '$lib/stores/unifiedThumbnailStore.svelte';
+	import {
 		isMediaFile,
 		isArchiveFile,
 		formatRelativeTime,
@@ -41,6 +46,7 @@
 		genderCategories,
 		normalizeTagKey
 	} from './fileItemUtils';
+	import { loadFolderPreviewImagePaths } from './folderPreviewLoader';
 
 	const namespaceDisplayCache = new Map<string, string>();
 	const tagTranslationCache = new Map<string, string>();
@@ -205,6 +211,9 @@
 	let penetratePureMediaFolderOpen = $state(true);
 	// 文件夹预览缩略图 URL 数组
 	let folderThumbnails = $state<string[]>([]);
+	let folderPreviewImagePaths = $state<string[]>([]);
+	let folderPreviewLoading = $state(false);
+	let folderPreviewRequestId = 0;
 	// 文件夹预览网格模式和预览数量
 	const folderPreviewGridEnabled = $derived($fileBrowserStore.folderPreviewGrid);
 	const folderPreviewCount = $derived($fileBrowserStore.folderPreviewCount);
@@ -238,63 +247,108 @@
 		return unsubscribe;
 	});
 
+	function getFolderPreviewThumbKey(path: string): string {
+		const source: ThumbnailSource = { kind: 'file', path, fileSize: 0, modified: 0 };
+		return generateThumbKey(source, 256);
+	}
+
+	function toFolderPreviewRequest(path: string): ThumbnailRequest {
+		const source: ThumbnailSource = { kind: 'file', path, fileSize: 0, modified: 0 };
+		return { key: generateThumbKey(source, 256), source, maxSize: 256 };
+	}
+
 	// 文件夹多图预览加载
 	$effect(() => {
-		// 仅在文件夹项目、开启多图预览时加载
 		const isDir = item.isDir;
 		const enabled = folderPreviewGridEnabled;
 		const count = folderPreviewCount;
 		const itemPath = item.path;
+		const modified = item.modified ?? 0;
 
 		if (!isDir || !enabled) {
 			folderThumbnails = [];
+			folderPreviewImagePaths = [];
+			folderPreviewLoading = false;
+			folderPreviewRequestId += 1;
 			return;
 		}
 
-		// 延迟加载，避免影响初始列表加载性能
-		const timeoutId = setTimeout(async () => {
-			try {
-				// 调用后端获取文件夹预览缩略图
-				const blobKeys = await invoke<string[]>('get_folder_preview_thumbnails', {
-					folderPath: itemPath,
-					count: count
-				});
+		const requestId = ++folderPreviewRequestId;
+		folderThumbnails = [];
+		folderPreviewImagePaths = [];
+		folderPreviewLoading = true;
 
-				if (blobKeys.length === 0) {
-					folderThumbnails = [];
-					return;
-				}
-
-				// 将 blob keys 转换为 blob URLs
-				const urls: string[] = [];
-				for (const blobKey of blobKeys) {
-					try {
-						const blobData = await invoke<number[] | null>('get_thumbnail_blob_data', { blobKey });
-						if (blobData) {
-							const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
-							urls.push(URL.createObjectURL(blob));
-						}
-					} catch {
-						// 忽略单个缩略图加载失败
+		const timeoutId = setTimeout(() => {
+			loadFolderPreviewImagePaths(itemPath, count, modified)
+				.then((paths) => {
+					if (requestId !== folderPreviewRequestId) return;
+					folderPreviewImagePaths = paths;
+				})
+				.catch((error) => {
+					if (requestId !== folderPreviewRequestId) return;
+					console.debug('加载文件夹预览路径失败:', error);
+					folderPreviewImagePaths = [];
+				})
+				.finally(() => {
+					if (requestId === folderPreviewRequestId) {
+						folderPreviewLoading = false;
 					}
-				}
-				folderThumbnails = urls;
-			} catch (e) {
-				console.debug('加载文件夹预览缩略图失败:', e);
-				folderThumbnails = [];
-			}
-		}, 100);
+				});
+		}, 80);
 
 		return () => {
 			clearTimeout(timeoutId);
-			// 清理 blob URLs
-			folderThumbnails.forEach(url => {
-				if (url.startsWith('blob:')) {
-					URL.revokeObjectURL(url);
-				}
-			});
+			folderPreviewRequestId += 1;
+			folderPreviewLoading = false;
 		};
 	});
+
+	$effect(() => {
+		const isDir = item.isDir;
+		const enabled = folderPreviewGridEnabled;
+		const itemPath = item.path;
+		const paths = folderPreviewImagePaths;
+
+		if (!isDir || !enabled || paths.length === 0) return;
+
+		void unifiedThumbnailStore.requestThumbnails(
+			paths.map(toFolderPreviewRequest),
+			`folder-preview:${itemPath}`,
+			'visible'
+		);
+	});
+
+	const folderPreviewStatus = $derived.by(() => {
+		const urls: string[] = [];
+		let hasPending = false;
+
+		for (const path of folderPreviewImagePaths) {
+			const entry = unifiedThumbnailStore.getEntry(getFolderPreviewThumbKey(path));
+			if (entry?.status === 'ready' && entry.url) {
+				urls.push(entry.url);
+			} else if (!entry || entry.status === 'pending' || entry.status === 'loading') {
+				hasPending = true;
+			}
+		}
+
+		return { urls, hasPending };
+	});
+
+	$effect(() => {
+		folderThumbnails = folderPreviewStatus.urls;
+	});
+
+	const folderPreviewExpectedCount = $derived(
+		folderPreviewImagePaths.length > 0
+			? folderPreviewImagePaths.length
+			: Math.max(1, Math.min(16, folderPreviewCount))
+	);
+	const folderPreviewIsLoading = $derived(
+		folderPreviewLoading ||
+			(folderPreviewImagePaths.length > 0 &&
+				folderPreviewStatus.urls.length === 0 &&
+				folderPreviewStatus.hasPending)
+	);
 
 	// 穿透模式：加载文件夹内的压缩包信息（延迟加载避免影响初始渲染）
 	$effect(() => {
@@ -892,6 +946,8 @@
 		{thumbnail}
 		{folderThumbnails}
 		{folderPreviewGridEnabled}
+		folderPreviewLoading={folderPreviewIsLoading}
+		{folderPreviewExpectedCount}
 		{isSelected}
 		{showReadMark}
 		{showSizeAndModified}

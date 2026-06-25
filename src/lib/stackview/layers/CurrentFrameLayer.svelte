@@ -262,7 +262,7 @@
 		const classes: string[] = [];
 
 		if (layout === 'double') {
-			// 双页模式：始终左右排列
+			// 双页始终保持左右配对；orientation 只影响浏览/滚动方向。
 			classes.push('frame-double');
 			if (direction === 'rtl') {
 				classes.push('frame-rtl');

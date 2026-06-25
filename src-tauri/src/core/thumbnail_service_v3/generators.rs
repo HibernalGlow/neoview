@@ -254,32 +254,176 @@ fn find_images_recursive_impl(
 /// 获取文件夹前 N 张图片路径（用于 4 图预览）
 /// 返回 Vec<String>，最多返回 count 个图片路径
 /// 如果 count == 1，优先返回封面图片；否则返回多张图片（封面作为第一张）
-pub fn get_folder_preview_images(
-    folder_path: &str,
-    count: usize,
-) -> Result<Vec<String>, String> {
+pub fn get_folder_preview_images(folder_path: &str, count: usize) -> Result<Vec<String>, String> {
     println!("📂 [4图预览] 请求: folder={}, count={}", folder_path, count);
 
-    // count == 1 时：单图模式，优先封面
-    if count == 1 {
-        if let Ok(Some(cover)) = find_cover_image(folder_path) {
-            println!("📂 [4图预览] 单图模式，找到封面: {}", cover);
-            return Ok(vec![cover]);
-        }
-        // 没有封面，找第一张图片
-        let mut results = Vec::new();
-        find_images_only_recursive(folder_path, 3, 1, &mut results, true);
-        println!("📂 [4图预览] 单图模式，找到 {} 张图片", results.len());
-        return Ok(results);
+    let max_count = count.max(1);
+    let mut results = Vec::new();
+
+    if let Ok(Some(cover)) = find_cover_image(folder_path) {
+        results.push(cover);
     }
 
-    // count > 1 时：多图预览模式，排除封面图片
-    let mut results = Vec::new();
-    find_images_only_recursive(folder_path, 3, count, &mut results, false); // 排除封面
+    find_preview_candidates_bfs(folder_path, max_count, &mut results);
 
-    println!("📂 [4图预览] 多图模式，找到 {} 张图片: {:?}", results.len(), results);
+    let mut seen = std::collections::HashSet::new();
+    results.retain(|path| {
+        let key = path.replace('\\', "/").to_lowercase();
+        seen.insert(key)
+    });
+    results.truncate(max_count);
+
+    println!(
+        "📂 [4图预览] 多图模式，找到 {} 个候选: {:?}",
+        results.len(),
+        results
+    );
 
     Ok(results)
+}
+
+fn find_preview_candidates_bfs(folder: &str, max_count: usize, results: &mut Vec<String>) {
+    const MAX_DEPTH: u32 = 10;
+    const MAX_VISITED_DIRS: usize = 256;
+    const MAX_ENTRIES_PER_DIR: usize = 2048;
+
+    let mut queue = std::collections::VecDeque::new();
+    let mut visited = 0usize;
+    queue.push_back((std::path::PathBuf::from(folder), 0u32));
+
+    while let Some((dir, depth)) = queue.pop_front() {
+        if results.len() >= max_count || depth > MAX_DEPTH || visited >= MAX_VISITED_DIRS {
+            break;
+        }
+        visited += 1;
+
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+
+        let mut paths: Vec<_> = entries
+            .flatten()
+            .take(MAX_ENTRIES_PER_DIR + 1)
+            .map(|entry| entry.path())
+            .collect();
+
+        if paths.len() > MAX_ENTRIES_PER_DIR {
+            paths.truncate(MAX_ENTRIES_PER_DIR);
+        }
+
+        paths.sort_by(|a, b| {
+            preview_candidate_rank(a)
+                .cmp(&preview_candidate_rank(b))
+                .then_with(|| a.cmp(b))
+        });
+
+        let mut media_paths = Vec::new();
+        let mut subdirs = Vec::new();
+
+        for path in paths {
+            if path.is_file() && is_preview_media_file(&path) {
+                media_paths.push(path);
+            } else if path.is_dir() {
+                subdirs.push(path);
+            }
+        }
+
+        for path in &media_paths {
+            if results.len() >= max_count {
+                break;
+            }
+            results.push(path.to_string_lossy().to_string());
+        }
+
+        let should_use_subdirs_as_tiles = media_paths.is_empty() && subdirs.len() > 1;
+        if should_use_subdirs_as_tiles {
+            for path in &subdirs {
+                if results.len() >= max_count {
+                    break;
+                }
+                results.push(path.to_string_lossy().to_string());
+            }
+        }
+
+        if depth < MAX_DEPTH {
+            for subdir in subdirs {
+                queue.push_back((subdir, depth + 1));
+            }
+        }
+    }
+}
+
+fn preview_candidate_rank(path: &std::path::Path) -> u8 {
+    if path.is_file() {
+        let stem = path
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        if matches!(
+            stem.as_str(),
+            "cover" | "folder" | "thumb" | "thumbnail" | "front"
+        ) {
+            return 0;
+        }
+        if is_image_path(path) {
+            return 1;
+        }
+        if is_archive_path(path) {
+            return 2;
+        }
+        if is_video_path(path) {
+            return 3;
+        }
+    }
+
+    if path.is_dir() {
+        return 4;
+    }
+
+    5
+}
+
+fn is_preview_media_file(path: &std::path::Path) -> bool {
+    is_image_path(path) || is_archive_path(path) || is_video_path(path)
+}
+
+fn is_image_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp" | "avif" | "jxl"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn is_archive_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "zip" | "cbz" | "rar" | "cbr" | "7z" | "cb7" | "pdf"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn is_video_path(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            matches!(
+                ext.to_ascii_lowercase().as_str(),
+                "mp4" | "mkv" | "avi" | "mov" | "webm" | "wmv" | "flv" | "m4v"
+            )
+        })
+        .unwrap_or(false)
 }
 
 /// 递归查找图片文件（仅图片，不包含压缩包和视频）

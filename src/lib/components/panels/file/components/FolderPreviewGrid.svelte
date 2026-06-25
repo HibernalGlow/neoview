@@ -13,13 +13,15 @@
 		folderName?: string;
 		/** 是否显示加载骨架屏 */
 		loading?: boolean;
+		expectedCount?: number;
 	}
 
-	let { thumbnails = [], folderName = '', loading = false }: Props = $props();
+	let { thumbnails = [], folderName = '', loading = false, expectedCount = 0 }: Props = $props();
 
 	// 动态计算行数、列数 and 总格数，支持任意数量预览
+	const displayCount = $derived(Math.max(thumbnails.length, expectedCount));
 	const gridInfo = $derived.by(() => {
-		const len = thumbnails.length;
+		const len = displayCount;
 		if (len <= 1) {
 			return { cols: 1, rows: 1, size: 1 };
 		}
@@ -40,7 +42,16 @@
 </script>
 
 <div class="relative h-full w-full overflow-hidden">
-	{#if loading}
+	{#if loading && thumbnails.length === 0 && displayCount > 1}
+		<div
+			class="grid h-full w-full gap-0.5"
+			style="grid-template-columns: repeat({gridInfo.cols}, minmax(0, 1fr)); grid-template-rows: repeat({gridInfo.rows}, minmax(0, 1fr));"
+		>
+			{#each Array(gridInfo.size) as _}
+				<div class="bg-accent animate-pulse"></div>
+			{/each}
+		</div>
+	{:else if loading && thumbnails.length === 0}
 		<!-- 加载中骨架屏 -->
 		<div class="bg-accent absolute inset-0 animate-pulse"></div>
 		<div class="relative flex h-full w-full items-center justify-center">
@@ -52,7 +63,7 @@
 		<div class="relative flex h-full w-full items-center justify-center">
 			<Folder class="text-primary/50 h-16 w-16" />
 		</div>
-	{:else if thumbnails.length === 1}
+	{:else if thumbnails.length === 1 && displayCount <= 1}
 		<!-- 单图（封面或只有一张图）占满 -->
 		<img
 			src={thumbnails[0]}
@@ -79,7 +90,11 @@
 						/>
 					{:else}
 						<!-- 空置预览位占位 -->
-						<div class="flex h-full w-full items-center justify-center">
+						<div
+							class="flex h-full w-full items-center justify-center {loading
+								? 'bg-accent animate-pulse'
+								: ''}"
+						>
 							<Image class="text-primary/30 h-4 w-4" />
 						</div>
 					{/if}

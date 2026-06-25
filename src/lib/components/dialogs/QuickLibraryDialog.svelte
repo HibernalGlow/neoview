@@ -107,20 +107,19 @@
 	}
 </script>
 
-{#if radialMenuStore.isOpen}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		data-radial-exclude
-		style="{cardStyle} background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
-		class="pointer-events-auto flex flex-col overflow-hidden p-3 shadow-2xl select-none"
-		onpointerdown={stopPropagation}
-		onpointerup={stopPropagation}
-		onmousedown={stopPropagation}
-		onmouseup={stopPropagation}
-		onclick={stopPropagation}
-	>
-		<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-			<FolderPanel />
-		</div>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	data-radial-exclude
+	style="{cardStyle} background-color: color-mix(in oklch, var(--background) {sidebarOpacity}%, transparent); backdrop-filter: blur({sidebarBlur}px);"
+	class="pointer-events-auto flex flex-col overflow-hidden p-3 shadow-2xl select-none"
+	class:pointer-events-none={!radialMenuStore.isOpen}
+	onpointerdown={stopPropagation}
+	onpointerup={stopPropagation}
+	onmousedown={stopPropagation}
+	onmouseup={stopPropagation}
+	onclick={stopPropagation}
+>
+	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+		<FolderPanel />
 	</div>
-{/if}
+</div>

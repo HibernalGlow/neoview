@@ -1,7 +1,8 @@
 <script lang="ts">
 	// V2: Migrating to @tanstack/svelte-virtual
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
-	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
+	import { globalScrollPositions } from './scrollCache';
 	import type { FsItem } from '$lib/types';
 	// 统一缩略图系统
 	import {
@@ -98,11 +99,23 @@
 		return unifiedThumbnailStore.getThumbnailUrl(key);
 	}
 
-	// 滚动位置缓存
-	const scrollPositions = new Map<string, number>();
+	// 滚动位置缓存 (使用全局共享 Cache)
+	const scrollPositions = globalScrollPositions;
 
 	// 滚动进度（用于 ListSlider）
 	let scrollProgress = $state(0);
+
+	// 滚动恢复与防抖状态，防止切换目录或渲染高度崩塌时重置 scroll
+	let isRestoringScroll = $state(true); // 默认初始化为 true，防止组件挂载时的初始渲染/空布局覆盖缓存
+	let lastPath = $state(currentPath);
+	let lastItemsLength = $state(items.length);
+
+	// 采用 Svelte 5 的同步状态派生，确保在 DOM 变更/渲染前同步将 isRestoringScroll 置为 true
+	if (currentPath !== lastPath || items.length !== lastItemsLength) {
+		isRestoringScroll = true;
+		lastPath = currentPath;
+		lastItemsLength = items.length;
+	}
 
 	// 滚动方向检测
 	let lastScrollTop = 0;
@@ -186,15 +199,7 @@
 	});
 
 	// 追踪上一次的视图模式，用于检测变化
-	let lastViewMode = $state<'list' | 'thumbnails' | 'grid' | 'content' | 'banner' | 'thumbnail'>(
-		'list'
-	);
-
-	$effect(() => {
-		if (!mounted) {
-			lastViewMode = viewMode;
-		}
-	});
+	let lastViewMode = $state(viewMode);
 
 	// 当 items 或 viewMode 变化时强制刷新 virtualizer
 	$effect(() => {
@@ -412,13 +417,60 @@
 		scheduleVisibleRangeChange();
 	});
 
+	// 恢复特定路径的滚动位置
+	function restoreScrollPosition() {
+		if (!container) return;
+		
+		isRestoringScroll = true;
+		const path = currentPath;
+		const savedScroll = scrollPositions.get(path) ?? 0;
+		let attempts = 0;
+		const maxAttempts = 5;
+
+		const tryRestore = () => {
+			if (!container || path !== currentPath) return;
+
+			// 直接设置并由浏览器自动 clamp。如果当前 scrollTop 与 savedScroll 不一致，说明可能被 clamp 了
+			// 我们会在接下来的几帧中持续尝试，直到一致或达到最大尝试次数
+			if (container.scrollTop !== savedScroll) {
+				container.scrollTop = savedScroll;
+
+				if (container.scrollTop !== savedScroll && attempts < maxAttempts) {
+					attempts++;
+					requestAnimationFrame(tryRestore);
+					return;
+				}
+			}
+
+			// 恢复完成后（或达到最大尝试次数后），延迟 100ms 清除 isRestoringScroll 标记
+			// 确保避开所有渲染和 layout 调整导致的回刷 scroll 事件
+			setTimeout(() => {
+				if (path === currentPath) {
+					isRestoringScroll = false;
+				}
+			}, 100);
+		};
+
+		tryRestore();
+	}
+
 	// --- Lifecycle ---
 	onMount(() => {
 		if (container) {
 			viewportWidth = container.clientWidth;
+			let lastWasVisible = container.clientWidth > 0 && container.clientHeight > 0;
 			resizeObserver = new ResizeObserver(() => {
 				if (container) {
-					viewportWidth = container.clientWidth;
+					const width = container.clientWidth;
+					const height = container.clientHeight;
+					viewportWidth = width;
+
+					const isCurrentlyVisible = width > 0 && height > 0;
+					if (isCurrentlyVisible && !lastWasVisible) {
+						// 容器从隐藏转为可见（例如激活标签页或打开侧边栏/HUD）时，恢复滚动位置
+						restoreScrollPosition();
+					}
+					lastWasVisible = isCurrentlyVisible;
 				}
 			});
 			resizeObserver.observe(container);
@@ -442,7 +494,7 @@
 	function handleScroll() {
 		if (!container) return;
 		const scrollTop = container.scrollTop;
-		if (currentPath) {
+		if (currentPath && !isRestoringScroll) {
 			scrollPositions.set(currentPath, scrollTop);
 		}
 		// 更新滚动进度
@@ -451,6 +503,17 @@
 
 		// 缩略图请求由可见范围签名变化触发，这里不重复触发
 	}
+
+	// 当路径或项目发生变化时，在下一个 tick 恢复该路径的滚动位置
+	$effect(() => {
+		const _path = currentPath;
+		const _count = items.length;
+		if (container) {
+			tick().then(() => {
+				restoreScrollPosition();
+			});
+		}
+	});
 
 	function handleItemClick(item: FsItem, index: number) {
 		// 检查勾选模式下点击行为设置

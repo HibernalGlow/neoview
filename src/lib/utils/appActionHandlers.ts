@@ -21,7 +21,6 @@ import {
 	toggleReadingDirection,
 	toggleSinglePanoramaView,
 	toggleTemporaryFitZoom,
-	toggleOrientation,
 	quickLibraryStore
 } from '$lib/stores';
 import { settingsManager } from '$lib/settings/settingsManager';
@@ -101,10 +100,6 @@ export const SIMPLE_ACTION_HANDLERS: Record<string, () => void> = {
 	toggleReadingDirection: () => {
 		console.log('执行阅读方向切换');
 		toggleReadingDirection();
-	},
-	toggleOrientation: () => {
-		console.log('执行转置/布局方向切换');
-		toggleOrientation();
 	},
 	toggleLayoutMode: () => {
 		console.log('布局模式切换已禁用');

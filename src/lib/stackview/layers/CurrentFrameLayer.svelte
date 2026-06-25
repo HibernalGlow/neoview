@@ -262,10 +262,9 @@
 		const classes: string[] = [];
 
 		if (layout === 'double') {
+			// 双页模式：始终左右排列
 			classes.push('frame-double');
-			if (orientation === 'vertical') {
-				classes.push('frame-vertical');
-			} else if (direction === 'rtl') {
+			if (direction === 'rtl') {
 				classes.push('frame-rtl');
 			}
 		} else {
@@ -386,12 +385,6 @@
 
 	.scroll-frame-container.frame-double.frame-rtl .scroll-frame-content {
 		flex-direction: row-reverse;
-	}
-
-	/* 双页模式（垂直排列） */
-	.scroll-frame-container.frame-double.frame-vertical .scroll-frame-content {
-		flex-direction: column;
-		gap: 0;
 	}
 
 	/* 对齐模式 - 应用到 flex 容器 .scroll-frame-content 上 */

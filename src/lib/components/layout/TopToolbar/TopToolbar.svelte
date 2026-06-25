@@ -51,7 +51,7 @@
 		RectangleVertical,
 		Columns2,
 		PanelsTopLeft,
-		ArrowUpDown,
+		ArrowDownUp,
 		ArrowLeftRight,
 		ArrowRight,
 		ArrowLeft,
@@ -478,7 +478,7 @@
 									class="h-8 w-8 {isSortLocked ? 'ring-primary ring-2' : ''}"
 									onclick={toggleSortPanel}
 								>
-									<ArrowUpDown class="h-3.5 w-3.5" />
+									<ArrowDownUp class="h-3.5 w-3.5" />
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>
@@ -641,7 +641,7 @@
 											{#if $viewerState.orientation === 'horizontal'}
 												<ArrowLeftRight class="h-4 w-4" />
 											{:else}
-												<ArrowUpDown class="h-4 w-4" />
+												<ArrowDownUp class="h-4 w-4" />
 											{/if}
 										</Button>
 									</Tooltip.Trigger>

@@ -5,7 +5,7 @@ use super::{Page, PageRange, Size};
 use serde::{Deserialize, Serialize};
 
 /// 裁剪区域
-/// 
+///
 /// 用于分割页面时指定显示区域
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,22 +23,42 @@ pub struct CropRect {
 impl CropRect {
     /// 创建新裁剪区域
     pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// 完整区域（无裁剪）
     pub fn full() -> Self {
-        Self { x: 0.0, y: 0.0, width: 1.0, height: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        }
     }
 
     /// 左半区域
     pub fn left_half() -> Self {
-        Self { x: 0.0, y: 0.0, width: 0.5, height: 1.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: 0.5,
+            height: 1.0,
+        }
     }
 
     /// 右半区域
     pub fn right_half() -> Self {
-        Self { x: 0.5, y: 0.0, width: 0.5, height: 1.0 }
+        Self {
+            x: 0.5,
+            y: 0.0,
+            width: 0.5,
+            height: 1.0,
+        }
     }
 
     /// 是否为完整区域
@@ -50,7 +70,7 @@ impl CropRect {
     }
 
     /// 转换为 CSS clip-path 值
-    /// 
+    ///
     /// 返回 inset(top right bottom left) 格式
     pub fn to_css_clip_path(&self) -> String {
         let top = self.y * 100.0;
@@ -68,7 +88,7 @@ impl Default for CropRect {
 }
 
 /// 页面帧元素
-/// 
+///
 /// 表示页面在帧中的表示，可能是完整页面或分割后的半页
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -61,12 +61,12 @@
 
 	<!-- 文件夹多图自适应预览 -->
 	<div class="flex items-center gap-2">
-		<LayoutGrid class="h-3.5 w-3.5 text-muted-foreground" />
+		<LayoutGrid class="text-muted-foreground h-3.5 w-3.5" />
 		<span class="text-muted-foreground">多图预览:</span>
-		<Button 
-			variant={$fileBrowserStore.folderPreviewGrid ? 'default' : 'outline'} 
-			size="sm" 
-			class="h-6 text-xs px-2"
+		<Button
+			variant={$fileBrowserStore.folderPreviewGrid ? 'default' : 'outline'}
+			size="sm"
+			class="h-6 px-2 text-xs"
 			onclick={() => fileBrowserStore.setFolderPreviewGrid(!$fileBrowserStore.folderPreviewGrid)}
 		>
 			{$fileBrowserStore.folderPreviewGrid ? '开' : '关'}

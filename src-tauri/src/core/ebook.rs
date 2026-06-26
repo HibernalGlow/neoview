@@ -67,8 +67,7 @@ impl EbookManager {
 
     /// 打开 EPUB 并获取信息
     pub fn open_epub(path: &str) -> Result<EbookInfo, String> {
-        let doc = EpubDoc::new(path)
-            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+        let doc = EpubDoc::new(path).map_err(|e| format!("打开 EPUB 失败: {}", e))?;
 
         // epub crate 的 mdata 返回 Option<&MetadataItem>，需要转换为 String
         let title = doc.mdata("title").map(|m| m.value.clone());
@@ -109,18 +108,19 @@ impl EbookManager {
 
     /// 从 EPUB 获取图片数据
     pub fn get_epub_image(path: &str, resource_path: &str) -> Result<(Vec<u8>, String), String> {
-        let mut doc = EpubDoc::new(path)
-            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+        let mut doc = EpubDoc::new(path).map_err(|e| format!("打开 EPUB 失败: {}", e))?;
 
         // 查找资源的 MIME 类型
-        let mime = doc.resources
+        let mime = doc
+            .resources
             .iter()
             .find(|(_, resource)| resource.path.to_string_lossy() == resource_path)
             .map(|(_, resource)| resource.mime.clone())
             .unwrap_or_else(|| "application/octet-stream".to_string());
 
         // 获取资源数据
-        let data = doc.get_resource_by_path(resource_path)
+        let data = doc
+            .get_resource_by_path(resource_path)
             .ok_or_else(|| format!("找不到资源: {}", resource_path))?;
 
         Ok((data, mime))
@@ -128,10 +128,10 @@ impl EbookManager {
 
     /// 列出 EPUB 中的所有图片路径
     pub fn list_epub_images(path: &str) -> Result<Vec<String>, String> {
-        let doc = EpubDoc::new(path)
-            .map_err(|e| format!("打开 EPUB 失败: {}", e))?;
+        let doc = EpubDoc::new(path).map_err(|e| format!("打开 EPUB 失败: {}", e))?;
 
-        let mut images: Vec<String> = doc.resources
+        let mut images: Vec<String> = doc
+            .resources
             .iter()
             .filter(|(_, resource)| resource.mime.starts_with("image/"))
             .map(|(_, resource)| resource.path.to_string_lossy().to_string())
@@ -140,7 +140,6 @@ impl EbookManager {
         images.sort();
         Ok(images)
     }
-
 }
 
 #[cfg(test)]

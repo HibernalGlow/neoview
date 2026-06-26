@@ -6,6 +6,7 @@
 	import { tick, onMount, onDestroy } from 'svelte';
 	import type { FsItem } from '$lib/types';
 	import type { Writable } from 'svelte/store';
+	import type { FolderSortField, FolderSortOrder } from '../stores/folderTabStore';
 	import VirtualizedFileList from '$lib/components/panels/file/components/VirtualizedFileListV2.svelte';
 	import { fileBrowserStore } from '$lib/stores/fileBrowser.svelte';
 	import { get } from 'svelte/store';
@@ -32,7 +33,11 @@
 	import { sortItems } from './FolderStack/sortingUtils';
 
 	// 模块化导入
-	import { FolderStackState, type FolderLayer } from './FolderStack/FolderStackState.svelte';
+	import {
+		FolderStackState,
+		type FolderLayer,
+		type LayerCreateOptions
+	} from './FolderStack/FolderStackState.svelte';
 	import { FolderDataLoader, createLayerFactory } from './FolderStack/FolderDataLoader';
 	import {
 		handleItemSelection,
@@ -51,6 +56,7 @@
 		shouldHandleEmptyClick,
 		type EmptyClickAction
 	} from './FolderStack/folderStackEventHandlers';
+	import { directoryTreeCache } from '../utils/directoryTreeCache';
 
 	// 别名映射
 	const viewStyle = tabViewStyle;
@@ -83,7 +89,7 @@
 		overrideMultiSelectMode?: boolean;
 		overrideDeleteMode?: boolean;
 		overrideViewStyle?: 'list' | 'content' | 'banner' | 'thumbnail';
-		overrideSortConfig?: { field: string; order: 'asc' | 'desc' };
+		overrideSortConfig?: { field: FolderSortField; order: FolderSortOrder };
 	}
 
 	let {
@@ -134,18 +140,57 @@
 
 	// 创建数据加载器和状态管理器
 	const dataLoader = new FolderDataLoader();
-	const createLayer = createLayerFactory(dataLoader, (layerId, items) => {
+	const baseCreateLayer = createLayerFactory(dataLoader, (layerId, items) => {
 		stackState.updateLayerItems(layerId, items);
 	});
+	function isStackActive(): boolean {
+		return forceActive || skipGlobalStore || tabId === get(activeTabId);
+	}
+	const createLayer = (path: string, options: LayerCreateOptions = {}) => {
+		const active = isStackActive();
+		const preloadChildren = options.preloadChildren ?? active;
+		return baseCreateLayer(path, {
+			...options,
+			warmupThumbnails: options.warmupThumbnails ?? active,
+			preloadChildren,
+			streamLane: options.streamLane ?? (active ? 'active' : 'background'),
+			progressive:
+				options.progressive ?? (active && preloadChildren !== false && !isVirtualPath(path))
+		});
+	};
 
 	const stackState = new FolderStackState(createLayer, tick, {
 		onPathChange: globalStore.setPath,
 		onItemsChange: globalStore.setItems
 	});
+	const activeScopeId = `FolderStack:${tabId}`;
+	let lastActiveStack = false;
 
 	// 缩略图和返回按钮状态
 	let thumbnails = $state<Map<string, string>>(new Map());
 	let showBackButtonValue = $state(false);
+
+	$effect(() => {
+		const isActiveStack = forceActive || skipGlobalStore || tabId === $activeTabId;
+		if (!isActiveStack) {
+			if (lastActiveStack) {
+				dataLoader.cleanup();
+			}
+			lastActiveStack = false;
+			directoryTreeCache.clearActiveScope(activeScopeId);
+			return;
+		}
+		lastActiveStack = true;
+		const activeLayer = stackState.activeLayer;
+		const activePaths = activeLayer
+			? activeLayer.path && !isVirtualPath(activeLayer.path)
+				? [activeLayer.path]
+				: []
+			: initialPath && !isVirtualPath(initialPath)
+				? [initialPath]
+				: [];
+		directoryTreeCache.setActiveScope(activeScopeId, activePaths, 0);
+	});
 
 	$effect(() => {
 		const unsubscribe = fileBrowserStore.subscribe((state) => {
@@ -158,6 +203,16 @@
 	// 排序版本（用于触发重新排序）
 	let collectTagVersion = $state(0);
 	let collectTagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	const displayItemsCache = new Map<
+		string,
+		{
+			itemsRef: FsItem[];
+			sortField: string;
+			sortOrder: string;
+			collectTagVersion: number;
+			result: FsItem[];
+		}
+	>();
 
 	$effect(() => {
 		const unsubscribe = collectTagCountStore.subscribe((cache) => {
@@ -177,7 +232,18 @@
 
 	// 获取显示项（应用排序）
 	function getDisplayItems(layer: FolderLayer): FsItem[] {
-		const _ = collectTagVersion; // 依赖触发
+		const currentCollectTagVersion = collectTagVersion;
+		const cached = displayItemsCache.get(layer.id);
+		if (
+			cached &&
+			cached.itemsRef === layer.items &&
+			cached.sortField === effectiveSortConfig.field &&
+			cached.sortOrder === effectiveSortConfig.order &&
+			cached.collectTagVersion === currentCollectTagVersion
+		) {
+			return cached.result;
+		}
+
 		const skipFolderFirst = isVirtualPath(layer.path);
 		const sorted = sortItems(
 			layer.items,
@@ -188,8 +254,21 @@
 		);
 		// 当前活动层的排序结果缓存，供切换书籍时直接读取（不二次排序）
 		if (!skipGlobalStore && layer === stackState.activeLayer) {
-			folderTabActions.setCachedSortedItems(sorted, layer.path, `FolderStack:${tabId}`);
+			folderTabActions.setCachedSortedItems(
+				sorted,
+				layer.path,
+				`FolderStack:${tabId}`,
+				effectiveSortConfig.field,
+				effectiveSortConfig.order
+			);
 		}
+		displayItemsCache.set(layer.id, {
+			itemsRef: layer.items,
+			sortField: effectiveSortConfig.field,
+			sortOrder: effectiveSortConfig.order,
+			collectTagVersion: currentCollectTagVersion,
+			result: sorted
+		});
 		return sorted;
 	}
 
@@ -252,7 +331,9 @@
 		if (pathsToLoad.length === 0) return;
 
 		try {
-			const newLayers = await Promise.all(pathsToLoad.map((p) => createLayer(p)));
+			const newLayers = await Promise.all(
+				pathsToLoad.map((p) => createLayer(p, { warmupThumbnails: false, preloadChildren: false }))
+			);
 			stackState.layers = [...newLayers.reverse(), ...stackState.layers];
 			stackState.activeIndex += newLayers.length;
 		} catch {}
@@ -450,6 +531,7 @@
 	}
 
 	onDestroy(() => {
+		directoryTreeCache.clearActiveScope(activeScopeId);
 		dataLoader.cleanup();
 	});
 </script>
@@ -458,6 +540,7 @@
 	{#each stackState.layers as layer, index (layer.id)}
 		<div
 			class="folder-layer bg-muted/10 absolute inset-0 transition-transform duration-300 ease-out"
+			class:is-animating={stackState.isAnimating}
 			class:pointer-events-none={index !== stackState.activeIndex}
 			style="transform: translateX({(index - stackState.activeIndex) * 100}%); z-index: {index};"
 		>
@@ -471,43 +554,52 @@
 					<p class="text-destructive text-sm">{layer.error}</p>
 				</div>
 			{:else}
-				{@const displayItems = getDisplayItems(layer)}
-				{#if displayItems.length === 0}
-					<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
-						<FolderOpen class="text-muted-foreground h-12 w-12" />
-						<p class="text-muted-foreground text-sm">文件夹为空</p>
-					</div>
+				{@const shouldRenderLayerList =
+					index === stackState.activeIndex ||
+					(stackState.isAnimating && Math.abs(index - stackState.activeIndex) <= 1)}
+				{#if !shouldRenderLayerList}
+					<div class="h-full w-full"></div>
 				{:else}
-					<VirtualizedFileList
-						items={displayItems}
-						currentPath={layer.path}
-						{thumbnails}
-						selectedIndex={layer.selectedIndex}
-						{scrollToSelectedToken}
-						isCheckMode={effectiveMultiSelectMode}
-						isDeleteMode={effectiveDeleteMode}
-						selectedItems={$selectedItems}
-						{viewMode}
-						thumbnailWidthPercent={$thumbnailWidthPercent}
-						bannerWidthPercent={$bannerWidthPercent}
-						showFullPath={getVirtualPathType(layer.path) === 'search'}
-						showBackButton={shouldShowBackButton(layer.path)}
-						onItemSelect={(payload) => handleItemSelect(index, payload)}
-						onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
-						onEmptyDoubleClick={() => handleEmptyAreaAction(index, 'double')}
-						onEmptySingleClick={() => handleEmptyAreaAction(index, 'single')}
-						onBackButtonClick={() => handleBackButtonClick(index)}
-						onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
-						onSelectionChange={(payload) => globalStore.setSelectedItems(payload.selectedItems)}
-						on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
-						on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
-						on:openInNewTab={(e) => {
-							if (index === stackState.activeIndex && e.detail.item.isDir) {
-								onOpenInNewTab?.(e.detail.item);
-							}
-						}}
-						on:deleteItem={(e) => handleDeleteItem(index, e.detail.item)}
-					/>
+					{@const displayItems = getDisplayItems(layer)}
+					{#if displayItems.length === 0}
+						<div class="flex h-full flex-col items-center justify-center gap-2 p-4">
+							<FolderOpen class="text-muted-foreground h-12 w-12" />
+							<p class="text-muted-foreground text-sm">文件夹为空</p>
+						</div>
+					{:else}
+						<VirtualizedFileList
+							items={displayItems}
+							currentPath={layer.path}
+							{thumbnails}
+							selectedIndex={layer.selectedIndex}
+							{scrollToSelectedToken}
+							isCheckMode={effectiveMultiSelectMode}
+							isDeleteMode={effectiveDeleteMode}
+							selectedItems={$selectedItems}
+							{viewMode}
+							thumbnailWidthPercent={$thumbnailWidthPercent}
+							bannerWidthPercent={$bannerWidthPercent}
+							showFullPath={getVirtualPathType(layer.path) === 'search'}
+							showBackButton={shouldShowBackButton(layer.path)}
+							isActive={index === stackState.activeIndex &&
+								(forceActive || skipGlobalStore || tabId === $activeTabId)}
+							onItemSelect={(payload) => handleItemSelect(index, payload)}
+							onItemDoubleClick={(payload) => handleItemDoubleClick(index, payload)}
+							onEmptyDoubleClick={() => handleEmptyAreaAction(index, 'double')}
+							onEmptySingleClick={() => handleEmptyAreaAction(index, 'single')}
+							onBackButtonClick={() => handleBackButtonClick(index)}
+							onSelectedIndexChange={(payload) => handleSelectedIndexChange(index, payload)}
+							onSelectionChange={(payload) => globalStore.setSelectedItems(payload.selectedItems)}
+							on:itemContextMenu={(e) => handleItemContextMenu(index, e.detail)}
+							on:openFolderAsBook={(e) => handleOpenFolderAsBook(index, e.detail.item)}
+							on:openInNewTab={(e) => {
+								if (index === stackState.activeIndex && e.detail.item.isDir) {
+									onOpenInNewTab?.(e.detail.item);
+								}
+							}}
+							on:deleteItem={(e) => handleDeleteItem(index, e.detail.item)}
+						/>
+					{/if}
 				{/if}
 			{/if}
 		</div>
@@ -520,8 +612,10 @@
 		contain: layout style;
 	}
 	.folder-layer {
-		will-change: transform;
 		backface-visibility: hidden;
 		contain: layout style paint;
+	}
+	.folder-layer.is-animating {
+		will-change: transform;
 	}
 </style>

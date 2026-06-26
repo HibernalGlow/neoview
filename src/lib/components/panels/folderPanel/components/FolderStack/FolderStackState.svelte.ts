@@ -16,8 +16,16 @@ export interface FolderLayer {
 	scrollTop: number;
 }
 
+export interface LayerCreateOptions {
+	warmupThumbnails?: boolean;
+	preloadChildren?: boolean;
+	progressive?: boolean;
+	streamBatchSize?: number;
+	streamLane?: 'active' | 'background';
+}
+
 /** 创建层的工厂函数类型 */
-export type LayerFactory = (path: string) => Promise<FolderLayer>;
+export type LayerFactory = (path: string, options?: LayerCreateOptions) => Promise<FolderLayer>;
 
 /** 等待 DOM 更新的回调类型 */
 export type TickCallback = () => Promise<void>;
@@ -169,7 +177,9 @@ export class FolderStackState {
 		if (paths.length === 0) return;
 
 		// 先加载所有层数据
-		const newLayers = await Promise.all(paths.map((p) => this.createLayerFn(p)));
+		const newLayers = await Promise.all(
+			paths.map((p) => this.createLayerFn(p, { warmupThumbnails: false, preloadChildren: false }))
+		);
 
 		// 1. 先插入新层到 DOM（在屏幕外）
 		const oldActiveIndex = this.activeIndex;
@@ -208,7 +218,9 @@ export class FolderStackState {
 	/** 在子层之前插入多个层 */
 	async insertBeforeChild(childIndex: number, paths: string[]): Promise<void> {
 		// 先加载所有层数据
-		const insertLayers = await Promise.all(paths.map((p) => this.createLayerFn(p)));
+		const insertLayers = await Promise.all(
+			paths.map((p) => this.createLayerFn(p, { warmupThumbnails: false, preloadChildren: false }))
+		);
 
 		// 1. 先插入新层到 DOM
 		const oldLayers = this.layers.slice(childIndex);

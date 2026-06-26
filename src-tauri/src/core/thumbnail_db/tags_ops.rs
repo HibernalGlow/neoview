@@ -33,7 +33,10 @@ impl ThumbnailDb {
     }
 
     /// 批量获取 manual_tags
-    pub fn batch_get_manual_tags(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
+    pub fn batch_get_manual_tags(
+        &self,
+        keys: &[String],
+    ) -> SqliteResult<HashMap<String, Option<String>>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -50,7 +53,8 @@ impl ThumbnailDb {
         );
 
         let mut stmt = conn.prepare(&query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(params.as_slice())?;
 
         while let Some(row) = rows.next()? {
@@ -73,13 +77,14 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut sql = String::from(
-            "SELECT key, emm_json FROM thumbs WHERE emm_json IS NOT NULL"
-        );
-        
+        let mut sql = String::from("SELECT key, emm_json FROM thumbs WHERE emm_json IS NOT NULL");
+
         if let Some(path) = base_path {
             let normalized_path = path.to_lowercase().replace("/", "\\");
-            sql.push_str(&format!(" AND LOWER(key) LIKE '{}%'", normalized_path.replace("'", "''")));
+            sql.push_str(&format!(
+                " AND LOWER(key) LIKE '{}%'",
+                normalized_path.replace("'", "''")
+            ));
             println!("🔍 标签搜索: 基础路径过滤 = {}", normalized_path);
         }
 
@@ -104,7 +109,10 @@ impl ThumbnailDb {
                             tag_obj.get("namespace").and_then(|n| n.as_str()),
                             tag_obj.get("tag").and_then(|t| t.as_str()),
                         ) {
-                            book_tags.entry(ns.to_string()).or_default().push(tag.to_string());
+                            book_tags
+                                .entry(ns.to_string())
+                                .or_default()
+                                .push(tag.to_string());
                         }
                     }
 
@@ -119,7 +127,10 @@ impl ThumbnailDb {
                             }
                         }
 
-                        if !matched && enable_mixed_gender && gender_categories.contains(&ns.as_str()) {
+                        if !matched
+                            && enable_mixed_gender
+                            && gender_categories.contains(&ns.as_str())
+                        {
                             for alt_ns in &gender_categories {
                                 if *alt_ns == ns.as_str() {
                                     continue;
@@ -181,7 +192,12 @@ impl ThumbnailDb {
                 .ok();
 
             let count = if let Some(json_str) = emm_json {
-                Self::count_tags_in_json(&json_str, collect_tags, enable_mixed_gender, &gender_categories)
+                Self::count_tags_in_json(
+                    &json_str,
+                    collect_tags,
+                    enable_mixed_gender,
+                    &gender_categories,
+                )
             } else {
                 0
             };
@@ -207,7 +223,10 @@ impl ThumbnailDb {
                         tag_obj.get("namespace").and_then(|n| n.as_str()),
                         tag_obj.get("tag").and_then(|t| t.as_str()),
                     ) {
-                        book_tags.entry(ns.to_string()).or_default().push(tag.to_string());
+                        book_tags
+                            .entry(ns.to_string())
+                            .or_default()
+                            .push(tag.to_string());
                     }
                 }
 
@@ -264,7 +283,12 @@ impl ThumbnailDb {
         let gender_categories = ["female", "male", "mixed"];
 
         if let Some(json_str) = emm_json {
-            Ok(Self::count_tags_in_json(&json_str, collect_tags, enable_mixed_gender, &gender_categories))
+            Ok(Self::count_tags_in_json(
+                &json_str,
+                collect_tags,
+                enable_mixed_gender,
+                &gender_categories,
+            ))
         } else {
             Ok(0)
         }
@@ -284,7 +308,7 @@ impl ThumbnailDb {
         })?;
 
         let mut stmt = conn.prepare(
-            "SELECT emm_json FROM thumbs WHERE emm_json IS NOT NULL ORDER BY RANDOM() LIMIT 50"
+            "SELECT emm_json FROM thumbs WHERE emm_json IS NOT NULL ORDER BY RANDOM() LIMIT 50",
         )?;
 
         let rows: Vec<String> = stmt
@@ -293,7 +317,7 @@ impl ThumbnailDb {
             .collect();
 
         let mut all_tags: Vec<(String, String)> = Vec::new();
-        
+
         for emm_json in rows {
             if let Ok(json) = serde_json::from_str::<Value>(&emm_json) {
                 if let Some(tags_array) = json.get("tags").and_then(|t| t.as_array()) {

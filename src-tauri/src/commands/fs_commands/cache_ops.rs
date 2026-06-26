@@ -88,7 +88,9 @@ pub async fn load_directory_snapshot(
         .enqueue_blocking(
             "filebrowser-directory-load",
             job_path,
-            move || -> Result<Vec<FsItem>, String> { fs_manager.read_directory_with_stats(&path_for_job) },
+            move || -> Result<Vec<FsItem>, String> {
+                fs_manager.read_directory_with_stats(&path_for_job)
+            },
         )
         .await?;
 

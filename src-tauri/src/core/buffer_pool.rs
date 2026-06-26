@@ -45,7 +45,7 @@ impl BufferPool {
     /// 优先从池中获取，如果池为空则创建新的
     pub fn acquire(&self) -> Vec<u8> {
         let mut pool = self.buffers.lock();
-        
+
         if let Some(mut buffer) = pool.pop_front() {
             // 清空但保留容量
             buffer.clear();
@@ -59,7 +59,7 @@ impl BufferPool {
     /// 获取指定最小容量的缓冲区
     pub fn acquire_with_capacity(&self, min_capacity: usize) -> Vec<u8> {
         let mut pool = self.buffers.lock();
-        
+
         // 尝试找一个足够大的缓冲区
         let mut best_idx = None;
         for (i, buf) in pool.iter().enumerate() {
@@ -68,7 +68,7 @@ impl BufferPool {
                 break;
             }
         }
-        
+
         if let Some(idx) = best_idx {
             let mut buffer = pool.remove(idx).unwrap();
             buffer.clear();
@@ -86,9 +86,9 @@ impl BufferPool {
         if buffer.capacity() < self.default_size / 4 {
             return;
         }
-        
+
         let mut pool = self.buffers.lock();
-        
+
         if pool.len() < self.max_size {
             buffer.clear();
             pool.push_back(buffer);
@@ -100,7 +100,7 @@ impl BufferPool {
     pub fn stats(&self) -> BufferPoolStats {
         let pool = self.buffers.lock();
         let total_capacity: usize = pool.iter().map(|b| b.capacity()).sum();
-        
+
         BufferPoolStats {
             available_buffers: pool.len(),
             total_capacity,
@@ -216,15 +216,15 @@ mod tests {
     #[test]
     fn test_buffer_pool_basic() {
         let pool = BufferPool::new();
-        
+
         // 获取缓冲区
         let mut buf1 = pool.acquire();
         buf1.extend_from_slice(b"hello");
         assert_eq!(buf1.len(), 5);
-        
+
         // 归还
         pool.release(buf1);
-        
+
         // 再次获取应该复用
         let buf2 = pool.acquire();
         assert!(buf2.is_empty()); // 已清空
@@ -234,13 +234,13 @@ mod tests {
     #[test]
     fn test_pooled_buffer_raii() {
         let pool = BufferPool::new();
-        
+
         {
             let mut buf = PooledBuffer::new(&pool);
             buf.extend_from_slice(b"test data");
             assert_eq!(buf.len(), 9);
         } // 自动归还
-        
+
         let stats = pool.stats();
         assert_eq!(stats.available_buffers, 1);
     }
@@ -248,13 +248,13 @@ mod tests {
     #[test]
     fn test_pool_max_size() {
         let pool = BufferPool::with_config(1024, 2);
-        
+
         // 获取并归还多个缓冲区
         for _ in 0..5 {
             let buf = pool.acquire();
             pool.release(buf);
         }
-        
+
         // 池大小不应超过 max_size
         let stats = pool.stats();
         assert!(stats.available_buffers <= 2);

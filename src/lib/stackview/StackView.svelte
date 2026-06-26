@@ -96,6 +96,13 @@
 	const imageStore = getImageStore();
 	const panoramaStore = getPanoramaStore();
 	const zoomModeManager = createZoomModeManager();
+	const STACK_VIEW_DEBUG = false;
+
+	function debugStackView(...args: unknown[]): void {
+		if (STACK_VIEW_DEBUG) {
+			console.debug(...args);
+		}
+	}
 
 	let settings = $state(settingsManager.getSettings());
 	settingsManager.addListener((s) => {
@@ -236,6 +243,16 @@
 
 	// 最终缩放 = modeScale * manualScale
 	let effectiveScale = $derived(modeScale * manualScale);
+
+	$effect(() => {
+		const scale = effectiveScale;
+		const viewportWidth = viewportSize.width;
+		const viewportHeight = viewportSize.height;
+		const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+		if (viewportWidth >= 0 && viewportHeight >= 0) {
+			imageStore.setDisplayPreloadContext({ scale, dpr });
+		}
+	});
 
 	// 缩放后的实际显示尺寸，和 modeScale 使用同一套帧尺寸。
 	let displaySize = $derived.by(() => {
@@ -1041,7 +1058,7 @@
 
 			// 如果是新书本，重置状态
 			if (bookContext?.path !== currentPath) {
-				console.log('📚 [StackView] 书籍切换:', {
+				debugStackView('📚 [StackView] 书籍切换:', {
 					oldPath: bookContext?.path,
 					newPath: currentPath
 				});
@@ -1053,7 +1070,7 @@
 				lastNonEmptyFrame = null;
 
 				// 通知 upscaleStore 书籍切换
-				console.log('📚 [StackView] 调用 upscaleStore.setCurrentBook:', currentPath);
+				debugStackView('📚 [StackView] 调用 upscaleStore.setCurrentBook:', currentPath);
 				upscaleStore.setCurrentBook(currentPath);
 			}
 
@@ -1198,7 +1215,7 @@
 	function handleApplyZoomMode(event: Event) {
 		const detail = (event as CustomEvent<ApplyZoomModeDetail>).detail;
 		const mode = detail.mode ?? settingsManager.getSettings().view.defaultZoomMode ?? 'fit';
-		console.log('[StackView] handleApplyZoomMode', {
+		debugStackView('[StackView] handleApplyZoomMode', {
 			requestedMode: detail.mode,
 			resolvedMode: mode,
 			prevMode: currentZoomMode,

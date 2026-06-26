@@ -36,7 +36,7 @@ pub struct StartupDiagnostics {
 }
 
 /// 确保应用数据目录存在
-/// 
+///
 /// 尝试创建标准 AppData 目录，如果失败则使用临时目录作为回退
 pub fn ensure_app_directories<R: tauri::Runtime>(
     app: &AppHandle<R>,
@@ -108,7 +108,7 @@ fn get_fallback_directory() -> PathBuf {
 /// 写入启动日志到文件
 pub fn write_startup_log(app_data_path: &PathBuf, message: &str) {
     let log_path = app_data_path.join("logs").join("startup.log");
-    
+
     // 确保日志目录存在
     if let Some(parent) = log_path.parent() {
         let _ = std::fs::create_dir_all(parent);
@@ -132,7 +132,7 @@ pub fn write_startup_log(app_data_path: &PathBuf, message: &str) {
 }
 
 /// 显示启动错误对话框（仅在关键错误时使用）
-/// 
+///
 /// 注意：此函数会阻塞直到用户关闭对话框
 /// 使用原生 Windows API 显示消息框
 #[cfg(windows)]
@@ -142,7 +142,10 @@ pub fn show_startup_error_dialog(title: &str, message: &str) {
 
     // 将字符串转换为宽字符
     fn to_wide(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     let title_wide = to_wide(title);
@@ -151,7 +154,12 @@ pub fn show_startup_error_dialog(title: &str, message: &str) {
     // 使用 extern 直接调用 Windows API
     #[link(name = "user32")]
     extern "system" {
-        fn MessageBoxW(hwnd: *mut std::ffi::c_void, text: *const u16, caption: *const u16, utype: u32) -> i32;
+        fn MessageBoxW(
+            hwnd: *mut std::ffi::c_void,
+            text: *const u16,
+            caption: *const u16,
+            utype: u32,
+        ) -> i32;
     }
 
     unsafe {

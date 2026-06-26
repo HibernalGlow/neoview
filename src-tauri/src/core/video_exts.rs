@@ -10,22 +10,9 @@ use std::path::Path;
 /// - 视频缩略图生成等
 pub const VIDEO_EXTENSIONS: &[&str] = &[
     // 与前端 DEFAULT_VIDEO_EXTENSIONS 对齐
-    "mp4",
-    "m4v",
-    "mov",
-    "webm",
-    "ogg",
-    "ogv",
-    "3gp",
-    "3g2",
-    "mkv",
-    "avi",
-    "flv",
-    "wmv",
+    "mp4", "m4v", "mov", "webm", "ogg", "ogv", "3gp", "3g2", "mkv", "avi", "flv", "wmv",
     // 传统容器
-    "mpg",
-    "mpeg",
-    // 自定义扩展：常见场景是伪装为 mp4 的视频
+    "mpg", "mpeg", // 自定义扩展：常见场景是伪装为 mp4 的视频
     "nov",
 ];
 
@@ -47,6 +34,6 @@ pub fn is_video_extension(ext: &str) -> bool {
 pub fn is_video_path(path: &Path) -> bool {
     path.extension()
         .and_then(OsStr::to_str)
-    .map(is_video_extension_inner)
+        .map(is_video_extension_inner)
         .unwrap_or(false)
 }

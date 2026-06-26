@@ -26,6 +26,36 @@ interface TreeNode {
 	timestamp: number;
 }
 
+interface DirectoryLoadOptions {
+	forceRefresh?: boolean;
+	preloadChildren?: boolean;
+	childPreloadDepth?: number;
+}
+
+interface BackgroundPreloadTask {
+	path: string;
+	depth: number;
+	priority: number;
+	queuedAt: number;
+}
+
+type StreamingNotifyMode = 'batch' | 'final' | 'none';
+
+interface DirectoryStreamingOptions {
+	batchSize?: number;
+	skipHidden?: boolean;
+	notifyMode?: StreamingNotifyMode;
+	lane?: 'active' | 'background';
+}
+
+const DIRECTORY_TREE_DEBUG = false;
+
+function debugDirectoryTree(getMessage: () => string, ...details: unknown[]): void {
+	if (DIRECTORY_TREE_DEBUG) {
+		console.debug(getMessage(), ...details);
+	}
+}
+
 class DirectoryTreeCache {
 	// 扁平缓存（快速查找）
 	private cache = new Map<string, CacheEntry>();
@@ -37,9 +67,20 @@ class DirectoryTreeCache {
 	private readonly MAX_CACHE_SIZE = 500; // 最多缓存 500 个目录（从200提升）
 	private readonly CACHE_TTL = 10 * 60 * 1000; // 10 分钟缓存有效期
 	private readonly PRELOAD_DEPTH = 3; // 预加载深度（从2提升到3）
+	private readonly CHILD_PRELOAD_LIMIT = 3;
+	private readonly BACKGROUND_PRELOAD_CONCURRENCY = 2;
+	private readonly MAX_BACKGROUND_PRELOAD_QUEUE = 64;
 
 	// 正在加载的路径
 	private loadingPaths = new Set<string>();
+	private inflightLoads = new Map<string, Promise<FsItem[]>>();
+	private streamingLoads = new Map<string, Promise<StreamComplete>>();
+	private backgroundPreloadQueue: BackgroundPreloadTask[] = [];
+	private backgroundPreloadKeys = new Set<string>();
+	private activeBackgroundPreloads = 0;
+	private activePathKeys = new Set<string>();
+	private activePathPriorities = new Map<string, number>();
+	private activePathScopes = new Map<string, { keys: Set<string>; priority: number }>();
 
 	// 更新回调
 	private onUpdateCallbacks: ((path: string, items: FsItem[]) => void)[] = [];
@@ -51,15 +92,205 @@ class DirectoryTreeCache {
 		return path.replace(/\\/g, '/').toLowerCase();
 	}
 
+	private getPathSegmentDistance(fromKey: string, toKey: string): number {
+		const fromSegments = fromKey.split('/').filter(Boolean);
+		const toSegments = toKey.split('/').filter(Boolean);
+		return Math.max(0, toSegments.length - fromSegments.length);
+	}
+
+	private getParentKey(key: string): string {
+		const lastSlash = key.lastIndexOf('/');
+		return lastSlash > 0 ? key.slice(0, lastSlash) : '';
+	}
+
+	private getActivePathPriority(path: string, depth = 0): number {
+		if (this.activePathKeys.size === 0) return depth;
+
+		const key = this.normalizePath(path);
+		let best = Number.POSITIVE_INFINITY;
+		for (const activeKey of this.activePathKeys) {
+			if (!activeKey) continue;
+			const basePriority = this.activePathPriorities.get(activeKey) ?? 0;
+			if (key === activeKey) {
+				best = Math.min(best, basePriority + depth);
+				continue;
+			}
+			if (key.startsWith(`${activeKey}/`)) {
+				best = Math.min(
+					best,
+					basePriority + 10 + depth + this.getPathSegmentDistance(activeKey, key)
+				);
+				continue;
+			}
+			if (activeKey.startsWith(`${key}/`)) {
+				best = Math.min(
+					best,
+					basePriority + 20 + depth + this.getPathSegmentDistance(key, activeKey)
+				);
+				continue;
+			}
+			if (this.getParentKey(key) && this.getParentKey(key) === this.getParentKey(activeKey)) {
+				best = Math.min(best, basePriority + 40 + depth);
+			}
+		}
+
+		return Number.isFinite(best) ? best : 1000 + depth;
+	}
+
+	private isRelatedToActivePath(path: string): boolean {
+		return this.activePathKeys.size === 0 || this.getActivePathPriority(path) < 1000;
+	}
+
+	private sortBackgroundPreloadQueue(): void {
+		this.backgroundPreloadQueue.sort(
+			(a, b) => a.priority - b.priority || a.depth - b.depth || a.queuedAt - b.queuedAt
+		);
+	}
+
+	private refreshBackgroundPreloadPriorities(): void {
+		for (const task of this.backgroundPreloadQueue) {
+			task.priority = this.getActivePathPriority(task.path, task.depth);
+		}
+		this.sortBackgroundPreloadQueue();
+	}
+
+	private trimBackgroundPreloadQueue(): void {
+		this.refreshBackgroundPreloadPriorities();
+		if (this.activePathKeys.size > 0) {
+			const kept = this.backgroundPreloadQueue.filter((task) => task.priority < 1000);
+			if (kept.length !== this.backgroundPreloadQueue.length) {
+				this.backgroundPreloadQueue = kept;
+				this.backgroundPreloadKeys.clear();
+				for (const task of kept) {
+					this.backgroundPreloadKeys.add(this.normalizePath(task.path));
+				}
+			}
+		}
+
+		while (this.backgroundPreloadQueue.length > this.MAX_BACKGROUND_PRELOAD_QUEUE) {
+			const removed = this.backgroundPreloadQueue.pop();
+			if (removed) {
+				this.backgroundPreloadKeys.delete(this.normalizePath(removed.path));
+			}
+		}
+	}
+
+	private rebuildActivePathKeys(): void {
+		const nextKeys = new Set<string>();
+		const nextPriorities = new Map<string, number>();
+		for (const scope of this.activePathScopes.values()) {
+			for (const key of scope.keys) {
+				nextKeys.add(key);
+				const current = nextPriorities.get(key);
+				if (current === undefined || scope.priority < current) {
+					nextPriorities.set(key, scope.priority);
+				}
+			}
+		}
+		this.activePathKeys = nextKeys;
+		this.activePathPriorities = nextPriorities;
+	}
+
+	setActivePaths(paths: string[]): void {
+		this.setActiveScope('default', paths, 0);
+	}
+
+	setActiveScope(scopeId: string, paths: string[], priority = 0): void {
+		const nextKeys = new Set(
+			paths
+				.filter((path) => path && !path.startsWith('virtual://'))
+				.map((path) => this.normalizePath(path))
+		);
+		const previous = this.activePathScopes.get(scopeId);
+		let changed =
+			!previous || previous.priority !== priority || nextKeys.size !== previous.keys.size;
+		if (!changed) {
+			for (const key of nextKeys) {
+				if (!previous?.keys.has(key)) {
+					changed = true;
+					break;
+				}
+			}
+		}
+		if (!changed) return;
+
+		if (nextKeys.size === 0) {
+			this.activePathScopes.delete(scopeId);
+		} else {
+			this.activePathScopes.set(scopeId, {
+				keys: nextKeys,
+				priority
+			});
+		}
+		this.rebuildActivePathKeys();
+		this.trimBackgroundPreloadQueue();
+		this.pumpBackgroundPreloadQueue();
+	}
+
+	clearActiveScope(scopeId: string): void {
+		if (!this.activePathScopes.delete(scopeId)) return;
+		this.rebuildActivePathKeys();
+		this.trimBackgroundPreloadQueue();
+		this.pumpBackgroundPreloadQueue();
+	}
+
+	isActivePath(path: string): boolean {
+		if (!path || path.startsWith('virtual://')) return false;
+		if (this.activePathKeys.size === 0) return true;
+		const key = this.normalizePath(path);
+		return this.activePathKeys.has(key) && (this.activePathPriorities.get(key) ?? 0) < 100;
+	}
+
+	private waitForLoadingCache(key: string): Promise<FsItem[]> {
+		return new Promise((resolve) => {
+			const startedAt = Date.now();
+			const checkInterval = setInterval(() => {
+				const cached = this.cache.get(key);
+				if (cached && !cached.loading) {
+					clearInterval(checkInterval);
+					resolve(cached.items);
+					return;
+				}
+
+				if (!cached || Date.now() - startedAt > 5000) {
+					clearInterval(checkInterval);
+					resolve(cached?.items ?? []);
+				}
+			}, 50);
+		});
+	}
+
+	private normalizeLoadOptions(
+		options: boolean | DirectoryLoadOptions
+	): Required<DirectoryLoadOptions> {
+		if (typeof options === 'boolean') {
+			return {
+				forceRefresh: options,
+				preloadChildren: true,
+				childPreloadDepth: 0
+			};
+		}
+
+		return {
+			forceRefresh: options.forceRefresh ?? false,
+			preloadChildren: options.preloadChildren ?? true,
+			childPreloadDepth: options.childPreloadDepth ?? 0
+		};
+	}
+
 	/**
 	 * 获取目录内容（优先从缓存）
 	 */
-	async getDirectory(path: string, forceRefresh = false): Promise<FsItem[]> {
+	async getDirectory(
+		path: string,
+		options: boolean | DirectoryLoadOptions = false
+	): Promise<FsItem[]> {
+		const loadOptions = this.normalizeLoadOptions(options);
 		const key = this.normalizePath(path);
 		const now = Date.now();
 
 		// 检查缓存
-		if (!forceRefresh) {
+		if (!loadOptions.forceRefresh) {
 			const cached = this.cache.get(key);
 			if (cached && now - cached.timestamp < this.CACHE_TTL && !cached.loading) {
 				// 增加访问计数
@@ -68,23 +299,13 @@ class DirectoryTreeCache {
 			}
 		}
 
-		// 检查是否正在加载
+		const inflight = this.inflightLoads.get(key);
+		if (inflight) {
+			return inflight;
+		}
+
 		if (this.loadingPaths.has(key)) {
-			// 等待加载完成
-			return new Promise((resolve) => {
-				const checkInterval = setInterval(() => {
-					const cached = this.cache.get(key);
-					if (cached && !cached.loading) {
-						clearInterval(checkInterval);
-						resolve(cached.items);
-					}
-				}, 50);
-				// 超时保护
-				setTimeout(() => {
-					clearInterval(checkInterval);
-					resolve([]);
-				}, 5000);
-			});
+			return this.waitForLoadingCache(key);
 		}
 
 		// 开始加载
@@ -97,34 +318,41 @@ class DirectoryTreeCache {
 			isComplete: false
 		});
 
-		try {
-			const items = await FileSystemAPI.browseDirectory(path);
+		const loadPromise = FileSystemAPI.browseDirectory(path)
+			.then((items) => {
+				// 更新缓存，初始访问计数为1
+				this.cache.set(key, {
+					items,
+					timestamp: Date.now(),
+					loading: false,
+					accessCount: 1,
+					isComplete: true
+				});
 
-			// 更新缓存，初始访问计数为1
-			this.cache.set(key, {
-				items,
-				timestamp: Date.now(),
-				loading: false,
-				accessCount: 1,
-				isComplete: true
+				// 清理过期缓存
+				this.cleanup();
+
+				// 触发更新回调
+				this.notifyUpdate(path, items);
+
+				// 后台预加载子目录
+				if (loadOptions.preloadChildren && loadOptions.childPreloadDepth < this.PRELOAD_DEPTH) {
+					this.preloadChildren(path, items, loadOptions.childPreloadDepth + 1);
+				}
+
+				return items;
+			})
+			.catch((err) => {
+				this.cache.delete(key);
+				throw err;
+			})
+			.finally(() => {
+				this.loadingPaths.delete(key);
+				this.inflightLoads.delete(key);
 			});
-			this.loadingPaths.delete(key);
 
-			// 清理过期缓存
-			this.cleanup();
-
-			// 触发更新回调
-			this.notifyUpdate(path, items);
-
-			// 后台预加载子目录
-			this.preloadChildren(path, items);
-
-			return items;
-		} catch (err) {
-			this.loadingPaths.delete(key);
-			this.cache.delete(key);
-			throw err;
-		}
+		this.inflightLoads.set(key, loadPromise);
+		return loadPromise;
 	}
 
 	/**
@@ -151,25 +379,78 @@ class DirectoryTreeCache {
 	/**
 	 * 预加载子目录
 	 */
-	private async preloadChildren(parentPath: string, items: FsItem[], depth = 1) {
+	private preloadChildren(parentPath: string, items: FsItem[], depth = 1) {
 		if (depth > this.PRELOAD_DEPTH) return;
+		if (!this.isRelatedToActivePath(parentPath)) return;
 
-		// 只预加载前 5 个子目录
-		const directories = items.filter((item) => item.isDir).slice(0, 5);
+		// 只预加载前几个子目录，避免大目录/多页签切换时 I/O 放大
+		const directories = items.filter((item) => item.isDir).slice(0, this.CHILD_PRELOAD_LIMIT);
 
 		for (const dir of directories) {
 			const key = this.normalizePath(dir.path);
+			const priority = this.getActivePathPriority(dir.path, depth);
+			if (this.activePathKeys.size > 0 && priority >= 1000) continue;
 
 			// 跳过已缓存的
 			if (this.hasValidCache(dir.path)) continue;
 
 			// 跳过正在加载的
 			if (this.loadingPaths.has(key)) continue;
+			if (this.backgroundPreloadKeys.has(key)) continue;
 
-			// 静默加载
-			this.getDirectory(dir.path).catch(() => {
-				// 忽略预加载错误
+			if (this.backgroundPreloadQueue.length >= this.MAX_BACKGROUND_PRELOAD_QUEUE) {
+				this.trimBackgroundPreloadQueue();
+				const worst = this.backgroundPreloadQueue.at(-1);
+				if (!worst || worst.priority <= priority) {
+					break;
+				}
+				this.backgroundPreloadQueue.pop();
+				this.backgroundPreloadKeys.delete(this.normalizePath(worst.path));
+			}
+
+			this.backgroundPreloadQueue.push({
+				path: dir.path,
+				depth,
+				priority,
+				queuedAt: Date.now()
 			});
+			this.backgroundPreloadKeys.add(key);
+		}
+
+		this.sortBackgroundPreloadQueue();
+		this.pumpBackgroundPreloadQueue();
+	}
+
+	private pumpBackgroundPreloadQueue(): void {
+		this.refreshBackgroundPreloadPriorities();
+		while (
+			this.activeBackgroundPreloads < this.BACKGROUND_PRELOAD_CONCURRENCY &&
+			this.backgroundPreloadQueue.length > 0
+		) {
+			const next = this.backgroundPreloadQueue.shift();
+			if (!next) return;
+
+			const key = this.normalizePath(next.path);
+			this.backgroundPreloadKeys.delete(key);
+
+			if (this.activePathKeys.size > 0 && next.priority >= 1000) {
+				continue;
+			}
+
+			if (this.hasValidCache(next.path) || this.loadingPaths.has(key)) {
+				continue;
+			}
+
+			this.activeBackgroundPreloads++;
+			this.getDirectory(next.path, {
+				preloadChildren: next.depth < this.PRELOAD_DEPTH,
+				childPreloadDepth: next.depth
+			})
+				.catch(() => {})
+				.finally(() => {
+					this.activeBackgroundPreloads--;
+					this.pumpBackgroundPreloadQueue();
+				});
 		}
 	}
 
@@ -178,7 +459,7 @@ class DirectoryTreeCache {
 	 */
 	async preload(path: string): Promise<void> {
 		if (this.hasValidCache(path)) return;
-		await this.getDirectory(path).catch(() => {});
+		await this.getDirectory(path, { preloadChildren: false }).catch(() => {});
 	}
 
 	/**
@@ -186,7 +467,17 @@ class DirectoryTreeCache {
 	 */
 	async preloadBatch(paths: string[]): Promise<void> {
 		const toLoad = paths.filter((p) => !this.hasValidCache(p));
-		await Promise.all(toLoad.map((p) => this.getDirectory(p).catch(() => {})));
+		const concurrency = 3;
+		let cursor = 0;
+
+		const workers = Array.from({ length: Math.min(concurrency, toLoad.length) }, async () => {
+			while (cursor < toLoad.length) {
+				const path = toLoad[cursor++];
+				await this.getDirectory(path, { preloadChildren: false }).catch(() => {});
+			}
+		});
+
+		await Promise.all(workers);
 	}
 
 	/**
@@ -242,6 +533,14 @@ class DirectoryTreeCache {
 		}
 	}
 
+	private getCacheEvictionRank(key: string, entry: CacheEntry): number {
+		const activePriority = this.getActivePathPriority(key);
+		const activeRank = activePriority >= 1000 ? 0 : activePriority >= 100 ? 1000 : 2000;
+		const completeBonus = entry.isComplete ? 100 : 0;
+		const accessBonus = Math.min(entry.accessCount || 0, 50);
+		return activeRank + completeBonus - accessBonus;
+	}
+
 	/**
 	 * 清理过期缓存
 	 */
@@ -258,10 +557,14 @@ class DirectoryTreeCache {
 		// 如果缓存超过限制，删除最旧的
 		if (this.cache.size > this.MAX_CACHE_SIZE) {
 			const entries = Array.from(this.cache.entries())
-				.filter(([, e]) => !e.loading)
-				.sort((a, b) => a[1].timestamp - b[1].timestamp);
+				.filter(([, e]) => !e.loading && !e.streamHandle)
+				.sort(
+					(a, b) =>
+						this.getCacheEvictionRank(a[0], a[1]) - this.getCacheEvictionRank(b[0], b[1]) ||
+						a[1].timestamp - b[1].timestamp
+				);
 
-			const toDelete = entries.slice(0, entries.length - this.MAX_CACHE_SIZE);
+			const toDelete = entries.slice(0, Math.max(0, this.cache.size - this.MAX_CACHE_SIZE));
 			for (const [key] of toDelete) {
 				this.cache.delete(key);
 			}
@@ -274,6 +577,14 @@ class DirectoryTreeCache {
 	clear() {
 		this.cache.clear();
 		this.loadingPaths.clear();
+		this.inflightLoads.clear();
+		this.streamingLoads.clear();
+		this.backgroundPreloadQueue = [];
+		this.backgroundPreloadKeys.clear();
+		this.activeBackgroundPreloads = 0;
+		this.activePathKeys.clear();
+		this.activePathPriorities.clear();
+		this.activePathScopes.clear();
 		this.root = null;
 	}
 
@@ -319,7 +630,7 @@ class DirectoryTreeCache {
 		let loaded = 0;
 		let total = 1;
 
-		console.log(`🔥 开始预热子树: ${rootPath} (深度: ${maxDepth})`);
+		debugDirectoryTree(() => `开始预热子树: ${rootPath} (深度: ${maxDepth})`);
 
 		while (queue.length > 0) {
 			const { path, depth } = queue.shift()!;
@@ -331,7 +642,9 @@ class DirectoryTreeCache {
 
 			try {
 				// 静默加载（如果已缓存则跳过）
-				const items = await this.getDirectory(path).catch(() => [] as FsItem[]);
+				const items = await this.getDirectory(path, { preloadChildren: false }).catch(
+					() => [] as FsItem[]
+				);
 				loaded++;
 				onProgress?.(loaded, total);
 
@@ -349,11 +662,11 @@ class DirectoryTreeCache {
 				// 避免阻塞UI，每处理一项暂停10ms
 				await new Promise((r) => setTimeout(r, 10));
 			} catch (error) {
-				console.debug(`预热失败: ${path}`, error);
+				debugDirectoryTree(() => `预热失败: ${path}`, error);
 			}
 		}
 
-		console.log(`✅ 子树预热完成: ${rootPath} (已加载 ${loaded}/${total})`);
+		debugDirectoryTree(() => `子树预热完成: ${rootPath} (已加载 ${loaded}/${total})`);
 	}
 
 	/**
@@ -363,6 +676,11 @@ class DirectoryTreeCache {
 		return {
 			size: this.cache.size,
 			loading: this.loadingPaths.size,
+			inflight: this.inflightLoads.size,
+			backgroundQueue: this.backgroundPreloadQueue.length,
+			backgroundActive: this.activeBackgroundPreloads,
+			activePaths: this.activePathKeys.size,
+			activeScopes: this.activePathScopes.size,
 			maxSize: this.MAX_CACHE_SIZE,
 			ttl: this.CACHE_TTL
 		};
@@ -384,10 +702,11 @@ class DirectoryTreeCache {
 	async getDirectoryStreaming(
 		path: string,
 		onBatch?: (items: FsItem[], batchIndex: number, total: number) => void,
-		options?: { batchSize?: number; skipHidden?: boolean }
+		options?: DirectoryStreamingOptions
 	): Promise<StreamComplete> {
 		const key = this.normalizePath(path);
 		const now = Date.now();
+		const notifyMode = options?.notifyMode ?? 'batch';
 
 		// 检查缓存
 		const cached = this.cache.get(key);
@@ -401,6 +720,24 @@ class DirectoryTreeCache {
 				elapsedMs: 0,
 				fromCache: true
 			};
+		}
+
+		const inflight = this.streamingLoads.get(key);
+		if (inflight && cached?.loading) {
+			let emitted = 0;
+			const emitAvailable = () => {
+				const current = this.cache.get(key);
+				if (!current || current.items.length <= emitted) return;
+				const delta = current.items.slice(emitted);
+				emitted = current.items.length;
+				onBatch?.(delta, 0, emitted);
+			};
+
+			emitAvailable();
+			return inflight.then((complete) => {
+				emitAvailable();
+				return complete;
+			});
 		}
 
 		// 取消之前的流（如果有）
@@ -419,7 +756,7 @@ class DirectoryTreeCache {
 		};
 		this.cache.set(key, entry);
 
-		return new Promise((resolve, reject) => {
+		const streamingPromise = new Promise<StreamComplete>((resolve, reject) => {
 			let totalLoaded = 0;
 
 			streamDirectory(
@@ -435,11 +772,15 @@ class DirectoryTreeCache {
 						// 通知调用者
 						onBatch?.(batch.items, batch.batchIndex, totalLoaded);
 						// 触发更新回调
-						this.notifyUpdate(path, cached?.items || batch.items);
+						if (notifyMode === 'batch') {
+							this.notifyUpdate(path, cached?.items || batch.items);
+						}
 					},
 					onProgress: (progress) => {
 						// 可以在这里更新进度 UI
-						console.debug(`📁 流式加载进度: ${progress.loaded} 项, ${progress.elapsedMs}ms`);
+						debugDirectoryTree(
+							() => `流式加载进度: ${progress.loaded} 项, ${progress.elapsedMs}ms`
+						);
 					},
 					onError: (error) => {
 						console.warn(`⚠️ 流式加载错误: ${error.message}`);
@@ -454,13 +795,18 @@ class DirectoryTreeCache {
 							delete cached.streamHandle;
 						}
 						this.loadingPaths.delete(key);
+						this.streamingLoads.delete(key);
 						this.cleanup();
+						if (notifyMode === 'final' && cached) {
+							this.notifyUpdate(path, cached.items);
+						}
 						resolve(complete);
 					}
 				},
 				{
 					batchSize: options?.batchSize,
-					skipHidden: options?.skipHidden
+					skipHidden: options?.skipHidden,
+					lane: options?.lane
 				}
 			)
 				.then((handle) => {
@@ -472,10 +818,13 @@ class DirectoryTreeCache {
 				})
 				.catch((err) => {
 					this.loadingPaths.delete(key);
+					this.streamingLoads.delete(key);
 					this.cache.delete(key);
 					reject(err);
 				});
 		});
+		this.streamingLoads.set(key, streamingPromise);
+		return streamingPromise;
 	}
 
 	/**
@@ -490,6 +839,7 @@ class DirectoryTreeCache {
 			cached.loading = false;
 		}
 		this.loadingPaths.delete(key);
+		this.streamingLoads.delete(key);
 	}
 
 	/**

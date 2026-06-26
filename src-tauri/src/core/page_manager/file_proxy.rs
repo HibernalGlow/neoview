@@ -30,7 +30,7 @@ struct TempFileEntry {
 }
 
 /// FileProxy - 文件代理
-/// 
+///
 /// 对于需要提取到临时文件的情况（视频、大文件），
 /// 提供统一的访问接口
 #[derive(Debug, Clone)]
@@ -97,21 +97,31 @@ impl TempFileManager {
 
     /// 获取当前大文件阈值
     pub fn get_large_file_threshold(&self) -> usize {
-        *self.large_file_threshold.lock().unwrap_or_else(|e| e.into_inner())
+        *self
+            .large_file_threshold
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     /// 设置大文件阈值（字节）
     pub fn set_large_file_threshold(&self, threshold: usize) {
         if let Ok(mut t) = self.large_file_threshold.lock() {
             *t = threshold;
-            log::info!("📁 TempFileManager: 设置大文件阈值为 {} MB", threshold / 1024 / 1024);
+            log::info!(
+                "📁 TempFileManager: 设置大文件阈值为 {} MB",
+                threshold / 1024 / 1024
+            );
         }
     }
 
     /// 判断是否需要使用临时文件
-    pub fn needs_temp_file(&self, content_type: &super::book_context::PageContentType, estimated_size: usize) -> bool {
+    pub fn needs_temp_file(
+        &self,
+        content_type: &super::book_context::PageContentType,
+        estimated_size: usize,
+    ) -> bool {
         use super::book_context::PageContentType;
-        
+
         match content_type {
             // 视频必须使用临时文件（浏览器需要文件路径）
             PageContentType::Video => true,
@@ -132,13 +142,13 @@ impl TempFileManager {
         // 使用 MD5 哈希生成唯一文件名
         let key = Self::cache_key(book_path, inner_path);
         let hash = format!("{:x}", md5::compute(key.as_bytes()));
-        
+
         // 保留原始扩展名
         let ext = Path::new(inner_path)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("tmp");
-        
+
         self.temp_dir.join(format!("{}.{}", hash, ext))
     }
 
@@ -167,8 +177,7 @@ impl TempFileManager {
         self.cleanup_expired(&mut cache);
 
         // 写入新文件
-        std::fs::write(&temp_path, data)
-            .map_err(|e| format!("写入临时文件失败: {}", e))?;
+        std::fs::write(&temp_path, data).map_err(|e| format!("写入临时文件失败: {}", e))?;
 
         log::debug!(
             "📁 TempFileManager: 创建临时文件 {} ({} KB)",
@@ -177,12 +186,15 @@ impl TempFileManager {
         );
 
         // 添加到缓存
-        cache.insert(key, TempFileEntry {
-            path: temp_path.clone(),
-            created_at: Instant::now(),
-            last_accessed: Instant::now(),
-            ref_count: 1,
-        });
+        cache.insert(
+            key,
+            TempFileEntry {
+                path: temp_path.clone(),
+                created_at: Instant::now(),
+                last_accessed: Instant::now(),
+                ref_count: 1,
+            },
+        );
 
         Ok(temp_path)
     }
@@ -238,7 +250,7 @@ impl TempFileManager {
     /// 清理指定书籍的所有临时文件
     pub fn cleanup_book(&self, book_path: &str) {
         let prefix = format!("{}:", book_path);
-        
+
         if let Ok(mut cache) = self.cache.lock() {
             let keys_to_remove: Vec<_> = cache
                 .keys()
@@ -322,9 +334,9 @@ mod tests {
     fn test_needs_temp_file() {
         use super::super::book_context::PageContentType;
         use std::path::PathBuf;
-        
+
         let manager = TempFileManager::new(PathBuf::from("/tmp/test"));
-        
+
         // 视频始终需要临时文件
         assert!(manager.needs_temp_file(&PageContentType::Video, 0));
         // 大文件需要临时文件（1GB > 800MB）

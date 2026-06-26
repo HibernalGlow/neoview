@@ -17,6 +17,20 @@ interface PredecodeOptions {
 	priority?: ImageFetchPriority;
 }
 
+export interface ImageDecodePreloaderStats {
+	total: number;
+	decoded: number;
+	pending: number;
+	error: number;
+	decodedPixels: number;
+	hot: number;
+	queued: number;
+	active: number;
+	maxItems: number;
+	maxPixels: number;
+	concurrency: number;
+}
+
 const MAX_DECODED_ITEMS = 12;
 const MAX_DECODED_PIXELS = 160_000_000;
 const BACKGROUND_DECODE_CONCURRENCY = 2;
@@ -24,7 +38,9 @@ const BACKGROUND_DECODE_CONCURRENCY = 2;
 const decodedImageCache = new Map<string, DecodedImageEntry>();
 const backgroundQueue: Array<{ url: string; priority: ImageFetchPriority }> = [];
 const backgroundQueueSet = new Set<string>();
+const hotDecodedUrls = new Set<string>();
 let activeBackgroundDecodes = 0;
+let decodeQueueGeneration = 0;
 
 function now(): number {
 	return typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -41,29 +57,74 @@ function releaseEntry(entry: DecodedImageEntry): void {
 }
 
 function trimDecodedImageCache(): void {
-	const decodedEntries = Array.from(decodedImageCache.values()).filter(
-		(entry) => entry.status === 'decoded'
-	);
-	let decodedPixels = decodedEntries.reduce((total, entry) => total + entry.pixels, 0);
-
-	const oldestFirst = decodedEntries.sort((a, b) => a.lastUsed - b.lastUsed);
-	for (const entry of oldestFirst) {
-		if (decodedImageCache.size <= MAX_DECODED_ITEMS && decodedPixels <= MAX_DECODED_PIXELS) {
-			break;
-		}
-		if (!decodedImageCache.delete(entry.url)) {
-			continue;
-		}
-		decodedPixels -= entry.pixels;
-		releaseEntry(entry);
-	}
-
 	for (const entry of Array.from(decodedImageCache.values())) {
 		if (entry.status === 'error') {
 			decodedImageCache.delete(entry.url);
 			releaseEntry(entry);
 		}
 	}
+
+	const decodedEntries = Array.from(decodedImageCache.values()).filter(
+		(entry) => entry.status === 'decoded'
+	);
+	let decodedPixels = decodedEntries.reduce((total, entry) => total + entry.pixels, 0);
+
+	const removeOldest = (entries: DecodedImageEntry[]) => {
+		const oldestFirst = entries.sort((a, b) => a.lastUsed - b.lastUsed);
+		for (const entry of oldestFirst) {
+			if (decodedImageCache.size <= MAX_DECODED_ITEMS && decodedPixels <= MAX_DECODED_PIXELS) {
+				break;
+			}
+			if (!decodedImageCache.delete(entry.url)) {
+				continue;
+			}
+			decodedPixels -= entry.pixels;
+			releaseEntry(entry);
+		}
+	};
+
+	removeOldest(decodedEntries.filter((entry) => !hotDecodedUrls.has(entry.url)));
+	if (decodedImageCache.size > MAX_DECODED_ITEMS || decodedPixels > MAX_DECODED_PIXELS) {
+		removeOldest(decodedEntries.filter((entry) => hotDecodedUrls.has(entry.url)));
+	}
+}
+
+export function setHotImageDecodeUrls(urls: string[]): void {
+	hotDecodedUrls.clear();
+	for (const url of urls) {
+		if (url) hotDecodedUrls.add(url);
+	}
+	trimDecodedImageCache();
+}
+
+export function prependImagePredecodes(
+	urls: string[],
+	priority: ImageFetchPriority = 'high'
+): void {
+	for (let i = urls.length - 1; i >= 0; i -= 1) {
+		const url = urls[i];
+		if (!url || decodedImageCache.has(url)) {
+			continue;
+		}
+		const queuedIndex = backgroundQueue.findIndex((entry) => entry.url === url);
+		if (queuedIndex >= 0) {
+			const [entry] = backgroundQueue.splice(queuedIndex, 1);
+			backgroundQueue.unshift({ ...entry, priority });
+			continue;
+		}
+		backgroundQueue.unshift({ url, priority });
+		backgroundQueueSet.add(url);
+	}
+	pumpBackgroundQueue();
+}
+
+function countHotDecodedEntries(): number {
+	let count = 0;
+	for (const url of hotDecodedUrls) {
+		const entry = decodedImageCache.get(url);
+		if (entry?.status === 'decoded') count++;
+	}
+	return count;
 }
 
 async function decodeImageElement(image: HTMLImageElement, url: string): Promise<void> {
@@ -164,10 +225,14 @@ function pumpBackgroundQueue(): void {
 	}
 
 	activeBackgroundDecodes++;
+	const generation = decodeQueueGeneration;
 	void predecodeImage(next.url, { priority: next.priority })
 		.catch(() => {})
 		.finally(() => {
-			activeBackgroundDecodes--;
+			if (generation !== decodeQueueGeneration) {
+				return;
+			}
+			activeBackgroundDecodes = Math.max(0, activeBackgroundDecodes - 1);
 			pumpBackgroundQueue();
 		});
 
@@ -197,12 +262,50 @@ export function enqueueImagePredecode(url: string, priority: ImageFetchPriority 
 	pumpBackgroundQueue();
 }
 
+export function clearQueuedImagePredecodes(): void {
+	backgroundQueue.length = 0;
+	backgroundQueueSet.clear();
+}
+
+export function getImageDecodePreloaderStats(): ImageDecodePreloaderStats {
+	let decoded = 0;
+	let pending = 0;
+	let error = 0;
+	let decodedPixels = 0;
+
+	for (const entry of decodedImageCache.values()) {
+		if (entry.status === 'decoded') {
+			decoded++;
+			decodedPixels += entry.pixels;
+		} else if (entry.status === 'pending') {
+			pending++;
+		} else {
+			error++;
+		}
+	}
+
+	return {
+		total: decodedImageCache.size,
+		decoded,
+		pending,
+		error,
+		decodedPixels,
+		hot: countHotDecodedEntries(),
+		queued: backgroundQueue.length,
+		active: activeBackgroundDecodes,
+		maxItems: MAX_DECODED_ITEMS,
+		maxPixels: MAX_DECODED_PIXELS,
+		concurrency: BACKGROUND_DECODE_CONCURRENCY
+	};
+}
+
 export function clearImageDecodeCache(): void {
+	decodeQueueGeneration++;
 	for (const entry of decodedImageCache.values()) {
 		releaseEntry(entry);
 	}
 	decodedImageCache.clear();
-	backgroundQueue.length = 0;
-	backgroundQueueSet.clear();
+	hotDecodedUrls.clear();
+	clearQueuedImagePredecodes();
 	activeBackgroundDecodes = 0;
 }

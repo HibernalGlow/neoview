@@ -2,11 +2,19 @@
 //!
 //! 替代旧的两套缩略图系统（文件浏览 + 阅读页底栏）
 
-use tauri::{AppHandle, Emitter, State};
 use crate::core::thumbnail_service_v4::types::*;
 use crate::core::thumbnail_service_v4::UnifiedThumbnailService;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, State};
+use tokio::sync::{RwLock, Semaphore};
+
+const MAX_THUMB_V4_WORKERS: usize = 6;
+const WORKER_IDLE_GRACE_ROUNDS: usize = 3;
+const WORKER_IDLE_GRACE_MS: u64 = 25;
+
+static THUMB_V4_WORKER_SEMAPHORE: LazyLock<Arc<Semaphore>> =
+    LazyLock::new(|| Arc::new(Semaphore::new(MAX_THUMB_V4_WORKERS)));
 
 /// V4 服务状态
 pub struct ThumbnailV4State {
@@ -20,35 +28,63 @@ pub async fn thumb_v4_request(
     app: AppHandle,
     state: State<'_, ThumbnailV4State>,
 ) -> Result<(), String> {
-    log::debug!("🖼️ [ThumbV4] request: {} items, lane={}", params.items.len(), params.lane);
+    log::debug!(
+        "🖼️ [ThumbV4] request: {} items, lane={}",
+        params.items.len(),
+        params.lane
+    );
     let service = Arc::clone(&state.service);
     tauri::async_runtime::spawn(async move {
-        let lane = params.lane;
-        let chunk_size = request_chunk_size(lane);
-        for chunk in params.items.chunks(chunk_size) {
-            let items = {
-                let service = service.read().await;
-                service.generate_thumbnails(chunk.to_vec(), lane).await
-            };
-
-            if items.is_empty() {
-                continue;
-            }
-
-            if let Err(err) = app.emit("thumbnail-batch-ready", ThumbnailBatchReadyEvent { items }) {
-                log::warn!("🖼️ [ThumbV4] emit thumbnail-batch-ready failed: {}", err);
-                break;
-            }
+        {
+            let service_guard = service.read().await;
+            service_guard.request_thumbnails(params).await;
         }
+        spawn_thumbnail_workers(app, service);
     });
     Ok(())
 }
 
-fn request_chunk_size(lane: ThumbnailLane) -> usize {
-    match lane {
-        ThumbnailLane::Visible | ThumbnailLane::ReaderVisible => 16,
-        ThumbnailLane::Prefetch => 16,
-        ThumbnailLane::Background => 8,
+fn spawn_thumbnail_workers(app: AppHandle, service: Arc<RwLock<UnifiedThumbnailService>>) {
+    for _ in 0..MAX_THUMB_V4_WORKERS {
+        let Ok(permit) = THUMB_V4_WORKER_SEMAPHORE.clone().try_acquire_owned() else {
+            break;
+        };
+
+        let app = app.clone();
+        let service = Arc::clone(&service);
+        tauri::async_runtime::spawn(async move {
+            let _permit = permit;
+            let mut idle_rounds = 0;
+
+            loop {
+                let ready_items = {
+                    let service_guard = service.read().await;
+                    service_guard.process_next_queued().await
+                };
+
+                match ready_items {
+                    Some(items) => {
+                        idle_rounds = 0;
+                        if items.is_empty() {
+                            continue;
+                        }
+                        if app
+                            .emit("thumbnail-batch-ready", ThumbnailBatchReadyEvent { items })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    None => {
+                        if idle_rounds >= WORKER_IDLE_GRACE_ROUNDS {
+                            break;
+                        }
+                        idle_rounds += 1;
+                        tokio::time::sleep(Duration::from_millis(WORKER_IDLE_GRACE_MS)).await;
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -56,11 +92,12 @@ fn request_chunk_size(lane: ThumbnailLane) -> usize {
 #[tauri::command]
 pub async fn thumb_v4_cancel_context(
     context_id: String,
+    generation: u32,
     state: State<'_, ThumbnailV4State>,
 ) -> Result<(), String> {
     log::debug!("🖼️ [ThumbV4] cancel_context: {}", context_id);
     let service = state.service.read().await;
-    service.cancel_context(&context_id).await;
+    service.cancel_context(&context_id, generation).await;
     Ok(())
 }
 
@@ -77,9 +114,7 @@ pub async fn thumb_v4_get_url(
 
 /// 获取队列状态
 #[tauri::command]
-pub async fn thumb_v4_queue_status(
-    state: State<'_, ThumbnailV4State>,
-) -> Result<usize, String> {
+pub async fn thumb_v4_queue_status(state: State<'_, ThumbnailV4State>) -> Result<usize, String> {
     let service = state.service.read().await;
     Ok(service.queue_len().await)
 }

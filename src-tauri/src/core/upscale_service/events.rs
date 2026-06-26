@@ -1,5 +1,5 @@
 //! 超分服务事件类型模块
-//! 
+//!
 //! 包含 UpscaleStatus, UpscaleReadyPayload, UpscaleServiceStats 等事件相关类型
 
 use serde::{Deserialize, Serialize};

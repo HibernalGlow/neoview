@@ -1,10 +1,10 @@
 // 缓存管理模块
 // 包含图片缓存、压缩包缓存的管理操作
 
+use super::image_ops;
 use super::types::{CachedImageEntry, IMAGE_CACHE_LIMIT};
 use super::utils::{normalize_archive_key, StreamReader};
 use super::zip_handler::{self, ZipArchiveCache};
-use super::image_ops;
 use crate::core::archive_index::ArchiveIndexCache;
 use std::collections::HashMap;
 use std::io::Read;
@@ -16,10 +16,7 @@ use std::thread;
 pub type ImageCache = Arc<Mutex<HashMap<String, CachedImageEntry>>>;
 
 /// 清除所有缓存
-pub fn clear_cache(
-    image_cache: &ImageCache,
-    archive_cache: &ZipArchiveCache,
-) {
+pub fn clear_cache(image_cache: &ImageCache, archive_cache: &ZipArchiveCache) {
     if let Ok(mut cache) = image_cache.lock() {
         cache.clear();
     }
@@ -79,7 +76,8 @@ pub fn preload_all_images(
             image_cache,
             archive_path,
             &entry.path,
-        ).is_ok()
+        )
+        .is_ok()
         {
             loaded_count += 1;
         }
@@ -180,7 +178,7 @@ pub fn evict_archive_cache(
     archive_path: &Path,
 ) {
     let key = normalize_archive_key(archive_path);
-    
+
     // 清除 ZIP 缓存
     if let Ok(mut cache) = archive_cache.lock() {
         cache.remove(&key);

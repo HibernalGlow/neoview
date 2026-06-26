@@ -98,7 +98,7 @@ impl CommandQueue {
     }
 
     /// 提交新命令
-    /// 
+    ///
     /// 如果有正在执行的命令，会先取消它。
     pub fn submit(&self, path: PathBuf, options: LoadOptions) -> Arc<LoadCommand> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -144,7 +144,7 @@ impl CommandQueue {
                 *current = None;
             }
         }
-        
+
         // 发送完成通知
         let _ = self.completion_tx.send(result);
     }
@@ -216,7 +216,7 @@ impl PerformanceMonitor {
                 metrics.total_ms, self.warning_threshold_ms
             );
         }
-        
+
         info!(
             "加载完成: 总耗时={}ms, 索引={}ms, 首页={}ms, 列表={}ms, 页数={}, 缓存={}",
             metrics.total_ms,
@@ -224,7 +224,11 @@ impl PerformanceMonitor {
             metrics.first_page_ms,
             metrics.full_list_ms,
             metrics.page_count,
-            if metrics.cache_hit { "命中" } else { "未命中" }
+            if metrics.cache_hit {
+                "命中"
+            } else {
+                "未命中"
+            }
         );
 
         *self.last_metrics.lock() = Some(metrics);
@@ -252,14 +256,22 @@ mod tests {
 
     #[test]
     fn test_load_command_creation() {
-        let cmd = LoadCommand::new(1, PathBuf::from("/test/archive.zip"), LoadOptions::default());
+        let cmd = LoadCommand::new(
+            1,
+            PathBuf::from("/test/archive.zip"),
+            LoadOptions::default(),
+        );
         assert_eq!(cmd.id, 1);
         assert!(!cmd.is_cancelled());
     }
 
     #[test]
     fn test_load_command_cancel() {
-        let cmd = LoadCommand::new(1, PathBuf::from("/test/archive.zip"), LoadOptions::default());
+        let cmd = LoadCommand::new(
+            1,
+            PathBuf::from("/test/archive.zip"),
+            LoadOptions::default(),
+        );
         assert!(!cmd.is_cancelled());
         cmd.cancel();
         assert!(cmd.is_cancelled());
@@ -268,14 +280,14 @@ mod tests {
     #[test]
     fn test_command_queue_submit() {
         let queue = CommandQueue::new();
-        
+
         let cmd1 = queue.submit(PathBuf::from("/test/archive1.zip"), LoadOptions::default());
         assert_eq!(cmd1.id, 1);
         assert!(queue.has_active_command());
-        
+
         let cmd2 = queue.submit(PathBuf::from("/test/archive2.zip"), LoadOptions::default());
         assert_eq!(cmd2.id, 2);
-        
+
         // 第一个命令应该被取消
         assert!(cmd1.is_cancelled());
         assert!(!cmd2.is_cancelled());
@@ -284,10 +296,10 @@ mod tests {
     #[test]
     fn test_command_queue_cancel() {
         let queue = CommandQueue::new();
-        
+
         let cmd = queue.submit(PathBuf::from("/test/archive.zip"), LoadOptions::default());
         assert!(!cmd.is_cancelled());
-        
+
         queue.cancel_current();
         assert!(cmd.is_cancelled());
         assert!(!queue.has_active_command());
@@ -296,7 +308,7 @@ mod tests {
     #[test]
     fn test_performance_monitor() {
         let monitor = PerformanceMonitor::new(500);
-        
+
         let metrics = LoadMetrics {
             index_load_ms: 50,
             first_page_ms: 100,
@@ -305,9 +317,9 @@ mod tests {
             page_count: 100,
             cache_hit: true,
         };
-        
+
         monitor.record(metrics.clone());
-        
+
         let last = monitor.get_last_metrics().unwrap();
         assert_eq!(last.total_ms, 350);
         assert!(last.cache_hit);
@@ -334,7 +346,7 @@ mod property_tests {
         ) {
             let queue = CommandQueue::new();
             let mut commands = Vec::new();
-            
+
             // 提交多个命令
             for i in 0..command_count {
                 let cmd = queue.submit(
@@ -343,7 +355,7 @@ mod property_tests {
                 );
                 commands.push(cmd);
             }
-            
+
             // 验证：除了最后一个，所有命令都应该被取消
             for (i, cmd) in commands.iter().enumerate() {
                 if i < command_count - 1 {
@@ -375,7 +387,7 @@ mod property_tests {
             cache_hit in any::<bool>(),
         ) {
             let monitor = PerformanceMonitor::new(500);
-            
+
             let metrics = LoadMetrics {
                 index_load_ms: index_ms,
                 first_page_ms: first_page_ms,
@@ -384,11 +396,11 @@ mod property_tests {
                 page_count,
                 cache_hit,
             };
-            
+
             monitor.record(metrics);
-            
+
             let last = monitor.get_last_metrics().unwrap();
-            
+
             // 验证记录值与输入一致（u64 本身保证非负）
             prop_assert_eq!(last.index_load_ms, index_ms);
             prop_assert_eq!(last.first_page_ms, first_page_ms);

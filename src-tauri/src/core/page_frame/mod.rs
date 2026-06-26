@@ -9,29 +9,29 @@
 //!         └── PageFrame (显示帧，包含 1-2 个元素)
 //! ```
 
-mod position;
-mod range;
-mod page;
-mod element;
-mod frame;
 mod builder;
 mod calculator;
 mod context;
+mod element;
 mod error;
-mod stretch;
+mod frame;
+mod page;
+mod position;
+mod range;
 mod snapshot;
+mod stretch;
 
+pub use builder::PageFrameBuilder;
+pub use calculator::{AutoRotateType, ContentSizeCalculator, StretchMode};
+pub use context::PageFrameContext;
+pub use element::{CropRect, PageFrameElement};
+pub use error::{PageFrameError, PageFrameErrorInfo, PageFrameResult};
+pub use frame::PageFrame;
+pub use page::Page;
 pub use position::PagePosition;
 pub use range::PageRange;
-pub use page::Page;
-pub use element::{PageFrameElement, CropRect};
-pub use frame::PageFrame;
-pub use builder::PageFrameBuilder;
-pub use calculator::{ContentSizeCalculator, StretchMode, AutoRotateType};
-pub use context::PageFrameContext;
-pub use error::{PageFrameError, PageFrameResult, PageFrameErrorInfo};
-pub use stretch::{WidePageStretch, ContentScaleCalculator as WidePageScaleCalculator};
-pub use snapshot::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow};
+pub use snapshot::{FrameImageInfo, FrameLayoutType, FrameSnapshot, ReaderWindow, SplitHalf};
+pub use stretch::{ContentScaleCalculator as WidePageScaleCalculator, WidePageStretch};
 
 /// 页面模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -90,7 +90,10 @@ impl Size {
     }
 
     pub fn zero() -> Self {
-        Self { width: 0.0, height: 0.0 }
+        Self {
+            width: 0.0,
+            height: 0.0,
+        }
     }
 
     /// 是否为横向

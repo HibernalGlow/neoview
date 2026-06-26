@@ -320,6 +320,8 @@ export function toggleShowPenetrateSettingsBar(): void {
 
 /** 设置文件列表 */
 export function setItems(items: FsItem[]): void {
+	const activeTab = getActiveTab();
+	invalidateCachedSortedItems(activeTab?.currentPath);
 	updateActiveTab((tab) => ({
 		...tab,
 		items,
@@ -330,6 +332,8 @@ export function setItems(items: FsItem[]): void {
 
 /** 从列表中移除单个项目（乐观更新） */
 export function removeItem(path: string): void {
+	const activeTab = getActiveTab();
+	invalidateCachedSortedItems(activeTab?.currentPath);
 	updateActiveTab((tab) => ({
 		...tab,
 		items: tab.items.filter((item) => item.path !== path)
@@ -348,44 +352,160 @@ export function setError(error: string | null): void {
 
 // ============ 已排序列表缓存（供切换书籍直读，不再二次排序） ============
 
-let _cachedSortedState: {
+interface CachedSortedState {
 	items: FsItem[];
 	path: string;
 	source: string;
 	updatedAt: number;
-} = {
+	sortField?: FolderSortField;
+	sortOrder?: FolderSortOrder;
+}
+
+const MAX_CACHED_SORTED_LISTS = 16;
+
+let _cachedSortedState: CachedSortedState = {
 	items: [],
 	path: '',
 	source: 'init',
 	updatedAt: 0
 };
 
-/** UI 组件排序完成后调用，将结果缓存起来 */
-export function setCachedSortedItems(items: FsItem[], path = '', source = 'unknown'): void {
-	_cachedSortedState = {
-		items,
+const cachedSortedByKey = new Map<string, CachedSortedState>();
+
+function getCachedSortedKey(
+	path: string,
+	sortField?: FolderSortField,
+	sortOrder?: FolderSortOrder
+): string {
+	return `${normalizeSortPathKey(path)}\u0000${sortField ?? '*'}\u0000${sortOrder ?? '*'}`;
+}
+
+function touchCachedSortedState(key: string, state: CachedSortedState): void {
+	cachedSortedByKey.delete(key);
+	cachedSortedByKey.set(key, state);
+
+	while (cachedSortedByKey.size > MAX_CACHED_SORTED_LISTS) {
+		const oldestKey = cachedSortedByKey.keys().next().value;
+		if (!oldestKey) break;
+		cachedSortedByKey.delete(oldestKey);
+	}
+}
+
+function getEmptyCachedSortedState(path = ''): CachedSortedState {
+	return {
+		items: [],
 		path,
-		source,
-		updatedAt: Date.now()
+		source: 'empty',
+		updatedAt: 0
 	};
 }
 
+function invalidateCachedSortedItems(path?: string): void {
+	if (!path) {
+		_cachedSortedState = getEmptyCachedSortedState();
+		cachedSortedByKey.clear();
+		return;
+	}
+
+	const normalizedPath = normalizeSortPathKey(path);
+	for (const [key, state] of cachedSortedByKey) {
+		if (normalizeSortPathKey(state.path) === normalizedPath) {
+			cachedSortedByKey.delete(key);
+		}
+	}
+
+	if (normalizeSortPathKey(_cachedSortedState.path) === normalizedPath) {
+		_cachedSortedState = getEmptyCachedSortedState(path);
+	}
+}
+
+function findCachedSortedState(
+	path?: string,
+	sortField?: FolderSortField,
+	sortOrder?: FolderSortOrder
+): CachedSortedState {
+	if (!path) return _cachedSortedState;
+
+	if (sortField && sortOrder) {
+		const key = getCachedSortedKey(path, sortField, sortOrder);
+		const exact = cachedSortedByKey.get(key);
+		if (exact) {
+			touchCachedSortedState(key, exact);
+			_cachedSortedState = exact;
+			return exact;
+		}
+	}
+
+	const normalizedPath = normalizeSortPathKey(path);
+	let bestKey = '';
+	let best: CachedSortedState | null = null;
+	for (const [key, state] of cachedSortedByKey) {
+		if (normalizeSortPathKey(state.path) !== normalizedPath) continue;
+		if (sortField && state.sortField !== sortField) continue;
+		if (sortOrder && state.sortOrder !== sortOrder) continue;
+		if (!best || state.updatedAt > best.updatedAt) {
+			bestKey = key;
+			best = state;
+		}
+	}
+
+	if (best) {
+		touchCachedSortedState(bestKey, best);
+		_cachedSortedState = best;
+		return best;
+	}
+
+	return getEmptyCachedSortedState(path);
+}
+
+/** UI 组件排序完成后调用，将结果缓存起来 */
+export function setCachedSortedItems(
+	items: FsItem[],
+	path = '',
+	source = 'unknown',
+	sortField?: FolderSortField,
+	sortOrder?: FolderSortOrder
+): void {
+	const state: CachedSortedState = {
+		items,
+		path,
+		source,
+		updatedAt: Date.now(),
+		sortField,
+		sortOrder
+	};
+	_cachedSortedState = state;
+
+	if (path) {
+		touchCachedSortedState(getCachedSortedKey(path, sortField, sortOrder), state);
+	}
+}
+
 /** 读取 UI 已排好序的列表（切换书籍时使用） */
-export function getCachedSortedItems(): FsItem[] {
-	return _cachedSortedState.items;
+export function getCachedSortedItems(
+	path?: string,
+	sortField?: FolderSortField,
+	sortOrder?: FolderSortOrder
+): FsItem[] {
+	return findCachedSortedState(path, sortField, sortOrder).items;
 }
 
 /** 读取 UI 已排好序列表的元信息 */
-export function getCachedSortedMeta(): {
+export function getCachedSortedMeta(
+	path?: string,
+	sortField?: FolderSortField,
+	sortOrder?: FolderSortOrder
+): {
 	path: string;
 	source: string;
 	updatedAt: number;
 	count: number;
 } {
+	const state = findCachedSortedState(path, sortField, sortOrder);
 	return {
-		path: _cachedSortedState.path,
-		source: _cachedSortedState.source,
-		updatedAt: _cachedSortedState.updatedAt,
-		count: _cachedSortedState.items.length
+		path: state.path,
+		source: state.source,
+		updatedAt: state.updatedAt,
+		count: state.items.length
 	};
 }

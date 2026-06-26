@@ -40,7 +40,11 @@ impl ImageDataCache {
     }
 
     /// 创建带自定义配置的缓存
-    pub fn with_config(num_counters: usize, max_cost: i64, buffer_size: usize) -> Result<Self, String> {
+    pub fn with_config(
+        num_counters: usize,
+        max_cost: i64,
+        buffer_size: usize,
+    ) -> Result<Self, String> {
         let cache = CacheBuilder::new(num_counters, max_cost)
             .set_buffer_size(buffer_size)
             .finalize()

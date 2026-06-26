@@ -5,7 +5,7 @@
 
 use crate::core::directory_stream::{
     DirectoryBatch, DirectoryScanner, DirectoryStreamOutput, StreamComplete, StreamError,
-    StreamManagerState, StreamOptions, StreamProgress,
+    StreamLane, StreamManagerState, StreamOptions, StreamProgress,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
@@ -13,6 +13,7 @@ use tauri::{ipc::Channel, State};
 use tokio::sync::{mpsc, Semaphore};
 
 const STREAM_SCAN_MAX_CONCURRENCY: usize = 6;
+const STREAM_BACKGROUND_SCAN_MAX_CONCURRENCY: usize = 1;
 const STREAM_SEARCH_MAX_CONCURRENCY: usize = 3;
 
 static STREAM_SCAN_QUEUE: LazyLock<Arc<Semaphore>> = LazyLock::new(|| {
@@ -28,6 +29,9 @@ static STREAM_SEARCH_QUEUE: LazyLock<Arc<Semaphore>> = LazyLock::new(|| {
         .unwrap_or(1);
     Arc::new(Semaphore::new(permits))
 });
+
+static STREAM_BACKGROUND_SCAN_QUEUE: LazyLock<Arc<Semaphore>> =
+    LazyLock::new(|| Arc::new(Semaphore::new(STREAM_BACKGROUND_SCAN_MAX_CONCURRENCY)));
 
 /// 流式浏览目录（Spacedrive 风格）
 ///
@@ -62,6 +66,7 @@ pub async fn stream_directory_v2(
 
     // 创建扫描器
     let options = options.unwrap_or_default();
+    let lane = options.lane.unwrap_or_default();
     let scanner = DirectoryScanner::from_options(&options);
 
     // 创建内部 channel 用于接收扫描结果
@@ -70,7 +75,10 @@ pub async fn stream_directory_v2(
     // 启动扫描任务
     let scan_handle = Arc::clone(&handle);
     let scan_path = path_buf.clone();
-    let scan_queue = Arc::clone(&*STREAM_SCAN_QUEUE);
+    let scan_queue = match lane {
+        StreamLane::Active => Arc::clone(&*STREAM_SCAN_QUEUE),
+        StreamLane::Background => Arc::clone(&*STREAM_BACKGROUND_SCAN_QUEUE),
+    };
     tokio::spawn(async move {
         let _permit = match scan_queue.acquire_owned().await {
             Ok(permit) => permit,

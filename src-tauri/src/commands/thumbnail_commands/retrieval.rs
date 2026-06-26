@@ -235,6 +235,39 @@ pub async fn get_folder_preview_image_paths(
 /// 返回前 N 张图片的缩略图 blob keys
 /// count == 1 时优先返回封面；count > 1 时返回多张图片（封面作为第一张）
 #[tauri::command]
+pub async fn get_folder_preview_candidates_v2(
+    folder_path: String,
+    count: Option<usize>,
+    max_depth: Option<u32>,
+    max_visited_dirs: Option<usize>,
+    max_entries_per_dir: Option<usize>,
+    budget_ms: Option<u64>,
+) -> Result<Vec<crate::core::thumbnail_service_v3::generators::FolderPreviewCandidate>, String> {
+    use crate::core::thumbnail_service_v3::generators::{
+        get_folder_preview_candidates_v2 as scan_folder_preview_candidates_v2,
+    };
+
+    let max_count = count.unwrap_or(4).clamp(1, 16);
+    let max_depth = max_depth.unwrap_or(8).clamp(1, 16);
+    let max_visited_dirs = max_visited_dirs.unwrap_or(96).clamp(1, 512);
+    let max_entries_per_dir = max_entries_per_dir.unwrap_or(768).clamp(32, 4096);
+    let budget_ms = budget_ms.unwrap_or(120).clamp(20, 500);
+
+    tauri::async_runtime::spawn_blocking(move || {
+        scan_folder_preview_candidates_v2(
+            &folder_path,
+            max_count,
+            max_depth,
+            max_visited_dirs,
+            max_entries_per_dir,
+            budget_ms,
+        )
+    })
+    .await
+    .map_err(|e| format!("鑾峰彇鏂囦欢澶归瑙堝€欓€夊け璐? {}", e))?
+}
+
+#[tauri::command]
 pub async fn get_folder_preview_thumbnails(
     app: tauri::AppHandle,
     folder_path: String,

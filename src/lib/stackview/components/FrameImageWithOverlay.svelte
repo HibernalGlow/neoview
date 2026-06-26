@@ -68,7 +68,17 @@
 </script>
 
 <div class="frame-image-wrapper {className}">
-	<FrameImage {pageIndex} {url} {alt} {transform} {clipPath} {style} onload={handleLoad} />
+	<FrameImage
+		{pageIndex}
+		{url}
+		{alt}
+		{transform}
+		{clipPath}
+		{style}
+		sourceWidth={imageWidth}
+		sourceHeight={imageHeight}
+		onload={handleLoad}
+	/>
 
 	{#if showOverlay}
 		<TranslationOverlay {pageIndex} imageWidth={effectiveWidth} imageHeight={effectiveHeight} />

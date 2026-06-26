@@ -49,7 +49,7 @@ impl Default for AutoRotateType {
 }
 
 /// 内容尺寸计算器
-/// 
+///
 /// 根据拉伸模式计算图片的显示尺寸和缩放比例
 pub struct ContentSizeCalculator {
     /// 视口尺寸
@@ -71,7 +71,7 @@ impl ContentSizeCalculator {
     }
 
     /// 计算显示尺寸和缩放比例
-    /// 
+    ///
     /// 返回 (显示尺寸, 缩放比例, 旋转角度)
     pub fn calculate(&self, content_size: Size) -> (Size, f64, f64) {
         if content_size.width <= 0.0 || content_size.height <= 0.0 {
@@ -80,7 +80,7 @@ impl ContentSizeCalculator {
 
         // 计算旋转角度
         let rotation = self.calculate_rotation(content_size);
-        
+
         // 如果需要旋转，交换宽高
         let effective_size = if rotation.abs() > 45.0 {
             Size::new(content_size.height, content_size.width)
@@ -90,12 +90,9 @@ impl ContentSizeCalculator {
 
         // 计算缩放
         let scale = self.calculate_scale(effective_size);
-        
+
         // 计算显示尺寸
-        let display_size = Size::new(
-            effective_size.width * scale,
-            effective_size.height * scale,
-        );
+        let display_size = Size::new(effective_size.width * scale, effective_size.height * scale);
 
         (display_size, scale, rotation)
     }
@@ -132,7 +129,7 @@ impl ContentSizeCalculator {
                 // 自动旋转：当图片方向与视口方向不匹配时旋转
                 let content_landscape = content_size.is_landscape();
                 let viewport_landscape = self.viewport.is_landscape();
-                
+
                 if content_landscape != viewport_landscape {
                     // 方向不匹配，旋转 90 度
                     90.0
@@ -219,7 +216,8 @@ mod tests {
     #[test]
     fn test_fill_scale() {
         let viewport = Size::new(1920.0, 1080.0);
-        let calc = ContentSizeCalculator::new(viewport, StretchMode::UniformToFill, AutoRotateType::None);
+        let calc =
+            ContentSizeCalculator::new(viewport, StretchMode::UniformToFill, AutoRotateType::None);
 
         // 横向图片填充横向视口
         let content = Size::new(3840.0, 2160.0);

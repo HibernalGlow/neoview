@@ -46,7 +46,8 @@
 		onEmptySingleClick = () => {},
 		onBackButtonClick = () => {},
 		showBackButton = false,
-		showFullPath = false
+		showFullPath = false,
+		isActive = true
 	}: {
 		items?: FsItem[];
 		currentPath?: string;
@@ -68,6 +69,7 @@
 		onBackButtonClick?: () => void;
 		showBackButton?: boolean;
 		showFullPath?: boolean;
+		isActive?: boolean;
 	} = $props();
 
 	const dispatch = createEventDispatcher();
@@ -79,10 +81,15 @@
 	let visibleRangeRaf: number | null = null;
 	let lastVisibleRequestKey = $state('');
 	let stablePrefetchTimer: ReturnType<typeof setTimeout> | null = null;
+	const thumbnailContextPrefix = `folder-list-${Math.random().toString(36).slice(2)}`;
+	const thumbnailContextId = $derived(`${thumbnailContextPrefix}:${currentPath || 'empty'}`);
+	let lastThumbnailContextId = $state('');
+	let lastThumbnailActive = $state(isActive);
 
 	const ARCHIVE_REGEX = /\.(zip|cbz|rar|cbr|7z|cb7)$/i;
 	const PREFETCH_VIEWPORTS = 1;
 	const MAX_STABLE_PREFETCH_ITEMS = 64;
+	const MAX_PREFETCH_WHILE_LOADING = 96;
 
 	// 辅助：从路径列表构造 ThumbnailRequest[]
 	function pathsToThumbRequests(paths: string[]): ThumbnailRequest[] {
@@ -90,6 +97,18 @@
 			const source: ThumbnailSource = { kind: 'file', path: p, fileSize: 0, modified: 0 };
 			return { key: generateThumbKey(source, 256), source, maxSize: 256 };
 		});
+	}
+
+	function clearPendingThumbnailWork() {
+		lastVisibleRequestKey = '';
+		if (visibleRangeRaf !== null) {
+			cancelAnimationFrame(visibleRangeRaf);
+			visibleRangeRaf = null;
+		}
+		if (stablePrefetchTimer) {
+			clearTimeout(stablePrefetchTimer);
+			stablePrefetchTimer = null;
+		}
 	}
 
 	// 辅助：从路径获取缩略图 URL（通过 key 查找）
@@ -267,6 +286,22 @@
 
 	const thumbnailCandidateSet = $derived(thumbnailCandidates.set);
 
+	$effect(() => {
+		const nextContextId = thumbnailContextId;
+		const nextActive = isActive;
+		const shouldCancelPrevious =
+			lastThumbnailContextId &&
+			(lastThumbnailContextId !== nextContextId || (lastThumbnailActive && !nextActive));
+
+		if (shouldCancelPrevious) {
+			clearPendingThumbnailWork();
+			void unifiedThumbnailStore.cancelContext(lastThumbnailContextId);
+		}
+
+		lastThumbnailContextId = nextContextId;
+		lastThumbnailActive = nextActive;
+	});
+
 	function collectVisiblePathsCenterFirst(startIndex: number, endIndex: number): string[] {
 		const center = Math.floor((startIndex + endIndex) / 2);
 		const result: string[] = [];
@@ -351,18 +386,22 @@
 	}
 
 	function scheduleStablePrefetch(startIndex: number, endIndex: number, visiblePaths: string[]) {
+		if (!isActive) return;
 		if (stablePrefetchTimer) {
 			clearTimeout(stablePrefetchTimer);
 		}
 
 		stablePrefetchTimer = setTimeout(() => {
 			stablePrefetchTimer = null;
+			if (!isActive) return;
 			scheduleIdleTask(() => {
+				if (!isActive) return;
+				if (unifiedThumbnailStore.getStats().loading > MAX_PREFETCH_WHILE_LOADING) return;
 				const allPaths = collectPrefetchPaths(startIndex, endIndex, visiblePaths);
 				if (allPaths.length === 0) return;
 				void unifiedThumbnailStore.requestThumbnails(
 					pathsToThumbRequests(allPaths),
-					currentPath,
+					thumbnailContextId,
 					'prefetch'
 				);
 			}, 500);
@@ -370,7 +409,7 @@
 	}
 
 	const handleVisibleRangeChange = debounce(() => {
-		if (!currentPath || items.length === 0 || virtualItems.length === 0) return;
+		if (!isActive || !currentPath || items.length === 0 || virtualItems.length === 0) return;
 
 		// 计算可见范围（按项目索引，考虑多列）
 		const startRowIndex = virtualItems[0].index;
@@ -385,7 +424,7 @@
 		// 统一缩略图系统: 请求可见区域缩略图
 		unifiedThumbnailStore.requestThumbnails(
 			pathsToThumbRequests(visiblePaths),
-			currentPath,
+			thumbnailContextId,
 			'visible',
 			center
 		);
@@ -395,9 +434,11 @@
 	}, 24); // 24ms debounce（约1.5帧，兼顾响应与稳定）
 
 	function scheduleVisibleRangeChange() {
+		if (!isActive) return;
 		if (visibleRangeRaf !== null) return;
 		visibleRangeRaf = requestAnimationFrame(() => {
 			visibleRangeRaf = null;
+			if (!isActive) return;
 			handleVisibleRangeChange();
 		});
 
@@ -411,7 +452,23 @@
 	$effect(() => {
 		const firstRow = virtualItems.length > 0 ? virtualItems[0].index : -1;
 		const lastRow = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
-		const requestKey = `${currentPath}|${items.length}|${columns}|${firstRow}|${lastRow}|${viewMode}`;
+		const firstIndex = firstRow >= 0 ? firstRow * columns : -1;
+		const lastIndex = lastRow >= 0 ? Math.min((lastRow + 1) * columns - 1, items.length - 1) : -1;
+		const visiblePathSignature =
+			firstIndex >= 0 && lastIndex >= firstIndex
+				? items
+						.slice(firstIndex, lastIndex + 1)
+						.map((item) => item?.path ?? '')
+						.join('|')
+				: 'empty';
+		const requestKey = `${isActive ? 'active' : 'inactive'}|${currentPath}|${columns}|${firstRow}|${lastRow}|${viewMode}|${visiblePathSignature}`;
+		if (!isActive) {
+			if (requestKey !== lastVisibleRequestKey) {
+				clearPendingThumbnailWork();
+				lastVisibleRequestKey = requestKey;
+			}
+			return;
+		}
 		if (requestKey === lastVisibleRequestKey) return;
 		lastVisibleRequestKey = requestKey;
 		scheduleVisibleRangeChange();
@@ -420,7 +477,7 @@
 	// 恢复特定路径的滚动位置
 	function restoreScrollPosition() {
 		if (!container) return;
-		
+
 		isRestoringScroll = true;
 		const path = currentPath;
 		const savedScroll = scrollPositions.get(path) ?? 0;
@@ -479,13 +536,9 @@
 
 	onDestroy(() => {
 		resizeObserver?.disconnect();
-		if (visibleRangeRaf !== null) {
-			cancelAnimationFrame(visibleRangeRaf);
-			visibleRangeRaf = null;
-		}
-		if (stablePrefetchTimer) {
-			clearTimeout(stablePrefetchTimer);
-			stablePrefetchTimer = null;
+		clearPendingThumbnailWork();
+		if (lastThumbnailContextId) {
+			void unifiedThumbnailStore.cancelContext(lastThumbnailContextId);
 		}
 	});
 

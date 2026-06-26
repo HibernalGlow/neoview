@@ -38,11 +38,11 @@ impl UnifiedDecoder {
         match ext.as_deref() {
             // Requirements 2.2: JXL 格式使用 jxl-oxide 作为主后端
             Some("jxl") => DecodeBackend::JxlOxide,
-            
+
             // Requirements 2.1: Windows 上优先使用 WIC
             #[cfg(target_os = "windows")]
             Some(ext) if WicDecoder::new().supports_format(ext) => DecodeBackend::Wic,
-            
+
             // 其他情况使用 image crate
             _ => DecodeBackend::ImageCrate,
         }
@@ -52,7 +52,7 @@ impl UnifiedDecoder {
     /// Requirements 6.1, 6.2, 6.4: 使用 catch_unwind 捕获 panic
     pub fn decode_safe(&self, data: &[u8]) -> Result<DecodedImage, DecodeError> {
         let format = self.format_hint.clone();
-        
+
         catch_unwind(AssertUnwindSafe(|| {
             self.decode_internal(data, format.as_deref())
         }))
@@ -71,7 +71,11 @@ impl UnifiedDecoder {
     }
 
     /// 内部解码实现
-    fn decode_internal(&self, data: &[u8], format: Option<&str>) -> Result<DecodedImage, DecodeError> {
+    fn decode_internal(
+        &self,
+        data: &[u8],
+        format: Option<&str>,
+    ) -> Result<DecodedImage, DecodeError> {
         let backend = self.select_backend(format);
 
         match backend {
@@ -100,9 +104,7 @@ impl UnifiedDecoder {
                     ImageCrateDecoder::new().decode(data)
                 })
             }
-            DecodeBackend::ImageCrate => {
-                ImageCrateDecoder::new().decode(data)
-            }
+            DecodeBackend::ImageCrate => ImageCrateDecoder::new().decode(data),
             #[cfg(not(target_os = "windows"))]
             DecodeBackend::Wic => {
                 // 非 Windows 平台不支持 WIC
@@ -124,26 +126,30 @@ impl UnifiedDecoder {
         match backend {
             DecodeBackend::JxlOxide => {
                 let decoder = JxlDecoder::new();
-                decoder.decode_with_scale(data, max_width, max_height).or_else(|_| {
-                    #[cfg(target_os = "windows")]
-                    {
-                        WicDecoder::new().decode_with_scale(data, max_width, max_height)
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        Err(DecodeError::DecodeFailed {
-                            backend: DecodeBackend::JxlOxide,
-                            message: "JXL 解码失败".to_string(),
-                        })
-                    }
-                })
+                decoder
+                    .decode_with_scale(data, max_width, max_height)
+                    .or_else(|_| {
+                        #[cfg(target_os = "windows")]
+                        {
+                            WicDecoder::new().decode_with_scale(data, max_width, max_height)
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            Err(DecodeError::DecodeFailed {
+                                backend: DecodeBackend::JxlOxide,
+                                message: "JXL 解码失败".to_string(),
+                            })
+                        }
+                    })
             }
             #[cfg(target_os = "windows")]
             DecodeBackend::Wic => {
                 let decoder = WicDecoder::new();
-                decoder.decode_with_scale(data, max_width, max_height).or_else(|_| {
-                    ImageCrateDecoder::new().decode_with_scale(data, max_width, max_height)
-                })
+                decoder
+                    .decode_with_scale(data, max_width, max_height)
+                    .or_else(|_| {
+                        ImageCrateDecoder::new().decode_with_scale(data, max_width, max_height)
+                    })
             }
             DecodeBackend::ImageCrate => {
                 ImageCrateDecoder::new().decode_with_scale(data, max_width, max_height)
@@ -174,7 +180,7 @@ impl ImageDecoder for UnifiedDecoder {
         max_height: u32,
     ) -> Result<DecodedImage, DecodeError> {
         let format = self.format_hint.clone();
-        
+
         catch_unwind(AssertUnwindSafe(|| {
             self.decode_with_scale_internal(data, max_width, max_height, format.as_deref())
         }))
@@ -206,18 +212,18 @@ impl ImageDecoder for UnifiedDecoder {
 
     fn supports_format(&self, extension: &str) -> bool {
         let ext = extension.to_lowercase();
-        
+
         // JXL 支持
         if ext == "jxl" {
             return true;
         }
-        
+
         // WIC 支持 (Windows)
         #[cfg(target_os = "windows")]
         if WicDecoder::new().supports_format(&ext) {
             return true;
         }
-        
+
         // image crate 支持
         ImageCrateDecoder::new().supports_format(&ext)
     }

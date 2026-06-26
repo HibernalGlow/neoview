@@ -44,9 +44,7 @@ where
                     path.display(),
                     error
                 );
-                std::thread::sleep(std::time::Duration::from_millis(
-                    120 * (attempt as u64 + 1),
-                ));
+                std::thread::sleep(std::time::Duration::from_millis(120 * (attempt as u64 + 1)));
             }
         }
     }
@@ -126,7 +124,11 @@ impl FsManager {
     pub fn add_allowed_root(&mut self, root: PathBuf) {
         if root.is_absolute() {
             let canonical_root = root.canonicalize().unwrap_or(root);
-            if !self.allowed_roots.iter().any(|existing| existing == &canonical_root) {
+            if !self
+                .allowed_roots
+                .iter()
+                .any(|existing| existing == &canonical_root)
+            {
                 self.allowed_roots.push(canonical_root);
             }
         }
@@ -617,7 +619,8 @@ impl FsManager {
                 let _ = tx.send(result);
             })
             .map_err(|e| format!("Failed to spawn trash thread: {}", e))?;
-        rx.recv().map_err(|_| "trash thread channel closed".to_string())?
+        rx.recv()
+            .map_err(|_| "trash thread channel closed".to_string())?
     }
 
     /// 复制文件或目录
@@ -741,7 +744,9 @@ impl FsManager {
                     if is_indexed_root {
                         can_use_index = true;
                     } else {
-                        println!("🔍 [Rust Search] Index does not cover path, fallback to rust_search");
+                        println!(
+                            "🔍 [Rust Search] Index does not cover path, fallback to rust_search"
+                        );
                     }
                 }
             } else if has_index && search_in_path {
@@ -752,44 +757,47 @@ impl FsManager {
         if can_use_index {
             // 使用索引搜索
             if let Ok(mut results) = self.search_with_index(query, max_results) {
+                println!(
+                    "🔍 [Rust Search] Index search returned {} results",
+                    results.len()
+                );
+
+                // 如果指定了路径，过滤结果（Windows 使用大小写不敏感 + 统一分隔符）
+                if path.to_string_lossy() != "/" {
+                    let path_str = path.to_string_lossy();
+                    let normalized_root = normalize_path_for_compare(&path_str);
+
+                    results = results
+                        .into_iter()
+                        .filter(|item| {
+                            normalize_path_for_compare(&item.path).starts_with(&normalized_root)
+                        })
+                        .collect();
                     println!(
-                        "🔍 [Rust Search] Index search returned {} results",
+                        "🔍 [Rust Search] After path filter: {} results",
                         results.len()
                     );
 
-                    // 如果指定了路径，过滤结果（Windows 使用大小写不敏感 + 统一分隔符）
-                    if path.to_string_lossy() != "/" {
-                        let path_str = path.to_string_lossy();
-                        let normalized_root = normalize_path_for_compare(&path_str);
-
+                    // 如果不包含子文件夹，只返回当前目录的结果
+                    if !include_subfolders {
                         results = results
                             .into_iter()
-                            .filter(|item| normalize_path_for_compare(&item.path).starts_with(&normalized_root))
+                            .filter(|item| {
+                                let item_path = Path::new(&item.path);
+                                if let Some(parent) = item_path.parent() {
+                                    normalize_path_for_compare(&parent.to_string_lossy())
+                                        == normalized_root
+                                } else {
+                                    false
+                                }
+                            })
                             .collect();
                         println!(
-                            "🔍 [Rust Search] After path filter: {} results",
+                            "🔍 [Rust Search] After subfolder filter: {} results",
                             results.len()
                         );
-
-                        // 如果不包含子文件夹，只返回当前目录的结果
-                        if !include_subfolders {
-                            results = results
-                                .into_iter()
-                                .filter(|item| {
-                                    let item_path = Path::new(&item.path);
-                                    if let Some(parent) = item_path.parent() {
-                                        normalize_path_for_compare(&parent.to_string_lossy()) == normalized_root
-                                    } else {
-                                        false
-                                    }
-                                })
-                                .collect();
-                            println!(
-                                "🔍 [Rust Search] After subfolder filter: {} results",
-                                results.len()
-                            );
-                        }
                     }
+                }
 
                 println!("🔍 [Rust Search] Returning {} index results", results.len());
                 return Ok(results);
@@ -839,7 +847,10 @@ impl FsManager {
             // 根据 search_in_path 选项过滤结果
             let matches = if search_in_path {
                 // 在完整路径中搜索
-                entry_path.to_string_lossy().to_lowercase().contains(&query_lower)
+                entry_path
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .contains(&query_lower)
             } else {
                 // 只在文件名中搜索
                 name.to_lowercase().contains(&query_lower)
@@ -853,13 +864,8 @@ impl FsManager {
 
             // 获取元数据
             if let Ok(metadata) = entry.metadata() {
-
                 let is_dir = metadata.is_dir();
-                let size = if is_dir {
-                    0
-                } else {
-                    metadata.len()
-                };
+                let size = if is_dir { 0 } else { metadata.len() };
 
                 let modified = metadata
                     .modified()

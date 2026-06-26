@@ -75,6 +75,14 @@ import {
 	toggleShowMigrationBar
 } from './selectionState.svelte';
 
+const FOLDER_PANEL_DEBUG = false;
+
+function debugFolderPanel(...args: unknown[]): void {
+	if (FOLDER_PANEL_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 // ============ Sorting Utilities ============
 
 function seededRandom(seed: number): () => number {
@@ -315,7 +323,7 @@ export const folderPanelActions = {
 			}
 		}
 		externalNavigationRequest.set({ path: dirPath, timestamp: Date.now() });
-		console.log('[FolderPanelStore] navigateToPath:', dirPath);
+		debugFolderPanel('[FolderPanelStore] navigateToPath:', dirPath);
 	},
 
 	getHistory(): HistoryRecord {
@@ -455,7 +463,7 @@ export const folderPanelActions = {
 		const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
 		if (targetIndex < 0 || targetIndex >= bookItems.length) return null;
 
-		console.log('[getAdjacentBookFromCurrentList] 找到目标', {
+		debugFolderPanel('[getAdjacentBookFromCurrentList] 找到目标', {
 			direction,
 			currentIndex,
 			targetIndex,
@@ -558,7 +566,7 @@ export const folderPanelActions = {
 		const sortField = options?.sortField ?? currentState.sortField;
 		const sortOrder = options?.sortOrder ?? currentState.sortOrder;
 
-		console.log('[findAdjacentBookPathAsync] 开始查找', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 开始查找', {
 			currentBookPath,
 			direction,
 			sortField,
@@ -567,7 +575,7 @@ export const folderPanelActions = {
 		let itemsToUse = currentState.items;
 		let dirPath = currentState.currentPath;
 
-		console.log('[findAdjacentBookPathAsync] 当前状态', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 当前状态', {
 			currentPath: dirPath,
 			itemsCount: itemsToUse.length,
 			sortField,
@@ -584,13 +592,13 @@ export const folderPanelActions = {
 			}
 		}
 
-		console.log('[findAdjacentBookPathAsync] 推断的父目录', { expectedParentDir });
+		debugFolderPanel('[findAdjacentBookPathAsync] 推断的父目录', { expectedParentDir });
 
 		const normalizedCurrentPath = dirPath ? normalizePath(dirPath) : null;
 		const normalizedBookPath = currentBookPath ? normalizePath(currentBookPath) : null;
 		const normalizedExpectedParent = expectedParentDir ? normalizePath(expectedParentDir) : null;
 
-		console.log('[findAdjacentBookPathAsync] 路径比较', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 路径比较', {
 			normalizedCurrentPath,
 			normalizedBookPath,
 			normalizedExpectedParent,
@@ -604,14 +612,14 @@ export const folderPanelActions = {
 			normalizedBookPath &&
 			normalizedCurrentPath === normalizedBookPath
 		) {
-			console.log('[findAdjacentBookPathAsync] 当前目录就是 book 本身，切换到父目录');
+			debugFolderPanel('[findAdjacentBookPathAsync] 当前目录就是 book 本身，切换到父目录');
 			// 当前目录就是 book 本身，需要切换到父目录
 			if (expectedParentDir) {
 				dirPath = expectedParentDir;
 				try {
 					itemsToUse = await browseDirectory(dirPath);
 					setCachedDirectory(dirPath, itemsToUse);
-					console.log('[findAdjacentBookPathAsync] 加载父目录成功', {
+					debugFolderPanel('[findAdjacentBookPathAsync] 加载父目录成功', {
 						itemsCount: itemsToUse.length
 					});
 				} catch (e) {
@@ -623,7 +631,7 @@ export const folderPanelActions = {
 		// 检查当前 folderPanel 显示的目录是否是书籍所在的父目录
 		// 如果不是（例如用户导航到了别处），需要加载正确的目录
 		else if (normalizedExpectedParent && normalizedCurrentPath !== normalizedExpectedParent) {
-			console.log(
+			debugFolderPanel(
 				'[findAdjacentBookPathAsync] folderPanel 显示的不是书籍所在目录，需要加载正确目录'
 			);
 			// folderPanel 当前显示的不是书籍所在目录，需要加载正确的父目录
@@ -633,12 +641,14 @@ export const folderPanelActions = {
 				const cached = getCachedDirectory(dirPath);
 				if (cached && cached.length > 0) {
 					itemsToUse = cached;
-					console.log('[findAdjacentBookPathAsync] 使用缓存', { itemsCount: itemsToUse.length });
+					debugFolderPanel('[findAdjacentBookPathAsync] 使用缓存', {
+						itemsCount: itemsToUse.length
+					});
 				} else {
 					try {
 						itemsToUse = await browseDirectory(dirPath);
 						setCachedDirectory(dirPath, itemsToUse);
-						console.log('[findAdjacentBookPathAsync] 加载目录成功', {
+						debugFolderPanel('[findAdjacentBookPathAsync] 加载目录成功', {
 							itemsCount: itemsToUse.length
 						});
 					} catch (e) {
@@ -648,11 +658,11 @@ export const folderPanelActions = {
 				}
 			}
 		} else {
-			console.log('[findAdjacentBookPathAsync] 使用当前 folderPanel 的 items');
+			debugFolderPanel('[findAdjacentBookPathAsync] 使用当前 folderPanel 的 items');
 		}
 
 		if (itemsToUse.length === 0) {
-			console.log('[findAdjacentBookPathAsync] items 为空，尝试加载目录');
+			debugFolderPanel('[findAdjacentBookPathAsync] items 为空，尝试加载目录');
 			if (expectedParentDir) {
 				dirPath = expectedParentDir;
 				try {
@@ -665,31 +675,31 @@ export const folderPanelActions = {
 			}
 		}
 		if (itemsToUse.length === 0) {
-			console.log('[findAdjacentBookPathAsync] 没有可用的 items，返回 null');
+			debugFolderPanel('[findAdjacentBookPathAsync] 没有可用的 items，返回 null');
 			return null;
 		}
 
-		console.log(
+		debugFolderPanel(
 			'[findAdjacentBookPathAsync] 排序前 items 样本',
 			itemsToUse.slice(0, 5).map((i) => ({ name: i.name, path: i.path, isDir: i.isDir }))
 		);
 
 		const sortedItemList = sortItems(itemsToUse, sortField, sortOrder, dirPath);
 
-		console.log(
+		debugFolderPanel(
 			'[findAdjacentBookPathAsync] 排序后 items 样本',
 			sortedItemList.slice(0, 5).map((i) => ({ name: i.name, path: i.path, isDir: i.isDir }))
 		);
 
 		const bookItems = sortedItemList.filter(isBookCandidate);
 
-		console.log('[findAdjacentBookPathAsync] 过滤后 bookItems', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 过滤后 bookItems', {
 			count: bookItems.length,
 			sample: bookItems.slice(0, 10).map((i) => ({ name: i.name, path: i.path, isDir: i.isDir }))
 		});
 
 		if (bookItems.length === 0) {
-			console.log('[findAdjacentBookPathAsync] 没有 bookItems，返回 null');
+			debugFolderPanel('[findAdjacentBookPathAsync] 没有 bookItems，返回 null');
 			return null;
 		}
 
@@ -698,32 +708,32 @@ export const folderPanelActions = {
 			(item) => normalizedCurrent && normalizePath(item.path) === normalizedCurrent
 		);
 
-		console.log('[findAdjacentBookPathAsync] 查找当前书籍索引', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 查找当前书籍索引', {
 			normalizedCurrent,
 			currentIndex,
 			matchedItem: currentIndex >= 0 ? bookItems[currentIndex]?.name : null
 		});
 
 		if (currentIndex === -1) {
-			console.log('[findAdjacentBookPathAsync] 未找到当前书籍，使用边界值');
+			debugFolderPanel('[findAdjacentBookPathAsync] 未找到当前书籍，使用边界值');
 			currentIndex = direction === 'next' ? -1 : bookItems.length;
 		}
 
 		const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
 
-		console.log('[findAdjacentBookPathAsync] 计算目标索引', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 计算目标索引', {
 			currentIndex,
 			targetIndex,
 			direction
 		});
 
 		if (targetIndex < 0 || targetIndex >= bookItems.length) {
-			console.log('[findAdjacentBookPathAsync] 目标索引越界，返回 null');
+			debugFolderPanel('[findAdjacentBookPathAsync] 目标索引越界，返回 null');
 			return null;
 		}
 
 		const result = bookItems[targetIndex].path;
-		console.log('[findAdjacentBookPathAsync] 返回结果', {
+		debugFolderPanel('[findAdjacentBookPathAsync] 返回结果', {
 			targetPath: result,
 			targetName: bookItems[targetIndex].name
 		});

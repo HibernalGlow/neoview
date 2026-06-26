@@ -56,7 +56,7 @@ pub async fn ollama_check_status(api_url: String) -> Result<bool, String> {
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     let url = format!("{}/api/tags", api_url.trim_end_matches('/'));
-    
+
     match client.get(&url).send().await {
         Ok(response) => Ok(response.status().is_success()),
         Err(_) => Ok(false),
@@ -72,7 +72,7 @@ pub async fn ollama_get_models(api_url: String) -> Result<Vec<OllamaModel>, Stri
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     let url = format!("{}/api/tags", api_url.trim_end_matches('/'));
-    
+
     let response = client
         .get(&url)
         .send()
@@ -106,7 +106,7 @@ pub async fn ollama_generate(
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     let url = format!("{}/api/generate", api_url.trim_end_matches('/'));
-    
+
     let request = OllamaGenerateRequest {
         model,
         prompt,

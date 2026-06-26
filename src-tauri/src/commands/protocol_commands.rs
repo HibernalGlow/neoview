@@ -1,7 +1,7 @@
 //! Custom Protocol 相关命令
 //! 提供路径注册和协议状态管理功能
 
-use crate::core::custom_protocol::ProtocolState;
+use crate::core::custom_protocol::{ProtocolState, ScaledProtocolStats};
 use crate::core::mmap_archive::MmapCacheStats;
 use std::path::PathBuf;
 use tauri::State;
@@ -19,11 +19,11 @@ pub fn register_book_path(path: String, state: State<'_, ProtocolState>) -> Resu
     log::debug!("📝 注册路径: {} -> {}", path, hash);
 
     // 压缩包：立即预热元数据缓存，避免首图请求时的延迟
-    let ext = path_buf
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-    if matches!(ext.to_lowercase().as_str(), "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7") {
+    let ext = path_buf.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if matches!(
+        ext.to_lowercase().as_str(),
+        "zip" | "rar" | "7z" | "cbz" | "cbr" | "cb7"
+    ) {
         let book_key = ProtocolState::parse_book_key(&hash);
         let _ = state.get_or_cache_metadata(book_key, &hash, &path_buf);
     }
@@ -52,6 +52,11 @@ pub fn batch_register_paths(
 #[tauri::command]
 pub fn get_mmap_cache_stats(state: State<'_, ProtocolState>) -> MmapCacheStats {
     state.mmap_cache.stats()
+}
+
+#[tauri::command]
+pub fn get_scaled_protocol_stats(state: State<'_, ProtocolState>) -> ScaledProtocolStats {
+    state.scaled_protocol_stats()
 }
 
 /// 清除内存映射缓存

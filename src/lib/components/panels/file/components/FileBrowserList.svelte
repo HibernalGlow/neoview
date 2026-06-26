@@ -4,6 +4,14 @@
 	import { enqueueVisible, bumpPriority } from '$lib/utils/thumbnailManager';
 	import { Folder, File, Image, FileArchive } from '@lucide/svelte';
 
+	const FILE_BROWSER_LIST_DEBUG = false;
+
+	function debugFileBrowserList(...args: unknown[]): void {
+		if (FILE_BROWSER_LIST_DEBUG) {
+			console.debug(...args);
+		}
+	}
+
 	let {
 		items = [],
 		currentPath = '',
@@ -19,11 +27,12 @@
 
 	let fileListContainer = $state<HTMLDivElement | undefined>(undefined);
 	let visibleRange = $state({ start: 0, end: 30 });
+	let lastVisibleRangeKey = '';
 	let itemHeight = 60; // 估计的每个项目高度
 	let containerHeight = 600; // 估计的容器高度
 
 	// 计算可见范围
-	function updateVisibleRange() {
+	function updateVisibleRange(force = false) {
 		if (!fileListContainer) return;
 
 		const scrollTop = fileListContainer.scrollTop;
@@ -32,7 +41,12 @@
 		const start = Math.floor(scrollTop / itemHeight);
 		const visibleCount = Math.ceil(containerHeight / itemHeight);
 		const end = Math.min(start + visibleCount + 5, items.length); // 预加载5个额外的项目
+		const rangeKey = `${currentPath}|${items.length}|${start}|${end}`;
+		if (!force && rangeKey === lastVisibleRangeKey) {
+			return;
+		}
 
+		lastVisibleRangeKey = rangeKey;
 		visibleRange = { start, end };
 
 		// 触发可见范围变化事件
@@ -63,7 +77,7 @@
 		});
 
 		if (needThumbnails.length > 0) {
-			console.log(
+			debugFileBrowserList(
 				`👁️ 可见范围更新: ${visibleRange.start}-${visibleRange.end}, 需要缩略图: ${needThumbnails.length}`
 			);
 			// 过滤出路径字符串数组
@@ -127,14 +141,14 @@
 		if (fileListContainer) {
 			// 更新容器高度
 			containerHeight = fileListContainer.clientHeight;
-			updateVisibleRange();
+			updateVisibleRange(true);
 		}
 	});
 
 	// 监听项目变化
 	$effect(() => {
 		if (items.length > 0) {
-			updateVisibleRange();
+			updateVisibleRange(true);
 		}
 	});
 </script>

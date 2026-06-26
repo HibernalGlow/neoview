@@ -21,6 +21,13 @@ import { isAnimatedImageVideoCandidate } from '$lib/utils/animatedVideoModeUtils
 // 全局标记防止 HMR 导致多次监听
 let globalListenerInitialized = false;
 let globalUnlistenReady: UnlistenFn | null = null;
+const UPSCALE_DEBUG = false;
+
+function debugUpscale(...args: unknown[]): void {
+	if (UPSCALE_DEBUG) {
+		console.debug(...args);
+	}
+}
 
 // ============================================================================
 // 类型定义
@@ -219,7 +226,7 @@ class UpscaleStore {
 
 			if (thumbnailDir) {
 				await syncSettingsToStartupConfig({ thumbnailDirectory: thumbnailDir });
-				console.log('✅ 已同步缓存目录到 startup_config.json:', thumbnailDir);
+				debugUpscale('✅ 已同步缓存目录到 startup_config.json:', thumbnailDir);
 			}
 		} catch (err) {
 			console.warn('⚠️ 同步缓存目录失败:', err);
@@ -228,7 +235,7 @@ class UpscaleStore {
 		// 初始化后端服务（后端从 config.json 读取缓存目录）
 		try {
 			await invoke('upscale_service_init');
-			console.log('✅ 后端 UpscaleService 初始化完成');
+			debugUpscale('✅ 后端 UpscaleService 初始化完成');
 		} catch (err) {
 			console.error('❌ 后端 UpscaleService 初始化失败:', err);
 		}
@@ -246,7 +253,7 @@ class UpscaleStore {
 				upscaleStore.handleUpscaleReadyPublic(event.payload);
 			});
 			globalListenerInitialized = true;
-			console.log('✅ 全局超分事件监听器已注册');
+			debugUpscale('✅ 全局超分事件监听器已注册');
 		}
 
 		this.unlistenReady = globalUnlistenReady;
@@ -255,7 +262,7 @@ class UpscaleStore {
 		try {
 			const { loadUpscalePanelSettings } = await import('$lib/components/panels/UpscalePanel');
 			const panelSettings = loadUpscalePanelSettings();
-			console.log('📋 [upscaleStore] 加载面板设置:', {
+			debugUpscale('📋 [upscaleStore] 加载面板设置:', {
 				autoUpscaleEnabled: panelSettings.autoUpscaleEnabled,
 				conditionalUpscaleEnabled: panelSettings.conditionalUpscaleEnabled,
 				conditionsCount: panelSettings.conditionsList?.length ?? 0
@@ -265,9 +272,9 @@ class UpscaleStore {
 			if (typeof panelSettings.autoUpscaleEnabled === 'boolean') {
 				this.state.enabled = panelSettings.autoUpscaleEnabled;
 				await invoke('upscale_service_set_enabled', { enabled: panelSettings.autoUpscaleEnabled });
-				console.log('✅ 同步超分开关:', panelSettings.autoUpscaleEnabled);
+				debugUpscale('✅ 同步超分开关:', panelSettings.autoUpscaleEnabled);
 			} else {
-				console.log('⚠️ autoUpscaleEnabled 未定义，使用默认值 false');
+				debugUpscale('⚠️ autoUpscaleEnabled 未定义，使用默认值 false');
 			}
 
 			// 2. 同步条件超分设置（包括条件列表）
@@ -278,7 +285,7 @@ class UpscaleStore {
 		}
 
 		this.initialized = true;
-		console.log('✅ UpscaleStore V2 initialized');
+		debugUpscale('✅ UpscaleStore V2 initialized');
 	}
 
 	/** 同步条件设置到后端（初始化时调用，或运行时条件变动） */
@@ -326,7 +333,7 @@ class UpscaleStore {
 		} catch (err) {
 			const errMsg = String(err);
 			if (errMsg.includes('未初始化')) {
-				console.log('ℹ️ UpscaleService 未初始化，条件设置将在下次打开书籍时生效');
+				debugUpscale('ℹ️ UpscaleService 未初始化，条件设置将在下次打开书籍时生效');
 			} else {
 				console.warn('⚠️ 同步条件设置失败:', err);
 			}
@@ -343,7 +350,7 @@ class UpscaleStore {
 		// 清除超分状态
 		this.state.pageStatus.clear();
 		this.initialized = false;
-		console.log('🛑 UpscaleStore destroyed');
+		debugUpscale('🛑 UpscaleStore destroyed');
 	}
 
 	/** 启用/禁用超分 */
@@ -368,11 +375,11 @@ class UpscaleStore {
 				this.state.loading = false;
 			} else {
 				// 启用时触发当前页和预加载范围的超分
-				console.log('🔄 超分已启用，开始检查当前页和预加载范围...');
+				debugUpscale('🔄 超分已启用，开始检查当前页和预加载范围...');
 				await this.triggerCurrentPageUpscale();
 			}
 
-			console.log(`🔄 超分${enabled ? '已启用' : '已禁用'}（已持久化）`);
+			debugUpscale(`🔄 超分${enabled ? '已启用' : '已禁用'}（已持久化）`);
 		} catch (err) {
 			console.error('设置超分状态失败:', err);
 		}
@@ -381,7 +388,7 @@ class UpscaleStore {
 	/** 触发当前页和预加载范围的超分（启用时或页面变化时调用） */
 	async triggerCurrentPageUpscale() {
 		if (!this.state.enabled || !this.state.currentBookPath) {
-			console.log(
+			debugUpscale(
 				'⏭️ 跳过超分触发: enabled=',
 				this.state.enabled,
 				'bookPath=',
@@ -397,7 +404,7 @@ class UpscaleStore {
 		const pageIndex = this.state.currentPageIndex;
 
 		if (!book || !book.pages || pageIndex >= book.pages.length) {
-			console.log('⏭️ 跳过超分触发: 无有效书籍或页面');
+			debugUpscale('⏭️ 跳过超分触发: 无有效书籍或页面');
 			return;
 		}
 
@@ -440,10 +447,10 @@ class UpscaleStore {
 			}
 		}
 
-		console.log(`📸 触发超分: 当前页 ${pageIndex}, 预加载范围 ${imageInfos.length} 页`);
+		debugUpscale(`📸 触发超分: 当前页 ${pageIndex}, 预加载范围 ${imageInfos.length} 页`);
 
 		// 请求预加载范围的超分
-		console.log(
+		debugUpscale(
 			`📸 调用 requestPreloadRange: bookPath=${this.state.currentBookPath}, enabled=${this.state.enabled}`
 		);
 		await this.requestPreloadRange(
@@ -457,7 +464,7 @@ class UpscaleStore {
 	/** 触发递进超分（从已超分的最后一页向后扩展） */
 	async triggerProgressiveUpscale(currentPageIndex: number, maxPages: number) {
 		if (!this.state.enabled || !this.state.currentBookPath) {
-			console.log(
+			debugUpscale(
 				'⏭️ 跳过递进超分: enabled=',
 				this.state.enabled,
 				'bookPath=',
@@ -471,7 +478,7 @@ class UpscaleStore {
 
 		const book = bookStore.currentBook;
 		if (!book || !book.pages) {
-			console.log('⏭️ 跳过递进超分: 无有效书籍');
+			debugUpscale('⏭️ 跳过递进超分: 无有效书籍');
 			return;
 		}
 
@@ -489,7 +496,7 @@ class UpscaleStore {
 		const startPage = lastUpscaledIndex + 1;
 
 		if (startPage >= book.pages.length) {
-			console.log('📸 递进超分: 已到达书籍末尾');
+			debugUpscale('📸 递进超分: 已到达书籍末尾');
 			return;
 		}
 
@@ -527,11 +534,11 @@ class UpscaleStore {
 		}
 
 		if (imageInfos.length === 0) {
-			console.log('📸 递进超分: 范围内所有页面已超分');
+			debugUpscale('📸 递进超分: 范围内所有页面已超分');
 			return;
 		}
 
-		console.log(`📸 递进超分: 从第 ${startPage + 1} 页开始，共 ${imageInfos.length} 页待处理`);
+		debugUpscale(`📸 递进超分: 从第 ${startPage + 1} 页开始，共 ${imageInfos.length} 页待处理`);
 
 		// 请求超分
 		await this.requestPreloadRange(
@@ -549,7 +556,7 @@ class UpscaleStore {
 
 	/** 设置当前书籍 */
 	async setCurrentBook(bookPath: string | null) {
-		console.log('📚 [upscaleStore] setCurrentBook 调用:', {
+		debugUpscale('📚 [upscaleStore] setCurrentBook 调用:', {
 			newPath: bookPath,
 			oldPath: this.state.currentBookPath,
 			enabled: this.state.enabled
@@ -560,7 +567,7 @@ class UpscaleStore {
 		}
 
 		if (this.state.currentBookPath === bookPath) {
-			console.log('📚 [upscaleStore] 书籍路径未变化，跳过');
+			debugUpscale('📚 [upscaleStore] 书籍路径未变化，跳过');
 			return;
 		}
 
@@ -570,11 +577,11 @@ class UpscaleStore {
 		}
 
 		this.state.currentBookPath = bookPath;
-		console.log('📚 [upscaleStore] 已更新 currentBookPath:', bookPath);
+		debugUpscale('📚 [upscaleStore] 已更新 currentBookPath:', bookPath);
 
 		try {
 			await invoke('upscale_service_set_current_book', { bookPath });
-			console.log('📚 [upscaleStore] 后端 set_current_book 成功');
+			debugUpscale('📚 [upscaleStore] 后端 set_current_book 成功');
 		} catch (err) {
 			console.error('设置当前书籍失败:', err);
 		}
@@ -644,11 +651,11 @@ class UpscaleStore {
 		totalPages: number,
 		imageInfos: Array<{ pageIndex: number; imagePath: string; hash: string }>
 	) {
-		console.log(
+		debugUpscale(
 			`📸 requestPreloadRange: enabled=${this.state.enabled}, bookPath=${bookPath}, imageInfos.length=${imageInfos.length}`
 		);
 		if (!this.state.enabled) {
-			console.log('📸 requestPreloadRange: 跳过，超分未启用');
+			debugUpscale('📸 requestPreloadRange: 跳过，超分未启用');
 			return;
 		}
 
@@ -758,7 +765,7 @@ class UpscaleStore {
 
 	/** 处理超分结果事件 */
 	handleUpscaleReadyPublic(payload: UpscaleReadyPayload) {
-		console.log(`📦 收到超分事件:`, {
+		debugUpscale(`📦 收到超分事件:`, {
 			bookPath: payload.bookPath?.slice(-30),
 			currentBookPath: this.state.currentBookPath?.slice(-30),
 			pageIndex: payload.pageIndex,
@@ -771,7 +778,7 @@ class UpscaleStore {
 
 		// 检查是否是当前书籍
 		if (payload.bookPath !== this.state.currentBookPath) {
-			console.log(`⚠️ 书籍路径不匹配，忽略事件`);
+			debugUpscale(`⚠️ 书籍路径不匹配，忽略事件`);
 			return;
 		}
 
@@ -806,7 +813,7 @@ class UpscaleStore {
 
 		// 如果完成且有缓存路径，记录超分完成
 		if (status === 'completed' && cachePath) {
-			console.log(`✅ 超分完成: page ${pageIndex}, cachePath=${cachePath.slice(-50)}`);
+			debugUpscale(`✅ 超分完成: page ${pageIndex}, cachePath=${cachePath.slice(-50)}`);
 		}
 
 		// 更新 loading 状态
@@ -814,7 +821,7 @@ class UpscaleStore {
 			this.state.loading = false;
 		}
 
-		console.log(`📸 超分结果: page ${pageIndex} -> ${status}`);
+		debugUpscale(`📸 超分结果: page ${pageIndex} -> ${status}`);
 	}
 
 	/** 更新页面状态 */

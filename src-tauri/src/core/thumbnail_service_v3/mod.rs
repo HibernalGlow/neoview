@@ -19,14 +19,14 @@ pub mod worker;
 // 重导出公共 API
 pub use config::ThumbnailServiceConfig;
 pub use types::{
-    detect_file_type, is_archive_file, is_likely_folder, CacheStats, ThumbnailBatchReadyPayload,
-    TaskLane, ThumbnailFileType, ThumbnailReadyPayload,
+    detect_file_type, is_archive_file, is_likely_folder, CacheStats, TaskLane,
+    ThumbnailBatchReadyPayload, ThumbnailFileType, ThumbnailReadyPayload,
 };
 
 // 内部使用
+use crate::core::request_dedup::RequestDeduplicator;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
-use crate::core::request_dedup::RequestDeduplicator;
 use lru::LruCache;
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
@@ -295,7 +295,12 @@ impl ThumbnailServiceV3 {
             if let Ok(mut dir) = self.current_dir.write() {
                 if *dir != current_dir {
                     let next_epoch = self.request_epoch.fetch_add(1, Ordering::AcqRel) + 1;
-                    log_debug!("📂 目录切换: {} -> {} (epoch={})", *dir, current_dir, next_epoch);
+                    log_debug!(
+                        "📂 目录切换: {} -> {} (epoch={})",
+                        *dir,
+                        current_dir,
+                        next_epoch
+                    );
                     *dir = current_dir.clone();
                 }
             }
@@ -386,7 +391,10 @@ impl ThumbnailServiceV3 {
         // 1. 立即批量发送内存缓存命中的（仅发 path，前端通过协议 URL 取数据）
         if !cached_paths.is_empty() {
             let payload = ThumbnailBatchReadyPayload {
-                items: cached_paths.into_iter().map(|path| ThumbnailReadyPayload { path }).collect(),
+                items: cached_paths
+                    .into_iter()
+                    .map(|path| ThumbnailReadyPayload { path })
+                    .collect(),
             };
             let _ = app.emit("thumbnail-batch-ready", payload);
         }
@@ -527,7 +535,10 @@ impl ThumbnailServiceV3 {
 
                 if elapsed_ms > target_ms && read_window > read_min {
                     read_window = read_window.saturating_sub(4).max(read_min);
-                } else if elapsed_ms < target_ms / 2 && chunk_paths.len() == read_window && read_window < read_max {
+                } else if elapsed_ms < target_ms / 2
+                    && chunk_paths.len() == read_window
+                    && read_window < read_max
+                {
                     read_window = (read_window + 4).min(read_max);
                 }
 
@@ -610,7 +621,8 @@ impl ThumbnailServiceV3 {
             let blob = Arc::<[u8]>::from(blob);
             if let Ok(mut c) = self.memory_cache.write() {
                 if c.peek(key).is_none() {
-                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    self.memory_cache_bytes
+                        .fetch_add(blob.len(), Ordering::SeqCst);
                     c.put(key.to_string(), blob.clone());
                 }
             }
@@ -620,7 +632,8 @@ impl ThumbnailServiceV3 {
             let blob = Arc::<[u8]>::from(blob);
             if let Ok(mut c) = self.memory_cache.write() {
                 if c.peek(key).is_none() {
-                    self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                    self.memory_cache_bytes
+                        .fetch_add(blob.len(), Ordering::SeqCst);
                     c.put(key.to_string(), blob.clone());
                 }
             }
@@ -671,7 +684,8 @@ impl ThumbnailServiceV3 {
             if let Ok(mut c) = self.memory_cache.write() {
                 for (path, blob) in db_loaded_for_cache {
                     if c.peek(path.as_str()).is_none() {
-                        self.memory_cache_bytes.fetch_add(blob.len(), Ordering::SeqCst);
+                        self.memory_cache_bytes
+                            .fetch_add(blob.len(), Ordering::SeqCst);
                         c.put(path, blob);
                     }
                 }
@@ -785,10 +799,9 @@ impl ThumbnailServiceV3 {
 
     /// 获取失败黑名单数量（内存 + DB）
     pub fn get_failed_count(&self) -> Result<(usize, usize), String> {
-        let memory_count = self.failed_index.read()
-            .map(|idx| idx.len())
-            .unwrap_or(0);
-        let db_count = self.db
+        let memory_count = self.failed_index.read().map(|idx| idx.len()).unwrap_or(0);
+        let db_count = self
+            .db
             .get_failed_count()
             .map_err(|e| format!("获取失败记录数量失败: {}", e))?;
         Ok((memory_count, db_count))
@@ -805,7 +818,8 @@ impl ThumbnailServiceV3 {
             0
         };
         // 2. 清除数据库中的失败记录
-        let db_cleared = self.db
+        let db_cleared = self
+            .db
             .clear_all_failed_thumbnails()
             .map_err(|e| format!("清除数据库失败记录失败: {}", e))?;
         log_info!(

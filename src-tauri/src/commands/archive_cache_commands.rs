@@ -28,7 +28,7 @@ pub async fn get_cache_stats(
     state: State<'_, Mutex<BookManager>>,
 ) -> Result<CacheStatusResponse, String> {
     let manager = state.lock().map_err(|e| e.to_string())?;
-    
+
     let index_cache = manager.index_cache().stats();
     let preheat_queue_size = manager.preheat_system().queue_size();
     let last_load_metrics = manager.performance_monitor().get_last_metrics();
@@ -42,9 +42,7 @@ pub async fn get_cache_stats(
 
 /// 清除索引缓存
 #[tauri::command]
-pub async fn clear_index_cache(
-    state: State<'_, Mutex<BookManager>>,
-) -> Result<(), String> {
+pub async fn clear_index_cache(state: State<'_, Mutex<BookManager>>) -> Result<(), String> {
     let manager = state.lock().map_err(|e| e.to_string())?;
     manager.index_cache().clear();
     log::info!("已清除索引缓存");
@@ -72,14 +70,14 @@ pub async fn preheat_adjacent_archives(
 ) -> Result<(), String> {
     let manager = state.lock().map_err(|e| e.to_string())?;
     let path_buf = PathBuf::from(&path);
-    
+
     // 触发预热
     manager.preheat_system().trigger(&path_buf);
-    
+
     // 执行预热任务
     let index_cache = Arc::clone(manager.index_cache());
     let preheat_system = Arc::clone(manager.preheat_system());
-    
+
     // 在后台线程执行预热
     std::thread::spawn(move || {
         preheat_system.execute_preheat(&index_cache);
@@ -90,9 +88,7 @@ pub async fn preheat_adjacent_archives(
 
 /// 取消预热任务
 #[tauri::command]
-pub async fn cancel_preheat(
-    state: State<'_, Mutex<BookManager>>,
-) -> Result<(), String> {
+pub async fn cancel_preheat(state: State<'_, Mutex<BookManager>>) -> Result<(), String> {
     let manager = state.lock().map_err(|e| e.to_string())?;
     manager.preheat_system().cancel();
     log::info!("已取消预热任务");
@@ -101,9 +97,7 @@ pub async fn cancel_preheat(
 
 /// 取消当前加载
 #[tauri::command]
-pub async fn cancel_current_load(
-    state: State<'_, Mutex<BookManager>>,
-) -> Result<(), String> {
+pub async fn cancel_current_load(state: State<'_, Mutex<BookManager>>) -> Result<(), String> {
     let manager = state.lock().map_err(|e| e.to_string())?;
     manager.command_queue().cancel_current();
     log::info!("已取消当前加载");

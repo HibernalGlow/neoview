@@ -30,8 +30,9 @@ pub use generation::{
 
 // 重导出检索命令
 pub use retrieval::{
-    get_folder_preview_image_paths, get_folder_preview_thumbnails, get_thumbnail_blob_data,
-    has_thumbnail, has_thumbnail_by_key_category, load_thumbnail_from_db,
+    get_folder_preview_candidates_v2, get_folder_preview_image_paths,
+    get_folder_preview_thumbnails, get_thumbnail_blob_data, has_thumbnail,
+    has_thumbnail_by_key_category, load_thumbnail_from_db,
     load_thumbnail_with_emm_json,
 };
 

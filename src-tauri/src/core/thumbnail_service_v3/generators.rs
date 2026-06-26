@@ -2,13 +2,30 @@
 //!
 //! 包含各类型文件的缩略图生成静态方法和辅助函数
 
-use std::path::Path;
+use serde::Serialize;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
 
 use super::log_debug;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPreviewCandidate {
+    pub path: String,
+    pub kind: FolderPreviewCandidateKind,
+    pub representative: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FolderPreviewCandidateKind {
+    File,
+    DirectoryCover,
+}
 
 /// 生成文件缩略图（静态方法，用于工作线程）
 /// 返回 (blob, path_key, size, ghash) 用于延迟保存
@@ -280,6 +297,148 @@ pub fn get_folder_preview_images(folder_path: &str, count: usize) -> Result<Vec<
     );
 
     Ok(results)
+}
+
+pub fn get_folder_preview_candidates_v2(
+    folder_path: &str,
+    count: usize,
+    max_depth: u32,
+    max_visited_dirs: usize,
+    max_entries_per_dir: usize,
+    budget_ms: u64,
+) -> Result<Vec<FolderPreviewCandidate>, String> {
+    let max_count = count.clamp(1, 16);
+    let max_depth = max_depth.clamp(1, 16);
+    let max_visited_dirs = max_visited_dirs.clamp(1, 512);
+    let max_entries_per_dir = max_entries_per_dir.clamp(32, 4096);
+    let deadline = Instant::now() + Duration::from_millis(budget_ms.clamp(20, 500));
+    let mut results = Vec::with_capacity(max_count);
+    let mut seen = std::collections::HashSet::new();
+
+    if let Ok(Some(cover)) = find_cover_image(folder_path) {
+        push_folder_preview_candidate(
+            &mut results,
+            &mut seen,
+            FolderPreviewCandidate {
+                path: cover,
+                kind: FolderPreviewCandidateKind::File,
+                representative: None,
+            },
+            max_count,
+        );
+    }
+
+    let mut queue = std::collections::VecDeque::new();
+    let mut visited = 0usize;
+    queue.push_back((PathBuf::from(folder_path), 0u32));
+
+    while let Some((dir, depth)) = queue.pop_front() {
+        if results.len() >= max_count
+            || depth > max_depth
+            || visited >= max_visited_dirs
+            || Instant::now() >= deadline
+        {
+            break;
+        }
+        visited += 1;
+
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .take(max_entries_per_dir + 1)
+            .map(|entry| entry.path())
+            .collect();
+
+        if paths.len() > max_entries_per_dir {
+            paths.truncate(max_entries_per_dir);
+        }
+
+        paths.sort_by(|a, b| {
+            preview_candidate_rank(a)
+                .cmp(&preview_candidate_rank(b))
+                .then_with(|| a.cmp(b))
+        });
+
+        let mut media_paths = Vec::new();
+        let mut subdirs = Vec::new();
+
+        for path in paths {
+            if path.is_file() && is_preview_media_file(&path) {
+                media_paths.push(path);
+            } else if path.is_dir() {
+                subdirs.push(path);
+            }
+        }
+
+        for path in &media_paths {
+            if results.len() >= max_count || Instant::now() >= deadline {
+                break;
+            }
+            push_folder_preview_candidate(
+                &mut results,
+                &mut seen,
+                FolderPreviewCandidate {
+                    path: path.to_string_lossy().to_string(),
+                    kind: FolderPreviewCandidateKind::File,
+                    representative: None,
+                },
+                max_count,
+            );
+        }
+
+        if media_paths.is_empty() && subdirs.len() > 1 {
+            for path in &subdirs {
+                if results.len() >= max_count || Instant::now() >= deadline {
+                    break;
+                }
+                let path_string = path.to_string_lossy().to_string();
+                push_folder_preview_candidate(
+                    &mut results,
+                    &mut seen,
+                    FolderPreviewCandidate {
+                        path: path_string.clone(),
+                        kind: FolderPreviewCandidateKind::DirectoryCover,
+                        representative: Some(path_string),
+                    },
+                    max_count,
+                );
+            }
+        }
+
+        if depth < max_depth {
+            for subdir in subdirs {
+                if visited + queue.len() >= max_visited_dirs || Instant::now() >= deadline {
+                    break;
+                }
+                queue.push_back((subdir, depth + 1));
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+fn push_folder_preview_candidate(
+    results: &mut Vec<FolderPreviewCandidate>,
+    seen: &mut std::collections::HashSet<String>,
+    candidate: FolderPreviewCandidate,
+    max_count: usize,
+) {
+    if results.len() >= max_count {
+        return;
+    }
+    let key = format!(
+        "{:?}:{}",
+        candidate.kind,
+        candidate.path.replace('\\', "/").to_lowercase()
+    );
+    if seen.insert(key) {
+        results.push(candidate);
+    }
 }
 
 fn find_preview_candidates_bfs(folder: &str, max_count: usize, results: &mut Vec<String>) {

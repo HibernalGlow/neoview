@@ -94,7 +94,7 @@ pub struct JobEngine {
 
 impl JobEngine {
     /// 创建新的 Job Engine（延迟启动模式）
-    /// 
+    ///
     /// Workers 会在首次提交任务时自动启动
     pub fn new(config: JobEngineConfig) -> Self {
         let scheduler = Arc::new(Mutex::new(JobScheduler::new()));
@@ -203,7 +203,7 @@ impl JobEngine {
             let state = self.worker_state.lock().unwrap();
             state.is_running
         };
-        
+
         if !is_running {
             return;
         }
@@ -228,7 +228,7 @@ impl JobEngine {
             state.is_running = false;
             std::mem::take(&mut state.handles)
         };
-        
+
         for handle in handles {
             let _ = handle.await;
         }

@@ -6,6 +6,14 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type { UpscaleCacheEntry, UpscaleStatus } from './types';
 
+const UPSCALE_STATUS_DEBUG = false;
+
+function debugUpscaleStatus(...args: unknown[]): void {
+	if (UPSCALE_STATUS_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 /** 超分缓存查询参数 */
 export interface UpscaleCacheQuery {
 	hash: string;
@@ -52,7 +60,7 @@ export class UpscaleStatusManager {
 		const nextMap = new SvelteMap(this.statusByPage);
 		nextMap.set(pageIndex, status);
 		this.statusByPage = nextMap;
-		console.log(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
+		debugUpscaleStatus(`📄 页面 ${pageIndex + 1} 超分状态更新为:`, status);
 	}
 
 	/** 获取所有页面的超分状态 */
@@ -63,7 +71,7 @@ export class UpscaleStatusManager {
 	/** 重置所有页面的超分状态 */
 	resetAllPageStatus(): void {
 		this.statusByPage = new SvelteMap();
-		console.log('🔄 已重置所有页面超分状态');
+		debugUpscaleStatus('🔄 已重置所有页面超分状态');
 	}
 
 	/** 获取预超分覆盖范围（最远已预超分的页面索引） */
@@ -116,7 +124,13 @@ export class UpscaleStatusManager {
 			innerPath: record.innerPath,
 			timestamp: Date.now()
 		});
-		console.log('💾 记录超分缓存:', record.hash, '->', record.cachePath, `(book: ${bookPath})`);
+		debugUpscaleStatus(
+			'💾 记录超分缓存:',
+			record.hash,
+			'->',
+			record.cachePath,
+			`(book: ${bookPath})`
+		);
 	}
 
 	/** 检查是否有超分缓存 */
@@ -159,7 +173,7 @@ export class UpscaleStatusManager {
 			}
 		}
 
-		console.log('🧹 清理过期缓存:', cleaned, '个');
+		debugUpscaleStatus('🧹 清理过期缓存:', cleaned, '个');
 		return cleaned;
 	}
 

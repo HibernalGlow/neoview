@@ -18,24 +18,24 @@
 //! - conditions.rs: 条件匹配
 //! - cache.rs: 缓存管理
 
-pub mod config;
-pub mod types;
-pub mod events;
-pub mod worker;
-pub mod task_processor;
-pub mod queue;
-pub mod conditions;
 pub mod cache;
+pub mod conditions;
+pub mod config;
+pub mod events;
+pub mod queue;
+pub mod task_processor;
+pub mod types;
+pub mod worker;
 
 // 重导出公共 API
 pub use config::UpscaleServiceConfig;
-pub use types::{TaskPriority, TaskScore, UpscaleTask, CacheEntry};
-pub use events::{UpscaleStatus, UpscaleReadyPayload, UpscaleServiceStats};
+pub use events::{UpscaleReadyPayload, UpscaleServiceStats, UpscaleStatus};
+pub use types::{CacheEntry, TaskPriority, TaskScore, UpscaleTask};
 
 use crate::commands::pyo3_upscale_commands::PyO3UpscalerState;
 use crate::core::pyo3_upscaler::UpscaleModel;
-use crate::core::upscale_settings::ConditionalUpscaleSettings;
 use crate::core::upscale_service::task_processor::get_regex_cache_stats;
+use crate::core::upscale_settings::ConditionalUpscaleSettings;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::PathBuf;
@@ -64,8 +64,8 @@ macro_rules! log_debug {
 }
 
 // 导出宏供子模块使用
-pub(crate) use log_info;
 pub(crate) use log_debug;
+pub(crate) use log_info;
 
 // ============================================================================
 // 服务实现
@@ -133,7 +133,7 @@ pub struct UpscaleService {
 
     /// 条件设置缓存
     condition_settings: Arc<RwLock<ConditionalUpscaleSettings>>,
-    
+
     /// 条件列表（从前端同步）
     conditions_list: Arc<RwLock<Vec<crate::commands::upscale_service_commands::FrontendCondition>>>,
 
@@ -143,7 +143,11 @@ pub struct UpscaleService {
 
 impl UpscaleService {
     /// 创建新的超分服务
-    pub fn new(py_state: Arc<PyO3UpscalerState>, config: UpscaleServiceConfig, cache_dir: PathBuf) -> Self {
+    pub fn new(
+        py_state: Arc<PyO3UpscalerState>,
+        config: UpscaleServiceConfig,
+        cache_dir: PathBuf,
+    ) -> Self {
         // 确保缓存目录存在
         if let Err(e) = fs::create_dir_all(&cache_dir) {
             log_info!("⚠️ 创建缓存目录失败: {}", e);
@@ -268,12 +272,12 @@ impl UpscaleService {
     pub fn update_condition_settings(&self, settings: ConditionalUpscaleSettings) {
         conditions::update_condition_settings(&self.condition_settings, settings);
     }
-    
+
     /// 同步条件配置（从前端接收完整的条件列表）
     pub fn sync_conditions(
-        &self, 
-        enabled: bool, 
-        conds: Vec<crate::commands::upscale_service_commands::FrontendCondition>
+        &self,
+        enabled: bool,
+        conds: Vec<crate::commands::upscale_service_commands::FrontendCondition>,
     ) {
         conditions::sync_conditions(
             &self.condition_settings,
@@ -282,7 +286,7 @@ impl UpscaleService {
             conds,
         );
     }
-    
+
     /// 根据图片尺寸匹配条件，返回模型配置
     pub fn match_condition(&self, width: u32, height: u32) -> Option<UpscaleModel> {
         conditions::match_condition(
@@ -334,7 +338,8 @@ impl UpscaleService {
         );
         self.rebuild_pending_set_from_queue();
 
-        let current_book = self.current_book
+        let current_book = self
+            .current_book
             .read()
             .ok()
             .and_then(|guard| guard.clone());
@@ -421,7 +426,12 @@ impl UpscaleService {
     }
 
     /// 检查缓存是否存在且有效
-    fn check_cache(&self, book_path: &str, image_path: &str, model: &UpscaleModel) -> Option<PathBuf> {
+    fn check_cache(
+        &self,
+        book_path: &str,
+        image_path: &str,
+        model: &UpscaleModel,
+    ) -> Option<PathBuf> {
         cache::check_cache(&self.cache_dir, book_path, image_path, model)
     }
 
@@ -482,7 +492,11 @@ impl UpscaleService {
                     upscaled_size: None,
                     is_preload: task.score.priority != TaskPriority::Current,
                     // 缓存命中时使用任务中的模型信息
-                    model_name: if task.model.model_name.is_empty() { None } else { Some(task.model.model_name.clone()) },
+                    model_name: if task.model.model_name.is_empty() {
+                        None
+                    } else {
+                        Some(task.model.model_name.clone())
+                    },
                     scale: Some(task.model.scale),
                 };
                 let _ = app.emit("upscale-ready", payload);
@@ -597,7 +611,9 @@ impl UpscaleService {
         if let Ok(mut set) = self.pending_set.write() {
             set.remove(&(book_path.to_string(), page_index));
         }
-        self.cancel_active_tasks(|_, task| task.book_path == book_path && task.page_index == page_index);
+        self.cancel_active_tasks(|_, task| {
+            task.book_path == book_path && task.page_index == page_index
+        });
     }
 
     /// 取消指定书籍的所有任务
@@ -618,7 +634,12 @@ impl UpscaleService {
     pub fn get_stats(&self) -> UpscaleServiceStats {
         let cache_count = self.cache_map.read().ok().map(|c| c.len()).unwrap_or(0);
         let pending_tasks = self.pending_set.read().ok().map(|s| s.len()).unwrap_or(0);
-        let processing_tasks = self.processing_set.read().ok().map(|s| s.len()).unwrap_or(0);
+        let processing_tasks = self
+            .processing_set
+            .read()
+            .ok()
+            .map(|s| s.len())
+            .unwrap_or(0);
         let queue_wait_sample_count = self.queue_wait_sample_count.load(Ordering::SeqCst);
         let queue_wait_total_ms = self.queue_wait_total_ms.load(Ordering::SeqCst);
         let queue_wait_max_ms = self.queue_wait_max_ms.load(Ordering::SeqCst);

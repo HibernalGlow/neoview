@@ -70,7 +70,7 @@ impl DirectoryCacheEntry {
     pub fn eviction_score(&self) -> u64 {
         let recency_score = self.last_accessed.elapsed().as_secs();
         let frequency_score = self.access_count as u64;
-        
+
         // 频率权重：每次访问相当于减少 60 秒的"年龄"
         // 这样频繁访问的目录不容易被淘汰
         recency_score.saturating_sub(frequency_score * 60)
@@ -195,7 +195,7 @@ impl DirectoryCache {
     pub fn stats(&self) -> CacheStats {
         let total_items: usize = self.entries.values().map(|e| e.items.len()).sum();
         let complete_count = self.entries.values().filter(|e| e.is_complete).count();
-        
+
         CacheStats {
             entry_count: self.entries.len(),
             total_items,

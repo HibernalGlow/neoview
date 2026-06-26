@@ -31,11 +31,20 @@ impl ImageCrateDecoder {
         let rgba = img.to_rgba8();
         let pixels = rgba.into_raw();
 
-        Ok(DecodedImage::new(width, height, pixels, DecodeBackend::ImageCrate))
+        Ok(DecodedImage::new(
+            width,
+            height,
+            pixels,
+            DecodeBackend::ImageCrate,
+        ))
     }
 
     /// 解码并缩放
-    fn decode_and_scale(data: &[u8], max_width: u32, max_height: u32) -> Result<DecodedImage, DecodeError> {
+    fn decode_and_scale(
+        data: &[u8],
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<DecodedImage, DecodeError> {
         let img = image::load_from_memory(data).map_err(|e| DecodeError::DecodeFailed {
             backend: DecodeBackend::ImageCrate,
             message: format!("图像解码失败: {e}"),
@@ -85,17 +94,16 @@ impl ImageDecoder for ImageCrateDecoder {
     }
 
     fn get_dimensions(&self, data: &[u8]) -> Result<(u32, u32), DecodeError> {
-        let img = image::load_from_memory(data).map_err(|e| {
-            DecodeError::DimensionError(format!("图像解码失败: {e}"))
-        })?;
+        let img = image::load_from_memory(data)
+            .map_err(|e| DecodeError::DimensionError(format!("图像解码失败: {e}")))?;
         Ok(img.dimensions())
     }
 
     fn supports_format(&self, extension: &str) -> bool {
         // image crate 支持的格式
         let supported = [
-            "png", "jpg", "jpeg", "gif", "bmp", "ico", "tiff", "tif",
-            "webp", "avif", "pnm", "dds", "tga", "farbfeld", "qoi",
+            "png", "jpg", "jpeg", "gif", "bmp", "ico", "tiff", "tif", "webp", "avif", "pnm", "dds",
+            "tga", "farbfeld", "qoi",
         ];
         supported.contains(&extension.to_lowercase().as_str())
     }

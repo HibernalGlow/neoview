@@ -22,7 +22,7 @@ impl ThumbnailDb {
         let mut saved_count = 0;
 
         let tx = conn.transaction()?;
-        
+
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT OR REPLACE INTO thumbs (key, size, date, ghash, category, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
@@ -35,7 +35,10 @@ impl ThumbnailDb {
                     "file"
                 };
 
-                if stmt.execute(params![key, size, date, ghash, cat, blob]).is_ok() {
+                if stmt
+                    .execute(params![key, size, date, ghash, cat, blob])
+                    .is_ok()
+                {
                     saved_count += 1;
                 }
             }
@@ -137,7 +140,10 @@ impl ThumbnailDb {
     }
 
     /// 批量检查失败记录
-    pub fn batch_check_failed(&self, keys: &[&str]) -> SqliteResult<HashMap<String, (String, i32)>> {
+    pub fn batch_check_failed(
+        &self,
+        keys: &[&str],
+    ) -> SqliteResult<HashMap<String, (String, i32)>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -154,7 +160,8 @@ impl ThumbnailDb {
         );
 
         let mut stmt = conn.prepare(&query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(params.as_slice())?;
 
         while let Some(row) = rows.next()? {

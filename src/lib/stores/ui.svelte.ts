@@ -21,6 +21,14 @@ import {
 	type PanoramaLoadOptions
 } from '$lib/stackview/stores/panoramaStore.svelte';
 
+const UI_STORE_DEBUG = false;
+
+function debugUiStore(...args: unknown[]): void {
+	if (UI_STORE_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 // ============================================================================
 // 类型定义
 // ============================================================================
@@ -570,7 +578,7 @@ export function requestZoomMode(mode: ZoomMode): boolean {
 		applyZoomModeWithTracking(locked);
 		return false;
 	}
-	console.log('[zoomMode] applying', { requested: mode, locked });
+	debugUiStore('[zoomMode] applying', { requested: mode, locked });
 	applyZoomModeWithTracking(mode);
 	return true;
 }
@@ -655,7 +663,24 @@ export function toggleReadingDirectionLock(direction: ReadingDirection) {
 //           修复：新增纯读取方法 getFrameStepAt(index)，由 builder 直接计算步长，
 //           不修改 pageFrameStore 任何状态。
 
+let activePageTurnDirection: 'left' | 'right' | null = null;
+
+function beginPageTurn(direction: 'left' | 'right'): boolean {
+	if (activePageTurnDirection !== null) {
+		return false;
+	}
+	activePageTurnDirection = direction;
+	return true;
+}
+
+function finishPageTurn(direction: 'left' | 'right'): void {
+	if (activePageTurnDirection === direction) {
+		activePageTurnDirection = null;
+	}
+}
+
 export async function pageLeft() {
+	if (!beginPageTurn('left')) return;
 	try {
 		if (isPanoramaActive()) {
 			await navigatePanoramaGlobal('prev');
@@ -696,10 +721,13 @@ export async function pageLeft() {
 		}
 	} catch (err) {
 		console.error('Failed to turn page left:', err);
+	} finally {
+		finishPageTurn('left');
 	}
 }
 
 export async function pageRight() {
+	if (!beginPageTurn('right')) return;
 	try {
 		if (isPanoramaActive()) {
 			await navigatePanoramaGlobal('next');
@@ -739,6 +767,8 @@ export async function pageRight() {
 		subPageIndex.set(0);
 	} catch (err) {
 		console.error('Failed to turn page right:', err);
+	} finally {
+		finishPageTurn('right');
 	}
 }
 

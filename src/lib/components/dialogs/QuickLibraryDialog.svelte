@@ -79,8 +79,9 @@
 			}
 
 			// 只有左右边框，无上下边框，无圆角
-			borderStyle = 'border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-top: none; border-bottom: none; border-radius: 0px;';
-		} 
+			borderStyle =
+				'border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-top: none; border-bottom: none; border-radius: 0px;';
+		}
 		// 竖屏模式 (让卡片占满宽度，横向 width 为 W，left 为 0，纵向跟随轮盘并贴紧)
 		else {
 			left = 0;
@@ -95,7 +96,8 @@
 			}
 
 			// 只有上下边框，无左右边框，无圆角
-			borderStyle = 'border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); border-left: none; border-right: none; border-radius: 0px;';
+			borderStyle =
+				'border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); border-left: none; border-right: none; border-radius: 0px;';
 		}
 
 		return `position: fixed; left: ${left}px; top: ${top}px; width: ${currentWidth}px; height: ${currentHeight}px; z-index: 58; ${borderStyle}`;

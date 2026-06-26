@@ -23,6 +23,7 @@
 	import CanvasImage from './CanvasImage.svelte';
 	import { getBitmapCacheEntry, preloadBitmap } from '../utils/bitmapPreloader';
 	import { getDecodedImageEntry, predecodeImage } from '../utils/imageDecodePreloader';
+	import { getDisplayProxyCandidate, readCssPixelValue } from '../utils/displayProxyUrl';
 
 	interface Props {
 		pageIndex: number;
@@ -32,6 +33,8 @@
 		clipPath?: string;
 		style?: string;
 		class?: string;
+		sourceWidth?: number;
+		sourceHeight?: number;
 		onload?: (e: Event) => void;
 	}
 
@@ -43,8 +46,82 @@
 		clipPath = '',
 		style = '',
 		class: className = '',
+		sourceWidth = 0,
+		sourceHeight = 0,
 		onload
 	}: Props = $props();
+
+	const DISPLAY_PROXY_GROW_RATIO = 1.2;
+	const DISPLAY_PROXY_SHRINK_PIXEL_RATIO = 0.65;
+
+	interface DisplayProxySelection {
+		sourceUrl: string;
+		width: number;
+		height: number;
+		url: string;
+	}
+
+	let displayProxySelection: DisplayProxySelection | null = null;
+
+	function resetDisplayProxySelection(value: string): void {
+		if (!displayProxySelection || displayProxySelection.sourceUrl === value) {
+			displayProxySelection = null;
+		}
+	}
+
+	function shouldReuseDisplayProxySelection(value: string, width: number, height: number): boolean {
+		const current = displayProxySelection;
+		if (!current || current.sourceUrl !== value) return false;
+		if (current.width === width && current.height === height) return true;
+
+		const needsLarger =
+			width > current.width * DISPLAY_PROXY_GROW_RATIO ||
+			height > current.height * DISPLAY_PROXY_GROW_RATIO;
+		if (needsLarger) return false;
+
+		const currentPixels = current.width * current.height;
+		const targetPixels = width * height;
+		const canDownshift =
+			width <= current.width &&
+			height <= current.height &&
+			targetPixels < currentPixels * DISPLAY_PROXY_SHRINK_PIXEL_RATIO;
+		return !canDownshift;
+	}
+
+	function getDisplayProxyUrl(value: string, cssText: string): string {
+		if (!value || loadModeStore.isCanvasMode) {
+			resetDisplayProxySelection(value);
+			return value;
+		}
+
+		const cssWidth = readCssPixelValue(cssText, 'width');
+		const cssHeight = readCssPixelValue(cssText, 'height');
+		const dpr = typeof window === 'undefined' ? undefined : window.devicePixelRatio || 1;
+		const candidate = getDisplayProxyCandidate({
+			url: value,
+			sourceWidth,
+			sourceHeight,
+			cssWidth,
+			cssHeight,
+			dpr
+		});
+		if (!candidate) {
+			resetDisplayProxySelection(value);
+			return value;
+		}
+
+		if (shouldReuseDisplayProxySelection(value, candidate.width, candidate.height)) {
+			return displayProxySelection?.url ?? candidate.url;
+		}
+
+		displayProxySelection = {
+			sourceUrl: value,
+			width: candidate.width,
+			height: candidate.height,
+			url: candidate.url
+		};
+		return candidate.url;
+	}
 
 	// 滤镜设置
 	let filterSettings = $state<FilterSettings | null>(null);
@@ -52,6 +129,7 @@
 	let isBlackAndWhite = $state(false);
 	// 上一次检测的 URL
 	let lastCheckedUrl = '';
+	let blackAndWhiteCheckToken = 0;
 	// 图像裁剪设置
 	let trimSettings = $state<ImageTrimSettings | null>(null);
 
@@ -73,16 +151,31 @@
 	// 检测图像是否为黑白（仅在启用「仅黑白」时）
 	$effect(() => {
 		const checkUrl = displayUrl;
-		if (
-			filterSettings?.colorizeEnabled &&
-			filterSettings?.onlyBlackAndWhite &&
-			checkUrl !== lastCheckedUrl
-		) {
-			lastCheckedUrl = checkUrl;
-			filterStore.checkIsBlackAndWhite(checkUrl).then((result) => {
-				isBlackAndWhite = result;
-			});
+		if (!filterSettings?.colorizeEnabled || !filterSettings?.onlyBlackAndWhite || !checkUrl) {
+			blackAndWhiteCheckToken++;
+			lastCheckedUrl = '';
+			isBlackAndWhite = false;
+			return;
 		}
+
+		if (checkUrl === lastCheckedUrl) {
+			return;
+		}
+
+		lastCheckedUrl = checkUrl;
+		const token = ++blackAndWhiteCheckToken;
+		filterStore
+			.checkIsBlackAndWhite(checkUrl)
+			.then((result) => {
+				if (token === blackAndWhiteCheckToken && displayUrl === checkUrl) {
+					isBlackAndWhite = result;
+				}
+			})
+			.catch(() => {
+				if (token === blackAndWhiteCheckToken && displayUrl === checkUrl) {
+					isBlackAndWhite = false;
+				}
+			});
 	});
 
 	// 计算实际的滤镜 CSS
@@ -101,7 +194,7 @@
 
 	// 【后端主导架构】显示 URL 直接使用 prop 传入的 URL
 	// 不再查询 imagePool/stackImageLoader，图片资源由后端 protocol 提供
-	let displayUrl = $derived(url);
+	let displayUrl = $derived.by(() => getDisplayProxyUrl(url, style));
 
 	// 当页内缩放变化时立即更新；翻页(url 变化)时，等新图 ready 再一起提交 URL 和样式，
 	// 避免旧图短暂套用新页尺寸而出现“缩放一下”的错觉。
@@ -109,30 +202,49 @@
 	let settledTransform = $state('');
 	let settledClipPath = $state('');
 	let settledStyle = $state('');
+	let settledNaturalWidth = $state(0);
+	let settledNaturalHeight = $state(0);
+	let settledSourceUrl = $state('');
 	let pendingSwapToken = 0;
+	let lastDimensionReportKey = '';
 
 	function commitSettledRender(
 		nextUrl: string,
 		nextTransform: string,
 		nextClipPath: string,
-		nextStyle: string
+		nextStyle: string,
+		width = 0,
+		height = 0,
+		nextSourceUrl = url
 	) {
 		settledUrl = nextUrl;
 		settledTransform = nextTransform;
 		settledClipPath = nextClipPath;
 		settledStyle = nextStyle;
+		settledNaturalWidth = width;
+		settledNaturalHeight = height;
+		settledSourceUrl = nextSourceUrl;
 	}
 
-	function emitPreloadedDimensions(width: number, height: number) {
+	function emitPreloadedDimensions(
+		width: number,
+		height: number,
+		sourceKey = settledSourceUrl || url
+	) {
 		if (!onload || !width || !height) return;
+		const reportedWidth = sourceWidth || width;
+		const reportedHeight = sourceHeight || height;
+		const reportKey = `${sourceKey}|${reportedWidth}x${reportedHeight}`;
+		if (reportKey === lastDimensionReportKey) return;
+		lastDimensionReportKey = reportKey;
 
 		const preloadEvent = new Event('load');
 		Object.defineProperty(preloadEvent, 'target', {
 			value: {
-				naturalWidth: width,
-				naturalHeight: height,
-				width,
-				height
+				naturalWidth: reportedWidth,
+				naturalHeight: reportedHeight,
+				width: reportedWidth,
+				height: reportedHeight
 			},
 			writable: false
 		});
@@ -144,15 +256,24 @@
 		const targetTransform = transform;
 		const targetClipPath = effectiveClipPath;
 		const targetStyle = combinedStyle;
+		const targetSourceUrl = url;
 
 		if (!targetUrl) {
 			pendingSwapToken++;
-			commitSettledRender('', targetTransform, targetClipPath, targetStyle);
+			commitSettledRender('', targetTransform, targetClipPath, targetStyle, 0, 0, targetSourceUrl);
 			return;
 		}
 
 		if (!settledUrl) {
-			commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
+			commitSettledRender(
+				targetUrl,
+				targetTransform,
+				targetClipPath,
+				targetStyle,
+				0,
+				0,
+				targetSourceUrl
+			);
 			return;
 		}
 
@@ -163,11 +284,25 @@
 			return;
 		}
 
+		if (targetSourceUrl === settledSourceUrl) {
+			settledTransform = targetTransform;
+			settledClipPath = targetClipPath;
+			settledStyle = targetStyle;
+		}
+
 		const swapToken = ++pendingSwapToken;
 		const commitIfCurrent = (width: number, height: number) => {
 			if (swapToken !== pendingSwapToken) return;
-			emitPreloadedDimensions(width, height);
-			commitSettledRender(targetUrl, targetTransform, targetClipPath, targetStyle);
+			emitPreloadedDimensions(width, height, targetSourceUrl);
+			commitSettledRender(
+				targetUrl,
+				targetTransform,
+				targetClipPath,
+				targetStyle,
+				width,
+				height,
+				targetSourceUrl
+			);
 		};
 
 		if (loadModeStore.isCanvasMode) {
@@ -239,7 +374,12 @@
 	// 当 Full Image 加载完成后隐藏缩略图
 	function handleMainImageLoad(e: Event) {
 		showThumbnail = false;
-		if (onload) onload(e);
+		if (!onload) return;
+		if (sourceWidth > 0 && sourceHeight > 0) {
+			emitPreloadedDimensions(sourceWidth, sourceHeight, settledSourceUrl || url);
+			return;
+		}
+		onload(e);
 	}
 
 	// 合成最终 clip-path（裁剪 + 页面分割）
@@ -289,6 +429,8 @@
 			<img
 				src={settledUrl}
 				{alt}
+				width={settledNaturalWidth || undefined}
+				height={settledNaturalHeight || undefined}
 				class="frame-image"
 				class:is-split={!!settledClipPath && settledClipPath !== 'none'}
 				style:transform={settledTransform || undefined}

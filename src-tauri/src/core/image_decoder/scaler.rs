@@ -40,12 +40,8 @@ pub fn scale_image(
     max_width: u32,
     max_height: u32,
 ) -> Result<DecodedImage, DecodeError> {
-    let (new_width, new_height) = calculate_scaled_dimensions(
-        img.width,
-        img.height,
-        max_width,
-        max_height,
-    );
+    let (new_width, new_height) =
+        calculate_scaled_dimensions(img.width, img.height, max_width, max_height);
 
     // Requirements 3.5: 如果目标尺寸等于或超过原始尺寸，返回原图
     if new_width == img.width && new_height == img.height {
@@ -68,7 +64,7 @@ fn scale_with_image_crate(
         .ok_or_else(|| DecodeError::ScaleError("无法创建 RGBA 图像".to_string()))?;
 
     let dynamic = DynamicImage::ImageRgba8(rgba);
-    
+
     // 使用 Lanczos3 滤波器进行高质量缩放
     let resized = dynamic.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
     let rgba_resized = resized.to_rgba8();

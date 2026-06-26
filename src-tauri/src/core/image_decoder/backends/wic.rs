@@ -8,13 +8,14 @@ use windows::{
     core::Interface,
     Win32::{
         Graphics::Imaging::{
-            CLSID_WICImagingFactory, IWICBitmapDecoder, IWICBitmapFrameDecode,
-            IWICBitmapScaler, IWICFormatConverter, IWICImagingFactory, IWICStream,
-            WICBitmapDitherTypeNone, WICBitmapInterpolationModeFant,
+            CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, IWICBitmapDecoder,
+            IWICBitmapFrameDecode, IWICBitmapScaler, IWICFormatConverter, IWICImagingFactory,
+            IWICStream, WICBitmapDitherTypeNone, WICBitmapInterpolationModeFant,
             WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
-            GUID_WICPixelFormat32bppBGRA,
         },
-        System::Com::{CoCreateInstance, CoInitializeEx, IStream, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, IStream, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+        },
     },
 };
 
@@ -34,23 +35,22 @@ impl WicDecoder {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
             // 创建 WIC 工厂
-            let factory: IWICImagingFactory = CoCreateInstance(
-                &CLSID_WICImagingFactory,
-                None,
-                CLSCTX_INPROC_SERVER,
-            )
-            .map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("创建 WIC 工厂失败: {e:?}"),
-            })?;
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).map_err(
+                    |e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建 WIC 工厂失败: {e:?}"),
+                    },
+                )?;
 
             // 创建 WIC 流
-            let stream: IWICStream = factory
-                .CreateStream()
-                .map_err(|e| DecodeError::DecodeFailed {
-                    backend: DecodeBackend::Wic,
-                    message: format!("创建流失败: {e:?}"),
-                })?;
+            let stream: IWICStream =
+                factory
+                    .CreateStream()
+                    .map_err(|e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建流失败: {e:?}"),
+                    })?;
 
             // 从内存初始化流
             stream
@@ -75,10 +75,11 @@ impl WicDecoder {
                 })?;
 
             // 获取第一帧
-            let frame: IWICBitmapFrameDecode = decoder.GetFrame(0).map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("获取帧失败: {e:?}"),
-            })?;
+            let frame: IWICBitmapFrameDecode =
+                decoder.GetFrame(0).map_err(|e| DecodeError::DecodeFailed {
+                    backend: DecodeBackend::Wic,
+                    message: format!("获取帧失败: {e:?}"),
+                })?;
 
             // 获取尺寸
             let mut width = 0u32;
@@ -91,12 +92,13 @@ impl WicDecoder {
                 })?;
 
             // 创建格式转换器（转为 BGRA）
-            let converter: IWICFormatConverter = factory
-                .CreateFormatConverter()
-                .map_err(|e| DecodeError::DecodeFailed {
-                    backend: DecodeBackend::Wic,
-                    message: format!("创建格式转换器失败: {e:?}"),
-                })?;
+            let converter: IWICFormatConverter =
+                factory
+                    .CreateFormatConverter()
+                    .map_err(|e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建格式转换器失败: {e:?}"),
+                    })?;
 
             converter
                 .Initialize(
@@ -126,35 +128,47 @@ impl WicDecoder {
                 })?;
 
             // BGRA → RGBA
-            Ok(DecodedImage::from_bgra(width, height, pixels, DecodeBackend::Wic))
+            Ok(DecodedImage::from_bgra(
+                width,
+                height,
+                pixels,
+                DecodeBackend::Wic,
+            ))
         }
     }
 
     /// 从内存解码并缩放图像
     /// Requirements 3.1: 使用 WIC IWICBitmapScaler 进行硬件加速缩放
-    fn decode_and_scale(data: &[u8], max_width: u32, max_height: u32) -> Result<DecodedImage, DecodeError> {
+    fn decode_and_scale(
+        data: &[u8],
+        max_width: u32,
+        max_height: u32,
+    ) -> Result<DecodedImage, DecodeError> {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
-            let factory: IWICImagingFactory = CoCreateInstance(
-                &CLSID_WICImagingFactory,
-                None,
-                CLSCTX_INPROC_SERVER,
-            )
-            .map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("创建 WIC 工厂失败: {e:?}"),
-            })?;
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).map_err(
+                    |e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建 WIC 工厂失败: {e:?}"),
+                    },
+                )?;
 
-            let stream: IWICStream = factory.CreateStream().map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("创建流失败: {e:?}"),
-            })?;
+            let stream: IWICStream =
+                factory
+                    .CreateStream()
+                    .map_err(|e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建流失败: {e:?}"),
+                    })?;
 
-            stream.InitializeFromMemory(data).map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("初始化流失败: {e:?}"),
-            })?;
+            stream
+                .InitializeFromMemory(data)
+                .map_err(|e| DecodeError::DecodeFailed {
+                    backend: DecodeBackend::Wic,
+                    message: format!("初始化流失败: {e:?}"),
+                })?;
 
             let istream: IStream = stream.cast().map_err(|e| DecodeError::DecodeFailed {
                 backend: DecodeBackend::Wic,
@@ -168,10 +182,11 @@ impl WicDecoder {
                     message: format!("创建解码器失败: {e:?}"),
                 })?;
 
-            let frame: IWICBitmapFrameDecode = decoder.GetFrame(0).map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("获取帧失败: {e:?}"),
-            })?;
+            let frame: IWICBitmapFrameDecode =
+                decoder.GetFrame(0).map_err(|e| DecodeError::DecodeFailed {
+                    backend: DecodeBackend::Wic,
+                    message: format!("获取帧失败: {e:?}"),
+                })?;
 
             let mut orig_width = 0u32;
             let mut orig_height = 0u32;
@@ -186,7 +201,7 @@ impl WicDecoder {
             let scale = (max_width as f64 / orig_width as f64)
                 .min(max_height as f64 / orig_height as f64)
                 .min(1.0);
-            
+
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let new_width = ((orig_width as f64 * scale) as u32).max(1);
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -198,18 +213,28 @@ impl WicDecoder {
             }
 
             // 创建缩放器
-            let scaler: IWICBitmapScaler = factory.CreateBitmapScaler().map_err(|e| DecodeError::ScaleError(format!("创建缩放器失败: {e:?}")))?;
+            let scaler: IWICBitmapScaler = factory
+                .CreateBitmapScaler()
+                .map_err(|e| DecodeError::ScaleError(format!("创建缩放器失败: {e:?}")))?;
 
             // 初始化缩放器（使用 Fant 插值）
             scaler
-                .Initialize(&frame, new_width, new_height, WICBitmapInterpolationModeFant)
+                .Initialize(
+                    &frame,
+                    new_width,
+                    new_height,
+                    WICBitmapInterpolationModeFant,
+                )
                 .map_err(|e| DecodeError::ScaleError(format!("初始化缩放器失败: {e:?}")))?;
 
             // 创建格式转换器
-            let converter: IWICFormatConverter = factory.CreateFormatConverter().map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::Wic,
-                message: format!("创建格式转换器失败: {e:?}"),
-            })?;
+            let converter: IWICFormatConverter =
+                factory
+                    .CreateFormatConverter()
+                    .map_err(|e| DecodeError::DecodeFailed {
+                        backend: DecodeBackend::Wic,
+                        message: format!("创建格式转换器失败: {e:?}"),
+                    })?;
 
             converter
                 .Initialize(
@@ -236,7 +261,12 @@ impl WicDecoder {
                     message: format!("复制像素失败: {e:?}"),
                 })?;
 
-            Ok(DecodedImage::from_bgra(new_width, new_height, pixels, DecodeBackend::Wic))
+            Ok(DecodedImage::from_bgra(
+                new_width,
+                new_height,
+                pixels,
+                DecodeBackend::Wic,
+            ))
         }
     }
 
@@ -245,12 +275,10 @@ impl WicDecoder {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
-            let factory: IWICImagingFactory = CoCreateInstance(
-                &CLSID_WICImagingFactory,
-                None,
-                CLSCTX_INPROC_SERVER,
-            )
-            .map_err(|e| DecodeError::DimensionError(format!("创建 WIC 工厂失败: {e:?}")))?;
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).map_err(
+                    |e| DecodeError::DimensionError(format!("创建 WIC 工厂失败: {e:?}")),
+                )?;
 
             let stream: IWICStream = factory
                 .CreateStream()
@@ -309,10 +337,12 @@ impl ImageDecoder for WicDecoder {
 
     fn supports_format(&self, extension: &str) -> bool {
         // WIC 原生支持的格式
-        let native_formats = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "ico", "wdp", "hdp"];
+        let native_formats = [
+            "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "ico", "wdp", "hdp",
+        ];
         // 需要安装扩展的格式
         let extension_formats = ["avif", "heic", "heif", "webp", "jxl"];
-        
+
         let ext = extension.to_lowercase();
         native_formats.contains(&ext.as_str()) || extension_formats.contains(&ext.as_str())
     }

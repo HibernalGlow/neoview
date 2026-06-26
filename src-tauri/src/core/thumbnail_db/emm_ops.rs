@@ -44,9 +44,7 @@ impl ThumbnailDb {
         let conn = conn_guard.as_ref().unwrap();
 
         let mut stmt = conn.prepare("SELECT emm_json FROM thumbs WHERE key = ?1")?;
-        let result: Option<Option<String>> = stmt
-            .query_row(params![key], |row| row.get(0))
-            .ok();
+        let result: Option<Option<String>> = stmt.query_row(params![key], |row| row.get(0)).ok();
 
         Ok(result.flatten())
     }
@@ -69,7 +67,8 @@ impl ThumbnailDb {
         );
 
         let mut stmt = conn.prepare(&query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(params.as_slice())?;
 
         while let Some(row) = rows.next()? {
@@ -139,7 +138,8 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut stmt = conn.prepare("SELECT key FROM thumbs WHERE emm_json IS NULL OR emm_json = ''")?;
+        let mut stmt =
+            conn.prepare("SELECT key FROM thumbs WHERE emm_json IS NULL OR emm_json = ''")?;
         let keys: Vec<String> = stmt
             .query_map([], |row| row.get(0))?
             .filter_map(|r| r.ok())

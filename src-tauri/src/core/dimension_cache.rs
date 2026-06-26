@@ -1,5 +1,5 @@
 //! 页面尺寸缓存模块
-//! 
+//!
 //! 持久化存储页面尺寸信息，避免重复扫描
 
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,6 @@ impl DimensionCache {
             dirty: false,
         }
     }
-
 
     /// 获取缓存的尺寸
     /// 如果 modified 时间比缓存新，返回 None（需要重新扫描）
@@ -104,18 +103,20 @@ impl DimensionCache {
 
         // 确保父目录存在
         if let Some(parent) = self.cache_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("创建缓存目录失败: {e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("创建缓存目录失败: {e}"))?;
         }
 
-        let json = serde_json::to_string(&self.entries)
-            .map_err(|e| format!("序列化缓存失败: {e}"))?;
+        let json =
+            serde_json::to_string(&self.entries).map_err(|e| format!("序列化缓存失败: {e}"))?;
 
-        fs::write(&self.cache_path, json)
-            .map_err(|e| format!("写入缓存文件失败: {e}"))?;
+        fs::write(&self.cache_path, json).map_err(|e| format!("写入缓存文件失败: {e}"))?;
 
         self.dirty = false;
-        log::debug!("💾 DimensionCache: 保存 {} 条记录到 {:?}", self.entries.len(), self.cache_path);
+        log::debug!(
+            "💾 DimensionCache: 保存 {} 条记录到 {:?}",
+            self.entries.len(),
+            self.cache_path
+        );
         Ok(())
     }
 
@@ -126,18 +127,16 @@ impl DimensionCache {
         }
 
         match fs::read_to_string(&self.cache_path) {
-            Ok(json) => {
-                match serde_json::from_str::<HashMap<String, DimensionEntry>>(&json) {
-                    Ok(entries) => {
-                        log::info!("📂 DimensionCache: 加载 {} 条缓存记录", entries.len());
-                        self.entries = entries;
-                    }
-                    Err(e) => {
-                        log::warn!("⚠️ DimensionCache: 解析缓存文件失败: {}, 将重新扫描", e);
-                        self.entries.clear();
-                    }
+            Ok(json) => match serde_json::from_str::<HashMap<String, DimensionEntry>>(&json) {
+                Ok(entries) => {
+                    log::info!("📂 DimensionCache: 加载 {} 条缓存记录", entries.len());
+                    self.entries = entries;
                 }
-            }
+                Err(e) => {
+                    log::warn!("⚠️ DimensionCache: 解析缓存文件失败: {}, 将重新扫描", e);
+                    self.entries.clear();
+                }
+            },
             Err(e) => {
                 log::warn!("⚠️ DimensionCache: 读取缓存文件失败: {}", e);
             }

@@ -1,9 +1,9 @@
 //! 超分服务类型定义模块
-//! 
+//!
 //! 包含 TaskPriority, TaskScore, UpscaleTask, CacheEntry 等核心类型
 
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use crate::core::pyo3_upscaler::UpscaleModel;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// 任务优先级（数值越小优先级越高）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -61,7 +61,11 @@ impl UpscaleTask {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
-        format!("upscale:{:x}:{}:{ts}", md5::compute(book_path.as_bytes()), page_index)
+        format!(
+            "upscale:{:x}:{}:{ts}",
+            md5::compute(book_path.as_bytes()),
+            page_index
+        )
     }
 
     /// 计算任务分数（基于当前页）

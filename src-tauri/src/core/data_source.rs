@@ -29,24 +29,18 @@ impl Default for DataSourceMode {
 #[serde(tag = "type")]
 pub enum DataSourceResult {
     /// Blob 数据
-    Blob {
-        data: Vec<u8>,
-        mime_type: String,
-    },
+    Blob { data: Vec<u8>, mime_type: String },
     /// 临时文件路径
-    TempFile {
-        path: String,
-        mime_type: String,
-    },
+    TempFile { path: String, mime_type: String },
 }
 
 impl DataSourceResult {
     pub fn data_size(&self) -> usize {
         match self {
             Self::Blob { data, .. } => data.len(),
-            Self::TempFile { path, .. } => {
-                std::fs::metadata(path).map(|m| m.len() as usize).unwrap_or(0)
-            }
+            Self::TempFile { path, .. } => std::fs::metadata(path)
+                .map(|m| m.len() as usize)
+                .unwrap_or(0),
         }
     }
 }
@@ -61,7 +55,7 @@ impl TempfileCache {
     pub fn new() -> Self {
         let cache_dir = std::env::temp_dir().join("neoview_cache");
         std::fs::create_dir_all(&cache_dir).ok();
-        
+
         Self {
             cache_dir,
             max_files: 500,
@@ -127,7 +121,7 @@ impl TempfileCache {
         // 按修改时间排序，删除最旧的
         files.sort_by_key(|(_, mtime)| *mtime);
         let to_delete = files.len() - self.max_files;
-        
+
         let mut deleted = 0;
         for (path, _) in files.into_iter().take(to_delete) {
             if std::fs::remove_file(&path).is_ok() {

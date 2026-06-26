@@ -114,7 +114,11 @@ impl Drop for Timer {
         // 如果没有调用 finish()，在 drop 时记录
         let elapsed = self.elapsed_ms();
         if elapsed > 100 {
-            log::warn!("⏱️ {} 耗时 {}ms（超过 100ms，未调用 finish）", self.name, elapsed);
+            log::warn!(
+                "⏱️ {} 耗时 {}ms（超过 100ms，未调用 finish）",
+                self.name,
+                elapsed
+            );
         }
     }
 }
@@ -169,7 +173,11 @@ impl PerfStats {
             self.name,
             self.call_count,
             self.avg_us(),
-            if self.min_us == u64::MAX { 0 } else { self.min_us },
+            if self.min_us == u64::MAX {
+                0
+            } else {
+                self.min_us
+            },
             self.max_us,
             self.total_us / 1000
         )
@@ -193,11 +201,11 @@ mod tests {
     #[test]
     fn test_perf_stats() {
         let mut stats = PerfStats::new("test");
-        
+
         stats.record(100);
         stats.record(200);
         stats.record(150);
-        
+
         assert_eq!(stats.call_count, 3);
         assert_eq!(stats.total_us, 450);
         assert_eq!(stats.min_us, 100);

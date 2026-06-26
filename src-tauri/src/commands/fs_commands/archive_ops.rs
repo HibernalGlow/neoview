@@ -67,9 +67,7 @@ pub async fn load_image_from_archive_binary(
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
         manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
@@ -83,7 +81,7 @@ pub async fn load_image_from_archive_binary(
                 bytes.len()
             );
             Ok(tauri::ipc::Response::new(bytes))
-        },
+        }
         Err(err) => {
             warn!(
                 "⚠️ [ImagePipeline:{}] load_image_from_archive_binary failed: {}",
@@ -120,9 +118,7 @@ pub async fn load_image_from_archive_base64(
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
         manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
@@ -137,7 +133,7 @@ pub async fn load_image_from_archive_base64(
                 trace_id, bytes.len(), encoded.len()
             );
             Ok(encoded)
-        },
+        }
         Err(err) => {
             warn!(
                 "⚠️ [ImagePipeline:{}] load_image_from_archive_base64 failed: {}",
@@ -174,9 +170,7 @@ pub async fn load_image_from_archive(
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
         manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)
     })
     .await
@@ -222,35 +216,33 @@ pub async fn extract_image_to_temp(
     let archive_manager = Arc::clone(&state.archive_manager);
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
-    
+
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
 
         let ext = Path::new(&inner_path)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("jpg");
-        
+
         let temp_dir = std::env::temp_dir().join("neoview_cache");
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
-        
+
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         archive_path_buf.hash(&mut hasher);
         inner_path.hash(&mut hasher);
         let hash = hasher.finish();
-        
+
         let temp_path = temp_dir.join(format!("{:x}.{}", hash, ext));
-        
+
         if temp_path.exists() {
             return Ok(temp_path.to_string_lossy().to_string());
         }
 
         manager.extract_file_to_path(&archive_path_buf, &inner_path, &temp_path)?;
-        
+
         Ok(temp_path.to_string_lossy().to_string())
     })
     .await
@@ -285,50 +277,42 @@ pub async fn extract_for_clipboard(
     let archive_manager = Arc::clone(&state.archive_manager);
     let archive_path_buf = PathBuf::from(&archive_path);
     let inner_path = file_path.clone();
-    
+
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
+
         let bytes = manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)?;
-        
+
         let ext = Path::new(&inner_path)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("jpg");
-        
+
         let temp_dir = std::env::temp_dir().join("neoview_clipboard");
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
-        
+
         let archive_stem = archive_path_buf
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("archive");
-        
+
         let inner_name = Path::new(&inner_path)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("file");
-        
+
         let temp_path = temp_dir.join(format!("{}_{}.{}", archive_stem, inner_name, ext));
-        
+
         std::fs::write(&temp_path, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
-        
+
         Ok(temp_path.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| format!("extract_for_clipboard join error: {}", e))?;
 
     match &result {
-        Ok(path) => info!(
-            "📤 [Clipboard] extract_for_clipboard success path={}",
-            path
-        ),
-        Err(err) => warn!(
-            "⚠️ [Clipboard] extract_for_clipboard failed: {}",
-            err
-        ),
+        Ok(path) => info!("📤 [Clipboard] extract_for_clipboard success path={}", path),
+        Err(err) => warn!("⚠️ [Clipboard] extract_for_clipboard failed: {}", err),
     }
 
     result
@@ -359,56 +343,52 @@ pub async fn batch_extract_archive(
     use std::hash::{Hash, Hasher};
 
     let archive_path_buf = PathBuf::from(&archive_path);
-    
+
     let mut hasher = DefaultHasher::new();
     archive_path_buf.hash(&mut hasher);
     let hash = hasher.finish();
-    
+
     let temp_dir = std::env::temp_dir()
         .join("neoview_cache")
         .join(format!("{:x}", hash));
-    
+
     if temp_dir.exists() {
-        let count = std::fs::read_dir(&temp_dir)
-            .map(|d| d.count())
-            .unwrap_or(0);
+        let count = std::fs::read_dir(&temp_dir).map(|d| d.count()).unwrap_or(0);
         if count > 0 {
             info!("📦 使用已解压的缓存目录: {:?} ({} files)", temp_dir, count);
             return Ok(temp_dir.to_string_lossy().to_string());
         }
     }
-    
+
     info!("📦 开始批量解压: {:?} -> {:?}", archive_path_buf, temp_dir);
-    
+
     let archive_manager = Arc::clone(&state.archive_manager);
-    
+
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
+
         let images = manager.get_images_from_archive(&archive_path_buf)?;
-        
+
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
-        
+
         for (index, inner_path) in images.iter().enumerate() {
             let bytes = manager.load_image_from_archive_binary(&archive_path_buf, inner_path)?;
-            
+
             let ext = Path::new(inner_path)
                 .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("jpg");
             let temp_file = temp_dir.join(format!("{:05}.{}", index, ext));
-            
+
             std::fs::write(&temp_file, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
         }
-        
+
         info!("✅ 批量解压完成: {} files", images.len());
         Ok(temp_dir.to_string_lossy().to_string())
     })
     .await
     .map_err(|e| format!("batch_extract_archive join error: {}", e))?;
-    
+
     result
 }
 
@@ -438,9 +418,7 @@ pub async fn batch_scan_archives(
             "filebrowser",
             move || -> Result<Vec<ArchiveScanResult>, String> {
                 let mut results = Vec::with_capacity(paths.len());
-                let manager = archive_manager
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
+                let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
 
                 for path in paths {
                     let archive_path_str = path.to_string_lossy().to_string();
@@ -479,27 +457,24 @@ pub async fn preload_archive_pages(
 ) -> Result<PreloadResult, String> {
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    
+
     let archive_manager = Arc::clone(&state.archive_manager);
     let archive_path_buf = PathBuf::from(&archive_path);
     let page_count = page_paths.len();
-    
+
     info!(
         "📦 [Preload] 开始并行预加载 {} 个页面: {}",
-        page_count,
-        archive_path
+        page_count, archive_path
     );
-    
+
     let start_time = std::time::Instant::now();
-    
+
     let result = spawn_blocking(move || {
-        let manager = archive_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        
+        let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
+
         let success_count = AtomicUsize::new(0);
         let total_bytes = AtomicUsize::new(0);
-        
+
         let errors: Vec<String> = page_paths
             .par_iter()
             .filter_map(|page_path| {
@@ -513,27 +488,34 @@ pub async fn preload_archive_pages(
                 }
             })
             .collect();
-        
+
         Ok(PreloadResult {
             total: page_count,
             success: success_count.load(Ordering::Relaxed),
             failed: errors.len(),
             total_bytes: total_bytes.load(Ordering::Relaxed),
-            errors: if errors.is_empty() { None } else { Some(errors) },
+            errors: if errors.is_empty() {
+                None
+            } else {
+                Some(errors)
+            },
         })
     })
     .await
     .map_err(|e| format!("preload_archive_pages join error: {}", e))?;
-    
+
     let elapsed = start_time.elapsed();
-    
+
     match &result {
         Ok(r) => info!(
             "✅ [Preload] 完成: {}/{} 成功, {} bytes, {:.1}ms",
-            r.success, r.total, r.total_bytes, elapsed.as_secs_f64() * 1000.0
+            r.success,
+            r.total,
+            r.total_bytes,
+            elapsed.as_secs_f64() * 1000.0
         ),
         Err(e) => warn!("⚠️ [Preload] 失败: {}", e),
     }
-    
+
     result
 }

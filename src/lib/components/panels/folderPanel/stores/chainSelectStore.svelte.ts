@@ -5,6 +5,14 @@
 
 import { writable, derived, get } from 'svelte/store';
 
+const CHAIN_SELECT_DEBUG = false;
+
+function debugChainSelect(...args: unknown[]): void {
+	if (CHAIN_SELECT_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 // 链选模式状态（按页签ID存储）- 导出用于响应式订阅
 export const chainSelectModeByTab = writable<Record<string, boolean>>({});
 
@@ -32,10 +40,10 @@ export const chainSelectMode = derived(chainSelectModeByTab, ($modes) => {
  * 切换指定页签的链选模式
  */
 export function toggleChainSelectMode(tabId: string) {
-	console.log('[ChainSelectStore] toggleChainSelectMode called, tabId:', tabId);
+	debugChainSelect('[ChainSelectStore] toggleChainSelectMode called, tabId:', tabId);
 	chainSelectModeByTab.update((modes) => {
 		const newEnabled = !modes[tabId];
-		console.log('[ChainSelectStore] 当前状态:', modes[tabId], '-> 新状态:', newEnabled);
+		debugChainSelect('[ChainSelectStore] 当前状态:', modes[tabId], '-> 新状态:', newEnabled);
 		// 关闭链选模式时清除锚点
 		if (!newEnabled) {
 			chainAnchorByTab.update((anchors) => {
@@ -57,7 +65,7 @@ export function toggleChainSelectMode(tabId: string) {
 export function getChainSelectMode(tabId: string): boolean {
 	const modes = get(chainSelectModeByTab);
 	const result = modes[tabId] || false;
-	console.log(
+	debugChainSelect(
 		'[ChainSelectStore] getChainSelectMode tabId:',
 		tabId,
 		'modes:',

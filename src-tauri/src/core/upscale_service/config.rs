@@ -1,5 +1,5 @@
 //! 超分服务配置模块
-//! 
+//!
 //! 包含 UpscaleServiceConfig 结构体及其默认实现
 
 /// 服务配置
@@ -19,7 +19,7 @@ impl Default for UpscaleServiceConfig {
     fn default() -> Self {
         Self {
             worker_threads: 2,
-            preload_range: 5, // 前后各5页
+            preload_range: 5,             // 前后各5页
             forward_priority_weight: 0.7, // 前方页优先
             default_timeout: 120.0,
         }

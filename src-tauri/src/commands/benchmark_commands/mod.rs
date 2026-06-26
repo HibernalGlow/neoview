@@ -10,27 +10,22 @@
 //! - realworld_benchmark: 真实场景模拟和转码测试命令
 
 // 子模块声明
-pub mod types;
-pub mod thumbnail_benchmark;
-pub mod image_benchmark;
 pub mod archive_benchmark;
-pub mod wic_benchmark;
+pub mod image_benchmark;
 pub mod realworld_benchmark;
+pub mod thumbnail_benchmark;
+pub mod types;
+pub mod wic_benchmark;
 
 // 重导出类型
 pub use types::*;
 
 // 重导出缩略图基准测试函数
-pub use thumbnail_benchmark::{
-    generate_thumbnail_with_image_crate,
-    decode_jxl_for_benchmark,
-};
+pub use thumbnail_benchmark::{decode_jxl_for_benchmark, generate_thumbnail_with_image_crate};
 
 #[cfg(target_os = "windows")]
 pub use thumbnail_benchmark::{
-    generate_thumbnail_with_wic,
-    generate_thumbnail_with_wic_fast,
-    generate_thumbnail_with_format,
+    generate_thumbnail_with_format, generate_thumbnail_with_wic, generate_thumbnail_with_wic_fast,
 };
 
 // 重导出图像基准测试命令（包括 Tauri 宏生成的函数）

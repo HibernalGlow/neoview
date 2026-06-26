@@ -79,6 +79,8 @@ interface RequestThumbnailsParams {
 	generation: number;
 }
 
+const IN_FLIGHT_TTL_MS = 60_000;
+
 // ============================================================================
 // 缓存键生成
 // ============================================================================
@@ -146,9 +148,13 @@ class UnifiedThumbnailStore {
 
 	/** 正在请求的 key 集合 */
 	private inFlight = new Set<string>();
+	private inFlightStartedAt = new Map<string, number>();
 
 	/** 上下文 -> 世代号 */
 	private contextGenerations = new Map<string, number>();
+
+	/** 上下文 -> 当前未完成的缩略图 key 集合 */
+	private contextInflightKeys = new Map<string, Set<string>>();
 
 	/** 事件监听器 */
 	private batchUnlisten: UnlistenFn | null = null;
@@ -194,7 +200,9 @@ class UnifiedThumbnailStore {
 		}
 		this.cache.clear();
 		this.inFlight.clear();
+		this.inFlightStartedAt.clear();
 		this.contextGenerations.clear();
+		this.contextInflightKeys.clear();
 		this.initialized = false;
 	}
 
@@ -222,7 +230,52 @@ class UnifiedThumbnailStore {
 
 	/** 是否正在加载 */
 	isLoading(key: string): boolean {
-		return this.inFlight.has(key);
+		return this.isInFlight(key);
+	}
+
+	private rememberContextKeys(contextId: string, keys: string[]): void {
+		if (keys.length === 0) return;
+		let contextKeys = this.contextInflightKeys.get(contextId);
+		if (!contextKeys) {
+			contextKeys = new Set<string>();
+			this.contextInflightKeys.set(contextId, contextKeys);
+		}
+		for (const key of keys) {
+			contextKeys.add(key);
+		}
+	}
+
+	private isInFlight(key: string): boolean {
+		if (!this.inFlight.has(key)) return false;
+		const startedAt = this.inFlightStartedAt.get(key) ?? 0;
+		if (Date.now() - startedAt <= IN_FLIGHT_TTL_MS) {
+			return true;
+		}
+
+		this.releaseInFlightKey(key);
+		const entry = this.cache.get(key);
+		if (entry && entry.status === 'loading') {
+			entry.status = 'failed';
+		}
+		return false;
+	}
+
+	private releaseInFlightKey(key: string): void {
+		this.inFlight.delete(key);
+		this.inFlightStartedAt.delete(key);
+		for (const [contextId, keys] of this.contextInflightKeys) {
+			keys.delete(key);
+			if (keys.size === 0) {
+				this.contextInflightKeys.delete(contextId);
+			}
+		}
+	}
+
+	private hasContextConsumer(key: string): boolean {
+		for (const keys of this.contextInflightKeys.values()) {
+			if (keys.has(key)) return true;
+		}
+		return false;
 	}
 
 	// ===========================================================================
@@ -238,19 +291,27 @@ class UnifiedThumbnailStore {
 	): Promise<void> {
 		if (items.length === 0) return;
 
-		// 过滤已缓存和正在加载的
-		const needRequest = items.filter((item) => {
+		// 记录当前 context 对未完成 key 的关注；即使 key 已由其他 context 发起，
+		// 也不能让旧 context 取消时误伤这个消费者。
+		const pendingItems = items.filter((item) => {
 			if (this.hasThumbnail(item.key)) return false;
-			if (this.inFlight.has(item.key)) return false;
 			return true;
 		});
+		// 只对全局未在途的 key 发起后端请求
+		const needRequest = pendingItems.filter((item) => !this.isInFlight(item.key));
+		this.rememberContextKeys(
+			contextId,
+			pendingItems.map((item) => item.key)
+		);
 
 		if (needRequest.length === 0) return;
 
 		// 标记为加载中
 		for (const item of needRequest) {
 			this.inFlight.add(item.key);
-			if (!this.cache.has(item.key)) {
+			this.inFlightStartedAt.set(item.key, Date.now());
+			const entry = this.cache.get(item.key);
+			if (!entry) {
 				this.cache.set(item.key, {
 					url: '',
 					width: 0,
@@ -258,6 +319,8 @@ class UnifiedThumbnailStore {
 					status: 'loading',
 					urlVersion: 0
 				});
+			} else if (entry.status !== 'ready') {
+				entry.status = 'loading';
 			}
 		}
 
@@ -279,7 +342,7 @@ class UnifiedThumbnailStore {
 			console.error('[UnifiedThumb] request failed:', err);
 			// 回滚加载状态
 			for (const item of needRequest) {
-				this.inFlight.delete(item.key);
+				this.releaseInFlightKey(item.key);
 				const entry = this.cache.get(item.key);
 				if (entry && entry.status === 'loading') {
 					entry.status = 'failed';
@@ -290,8 +353,24 @@ class UnifiedThumbnailStore {
 
 	/** 取消上下文 */
 	async cancelContext(contextId: string): Promise<void> {
+		const contextKeys = this.contextInflightKeys.get(contextId);
+		this.contextInflightKeys.delete(contextId);
+		if (contextKeys) {
+			for (const key of contextKeys) {
+				if (this.hasContextConsumer(key)) continue;
+				this.releaseInFlightKey(key);
+				const entry = this.cache.get(key);
+				if (entry && entry.status === 'loading') {
+					entry.status = 'failed';
+				}
+			}
+		}
+
+		const generation = (this.contextGenerations.get(contextId) ?? 0) + 1;
+		this.contextGenerations.set(contextId, generation);
+
 		try {
-			await invoke('thumb_v4_cancel_context', { contextId });
+			await invoke('thumb_v4_cancel_context', { contextId, generation });
 		} catch (err) {
 			console.warn('[UnifiedThumb] cancel failed:', err);
 		}
@@ -321,7 +400,7 @@ class UnifiedThumbnailStore {
 		this.pendingBatch = [];
 
 		for (const item of items) {
-			this.inFlight.delete(item.key);
+			this.releaseInFlightKey(item.key);
 
 			const url = getThumbProtocolUrl(item.key, item.urlVersion);
 			this.cache.set(item.key, {
@@ -340,8 +419,16 @@ class UnifiedThumbnailStore {
 
 	/** 清空缓存 */
 	clear(): void {
+		if (this.batchRafId) {
+			cancelAnimationFrame(this.batchRafId);
+			this.batchRafId = 0;
+		}
+		this.pendingBatch = [];
 		this.cache.clear();
 		this.inFlight.clear();
+		this.inFlightStartedAt.clear();
+		this.contextGenerations.clear();
+		this.contextInflightKeys.clear();
 	}
 
 	/** 获取统计 */

@@ -62,7 +62,7 @@ pub async fn load_image(
                 // EPUB 电子书：解析 path 格式 "epub_path:inner_path"
                 let book_path = book.path.clone();
                 drop(book_manager_lock);
-                
+
                 // 从 path 中提取 inner_path (格式: epub_path:inner_path)
                 let inner_path = if let Some(colon_pos) = path.find(':') {
                     // 跳过 Windows 盘符 (如 E:)
@@ -79,10 +79,10 @@ pub async fn load_image(
                 } else {
                     return Err(format!("Invalid EPUB path format: {}", path));
                 };
-                
+
                 use crate::core::ebook::EbookManager;
                 let epub_result = EbookManager::get_epub_image(&book_path, inner_path);
-                
+
                 if let Ok((ref bytes, ref mime)) = epub_result {
                     info!(
                         "📤 [ImagePipeline:{}] load_image epub branch success bytes={} mime={}",
@@ -152,24 +152,20 @@ pub async fn load_image_base64(
     book_manager: State<'_, Mutex<BookManager>>,
 ) -> Result<String, String> {
     let trace_id = trace_id.unwrap_or_else(|| fallback_trace_id("rust-load-b64", page_index));
-    
+
     // 调用原有的 load_image 获取数据
-    let bytes = load_image_internal(
-        &path,
-        &trace_id,
-        page_index,
-        &image_loader,
-        &book_manager,
-    )?;
-    
+    let bytes = load_image_internal(&path, &trace_id, page_index, &image_loader, &book_manager)?;
+
     // 编码为 Base64
     use base64::{engine::general_purpose::STANDARD, Engine};
     let encoded = STANDARD.encode(&bytes);
     info!(
         "📤 [ImagePipeline:{}] load_image_base64 success bytes={} base64_len={}",
-        trace_id, bytes.len(), encoded.len()
+        trace_id,
+        bytes.len(),
+        encoded.len()
     );
-    
+
     Ok(encoded)
 }
 
@@ -200,7 +196,7 @@ fn load_image_internal(
             BookType::Epub => {
                 let book_path = book.path.clone();
                 drop(book_manager_lock);
-                
+
                 let inner_path = if let Some(colon_pos) = path.find(':') {
                     if colon_pos == 1 {
                         if let Some(second_colon) = path[2..].find(':') {
@@ -214,7 +210,7 @@ fn load_image_internal(
                 } else {
                     return Err(format!("Invalid EPUB path format: {}", path));
                 };
-                
+
                 use crate::core::ebook::EbookManager;
                 return EbookManager::get_epub_image(&book_path, inner_path).map(|(data, _)| data);
             }
@@ -225,7 +221,7 @@ fn load_image_internal(
             }
         }
     }
-    
+
     let loader = image_loader.lock().map_err(|e| e.to_string())?;
     loader.load_image_as_binary(path)
 }

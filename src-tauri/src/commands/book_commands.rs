@@ -156,7 +156,13 @@ pub async fn open_book(
             return;
         }
 
-        scanner_arc.scan_book(&book_path, &book_type, &scan_pages, Some(&app_handle), Some(scan_generation));
+        scanner_arc.scan_book(
+            &book_path,
+            &book_type,
+            &scan_pages,
+            Some(&app_handle),
+            Some(scan_generation),
+        );
     });
 
     Ok(book)
@@ -237,7 +243,6 @@ pub async fn set_book_sort_mode(
     let mut manager = state.lock().map_err(|e| e.to_string())?;
     manager.set_sort_mode(sort_mode)
 }
-
 
 #[tauri::command]
 pub async fn set_media_priority_mode(

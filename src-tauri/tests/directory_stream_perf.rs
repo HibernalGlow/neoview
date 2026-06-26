@@ -199,7 +199,11 @@ fn export_sample_dirs(path: &PathBuf, sample_dirs: &[PathBuf]) {
         let _ = fs::create_dir_all(parent);
     }
     if let Err(err) = fs::write(path, out) {
-        eprintln!("[WARN] failed to export sample list to {}: {}", path.display(), err);
+        eprintln!(
+            "[WARN] failed to export sample list to {}: {}",
+            path.display(),
+            err
+        );
     }
 }
 
@@ -440,7 +444,11 @@ async fn directory_stream_perf_smoke() {
         stats.elapsed.as_micros(),
         stats.items_per_sec()
     );
-    assert_against_baseline("smoke", stats.items_per_sec(), "NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC");
+    assert_against_baseline(
+        "smoke",
+        stats.items_per_sec(),
+        "NEOVIEW_STREAM_SMOKE_BASELINE_ITEMS_PER_SEC",
+    );
     assert!(stats.total_items >= 1_000, "too few items streamed");
 }
 
@@ -521,12 +529,14 @@ async fn directory_stream_real_dataset_smoke() {
 
     println!(
         "[PERF][real][summary] runs={} avg_throughput={:.2} items/s p95_throughput={:.2} items/s",
-        runs,
-        avg_throughput,
-        p95_throughput
+        runs, avg_throughput, p95_throughput
     );
 
-    assert_against_baseline("real", avg_throughput, "NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC");
+    assert_against_baseline(
+        "real",
+        avg_throughput,
+        "NEOVIEW_STREAM_REAL_BASELINE_ITEMS_PER_SEC",
+    );
 
     if let Some(floor) = resolve_throughput_floor() {
         assert!(

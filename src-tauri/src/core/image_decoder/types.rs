@@ -65,7 +65,10 @@ pub enum DecodeError {
     UnsupportedFormat { format: String },
 
     #[error("解码失败 ({backend}): {message}")]
-    DecodeFailed { backend: DecodeBackend, message: String },
+    DecodeFailed {
+        backend: DecodeBackend,
+        message: String,
+    },
 
     #[error("获取尺寸失败: {0}")]
     DimensionError(String),
@@ -102,11 +105,15 @@ pub struct DecodedImage {
     pub backend: DecodeBackend,
 }
 
-
 impl DecodedImage {
     /// 创建新的 DecodedImage（RGBA 格式）
     pub fn new(width: u32, height: u32, pixels: Vec<u8>, backend: DecodeBackend) -> Self {
-        Self { width, height, pixels, backend }
+        Self {
+            width,
+            height,
+            pixels,
+            backend,
+        }
     }
 
     /// 从 BGRA 数据创建（自动转换为 RGBA）
@@ -116,7 +123,12 @@ impl DecodedImage {
         for chunk in bgra.chunks_exact_mut(4) {
             chunk.swap(0, 2); // B <-> R
         }
-        Self { width, height, pixels: bgra, backend }
+        Self {
+            width,
+            height,
+            pixels: bgra,
+            backend,
+        }
     }
 
     /// 转换为 `image::DynamicImage`
@@ -132,10 +144,10 @@ impl DecodedImage {
     pub fn to_webp(&self, quality: u8) -> Result<Vec<u8>, DecodeError> {
         let img = self.to_dynamic_image()?;
         let mut output = Vec::new();
-        
+
         // 使用 image crate 的 WebP 编码器
         let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut output);
-        
+
         // 如果质量 < 100，使用有损编码
         if quality < 100 {
             let mut output = Vec::new();
@@ -143,15 +155,17 @@ impl DecodedImage {
                 .map_err(|e| DecodeError::EncodeError(format!("WebP 编码失败: {e}")))?;
             return Ok(output);
         }
-        
+
         // 无损编码
-        encoder.encode(
-            &self.pixels,
-            self.width,
-            self.height,
-            image::ExtendedColorType::Rgba8,
-        ).map_err(|e| DecodeError::EncodeError(format!("WebP 编码失败: {e}")))?;
-        
+        encoder
+            .encode(
+                &self.pixels,
+                self.width,
+                self.height,
+                image::ExtendedColorType::Rgba8,
+            )
+            .map_err(|e| DecodeError::EncodeError(format!("WebP 编码失败: {e}")))?;
+
         Ok(output)
     }
 
@@ -180,7 +194,7 @@ mod tests {
         // BGRA: Blue=255, Green=128, Red=64, Alpha=255
         let bgra = vec![255, 128, 64, 255];
         let img = DecodedImage::from_bgra(1, 1, bgra, DecodeBackend::Wic);
-        
+
         // RGBA: Red=64, Green=128, Blue=255, Alpha=255
         assert_eq!(img.pixels, vec![64, 128, 255, 255]);
     }

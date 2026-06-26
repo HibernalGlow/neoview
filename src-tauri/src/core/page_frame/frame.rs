@@ -1,11 +1,13 @@
 //! PageFrame - 页面帧
 //! 当前显示的内容单位，可包含 1-2 个 PageFrameElement
 
-use super::{PageFrameElement, PageRange, ReadOrder, Size, WidePageStretch, WidePageScaleCalculator};
+use super::{
+    PageFrameElement, PageRange, ReadOrder, Size, WidePageScaleCalculator, WidePageStretch,
+};
 use serde::{Deserialize, Serialize};
 
 /// 页面帧
-/// 
+///
 /// 当前显示的内容单位，可包含 1-2 个 PageFrameElement
 /// 在双页模式下，两个竖向页面会组成一个帧
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,12 +44,11 @@ impl PageFrame {
     }
 
     /// 创建双页帧
-    /// 
+    ///
     /// 两个元素会根据阅读方向排列
     pub fn double(e1: PageFrameElement, e2: PageFrameElement, direction: i32) -> Self {
         // 合并范围
-        let frame_range = PageRange::merge([e1.page_range, e2.page_range])
-            .unwrap_or(e1.page_range);
+        let frame_range = PageRange::merge([e1.page_range, e2.page_range]).unwrap_or(e1.page_range);
 
         // 计算总尺寸（两页并排）
         let width = e1.width() + e2.width();
@@ -74,18 +75,18 @@ impl PageFrame {
     }
 
     /// 创建带对齐的双页帧
-    /// 
+    ///
     /// 根据 `WidePageStretch` 模式缩放两个元素
     pub fn double_aligned(
-        mut e1: PageFrameElement, 
-        mut e2: PageFrameElement, 
+        mut e1: PageFrameElement,
+        mut e2: PageFrameElement,
         direction: i32,
         stretch_mode: WidePageStretch,
     ) -> Self {
         // 使用 `WidePageScaleCalculator` 计算各元素的缩放比例
         let sizes = vec![e1.raw_size(), e2.raw_size()];
         let scales = WidePageScaleCalculator::calculate(&sizes, stretch_mode);
-        
+
         if scales.len() >= 2 {
             e1.scale = scales[0];
             e2.scale = scales[1];
@@ -93,11 +94,15 @@ impl PageFrame {
 
         Self::double(e1, e2, direction)
     }
-    
+
     /// 创建带高度对齐的双页帧（便捷方法）
-    /// 
+    ///
     /// 等同于 `double_aligned` 使用 `UniformHeight` 模式
-    pub fn double_height_aligned(e1: PageFrameElement, e2: PageFrameElement, direction: i32) -> Self {
+    pub fn double_height_aligned(
+        e1: PageFrameElement,
+        e2: PageFrameElement,
+        direction: i32,
+    ) -> Self {
         Self::double_aligned(e1, e2, direction, WidePageStretch::UniformHeight)
     }
 
@@ -122,7 +127,7 @@ impl PageFrame {
     }
 
     /// 获取按方向排序的元素
-    /// 
+    ///
     /// 返回的元素顺序与显示顺序一致
     pub fn get_directed_elements(&self) -> impl Iterator<Item = &PageFrameElement> {
         self.elements.iter()
@@ -205,7 +210,15 @@ mod tests {
     use crate::core::page_frame::{Page, PagePosition};
 
     fn create_test_page(index: usize, width: u32, height: u32) -> Page {
-        Page::new(index, "".into(), "".into(), format!("{index}.jpg"), 0, width, height)
+        Page::new(
+            index,
+            "".into(),
+            "".into(),
+            format!("{index}.jpg"),
+            0,
+            width,
+            height,
+        )
     }
 
     #[test]
@@ -226,14 +239,14 @@ mod tests {
         let page2 = create_test_page(1, 800, 1200);
         let e1 = PageFrameElement::full(page1, PageRange::full_page(0));
         let e2 = PageFrameElement::full(page2, PageRange::full_page(1));
-        
+
         let frame = PageFrame::double(e1, e2, 1);
 
         assert!(frame.is_double());
         assert!(frame.contains_index(0));
         assert!(frame.contains_index(1));
         assert!(!frame.contains_index(2));
-        
+
         // 检查尺寸
         assert!((frame.size.width - 1600.0).abs() < 0.001);
         assert!((frame.size.height - 1200.0).abs() < 0.001);
@@ -245,10 +258,10 @@ mod tests {
         let page2 = create_test_page(1, 800, 1200);
         let e1 = PageFrameElement::full(page1, PageRange::full_page(0));
         let e2 = PageFrameElement::full(page2, PageRange::full_page(1));
-        
+
         // RTL 模式
         let frame = PageFrame::double(e1, e2, -1);
-        
+
         // 第一个元素应该是 page2（索引 1）
         assert_eq!(frame.elements[0].page_index(), 1);
         assert_eq!(frame.elements[1].page_index(), 0);

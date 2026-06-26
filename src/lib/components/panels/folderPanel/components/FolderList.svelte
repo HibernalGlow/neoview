@@ -30,6 +30,14 @@
 		requestFolderSizes
 	} from '$lib/stores/folderSizeCache.svelte';
 
+	const FOLDER_LIST_DEBUG = false;
+
+	function debugFolderList(...args: unknown[]): void {
+		if (FOLDER_LIST_DEBUG) {
+			console.debug(...args);
+		}
+	}
+
 	// 别名映射
 	const currentPath = tabCurrentPath;
 	const viewStyle = tabViewStyle;
@@ -156,7 +164,13 @@
 		([$items, $config, $path]) => {
 			const sorted = sortItems($items, $config.field, $config.order, $path);
 			// 将排好序的列表缓存，供切换书籍时直接读取（不再二次排序）
-			folderTabActions.setCachedSortedItems(sorted, $path, 'FolderList');
+			folderTabActions.setCachedSortedItems(
+				sorted,
+				$path,
+				'FolderList',
+				$config.field,
+				$config.order
+			);
 			return sorted;
 		}
 	);
@@ -254,8 +268,8 @@
 			const parentPath = lastSlash > 0 ? item.path.substring(0, lastSlash) : '';
 			if (!parentPath) return;
 
-			console.log('🎬 Opening video:', item.path);
-			console.log('📁 Parent directory:', parentPath);
+			debugFolderList('🎬 Opening video:', item.path);
+			debugFolderList('📁 Parent directory:', parentPath);
 
 			// 打开父文件夹作为book
 			await bookStore.openDirectoryAsBook(parentPath);
@@ -271,7 +285,7 @@
 				console.error('Failed to add video history entry:', historyError);
 			}
 
-			console.log('✅ Video opened');
+			debugFolderList('✅ Video opened');
 		} catch (err) {
 			console.error('❌ Error opening video:', err);
 		}

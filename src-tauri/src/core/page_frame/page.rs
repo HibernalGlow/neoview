@@ -5,7 +5,7 @@ use super::Size;
 use serde::{Deserialize, Serialize};
 
 /// 物理页面
-/// 
+///
 /// 表示一个实际的图片文件，包含路径、尺寸等元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,7 +103,7 @@ impl Page {
     }
 
     /// 检查是否应该分割（根据宽高比阈值）
-    /// 
+    ///
     /// 当宽高比大于阈值时，认为是横向页面，可以分割
     pub fn should_split(&self, divide_page_rate: f64) -> bool {
         self.aspect_ratio > divide_page_rate

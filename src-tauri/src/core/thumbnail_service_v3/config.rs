@@ -1,5 +1,5 @@
 //! 缩略图服务配置模块
-//! 
+//!
 //! 包含 ThumbnailServiceConfig 结构体及其默认实现
 
 #[derive(Clone, Copy)]
@@ -74,10 +74,10 @@ impl Default for ThumbnailServiceConfig {
         let num_cores = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(4);
-        
+
         // 线程数 = CPU核心数 * 1.5，最少4，最高可扩到 32 (针对现代多核 CPU 如 i9/R9)
         let worker_threads = ((num_cores * 3) / 2).max(4).min(32);
-        
+
         // 动态内存缓存：
         // 假设每个缩略图平均 30KB，最少512，核心多则动态增加
         let memory_cache_size = if num_cores >= 12 {
@@ -101,9 +101,9 @@ impl Default for ThumbnailServiceConfig {
         } else {
             512 * 1024 * 1024 // 512MB
         };
-        
+
         Self {
-            folder_search_depth: 3,  // 允许递归3层查找子文件夹中的图片
+            folder_search_depth: 3, // 允许递归3层查找子文件夹中的图片
             memory_cache_size,
             worker_threads,
             thumbnail_size: 256,

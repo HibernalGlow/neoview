@@ -352,13 +352,7 @@ mod tests {
         // 插入更多数据触发驱逐
         for i in 1..10 {
             let key = PageKey::new("test.zip", i);
-            pool.insert(
-                key,
-                vec![0; 200 * 1024],
-                "image/jpeg".to_string(),
-                5,
-                1,
-            );
+            pool.insert(key, vec![0; 200 * 1024], "image/jpeg".to_string(), 5, 1);
         }
 
         // 第一页应该还在（被锁定）

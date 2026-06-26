@@ -1,6 +1,6 @@
 //! WIC (Windows Imaging Component) 图像解码器
 //! 使用 Windows 原生 API 解码图像，支持 AVIF、JXL、WebP 等格式（需安装对应编解码器）
-//! 
+//!
 //! 注意：编码功能已移除，因为 PyO3 超分器直接返回 WebP 格式
 
 #[cfg(target_os = "windows")]
@@ -9,13 +9,14 @@ use windows::{
     Win32::{
         Foundation::GENERIC_READ,
         Graphics::Imaging::{
-            CLSID_WICImagingFactory, IWICBitmapDecoder, IWICBitmapFrameDecode,
-            IWICFormatConverter, IWICImagingFactory, IWICBitmapScaler,
-            WICDecodeMetadataCacheOnDemand, WICBitmapDitherTypeNone,
-            WICBitmapPaletteTypeCustom, GUID_WICPixelFormat32bppBGRA,
-            WICBitmapInterpolationModeFant,
+            CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, IWICBitmapDecoder,
+            IWICBitmapFrameDecode, IWICBitmapScaler, IWICFormatConverter, IWICImagingFactory,
+            WICBitmapDitherTypeNone, WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom,
+            WICDecodeMetadataCacheOnDemand,
         },
-        System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED},
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+        },
     },
 };
 
@@ -41,12 +42,9 @@ pub fn decode_image_with_wic(file_path: &Path) -> Result<WicDecodeResult, String
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         // 创建 WIC 工厂
-        let factory: IWICImagingFactory = CoCreateInstance(
-            &CLSID_WICImagingFactory,
-            None,
-            CLSCTX_INPROC_SERVER,
-        )
-        .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+        let factory: IWICImagingFactory =
+            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
 
         // 将路径转换为宽字符
         let wide_path: Vec<u16> = OsStr::new(file_path)
@@ -99,11 +97,7 @@ pub fn decode_image_with_wic(file_path: &Path) -> Result<WicDecodeResult, String
 
         // 复制像素数据
         converter
-            .CopyPixels(
-                std::ptr::null(),
-                stride,
-                &mut pixels,
-            )
+            .CopyPixels(std::ptr::null(), stride, &mut pixels)
             .map_err(|e| format!("复制像素失败: {:?}", e))?;
 
         Ok(WicDecodeResult {
@@ -117,21 +111,18 @@ pub fn decode_image_with_wic(file_path: &Path) -> Result<WicDecodeResult, String
 /// 使用 WIC 从内存解码图像
 #[cfg(target_os = "windows")]
 pub fn decode_image_from_memory_with_wic(data: &[u8]) -> Result<WicDecodeResult, String> {
+    use windows::core::Interface;
     use windows::Win32::Graphics::Imaging::IWICStream;
     use windows::Win32::System::Com::IStream;
-    use windows::core::Interface;
 
     unsafe {
         // 初始化 COM
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         // 创建 WIC 工厂
-        let factory: IWICImagingFactory = CoCreateInstance(
-            &CLSID_WICImagingFactory,
-            None,
-            CLSCTX_INPROC_SERVER,
-        )
-        .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+        let factory: IWICImagingFactory =
+            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
 
         // 创建 WIC 流
         let stream: IWICStream = factory
@@ -144,16 +135,11 @@ pub fn decode_image_from_memory_with_wic(data: &[u8]) -> Result<WicDecodeResult,
             .map_err(|e| format!("初始化流失败: {:?}", e))?;
 
         // 转换为 IStream
-        let istream: IStream = stream.cast()
-            .map_err(|e| format!("转换流失败: {:?}", e))?;
+        let istream: IStream = stream.cast().map_err(|e| format!("转换流失败: {:?}", e))?;
 
         // 创建解码器
         let decoder: IWICBitmapDecoder = factory
-            .CreateDecoderFromStream(
-                &istream,
-                std::ptr::null(),
-                WICDecodeMetadataCacheOnDemand,
-            )
+            .CreateDecoderFromStream(&istream, std::ptr::null(), WICDecodeMetadataCacheOnDemand)
             .map_err(|e| format!("创建解码器失败: {:?}", e))?;
 
         // 获取第一帧
@@ -191,11 +177,7 @@ pub fn decode_image_from_memory_with_wic(data: &[u8]) -> Result<WicDecodeResult,
 
         // 复制像素数据
         converter
-            .CopyPixels(
-                std::ptr::null(),
-                stride,
-                &mut pixels,
-            )
+            .CopyPixels(std::ptr::null(), stride, &mut pixels)
             .map_err(|e| format!("复制像素失败: {:?}", e))?;
 
         Ok(WicDecodeResult {
@@ -209,22 +191,23 @@ pub fn decode_image_from_memory_with_wic(data: &[u8]) -> Result<WicDecodeResult,
 /// 使用 WIC 从内存解码图像并缩放到指定大小（高性能版本）
 /// 使用 WIC 内置缩放器，避免解码到全分辨率再缩放
 #[cfg(target_os = "windows")]
-pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -> Result<WicDecodeResult, String> {
+pub fn decode_and_scale_with_wic(
+    data: &[u8],
+    max_width: u32,
+    max_height: u32,
+) -> Result<WicDecodeResult, String> {
+    use windows::core::Interface;
     use windows::Win32::Graphics::Imaging::IWICStream;
     use windows::Win32::System::Com::IStream;
-    use windows::core::Interface;
 
     unsafe {
         // 初始化 COM
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
         // 创建 WIC 工厂
-        let factory: IWICImagingFactory = CoCreateInstance(
-            &CLSID_WICImagingFactory,
-            None,
-            CLSCTX_INPROC_SERVER,
-        )
-        .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+        let factory: IWICImagingFactory =
+            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
 
         // 创建 WIC 流
         let stream: IWICStream = factory
@@ -237,16 +220,11 @@ pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -
             .map_err(|e| format!("初始化流失败: {:?}", e))?;
 
         // 转换为 IStream
-        let istream: IStream = stream.cast()
-            .map_err(|e| format!("转换流失败: {:?}", e))?;
+        let istream: IStream = stream.cast().map_err(|e| format!("转换流失败: {:?}", e))?;
 
         // 创建解码器
         let decoder: IWICBitmapDecoder = factory
-            .CreateDecoderFromStream(
-                &istream,
-                std::ptr::null(),
-                WICDecodeMetadataCacheOnDemand,
-            )
+            .CreateDecoderFromStream(&istream, std::ptr::null(), WICDecodeMetadataCacheOnDemand)
             .map_err(|e| format!("创建解码器失败: {:?}", e))?;
 
         // 获取第一帧
@@ -275,7 +253,12 @@ pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -
 
         // 初始化缩放器（使用 Fant 插值，快速且质量较好）
         scaler
-            .Initialize(&frame, new_width, new_height, WICBitmapInterpolationModeFant)
+            .Initialize(
+                &frame,
+                new_width,
+                new_height,
+                WICBitmapInterpolationModeFant,
+            )
             .map_err(|e| format!("初始化缩放器失败: {:?}", e))?;
 
         // 创建格式转换器（转为 BGRA）
@@ -301,11 +284,7 @@ pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -
 
         // 复制像素数据
         converter
-            .CopyPixels(
-                std::ptr::null(),
-                stride,
-                &mut pixels,
-            )
+            .CopyPixels(std::ptr::null(), stride, &mut pixels)
             .map_err(|e| format!("复制像素失败: {:?}", e))?;
 
         Ok(WicDecodeResult {
@@ -317,7 +296,11 @@ pub fn decode_and_scale_with_wic(data: &[u8], max_width: u32, max_height: u32) -
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn decode_and_scale_with_wic(_data: &[u8], _max_width: u32, _max_height: u32) -> Result<WicDecodeResult, String> {
+pub fn decode_and_scale_with_wic(
+    _data: &[u8],
+    _max_width: u32,
+    _max_height: u32,
+) -> Result<WicDecodeResult, String> {
     Err("WIC 仅在 Windows 上可用".to_string())
 }
 
@@ -339,11 +322,13 @@ pub fn wic_result_to_dynamic_image(result: WicDecodeResult) -> Result<image::Dyn
 #[cfg(target_os = "windows")]
 pub fn wic_supports_format(extension: &str) -> bool {
     // WIC 原生支持的格式
-    let native_formats = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "ico", "wdp", "hdp"];
-    
+    let native_formats = [
+        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "ico", "wdp", "hdp",
+    ];
+
     // 需要安装扩展的格式
     let extension_formats = ["avif", "heic", "heif", "webp", "jxl"];
-    
+
     let ext = extension.to_lowercase();
     native_formats.contains(&ext.as_str()) || extension_formats.contains(&ext.as_str())
 }
@@ -360,7 +345,9 @@ pub fn decode_image_from_memory_with_wic(_data: &[u8]) -> Result<WicDecodeResult
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn wic_result_to_dynamic_image(_result: WicDecodeResult) -> Result<image::DynamicImage, String> {
+pub fn wic_result_to_dynamic_image(
+    _result: WicDecodeResult,
+) -> Result<image::DynamicImage, String> {
     Err("WIC 仅在 Windows 上可用".to_string())
 }
 
@@ -385,12 +372,9 @@ impl WicDecoder {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
             // 创建 WIC 工厂
-            let factory: IWICImagingFactory = CoCreateInstance(
-                &CLSID_WICImagingFactory,
-                None,
-                CLSCTX_INPROC_SERVER,
-            )
-            .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)
+                    .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
 
             // 将路径转换为宽字符
             let wide_path: Vec<u16> = OsStr::new(file_path)
@@ -427,21 +411,18 @@ impl WicDecoder {
     /// 获取图片尺寸（从内存数据）
     #[cfg(target_os = "windows")]
     pub fn get_image_dimensions_from_memory(data: &[u8]) -> Result<(u32, u32), String> {
+        use windows::core::Interface;
         use windows::Win32::Graphics::Imaging::IWICStream;
         use windows::Win32::System::Com::IStream;
-        use windows::core::Interface;
 
         unsafe {
             // 初始化 COM
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
 
             // 创建 WIC 工厂
-            let factory: IWICImagingFactory = CoCreateInstance(
-                &CLSID_WICImagingFactory,
-                None,
-                CLSCTX_INPROC_SERVER,
-            )
-            .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
+            let factory: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)
+                    .map_err(|e| format!("创建 WIC 工厂失败: {:?}", e))?;
 
             // 创建 WIC 流
             let stream: IWICStream = factory
@@ -454,16 +435,11 @@ impl WicDecoder {
                 .map_err(|e| format!("初始化流失败: {:?}", e))?;
 
             // 转换为 IStream
-            let istream: IStream = stream.cast()
-                .map_err(|e| format!("转换流失败: {:?}", e))?;
+            let istream: IStream = stream.cast().map_err(|e| format!("转换流失败: {:?}", e))?;
 
             // 创建解码器
             let decoder: IWICBitmapDecoder = factory
-                .CreateDecoderFromStream(
-                    &istream,
-                    std::ptr::null(),
-                    WICDecodeMetadataCacheOnDemand,
-                )
+                .CreateDecoderFromStream(&istream, std::ptr::null(), WICDecodeMetadataCacheOnDemand)
                 .map_err(|e| format!("创建解码器失败: {:?}", e))?;
 
             // 获取第一帧
@@ -486,16 +462,14 @@ impl WicDecoder {
     pub fn get_image_dimensions(_file_path: &std::path::Path) -> Result<(u32, u32), String> {
         // 非 Windows 平台回退到 image crate
         use image::GenericImageView;
-        let img = image::open(_file_path)
-            .map_err(|e| format!("打开图片失败: {}", e))?;
+        let img = image::open(_file_path).map_err(|e| format!("打开图片失败: {}", e))?;
         Ok(img.dimensions())
     }
 
     #[cfg(not(target_os = "windows"))]
     pub fn get_image_dimensions_from_memory(data: &[u8]) -> Result<(u32, u32), String> {
         use image::GenericImageView;
-        let img = image::load_from_memory(data)
-            .map_err(|e| format!("加载图片失败: {}", e))?;
+        let img = image::load_from_memory(data).map_err(|e| format!("加载图片失败: {}", e))?;
         Ok(img.dimensions())
     }
 

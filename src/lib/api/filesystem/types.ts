@@ -131,11 +131,14 @@ export type SearchStreamOutput =
 /**
  * 流配置选项
  */
+export type StreamLane = 'active' | 'background';
+
 export interface StreamOptions {
 	batchSize?: number;
 	skipHidden?: boolean;
 	sortBy?: string;
 	sortOrder?: string;
+	lane?: StreamLane;
 }
 
 /**

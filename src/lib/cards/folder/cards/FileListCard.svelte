@@ -119,6 +119,32 @@
 
 	// 有效的文件树配置（虚拟模式使用 effectiveFolderTreeConfig，否则使用全局 store）
 	let effectiveTreeConfig = $derived(ctx.effectiveFolderTreeConfig ?? globalFolderTreeConfigValue);
+	const MAX_MOUNTED_FOLDER_TABS = 3;
+	let mountedFolderTabIds = $state<string[]>([]);
+
+	$effect(() => {
+		const activeId = ctx.displayActiveTabId;
+		const availableIds = new Set(ctx.displayTabs.map((tab) => tab.id));
+		if (!activeId) {
+			mountedFolderTabIds = [];
+			return;
+		}
+
+		mountedFolderTabIds = [
+			activeId,
+			...mountedFolderTabIds.filter((id) => id !== activeId && availableIds.has(id))
+		].slice(0, Math.min(MAX_MOUNTED_FOLDER_TABS, ctx.displayTabs.length));
+	});
+
+	let renderedFolderTabs = $derived.by(() => {
+		const tabs = ctx.displayTabs;
+		if (tabs.length <= MAX_MOUNTED_FOLDER_TABS) return tabs;
+
+		const activeId = ctx.displayActiveTabId;
+		const mountedIds = new Set(mountedFolderTabIds);
+		if (activeId) mountedIds.add(activeId);
+		return tabs.filter((tab) => mountedIds.has(tab.id));
+	});
 
 	// ==================== 树调整 ====================
 	function startTreeResize(e: MouseEvent) {
@@ -276,18 +302,20 @@
 			effectiveTreeConfig.size
 		)}
 	>
-		{#each ctx.displayTabs as tab (tab.id)}
+		{#each renderedFolderTabs as tab (tab.id)}
 			<div
 				class="absolute inset-0"
 				class:hidden={tab.id !== ctx.displayActiveTabId}
 				class:pointer-events-none={tab.id !== ctx.displayActiveTabId}
 			>
 				{#if ctx.effectiveInlineTreeMode}
-					<InlineTreeList
-						onItemClick={onItemOpen}
-						onItemDoubleClick={onItemOpen}
-						{onItemContextMenu}
-					/>
+					{#if tab.id === ctx.displayActiveTabId}
+						<InlineTreeList
+							onItemClick={onItemOpen}
+							onItemDoubleClick={onItemOpen}
+							{onItemContextMenu}
+						/>
+					{/if}
 				{:else}
 					<FolderStack
 						tabId={tab.id}

@@ -2,9 +2,9 @@
 //! 使用 jxl-oxide 解码 JPEG XL 图像
 //! Requirements 4.1, 4.2, 4.3, 4.4, 4.5
 
+use crate::core::image_decoder::scaler::scale_image;
 use crate::core::image_decoder::traits::ImageDecoder;
 use crate::core::image_decoder::types::{DecodeBackend, DecodeError, DecodedImage};
-use crate::core::image_decoder::scaler::scale_image;
 use jxl_oxide::JxlImage;
 use std::io::Cursor;
 
@@ -20,12 +20,13 @@ impl JxlDecoder {
     /// 内部解码实现
     fn decode_internal(data: &[u8]) -> Result<DecodedImage, DecodeError> {
         let mut reader = Cursor::new(data);
-        let jxl_image = JxlImage::builder()
-            .read(&mut reader)
-            .map_err(|e| DecodeError::DecodeFailed {
-                backend: DecodeBackend::JxlOxide,
-                message: format!("JXL 解析失败: {e}"),
-            })?;
+        let jxl_image =
+            JxlImage::builder()
+                .read(&mut reader)
+                .map_err(|e| DecodeError::DecodeFailed {
+                    backend: DecodeBackend::JxlOxide,
+                    message: format!("JXL 解析失败: {e}"),
+                })?;
 
         // Requirements 4.4: 处理动画 JXL，仅解码第一帧
         let render = jxl_image
@@ -90,7 +91,12 @@ impl JxlDecoder {
             }
         };
 
-        Ok(DecodedImage::new(width, height, pixels, DecodeBackend::JxlOxide))
+        Ok(DecodedImage::new(
+            width,
+            height,
+            pixels,
+            DecodeBackend::JxlOxide,
+        ))
     }
 }
 

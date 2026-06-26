@@ -1,5 +1,5 @@
-use crate::core::video_thumbnail::VideoThumbnailGenerator;
 use crate::core::video_exts;
+use crate::core::video_thumbnail::VideoThumbnailGenerator;
 use std::path::PathBuf;
 use tauri::command;
 
@@ -122,35 +122,35 @@ pub async fn extract_video_to_temp(
     );
 
     let archive_path_buf = PathBuf::from(&archive_path);
-    
+
     // 获取文件扩展名
     let ext = Path::new(&file_path)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("mp4");
-    
+
     // 创建临时目录
     let temp_dir = std::env::temp_dir().join("neoview_video_cache");
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
-    
+
     // 使用 hash 作为文件名，避免重复解压
     let mut hasher = DefaultHasher::new();
     archive_path_buf.hash(&mut hasher);
     file_path.hash(&mut hasher);
     let hash = hasher.finish();
-    
+
     let temp_path = temp_dir.join(format!("{:x}.{}", hash, ext));
-    
+
     // 如果文件已存在，直接返回路径
     if temp_path.exists() {
         println!("[{}] 使用缓存的临时文件: {:?}", trace_id, temp_path);
         return Ok(temp_path.to_string_lossy().to_string());
     }
-    
+
     // 从压缩包提取视频
     let manager = ArchiveManager::new();
     let buffer = manager.extract_file(&archive_path_buf, &file_path)?;
-    
+
     // 检查文件大小（视频可以更大，允许 2GB）
     let size = buffer.len();
     if size > 2 * 1024 * 1024 * 1024 {
@@ -159,15 +159,15 @@ pub async fn extract_video_to_temp(
             size / 1024 / 1024
         ));
     }
-    
+
     // 写入临时文件
     std::fs::write(&temp_path, &buffer).map_err(|e| format!("写入临时文件失败: {}", e))?;
-    
+
     println!(
         "[{}] 视频提取成功: {:?} ({} bytes)",
         trace_id, temp_path, size
     );
-    
+
     Ok(temp_path.to_string_lossy().to_string())
 }
 
@@ -197,8 +197,8 @@ pub async fn convert_animated_image_to_video_temp(
     println!("[{}] 开始动图转码: {}", trace_id, image_path);
 
     let result = spawn_blocking(move || -> Result<String, String> {
-        let metadata = std::fs::metadata(&source_path)
-            .map_err(|e| format!("读取动图文件信息失败: {}", e))?;
+        let metadata =
+            std::fs::metadata(&source_path).map_err(|e| format!("读取动图文件信息失败: {}", e))?;
 
         let modified_secs = metadata
             .modified()

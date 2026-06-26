@@ -1,7 +1,7 @@
 //! 图片加载模式模块
 //! 支持 Raw（原始字节）和 Bitmap（像素数据）两种模式
 
-use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
+use crate::core::image_decoder::{ImageDecoder, UnifiedDecoder};
 use serde::{Deserialize, Serialize};
 
 /// 图片加载模式
@@ -26,10 +26,7 @@ impl Default for ImageLoadMode {
 #[serde(tag = "type")]
 pub enum ImageLoadResult {
     /// 原始字节数据
-    Raw {
-        data: Vec<u8>,
-        format: String,
-    },
+    Raw { data: Vec<u8>, format: String },
     /// Bitmap 像素数据 (RGBA)
     Bitmap {
         data: Vec<u8>,
@@ -63,7 +60,7 @@ pub fn load_image_unified(
     mode: ImageLoadMode,
 ) -> Result<ImageLoadResult, String> {
     let format_lower = format.to_lowercase();
-    
+
     // 确定实际使用的模式
     let effective_mode = match mode {
         ImageLoadMode::Auto => {
@@ -75,17 +72,13 @@ pub fn load_image_unified(
         }
         other => other,
     };
-    
+
     match effective_mode {
-        ImageLoadMode::Raw => {
-            Ok(ImageLoadResult::Raw {
-                data,
-                format: format_lower,
-            })
-        }
-        ImageLoadMode::Bitmap => {
-            decode_to_bitmap(&data)
-        }
+        ImageLoadMode::Raw => Ok(ImageLoadResult::Raw {
+            data,
+            format: format_lower,
+        }),
+        ImageLoadMode::Bitmap => decode_to_bitmap(&data),
         ImageLoadMode::Auto => unreachable!(),
     }
 }
@@ -93,9 +86,8 @@ pub fn load_image_unified(
 /// 使用 UnifiedDecoder 解码为 Bitmap
 fn decode_to_bitmap(data: &[u8]) -> Result<ImageLoadResult, String> {
     let decoder = UnifiedDecoder::new();
-    let decoded = decoder.decode(data)
-        .map_err(|e| format!("解码失败: {e}"))?;
-    
+    let decoded = decoder.decode(data).map_err(|e| format!("解码失败: {e}"))?;
+
     Ok(ImageLoadResult::Bitmap {
         data: decoded.pixels,
         width: decoded.width,
@@ -110,9 +102,10 @@ pub fn load_image_bitmap_scaled(
     max_height: u32,
 ) -> Result<ImageLoadResult, String> {
     let decoder = UnifiedDecoder::new();
-    let decoded = decoder.decode_with_scale(data, max_width, max_height)
+    let decoded = decoder
+        .decode_with_scale(data, max_width, max_height)
         .map_err(|e| format!("解码缩放失败: {e}"))?;
-    
+
     Ok(ImageLoadResult::Bitmap {
         data: decoded.pixels,
         width: decoded.width,

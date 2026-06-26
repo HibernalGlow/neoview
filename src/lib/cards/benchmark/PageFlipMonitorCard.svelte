@@ -6,8 +6,27 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { pageFlipMonitor } from '$lib/utils/pageFlipMonitor';
+	import { getImageStore } from '$lib/stackview/stores/imageStore.svelte';
+	import {
+		getImageDecodePreloaderStats,
+		type ImageDecodePreloaderStats
+	} from '$lib/stackview/utils/imageDecodePreloader';
+	import { getScaledProtocolStats, type ScaledProtocolStats } from '$lib/api/imageProtocol';
 	import { Button } from '$lib/components/ui/button';
 	import { RotateCw, Trash2, Activity } from '@lucide/svelte';
+
+	const imageStore = getImageStore();
+	const emptyScaledProtocolStats: ScaledProtocolStats = {
+		requests: 0,
+		hits: 0,
+		generated: 0,
+		generationFailures: 0,
+		bypasses: 0,
+		bypassHits: 0,
+		bypassGenerated: 0,
+		cacheLimit: 0,
+		cacheTtlSecs: 0
+	};
 
 	let stats = $state({
 		totalFlips: 0,
@@ -17,12 +36,27 @@
 		activeTimers: 0,
 		lastFlipTime: null as Date | null
 	});
+	let readerStats = $state(imageStore.getPerformanceStats());
+	let decodeStats = $state<ImageDecodePreloaderStats>(getImageDecodePreloaderStats());
+	let scaledProtocolStats = $state<ScaledProtocolStats>(emptyScaledProtocolStats);
+	let protocolHitRate = $derived(
+		scaledProtocolStats.requests > 0
+			? (scaledProtocolStats.hits / scaledProtocolStats.requests) * 100
+			: 0
+	);
 
 	// 定时更新统计
 	let updateInterval: ReturnType<typeof setInterval> | null = null;
 
 	function updateStats() {
 		stats = pageFlipMonitor.getStats();
+		readerStats = imageStore.getPerformanceStats();
+		decodeStats = getImageDecodePreloaderStats();
+		void getScaledProtocolStats()
+			.then((next) => {
+				scaledProtocolStats = next;
+			})
+			.catch(() => {});
 	}
 
 	function resetStats() {
@@ -108,6 +142,70 @@
 	</div>
 
 	<!-- 性能指标说明 -->
+	<div class="space-y-2 rounded border p-2 text-[10px]">
+		<div class="flex items-center gap-2 font-medium">
+			<Activity class="h-3 w-3" />
+			<span>Reader hot path</span>
+		</div>
+
+		<div class="text-muted-foreground grid grid-cols-2 gap-x-4 gap-y-1">
+			<div>samples</div>
+			<div class="text-foreground text-right font-mono">{readerStats.count}</div>
+
+			<div>total p95</div>
+			<div class="text-foreground text-right font-mono">
+				{readerStats.totalBeforeCommitP95.toFixed(1)}ms
+			</div>
+
+			<div>last total</div>
+			<div class="text-foreground text-right font-mono">
+				{(readerStats.last?.totalBeforeCommitMs ?? 0).toFixed(1)}ms
+			</div>
+
+			<div>last scaled/original</div>
+			<div class="text-foreground text-right font-mono">
+				{readerStats.preload.lastScaledProxyCount}/{readerStats.preload.lastOriginalCount}
+			</div>
+
+			<div>scaled queued</div>
+			<div class="text-foreground text-right font-mono">
+				{readerStats.preload.queuedScaledProxy}
+			</div>
+
+			<div>predecode queued/active</div>
+			<div class="text-foreground text-right font-mono">
+				{decodeStats.queued}/{decodeStats.active}
+			</div>
+
+			<div>decoded cache</div>
+			<div class="text-foreground text-right font-mono">
+				{decodeStats.decoded}/{decodeStats.maxItems}
+				({(decodeStats.decodedPixels / 1_000_000).toFixed(1)}MP)
+			</div>
+
+			<div>protocol hit/gen</div>
+			<div class="text-foreground text-right font-mono">
+				{scaledProtocolStats.hits}/{scaledProtocolStats.generated}
+				({protocolHitRate.toFixed(0)}%)
+			</div>
+
+			<div>protocol bypass</div>
+			<div class="text-foreground text-right font-mono">
+				{scaledProtocolStats.bypasses} ({scaledProtocolStats.bypassHits}/{scaledProtocolStats.bypassGenerated})
+			</div>
+
+			<div>protocol fail</div>
+			<div class="text-foreground text-right font-mono">
+				{scaledProtocolStats.generationFailures}
+			</div>
+
+			<div>protocol cache</div>
+			<div class="text-foreground text-right font-mono">
+				{scaledProtocolStats.cacheLimit}/{scaledProtocolStats.cacheTtlSecs}s
+			</div>
+		</div>
+	</div>
+
 	<div class="bg-muted/50 space-y-1 rounded border p-2 text-[10px]">
 		<div class="font-medium">性能目标</div>
 		<div class="text-muted-foreground space-y-0.5">

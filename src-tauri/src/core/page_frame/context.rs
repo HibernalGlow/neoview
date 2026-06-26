@@ -1,11 +1,11 @@
 //! PageFrameContext - 页面帧上下文配置
 //! 控制页面帧的构建行为
 
-use super::{PageMode, ReadOrder, Size, AutoRotateType, StretchMode, WidePageStretch};
+use super::{AutoRotateType, PageMode, ReadOrder, Size, StretchMode, WidePageStretch};
 use serde::{Deserialize, Serialize};
 
 /// 页面帧上下文配置
-/// 
+///
 /// 控制页面帧的构建行为，包括：
 /// - 单页/双页模式
 /// - 阅读方向

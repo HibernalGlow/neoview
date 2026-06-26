@@ -35,6 +35,14 @@ import {
 	savePerPanelLayoutSettings
 } from './utils.svelte';
 
+const FOLDER_TAB_DEBUG = false;
+
+function debugFolderTab(...args: unknown[]): void {
+	if (FOLDER_TAB_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 // ============ 共享设置状态 ============
 
 // 加载共享设置
@@ -198,11 +206,11 @@ export function setPerPanelLayoutSettings(settings: PerPanelLayoutSettings): voi
 /** 创建新页签 */
 export function createTab(homePath: string = ''): string {
 	const newId = generateTabId();
-	console.log('[FolderTabStore] createTab 被调用, homePath:', homePath, 'newId:', newId);
+	debugFolderTab('[FolderTabStore] createTab 被调用, homePath:', homePath, 'newId:', newId);
 	store.update(($store) => {
 		const sourceTab = $store.tabs.find((t) => t.id === $store.activeTabId);
 		const newTab = createDefaultTabState(newId, homePath, sourceTab);
-		console.log('[FolderTabStore] 新标签页状态:', {
+		debugFolderTab('[FolderTabStore] 新标签页状态:', {
 			id: newTab.id,
 			title: newTab.title,
 			currentPath: newTab.currentPath,

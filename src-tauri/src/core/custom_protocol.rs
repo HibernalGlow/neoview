@@ -8,18 +8,19 @@
 use crate::commands::thumbnail_v3_commands::ThumbnailServiceV3State;
 use crate::commands::thumbnail_v4_commands::ThumbnailV4State;
 use crate::core::archive::ArchiveManager;
-use crate::core::image_decoder::{UnifiedDecoder, ImageDecoder};
+use crate::core::image_decoder::{ImageDecoder, UnifiedDecoder};
 use crate::core::mmap_archive::MmapCache;
 use ahash::AHashMap;
 use log::{debug, error, warn};
 use mini_moka::sync::Cache;
-use parking_lot::RwLock;
+use parking_lot::{Condvar, Mutex, RwLock};
+use serde::Serialize;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::http::{Request, Response, StatusCode};
 use tauri::Manager;
 
@@ -29,6 +30,23 @@ const LEGACY_THUMB_CACHE_LIMIT: usize = 512;
 const LEGACY_THUMB_HINT_LIMIT: usize = 1024;
 const ARCHIVE_PREFETCH_INFLIGHT_LIMIT: usize = 4096;
 const ARCHIVE_PREFETCH_MAX_ACTIVE: usize = 4;
+const SCALED_IMAGE_CACHE_LIMIT: u64 = 384;
+const SCALED_IMAGE_CACHE_TTL_SECS: u64 = 300;
+const SCALED_IMAGE_INFLIGHT_WAIT_MS: u64 = 5_000;
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScaledProtocolStats {
+    pub requests: usize,
+    pub hits: usize,
+    pub generated: usize,
+    pub generation_failures: usize,
+    pub bypasses: usize,
+    pub bypass_hits: usize,
+    pub bypass_generated: usize,
+    pub cache_limit: u64,
+    pub cache_ttl_secs: u64,
+}
 
 /// 路径哈希到实际路径的映射
 pub struct PathRegistry {
@@ -122,6 +140,54 @@ struct CachedProtocolImage {
 }
 
 /// Custom Protocol 状态
+struct ScaledImageInflight {
+    keys: Mutex<AHashMap<String, ()>>,
+    ready: Condvar,
+}
+
+impl ScaledImageInflight {
+    fn new() -> Self {
+        Self {
+            keys: Mutex::new(AHashMap::new()),
+            ready: Condvar::new(),
+        }
+    }
+}
+
+struct ScaledImageGenerationGuard<'a> {
+    state: &'a ProtocolState,
+    key: String,
+    active: bool,
+}
+
+impl<'a> ScaledImageGenerationGuard<'a> {
+    fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn finish(mut self) {
+        if self.active {
+            self.state.finish_scaled_image_generation(&self.key);
+            self.active = false;
+        }
+    }
+}
+
+impl Drop for ScaledImageGenerationGuard<'_> {
+    fn drop(&mut self) {
+        if self.active {
+            self.state.finish_scaled_image_generation(&self.key);
+            self.active = false;
+        }
+    }
+}
+
+enum ScaledImageAccess<'a> {
+    Hit(CachedProtocolImage),
+    Owner(ScaledImageGenerationGuard<'a>),
+    Bypass,
+}
+
 pub struct ProtocolState {
     /// 路径注册表
     pub path_registry: Arc<PathRegistry>,
@@ -134,6 +200,15 @@ pub struct ProtocolState {
     archive_metadata_cache: Cache<u64, Arc<CachedArchiveMetadata>>,
     /// 压缩包图片二进制缓存（避免重复解包读取）
     archive_image_cache: Cache<(u64, usize), CachedProtocolImage>,
+    scaled_image_cache: Cache<String, CachedProtocolImage>,
+    scaled_image_inflight: Arc<ScaledImageInflight>,
+    scaled_image_requests: AtomicUsize,
+    scaled_image_hits: AtomicUsize,
+    scaled_image_generated: AtomicUsize,
+    scaled_image_generation_failures: AtomicUsize,
+    scaled_image_bypasses: AtomicUsize,
+    scaled_image_bypass_hits: AtomicUsize,
+    scaled_image_bypass_generated: AtomicUsize,
     /// 旧缩略图路径缓存（避免重复 DB 查询）
     legacy_thumb_cache: Cache<u64, (Arc<str>, Arc<[u8]>)>,
     /// 旧缩略图类别提示缓存（file/folder）
@@ -158,6 +233,11 @@ impl ProtocolState {
             .max_capacity(256)
             .time_to_live(Duration::from_secs(180))
             .build();
+        let scaled_image_cache = Cache::builder()
+            .max_capacity(SCALED_IMAGE_CACHE_LIMIT)
+            .time_to_live(Duration::from_secs(SCALED_IMAGE_CACHE_TTL_SECS))
+            .build();
+        let scaled_image_inflight = Arc::new(ScaledImageInflight::new());
         let legacy_thumb_cache = Cache::builder()
             .max_capacity(LEGACY_THUMB_CACHE_LIMIT as u64)
             .time_to_live(Duration::from_secs(180))
@@ -186,6 +266,15 @@ impl ProtocolState {
             archive_manager: shared_archive_manager,
             archive_metadata_cache,
             archive_image_cache,
+            scaled_image_cache,
+            scaled_image_inflight,
+            scaled_image_requests: AtomicUsize::new(0),
+            scaled_image_hits: AtomicUsize::new(0),
+            scaled_image_generated: AtomicUsize::new(0),
+            scaled_image_generation_failures: AtomicUsize::new(0),
+            scaled_image_bypasses: AtomicUsize::new(0),
+            scaled_image_bypass_hits: AtomicUsize::new(0),
+            scaled_image_bypass_generated: AtomicUsize::new(0),
             legacy_thumb_cache,
             legacy_thumb_category_hint,
             legacy_thumb_miss_cache,
@@ -258,18 +347,142 @@ impl ProtocolState {
                     &entry_path,
                     Some(target_index),
                 ) {
-                    image_cache.insert(
-                        cache_key,
-                        CachedProtocolImage {
-                            data,
-                            mime_type,
-                        },
-                    );
+                    image_cache.insert(cache_key, CachedProtocolImage { data, mime_type });
                 }
                 inflight.invalidate(&cache_key);
                 active_counter.fetch_sub(1, Ordering::AcqRel);
             });
         }
+    }
+
+    #[inline]
+    fn get_cached_scaled_image(&self, key: &str) -> Option<CachedProtocolImage> {
+        self.scaled_image_cache.get(&key.to_string())
+    }
+
+    #[inline]
+    fn record_scaled_request(&self) {
+        self.scaled_image_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_hit(&self) {
+        self.scaled_image_hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_generated(&self) {
+        self.scaled_image_generated.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_generation_failure(&self) {
+        self.scaled_image_generation_failures
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_bypass(&self) {
+        self.scaled_image_bypasses.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_bypass_hit(&self) {
+        self.scaled_image_bypass_hits
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn record_scaled_bypass_generated(&self) {
+        self.scaled_image_bypass_generated
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn scaled_protocol_stats(&self) -> ScaledProtocolStats {
+        ScaledProtocolStats {
+            requests: self.scaled_image_requests.load(Ordering::Relaxed),
+            hits: self.scaled_image_hits.load(Ordering::Relaxed),
+            generated: self.scaled_image_generated.load(Ordering::Relaxed),
+            generation_failures: self
+                .scaled_image_generation_failures
+                .load(Ordering::Relaxed),
+            bypasses: self.scaled_image_bypasses.load(Ordering::Relaxed),
+            bypass_hits: self.scaled_image_bypass_hits.load(Ordering::Relaxed),
+            bypass_generated: self
+                .scaled_image_bypass_generated
+                .load(Ordering::Relaxed),
+            cache_limit: SCALED_IMAGE_CACHE_LIMIT,
+            cache_ttl_secs: SCALED_IMAGE_CACHE_TTL_SECS,
+        }
+    }
+
+    fn put_cached_scaled_image(
+        &self,
+        key: String,
+        data: Vec<u8>,
+        mime_type: &'static str,
+    ) -> CachedProtocolImage {
+        let cached = CachedProtocolImage {
+            data: Arc::<[u8]>::from(data.into_boxed_slice()),
+            mime_type,
+        };
+        self.scaled_image_cache.insert(key, cached.clone());
+        cached
+    }
+
+    fn claim_scaled_image_generation(&self, key: &str) -> ScaledImageAccess<'_> {
+        if let Some(cached) = self.get_cached_scaled_image(key) {
+            return ScaledImageAccess::Hit(cached);
+        }
+
+        let deadline = Instant::now() + Duration::from_millis(SCALED_IMAGE_INFLIGHT_WAIT_MS);
+        let mut keys = self.scaled_image_inflight.keys.lock();
+        if !keys.contains_key(key) {
+            keys.insert(key.to_string(), ());
+            return ScaledImageAccess::Owner(ScaledImageGenerationGuard {
+                state: self,
+                key: key.to_string(),
+                active: true,
+            });
+        }
+
+        loop {
+            let now = Instant::now();
+            if now >= deadline {
+                return ScaledImageAccess::Bypass;
+            }
+
+            let timeout = deadline.saturating_duration_since(now);
+            let wait_result = self
+                .scaled_image_inflight
+                .ready
+                .wait_for(&mut keys, timeout);
+
+            if let Some(cached) = self.get_cached_scaled_image(key) {
+                return ScaledImageAccess::Hit(cached);
+            }
+
+            if !keys.contains_key(key) {
+                keys.insert(key.to_string(), ());
+                return ScaledImageAccess::Owner(ScaledImageGenerationGuard {
+                    state: self,
+                    key: key.to_string(),
+                    active: true,
+                });
+            }
+
+            if wait_result.timed_out() {
+                return ScaledImageAccess::Bypass;
+            }
+        }
+    }
+
+    fn finish_scaled_image_generation(&self, key: &str) {
+        {
+            let mut keys = self.scaled_image_inflight.keys.lock();
+            keys.remove(key);
+        }
+        self.scaled_image_inflight.ready.notify_all();
     }
 
     #[inline]
@@ -378,12 +591,11 @@ impl ProtocolState {
             }
         }
 
-        let metadata = Arc::new(CachedArchiveMetadata {
-            image_entries,
-        });
+        let metadata = Arc::new(CachedArchiveMetadata { image_entries });
 
         // 存入缓存
-        self.archive_metadata_cache.insert(book_key, metadata.clone());
+        self.archive_metadata_cache
+            .insert(book_key, metadata.clone());
         debug!(
             "📦 Protocol: 缓存元数据, hash={}, entries={}",
             book_hash,
@@ -397,12 +609,14 @@ impl ProtocolState {
     pub fn invalidate_cache(&self, book_hash: &str) {
         self.archive_metadata_cache
             .invalidate(&Self::parse_book_key(book_hash));
+        self.scaled_image_cache.invalidate_all();
     }
 
     /// 清空所有缓存
     pub fn clear_cache(&self) {
         self.archive_metadata_cache.invalidate_all();
         self.archive_image_cache.invalidate_all();
+        self.scaled_image_cache.invalidate_all();
         self.legacy_thumb_cache.invalidate_all();
         self.legacy_thumb_category_hint.invalidate_all();
         self.legacy_thumb_miss_cache.invalidate_all();
@@ -467,9 +681,7 @@ impl<'a> ProtocolRequest<'a> {
                 if parts.next().is_some() {
                     return ProtocolRequest::Unknown;
                 }
-                ProtocolRequest::FileImage {
-                    path_hash,
-                }
+                ProtocolRequest::FileImage { path_hash }
             }
             Some("thumb") => {
                 let Some(key) = parts.next() else {
@@ -497,10 +709,7 @@ fn decode_thumb_key(key: &str) -> Cow<'_, str> {
 
 /// 根据文件扩展名获取 MIME 类型
 fn get_mime_type(path: &str) -> &'static str {
-    let Some(ext) = Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-    else {
+    let Some(ext) = Path::new(path).extension().and_then(|e| e.to_str()) else {
         return "application/octet-stream";
     };
 
@@ -617,7 +826,8 @@ fn decode_and_scale(data: &[u8], target_w: u32, target_h: u32) -> Option<(Vec<u8
 
     // 使用有损 WebP 编码（质量 80，性能和大小平衡）
     let mut buffer = Vec::new();
-    img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP).ok()?;
+    img.write_to(&mut Cursor::new(&mut buffer), ImageFormat::WebP)
+        .ok()?;
     Some((buffer, "image/webp"))
 }
 
@@ -655,7 +865,10 @@ fn parse_byte_range(request: &Request<Vec<u8>>, total_len: usize) -> Option<(usi
     let end = if end_raw.is_empty() {
         total_len.saturating_sub(1)
     } else {
-        end_raw.parse::<usize>().ok()?.min(total_len.saturating_sub(1))
+        end_raw
+            .parse::<usize>()
+            .ok()?
+            .min(total_len.saturating_sub(1))
     };
 
     if end < start {
@@ -677,7 +890,10 @@ fn build_response_from_slice(
             .status(StatusCode::PARTIAL_CONTENT)
             .header("Content-Type", mime_type)
             .header("Content-Length", body.len().to_string())
-            .header("Content-Range", format!("bytes {}-{}/{}", start, end, bytes.len()))
+            .header(
+                "Content-Range",
+                format!("bytes {}-{}/{}", start, end, bytes.len()),
+            )
             .header("Accept-Ranges", "bytes")
             .header("Cache-Control", "max-age=3600, immutable")
             .header("Access-Control-Allow-Origin", "*")
@@ -689,6 +905,63 @@ fn build_response_from_slice(
 }
 
 /// 构建错误响应
+fn try_build_scaled_response(
+    state: &ProtocolState,
+    request: &Request<Vec<u8>>,
+    cache_key: &str,
+    data: &[u8],
+    target_w: u32,
+    target_h: u32,
+) -> Option<Response<Vec<u8>>> {
+    state.record_scaled_request();
+    match state.claim_scaled_image_generation(cache_key) {
+        ScaledImageAccess::Hit(cached) => {
+            state.record_scaled_hit();
+            Some(build_response_from_slice(
+                request,
+                cached.data.as_ref(),
+                cached.mime_type,
+            ))
+        }
+        ScaledImageAccess::Owner(claim) => {
+            let Some((scaled_data, scaled_mime)) = decode_and_scale(data, target_w, target_h)
+            else {
+                state.record_scaled_generation_failure();
+                return None;
+            };
+            let cached =
+                state.put_cached_scaled_image(claim.key().to_string(), scaled_data, scaled_mime);
+            claim.finish();
+            state.record_scaled_generated();
+            Some(build_response_from_slice(
+                request,
+                cached.data.as_ref(),
+                cached.mime_type,
+            ))
+        }
+        ScaledImageAccess::Bypass => {
+            state.record_scaled_bypass();
+            if let Some(cached) = state.get_cached_scaled_image(cache_key) {
+                state.record_scaled_bypass_hit();
+                return Some(build_response_from_slice(
+                    request,
+                    cached.data.as_ref(),
+                    cached.mime_type,
+                ));
+            }
+            decode_and_scale(data, target_w, target_h)
+                .map(|(scaled_data, scaled_mime)| {
+                    state.record_scaled_bypass_generated();
+                    build_response(scaled_data, scaled_mime)
+                })
+                .or_else(|| {
+                    state.record_scaled_generation_failure();
+                    None
+                })
+        }
+    }
+}
+
 fn build_error_response(status: StatusCode, message: &str) -> Response<Vec<u8>> {
     Response::builder()
         .status(status)
@@ -729,11 +1002,39 @@ fn handle_archive_image(
     entry_index: usize,
 ) -> Response<Vec<u8>> {
     let scale_params = parse_scale_params(&request.uri().to_string());
+    let archive_cache_key = (book_key, entry_index);
+    let scaled_cache_key = scale_params.map(|(target_w, target_h)| {
+        format!("archive:{book_key}:{entry_index}:{target_w}x{target_h}")
+    });
+
+    if let (Some(scaled_cache_key), Some((target_w, target_h))) =
+        (scaled_cache_key.as_deref(), scale_params)
+    {
+        if let Some(cached) = state.get_cached_scaled_image(scaled_cache_key) {
+            state.record_scaled_request();
+            state.record_scaled_hit();
+            state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
+            return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+        }
+        if let Some(cached) = state.archive_image_cache.get(&archive_cache_key) {
+            state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
+            if let Some(response) = try_build_scaled_response(
+                state,
+                request,
+                scaled_cache_key,
+                cached.data.as_ref(),
+                target_w,
+                target_h,
+            ) {
+                return response;
+            }
+            return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+        }
+    }
 
     // 缩放请求不命中完整尺寸缓存
     if scale_params.is_none() {
-        let cache_key = (book_key, entry_index);
-        if let Some(cached) = state.archive_image_cache.get(&cache_key) {
+        if let Some(cached) = state.archive_image_cache.get(&archive_cache_key) {
             state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
             return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
         }
@@ -779,8 +1080,11 @@ fn handle_archive_image(
     // 提取图片数据
     let shared = match state
         .archive_manager
-        .load_image_from_archive_shared_with_hint(book_path.as_ref(), &entry.path, Some(entry_index))
-    {
+        .load_image_from_archive_shared_with_hint(
+            book_path.as_ref(),
+            &entry.path,
+            Some(entry_index),
+        ) {
         Ok(data) => data,
         Err(e) => {
             error!("📦 Protocol: 提取图片失败: {e}");
@@ -789,23 +1093,37 @@ fn handle_archive_image(
     };
 
     // 按需缩放：如果请求指定了 w/h，解码并缩放到目标尺寸
-    if let Some((target_w, target_h)) = scale_params {
-        if let Some((scaled_data, scaled_mime)) = decode_and_scale(&shared, target_w, target_h) {
-            debug!("📦 Protocol: 按需缩放 {}x{} -> {}x{}", 
-                entry_index, shared.len(), target_w, target_h);
-            return build_response(scaled_data, scaled_mime);
-        }
-        // 缩放失败时回退到原始数据
-    }
-
-    let cache_key = (book_key, entry_index);
     state.archive_image_cache.insert(
-        cache_key,
+        archive_cache_key,
         CachedProtocolImage {
             data: shared.clone(),
             mime_type,
         },
     );
+
+    if let Some((target_w, target_h)) = scale_params {
+        if let Some(scaled_cache_key) = scaled_cache_key.as_deref() {
+            debug!(
+                "📦 Protocol: 按需缩放 {}x{} -> {}x{}",
+                entry_index,
+                shared.len(),
+                target_w,
+                target_h
+            );
+            if let Some(response) = try_build_scaled_response(
+                state,
+                request,
+                scaled_cache_key,
+                shared.as_ref(),
+                target_w,
+                target_h,
+            ) {
+                return response;
+            }
+        }
+        // 缩放失败时回退到原始数据
+    }
+
     state.try_schedule_archive_prefetch_neighbors(book_hash, book_key, entry_index);
     build_response_from_slice(request, shared.as_ref(), mime_type)
 }
@@ -820,9 +1138,21 @@ fn handle_legacy_archive_image(
 ) -> Response<Vec<u8>> {
     debug!(
         "📦 Protocol: 兼容旧 archive 请求, path={}, entry={}",
-        archive_path,
-        entry_path
+        archive_path, entry_path
     );
+
+    let scale_params = parse_scale_params(&request.uri().to_string());
+    let scaled_cache_key = scale_params.map(|(target_w, target_h)| {
+        format!("legacy-archive:{archive_path}:{entry_path}:{target_w}x{target_h}")
+    });
+
+    if let Some(scaled_cache_key) = scaled_cache_key.as_deref() {
+        if let Some(cached) = state.get_cached_scaled_image(scaled_cache_key) {
+            state.record_scaled_request();
+            state.record_scaled_hit();
+            return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+        }
+    }
 
     let shared = match state
         .archive_manager
@@ -837,9 +1167,18 @@ fn handle_legacy_archive_image(
 
     let mime_type = get_mime_type(entry_path);
 
-    if let Some((target_w, target_h)) = parse_scale_params(&request.uri().to_string()) {
-        if let Some((scaled_data, scaled_mime)) = decode_and_scale(&shared, target_w, target_h) {
-            return build_response(scaled_data, scaled_mime);
+    if let Some((target_w, target_h)) = scale_params {
+        if let Some(scaled_cache_key) = scaled_cache_key.as_deref() {
+            if let Some(response) = try_build_scaled_response(
+                state,
+                request,
+                scaled_cache_key,
+                shared.as_ref(),
+                target_w,
+                target_h,
+            ) {
+                return response;
+            }
         }
     }
 
@@ -852,6 +1191,18 @@ fn handle_file_image(
     request: &Request<Vec<u8>>,
     path_hash: &str,
 ) -> Response<Vec<u8>> {
+    let scale_params = parse_scale_params(&request.uri().to_string());
+    let scaled_cache_key =
+        scale_params.map(|(target_w, target_h)| format!("file:{path_hash}:{target_w}x{target_h}"));
+
+    if let Some(scaled_cache_key) = scaled_cache_key.as_deref() {
+        if let Some(cached) = state.get_cached_scaled_image(scaled_cache_key) {
+            state.record_scaled_request();
+            state.record_scaled_hit();
+            return build_response_from_slice(request, cached.data.as_ref(), cached.mime_type);
+        }
+    }
+
     // 从注册表获取路径
     let Some(file_path) = state.path_registry.get_path(path_hash) else {
         warn!("📁 Protocol: 未找到文件路径, hash={path_hash}");
@@ -870,10 +1221,24 @@ fn handle_file_image(
     };
 
     // 按需缩放
-    if let Some((target_w, target_h)) = parse_scale_params(&request.uri().to_string()) {
-        if let Some((scaled_data, scaled_mime)) = decode_and_scale(data.as_slice(), target_w, target_h) {
-            debug!("📁 Protocol: 按需缩放 {} -> {}x{}", file_path.display(), target_w, target_h);
-            return build_response(scaled_data, scaled_mime);
+    if let Some((target_w, target_h)) = scale_params {
+        if let Some(scaled_cache_key) = scaled_cache_key.as_deref() {
+            debug!(
+                "📁 Protocol: 按需缩放 {} -> {}x{}",
+                file_path.display(),
+                target_w,
+                target_h
+            );
+            if let Some(response) = try_build_scaled_response(
+                state,
+                request,
+                scaled_cache_key,
+                data.as_slice(),
+                target_w,
+                target_h,
+            ) {
+                return response;
+            }
         }
     }
 
@@ -926,7 +1291,7 @@ fn handle_health_check() -> Response<Vec<u8>> {
         .status(StatusCode::OK)
         .header("Content-Type", "text/plain")
         .header("Cache-Control", "no-store")
-    .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Origin", "*")
         .body(Vec::from(&b"ok"[..]))
         .unwrap()
 }

@@ -10,6 +10,7 @@ use tokio::sync::Notify;
 
 /// 队列中的任务
 pub struct QueueTask {
+    pub context_id: String,
     pub request: ThumbnailRequest,
     pub lane: ThumbnailLane,
     pub center_index: Option<usize>,
@@ -47,6 +48,7 @@ impl ThumbnailQueue {
     /// 入队请求（去重）
     pub fn enqueue(
         &mut self,
+        context_id: String,
         request: ThumbnailRequest,
         lane: ThumbnailLane,
         center_index: Option<usize>,
@@ -58,6 +60,7 @@ impl ThumbnailQueue {
         self.in_flight.insert(request.key.clone());
         if let Some(queue) = self.queues.get_mut(&lane) {
             queue.push_back(QueueTask {
+                context_id,
                 request,
                 lane,
                 center_index,
@@ -83,13 +86,12 @@ impl ThumbnailQueue {
             if let Some(queue) = self.queues.get_mut(&lane) {
                 // 跳过旧世代的任务
                 while let Some(task) = queue.pop_front() {
-                    if let Some(&gen) = self.context_generations.get(&task.request.key) {
+                    if let Some(&gen) = self.context_generations.get(&task.context_id) {
                         if task.generation < gen {
                             self.in_flight.remove(&task.request.key);
                             continue; // 丢弃旧世代
                         }
                     }
-                    self.in_flight.remove(&task.request.key);
                     return Some(task);
                 }
             }
@@ -109,6 +111,10 @@ impl ThumbnailQueue {
     }
 
     /// 队列是否为空
+    pub fn finish(&mut self, key: &str) {
+        self.in_flight.remove(key);
+    }
+
     pub fn is_empty(&self) -> bool {
         self.queues.values().all(|q| q.is_empty())
     }

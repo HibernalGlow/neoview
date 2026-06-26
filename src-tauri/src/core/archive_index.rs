@@ -569,7 +569,14 @@ mod property_tests {
             // 由于缓存容量为 0，可能所有都被淘汰，但访问顺序应该正确
             let stats = cache.stats();
             // 驱逐数应在本次插入的上限内（最多 10 个条目）
-            prop_assert!(stats.evictions <= 10);
+            prop_assert!(stats.evictions <= access_sequence.len() as u64);
+
+            if let Ok(order) = cache.access_order.read() {
+                let mut seen = std::collections::HashSet::new();
+                for key in order.iter() {
+                    prop_assert!(seen.insert(key.clone()));
+                }
+            };
         }
 
         /// 测试索引查找一致性

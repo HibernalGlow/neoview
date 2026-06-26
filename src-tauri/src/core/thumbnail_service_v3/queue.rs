@@ -1,5 +1,5 @@
 //! 任务队列管理模块
-//! 
+//!
 //! 包含任务队列管理、优先级排序逻辑
 
 use std::collections::{HashSet, VecDeque};
@@ -27,10 +27,7 @@ impl TaskQueueState {
     }
 }
 
-fn lane_queue_mut(
-    state: &mut TaskQueueState,
-    lane: TaskLane,
-) -> &mut VecDeque<GenerateTask> {
+fn lane_queue_mut(state: &mut TaskQueueState, lane: TaskLane) -> &mut VecDeque<GenerateTask> {
     match lane {
         TaskLane::Visible => &mut state.visible,
         TaskLane::Prefetch => &mut state.prefetch,
@@ -140,7 +137,7 @@ pub fn pop_task_by_lane_locked(
 }
 
 /// 将新任务添加到队列（带去重和优先级排序）
-/// 
+///
 /// # 参数
 /// - task_queue: 任务队列
 /// - paths: 需要生成缩略图的路径列表，每项为 (path, file_type, original_index)
@@ -160,7 +157,7 @@ pub fn enqueue_tasks(
     if paths.is_empty() {
         return;
     }
-    
+
     if let Ok(mut queue) = task_queue.0.lock() {
         // 计算每个路径到中心的距离并创建任务
         let mut new_tasks: Vec<GenerateTask> = Vec::with_capacity(paths.len());
@@ -201,7 +198,7 @@ pub fn enqueue_tasks(
             TaskLane::Prefetch => queued_prefetch,
             TaskLane::Background => queued_background,
         };
-        
+
         // 插入到队列前端（新任务优先于旧任务）
         for task in new_tasks.into_iter().rev() {
             lane_queue_mut(&mut queue, lane).push_front(task);
@@ -213,11 +210,11 @@ pub fn enqueue_tasks(
 }
 
 /// 清空指定目录的任务
-/// 
+///
 /// # 参数
 /// - task_queue: 任务队列
 /// - dir: 要清空的目录
-/// 
+///
 /// # 返回
 /// 被清除的任务数量
 pub fn clear_directory_tasks(
@@ -288,7 +285,11 @@ pub fn queue_len(task_queue: &(Mutex<TaskQueueState>, Condvar)) -> usize {
 /// 获取各调度车道的队列长度 (visible, prefetch, background)
 pub fn queue_lane_lens(task_queue: &(Mutex<TaskQueueState>, Condvar)) -> (usize, usize, usize) {
     if let Ok(queue) = task_queue.0.lock() {
-        return (queue.visible.len(), queue.prefetch.len(), queue.background.len());
+        return (
+            queue.visible.len(),
+            queue.prefetch.len(),
+            queue.background.len(),
+        );
     }
     (0, 0, 0)
 }
@@ -316,7 +317,7 @@ pub fn replace_path_with_task(
 }
 
 /// 清空整个队列
-/// 
+///
 /// # 返回
 /// 被清除的任务数量
 pub fn clear_queue(task_queue: &(Mutex<TaskQueueState>, Condvar)) -> usize {

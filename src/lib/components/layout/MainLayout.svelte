@@ -40,6 +40,13 @@
 	let { children } = $props();
 	let settings = $state(settingsManager.getSettings());
 	let hoverAreas = $derived(settings.panels?.hoverAreas);
+	const MAIN_LAYOUT_DEBUG = false;
+
+	function debugMainLayout(...args: unknown[]): void {
+		if (MAIN_LAYOUT_DEBUG) {
+			console.debug(...args);
+		}
+	}
 
 	// 计算左侧边栏高度和对齐样式
 	let leftHeightPercent = $derived(
@@ -75,14 +82,14 @@
 
 	// 调试日志
 	$effect(() => {
-		console.log('[MainLayout] Left:', {
+		debugMainLayout('[MainLayout] Left:', {
 			preset: $leftSidebarHeight,
 			percent: leftHeightPercent,
 			width: leftWidth,
 			style: leftHeightStyle,
 			alignStyle: leftVerticalStyle
 		});
-		console.log('[MainLayout] Right:', {
+		debugMainLayout('[MainLayout] Right:', {
 			preset: $rightSidebarHeight,
 			percent: rightHeightPercent,
 			width: rightWidth,
@@ -138,7 +145,7 @@
 	// 处理区域操作事件
 	function handleAreaAction(e: CustomEvent) {
 		const { action } = e.detail;
-		console.log('执行区域操作:', action);
+		debugMainLayout('执行区域操作:', action);
 
 		// 这里可以根据action执行相应的操作
 		// 例如：翻页、缩放等

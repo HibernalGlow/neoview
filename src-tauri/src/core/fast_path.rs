@@ -9,14 +9,14 @@ use std::path::Path;
 #[inline]
 pub fn normalize_path_fast(path: &[u8]) -> BString {
     let mut result = BString::from(path);
-    
+
     // 将反斜杠转换为正斜杠
     for byte in result.as_mut_slice() {
         if *byte == b'\\' {
             *byte = b'/';
         }
     }
-    
+
     // 移除连续的斜杠
     let mut prev_slash = false;
     result.retain(|&b| {
@@ -25,12 +25,12 @@ pub fn normalize_path_fast(path: &[u8]) -> BString {
         prev_slash = is_slash;
         keep
     });
-    
+
     // 移除尾部斜杠
     while result.last() == Some(&b'/') && result.len() > 1 {
         result.pop();
     }
-    
+
     result
 }
 
@@ -43,11 +43,11 @@ pub fn paths_equal_fast(a: &[u8], b: &[u8]) -> bool {
         let norm_b = normalize_path_fast(b);
         return norm_a == norm_b;
     }
-    
+
     // 长度相同，逐字节比较（斜杠等价）
-    a.iter().zip(b.iter()).all(|(&x, &y)| {
-        x == y || (is_slash(x) && is_slash(y))
-    })
+    a.iter()
+        .zip(b.iter())
+        .all(|(&x, &y)| x == y || (is_slash(x) && is_slash(y)))
 }
 
 /// 检查是否为斜杠字符
@@ -60,10 +60,10 @@ fn is_slash(b: u8) -> bool {
 #[inline]
 pub fn file_name_fast(path: &[u8]) -> &BStr {
     let path = BStr::new(path);
-    
+
     // 找到最后一个斜杠
     let last_sep = path.rfind_byte(b'/').or_else(|| path.rfind_byte(b'\\'));
-    
+
     match last_sep {
         Some(pos) => BStr::new(&path[pos + 1..]),
         None => path,
@@ -74,21 +74,21 @@ pub fn file_name_fast(path: &[u8]) -> &BStr {
 #[inline]
 pub fn extension_fast(path: &[u8]) -> Option<BString> {
     let name = file_name_fast(path);
-    
+
     // 找到最后一个点
     let dot_pos = name.rfind_byte(b'.')?;
-    
+
     // 确保点不在开头
     if dot_pos == 0 {
         return None;
     }
-    
+
     // 提取扩展名并转小写
     let ext = &name[dot_pos + 1..];
     if ext.is_empty() {
         return None;
     }
-    
+
     Some(BString::from(ext.to_lowercase()))
 }
 
@@ -99,8 +99,16 @@ pub fn is_image_file_fast(path: &[u8]) -> bool {
         Some(ext) => {
             matches!(
                 ext.as_slice(),
-                b"jpg" | b"jpeg" | b"png" | b"gif" | b"bmp" | b"webp" 
-                | b"avif" | b"jxl" | b"tiff" | b"tif"
+                b"jpg"
+                    | b"jpeg"
+                    | b"png"
+                    | b"gif"
+                    | b"bmp"
+                    | b"webp"
+                    | b"avif"
+                    | b"jxl"
+                    | b"tiff"
+                    | b"tif"
             )
         }
         None => false,
@@ -114,8 +122,16 @@ pub fn is_video_file_fast(path: &[u8]) -> bool {
         Some(ext) => {
             matches!(
                 ext.as_slice(),
-                b"mp4" | b"mkv" | b"avi" | b"mov" | b"wmv" | b"flv" 
-                | b"webm" | b"m4v" | b"mpg" | b"mpeg"
+                b"mp4"
+                    | b"mkv"
+                    | b"avi"
+                    | b"mov"
+                    | b"wmv"
+                    | b"flv"
+                    | b"webm"
+                    | b"m4v"
+                    | b"mpg"
+                    | b"mpeg"
             )
         }
         None => false,
@@ -173,22 +189,10 @@ mod tests {
 
     #[test]
     fn test_normalize_path_fast() {
-        assert_eq!(
-            normalize_path_fast(b"a\\b\\c"),
-            BString::from("a/b/c")
-        );
-        assert_eq!(
-            normalize_path_fast(b"a//b///c"),
-            BString::from("a/b/c")
-        );
-        assert_eq!(
-            normalize_path_fast(b"a/b/c/"),
-            BString::from("a/b/c")
-        );
-        assert_eq!(
-            normalize_path_fast(b"a\\\\b\\c\\"),
-            BString::from("a/b/c")
-        );
+        assert_eq!(normalize_path_fast(b"a\\b\\c"), BString::from("a/b/c"));
+        assert_eq!(normalize_path_fast(b"a//b///c"), BString::from("a/b/c"));
+        assert_eq!(normalize_path_fast(b"a/b/c/"), BString::from("a/b/c"));
+        assert_eq!(normalize_path_fast(b"a\\\\b\\c\\"), BString::from("a/b/c"));
     }
 
     #[test]

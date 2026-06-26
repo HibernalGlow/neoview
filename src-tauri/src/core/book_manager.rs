@@ -722,7 +722,9 @@ mod tests {
         manager.open_book(&canonical_path).expect("first open");
         manager.navigate_to_page(1).expect("goto page 1");
 
-        let second = manager.open_book(&slash_variant).expect("second open mixed separators");
+        let second = manager
+            .open_book(&slash_variant)
+            .expect("second open mixed separators");
         assert_eq!(second.current_page, 1);
     }
 }

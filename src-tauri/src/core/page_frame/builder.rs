@@ -7,7 +7,7 @@ use super::{
 };
 
 /// 页面帧构建器
-/// 
+///
 /// 根据页面列表和配置构建页面帧
 pub struct PageFrameBuilder {
     /// 页面列表
@@ -94,7 +94,10 @@ impl PageFrameBuilder {
 
     /// 检查页面是否为横向
     pub fn is_page_landscape(&self, index: usize) -> bool {
-        self.pages.get(index).map(|p| p.is_landscape()).unwrap_or(false)
+        self.pages
+            .get(index)
+            .map(|p| p.is_landscape())
+            .unwrap_or(false)
     }
 
     /// 构建指定位置的帧
@@ -142,7 +145,7 @@ impl PageFrameBuilder {
     }
 
     /// 构建双页帧
-    /// 
+    ///
     /// 按照 NeeView 的 CreatePageFrame 逻辑：
     /// 1. 当前页横向 → 独占
     /// 2. 下一页横向 → 当前页独占（关键修复点）
@@ -177,9 +180,10 @@ impl PageFrameBuilder {
         // 4. 首页/尾页单独显示（检查当前页或下一页是否为首页/尾页）
         let is_first = position.index == 0 || next_index == 0;
         let is_last = position.index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
-        
-        if (self.context.is_supported_single_first && is_first) ||
-           (self.context.is_supported_single_last && is_last) {
+
+        if (self.context.is_supported_single_first && is_first)
+            || (self.context.is_supported_single_last && is_last)
+        {
             let element = PageFrameElement::full(page, PageRange::full_page(position.index));
             return Some(PageFrame::single(element, direction));
         }
@@ -188,11 +192,16 @@ impl PageFrameBuilder {
         let e1 = PageFrameElement::full(page, PageRange::full_page(position.index));
         let e2 = PageFrameElement::full(next_page, PageRange::full_page(next_index));
 
-        Some(PageFrame::double_aligned(e1, e2, direction, self.context.wide_page_stretch))
+        Some(PageFrame::double_aligned(
+            e1,
+            e2,
+            direction,
+            self.context.wide_page_stretch,
+        ))
     }
 
     /// 检查页面是否应该单独显示
-    /// 
+    ///
     /// 注意：这个方法只检查单个页面，用于 prev_frame_position 等场景
     /// build_double_frame 和 get_frame_step 使用内联逻辑，因为需要同时检查当前页和下一页
     fn should_display_alone(&self, index: usize) -> bool {
@@ -220,7 +229,7 @@ impl PageFrameBuilder {
     }
 
     /// 检查两个页面是否应该组成双页
-    /// 
+    ///
     /// 按照 NeeView 的逻辑，检查：
     /// 1. 当前页横向 → 不能组成双页
     /// 2. 下一页横向 → 不能组成双页
@@ -249,9 +258,10 @@ impl PageFrameBuilder {
         // 首页/尾页检查
         let is_first = index == 0 || next_index == 0;
         let is_last = index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
-        
-        if (self.context.is_supported_single_first && is_first) ||
-           (self.context.is_supported_single_last && is_last) {
+
+        if (self.context.is_supported_single_first && is_first)
+            || (self.context.is_supported_single_last && is_last)
+        {
             return false;
         }
 
@@ -299,7 +309,10 @@ impl PageFrameBuilder {
                     // 上一页
                     let prev_index = current.index - 1;
                     let prev_split = self.is_page_split(prev_index);
-                    Some(PagePosition::new(prev_index, if prev_split { 1 } else { 0 }))
+                    Some(PagePosition::new(
+                        prev_index,
+                        if prev_split { 1 } else { 0 },
+                    ))
                 } else {
                     None
                 }
@@ -311,7 +324,7 @@ impl PageFrameBuilder {
 
                 // 向前查找上一帧的起始位置
                 let prev_index = current.index - 1;
-                
+
                 // 如果上一页应该单独显示，直接返回
                 if self.should_display_alone(prev_index) {
                     return Some(PagePosition::new(prev_index, 0));
@@ -329,7 +342,7 @@ impl PageFrameBuilder {
     }
 
     /// 获取帧的步长（双页模式下）
-    /// 
+    ///
     /// 按照 NeeView 的逻辑，与 build_double_frame 保持一致：
     /// 1. 当前页横向 → 步进 1
     /// 2. 下一页横向 → 步进 1
@@ -365,9 +378,10 @@ impl PageFrameBuilder {
         // 4. 首页/尾页单独显示
         let is_first = index == 0 || next_index == 0;
         let is_last = index == self.pages.len() - 1 || next_index == self.pages.len() - 1;
-        
-        if (self.context.is_supported_single_first && is_first) ||
-           (self.context.is_supported_single_last && is_last) {
+
+        if (self.context.is_supported_single_first && is_first)
+            || (self.context.is_supported_single_last && is_last)
+        {
             return 1;
         }
 
@@ -376,7 +390,7 @@ impl PageFrameBuilder {
     }
 
     /// 计算总虚拟页数
-    /// 
+    ///
     /// 考虑分割页面的额外计数
     pub fn total_virtual_pages(&self) -> usize {
         if !self.context.is_single_mode() || !self.context.is_supported_divide_page {
@@ -395,12 +409,16 @@ impl PageFrameBuilder {
         let mut current_virtual = 0;
         for (index, &is_split) in self.split_cache.iter().enumerate() {
             let page_virtual_count = if is_split { 2 } else { 1 };
-            
+
             if current_virtual + page_virtual_count > virtual_index {
-                let part = if is_split && virtual_index > current_virtual { 1 } else { 0 };
+                let part = if is_split && virtual_index > current_virtual {
+                    1
+                } else {
+                    0
+                };
                 return PagePosition::new(index, part);
             }
-            
+
             current_virtual += page_virtual_count;
         }
 
@@ -478,7 +496,9 @@ mod tests {
         assert!(frame.is_single());
         assert_eq!(frame.start_index(), 0);
 
-        let next = builder.next_frame_position(PagePosition::new(0, 0)).unwrap();
+        let next = builder
+            .next_frame_position(PagePosition::new(0, 0))
+            .unwrap();
         assert_eq!(next.index, 1);
     }
 
@@ -501,7 +521,9 @@ mod tests {
         assert!(frame1.first_element().unwrap().crop_rect.is_some());
 
         // 下一个位置应该是第二半
-        let next = builder.next_frame_position(PagePosition::new(0, 0)).unwrap();
+        let next = builder
+            .next_frame_position(PagePosition::new(0, 0))
+            .unwrap();
         assert_eq!(next.index, 0);
         assert_eq!(next.part, 1);
 
@@ -525,7 +547,9 @@ mod tests {
         assert!(frame.contains_index(1));
 
         // 下一帧位置
-        let next = builder.next_frame_position(PagePosition::new(0, 0)).unwrap();
+        let next = builder
+            .next_frame_position(PagePosition::new(0, 0))
+            .unwrap();
         assert_eq!(next.index, 2);
     }
 

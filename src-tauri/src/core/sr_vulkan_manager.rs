@@ -361,8 +361,15 @@ struct PreprocessResult {
 fn preprocess_image_for_sr(image_data: &[u8]) -> Result<PreprocessResult, String> {
     // 检测是否需要转码的格式
     if is_jxl_image(image_data) || is_avif_image(image_data) {
-        let format_name = if is_jxl_image(image_data) { "JXL" } else { "AVIF" };
-        println!("[SrVulkanManager] Detected {} image, using WIC to transcode to JPEG", format_name);
+        let format_name = if is_jxl_image(image_data) {
+            "JXL"
+        } else {
+            "AVIF"
+        };
+        println!(
+            "[SrVulkanManager] Detected {} image, using WIC to transcode to JPEG",
+            format_name
+        );
         transcode_with_wic_and_size(image_data)
     } else {
         // 其他格式直接透传（PNG/JPEG/WebP 等 sr_vulkan 原生支持的）
@@ -400,26 +407,28 @@ fn is_avif_image(data: &[u8]) -> bool {
 /// 使用 WIC 解码图片，然后编码为 JPEG（Q85），同时返回尺寸
 fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, String> {
     use crate::core::wic_decoder::decode_image_from_memory_with_wic;
-    
+
     // 使用 WIC 解码（支持 AVIF/JXL，需要安装对应编解码器）
     let decode_result = decode_image_from_memory_with_wic(image_data)
         .map_err(|e| format!("WIC 解码失败: {}", e))?;
-    
+
     let width = decode_result.width;
     let height = decode_result.height;
     let bgra_pixels = decode_result.pixels;
-    
+
     println!(
         "[SrVulkanManager] WIC decoded: {}x{}, {} bytes",
-        width, height, bgra_pixels.len()
+        width,
+        height,
+        bgra_pixels.len()
     );
-    
+
     // BGRA -> RGB（JPEG 不支持 alpha 通道）
     let rgb_pixels: Vec<u8> = bgra_pixels
         .chunks_exact(4)
         .flat_map(|c| [c[2], c[1], c[0]]) // BGRA -> RGB
         .collect();
-    
+
     // 使用 image crate 编码为 JPEG（Q85，速度快且保持质量）
     let mut output = Vec::new();
     {
@@ -430,12 +439,12 @@ fn transcode_with_wic_and_size(image_data: &[u8]) -> Result<PreprocessResult, St
             .write_image(&rgb_pixels, width, height, image::ExtendedColorType::Rgb8)
             .map_err(|e| format!("JPEG 编码失败: {}", e))?;
     }
-    
+
     println!(
         "[SrVulkanManager] Transcoded to JPEG: {} bytes",
         output.len()
     );
-    
+
     Ok(PreprocessResult {
         data: output,
         width: Some(width),

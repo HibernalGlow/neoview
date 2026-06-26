@@ -1,5 +1,5 @@
 //! 页面尺寸扫描器
-//! 
+//!
 //! 异步扫描书籍中所有页面的尺寸，支持取消和缓存
 
 use crate::core::archive::{is_image_file, ArchiveManager};
@@ -89,7 +89,6 @@ impl From<&Page> for ScanPageTask {
     }
 }
 
-
 /// 页面尺寸扫描器
 pub struct DimensionScanner {
     /// 取消令牌
@@ -141,7 +140,10 @@ impl DimensionScanner {
 
     /// 从文件路径快速获取图片尺寸（尽量只读取头部）
     fn get_image_dimensions_from_path_fast(path: &Path) -> Option<(u32, u32)> {
-        let reader = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+        let reader = image::ImageReader::open(path)
+            .ok()?
+            .with_guessed_format()
+            .ok()?;
         reader.into_dimensions().ok()
     }
 
@@ -222,7 +224,7 @@ impl DimensionScanner {
         let mut last_progress_emit_at = Instant::now();
         let total_count = u64::try_from(total).unwrap_or(u64::MAX).max(1);
         let mut updates_since_last_emit = 0usize;
-        
+
         let mut scanned_count = 0usize;
         let mut cached_count = 0usize;
         let mut failed_count = 0usize;
@@ -287,10 +289,13 @@ impl DimensionScanner {
             let is_last_page = idx == total - 1;
             let reached_batch = pending_updates.len() >= progress_batch_size;
             let emit_interval_elapsed = reached_batch
-                && last_progress_emit_at.elapsed().as_millis() >= u128::from(progress_emit_interval_ms);
+                && last_progress_emit_at.elapsed().as_millis()
+                    >= u128::from(progress_emit_interval_ms);
             let reached_update_threshold = updates_since_last_emit >= PROGRESS_MIN_UPDATE_COUNT;
 
-            if should_emit_progress && (is_last_page || (emit_interval_elapsed && reached_update_threshold)) {
+            if should_emit_progress
+                && (is_last_page || (emit_interval_elapsed && reached_update_threshold))
+            {
                 let updates = std::mem::take(&mut pending_updates);
                 if let Some(handle) = app_handle {
                     let completed = u64::try_from(idx + 1).unwrap_or(u64::MAX);
@@ -352,7 +357,6 @@ impl DimensionScanner {
         }
     }
 
-
     /// 扫描单个页面的尺寸
     fn scan_page_dimensions(
         &self,
@@ -386,17 +390,17 @@ impl DimensionScanner {
             BookType::Archive => {
                 // 压缩包类型：使用共享管理器（内含缓存机制）
                 let inner_path = page.inner_path.as_ref().unwrap_or(&page.path);
-                
-                match self.archive_manager.load_image_from_archive_binary(
-                    Path::new(book_path),
-                    inner_path,
-                ) {
+
+                match self
+                    .archive_manager
+                    .load_image_from_archive_binary(Path::new(book_path), inner_path)
+                {
                     Ok(data) => {
                         // 优先使用快速提取
                         if let Some(dims) = Self::get_image_dimensions_fast(&data) {
                             return Some(dims);
                         }
-                        
+
                         // 回退到 WIC
                         match WicDecoder::get_image_dimensions_from_memory(&data) {
                             Ok((w, h)) => Some((w, h)),
@@ -415,7 +419,7 @@ impl DimensionScanner {
             BookType::Epub => {
                 // EPUB 类型：使用 EbookManager 提取
                 use crate::core::ebook::EbookManager;
-                
+
                 let inner_path = page.inner_path.as_ref().unwrap_or(&page.path);
                 match EbookManager::get_epub_image(book_path, inner_path) {
                     Ok((data, _mime)) => {
@@ -466,5 +470,3 @@ impl DimensionScannerState {
         }
     }
 }
-
-

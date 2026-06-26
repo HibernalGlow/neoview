@@ -36,7 +36,9 @@ impl MmapArchive {
     /// 打开压缩包（使用内存映射）
     pub fn open(path: &Path) -> Result<Self, String> {
         let file = File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
-        let metadata = file.metadata().map_err(|e| format!("获取文件信息失败: {e}"))?;
+        let metadata = file
+            .metadata()
+            .map_err(|e| format!("获取文件信息失败: {e}"))?;
         let size = metadata.len();
 
         // 创建内存映射
@@ -196,7 +198,9 @@ impl SmartFileReader {
     /// 读取文件内容（自动选择最优方式）
     pub fn read(path: &Path) -> Result<Vec<u8>, String> {
         let file = File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
-        let metadata = file.metadata().map_err(|e| format!("获取文件信息失败: {e}"))?;
+        let metadata = file
+            .metadata()
+            .map_err(|e| format!("获取文件信息失败: {e}"))?;
         let size = metadata.len();
 
         if size >= MMAP_THRESHOLD {
@@ -225,7 +229,9 @@ impl SmartFileReader {
     /// 读取文件的指定范围
     pub fn read_range(path: &Path, offset: u64, length: usize) -> Result<Vec<u8>, String> {
         let file = File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
-        let metadata = file.metadata().map_err(|e| format!("获取文件信息失败: {e}"))?;
+        let metadata = file
+            .metadata()
+            .map_err(|e| format!("获取文件信息失败: {e}"))?;
         let size = metadata.len();
 
         if size >= MMAP_THRESHOLD {

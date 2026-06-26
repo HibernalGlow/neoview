@@ -47,6 +47,14 @@ import {
 
 export type { SwitchToastContext };
 
+const BOOK_CORE_DEBUG = false;
+
+function debugBookCore(...args: unknown[]): void {
+	if (BOOK_CORE_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 /** BookStore 核心类 - 第一部分：状态和基础 Getters */
 class BookStore {
 	private state = $state<BookState>({
@@ -209,7 +217,7 @@ class BookStore {
 			try {
 				if (!this.isOpenBookRequestCurrent(ticket)) return;
 
-				console.log('📖 Opening book:', path);
+				debugBookCore('📖 Opening book:', path);
 				this.state.loading = true;
 				this.state.error = '';
 				this.state.upscaledImageData = null;
@@ -251,7 +259,7 @@ class BookStore {
 		const book = await bookApi.openBook(path);
 		if (!this.isOpenBookRequestCurrent(ticket)) return;
 
-		console.log('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
+		debugBookCore('✅ Book opened:', book.name, 'with', book.totalPages, 'pages');
 
 		// 应用锁定的排序模式
 		const settings = settingsManager.getSettings();
@@ -264,7 +272,7 @@ class BookStore {
 				if (!this.isOpenBookRequestCurrent(ticket)) return;
 
 				Object.assign(book, updatedBook);
-				console.log('🔒 已应用锁定的排序模式:', lockedSortMode);
+				debugBookCore('🔒 已应用锁定的排序模式:', lockedSortMode);
 			} catch (err) {
 				if (!this.isOpenBookRequestCurrent(ticket)) return;
 
@@ -284,7 +292,7 @@ class BookStore {
 				if (!this.isOpenBookRequestCurrent(ticket)) return;
 
 				Object.assign(book, updatedBook);
-				console.log('🔒 已应用锁定的媒体优先模式:', lockedMediaPriority);
+				debugBookCore('🔒 已应用锁定的媒体优先模式:', lockedMediaPriority);
 			} catch (err) {
 				if (!this.isOpenBookRequestCurrent(ticket)) return;
 
@@ -305,14 +313,14 @@ class BookStore {
 
 			if (foundIndex >= 0) {
 				targetPage = foundIndex;
-				console.log(
+				debugBookCore(
 					'📍 [History] Found page by path:',
 					options.initialFilePath,
 					'-> index',
 					foundIndex
 				);
 			} else {
-				console.log(
+				debugBookCore(
 					'⚠️ [History] Page not found by path, falling back to index:',
 					options.initialPage
 				);
@@ -328,7 +336,7 @@ class BookStore {
 		this.state.viewerOpen = true;
 
 		// 后端 frame builder 负责布局计算，前端不再需要本地初始化
-		console.log('📐 [Reader] 书籍已打开，共', book.pages?.length ?? 0, '页，后端负责帧布局');
+		debugBookCore('📐 [Reader] 书籍已打开，共', book.pages?.length ?? 0, '页，后端负责帧布局');
 
 		if (targetPage > 0 && book.totalPages > 0 && this.isOpenBookRequestCurrent(ticket)) {
 			bookApi.navigateToPage(targetPage).catch((navErr) => {
@@ -365,7 +373,11 @@ class BookStore {
 			// 延迟 500ms 启动，将书籍打开初期的 IO 优先级完全让给首张图片的显示
 			setTimeout(() => {
 				if (this.state.currentBook?.path !== book.path) return;
-				console.log('📐 [DimensionScan] Starting background scan for', book.pages.length, 'pages');
+				debugBookCore(
+					'📐 [DimensionScan] Starting background scan for',
+					book.pages.length,
+					'pages'
+				);
 				dimensionApi.startDimensionScan(book.path, book.type, book.pages).catch((err) => {
 					console.warn('⚠️ [DimensionScan] Failed to start scan:', err);
 				});
@@ -396,7 +408,7 @@ class BookStore {
 	async cancelCurrentLoad() {
 		try {
 			await bookApi.cancelCurrentLoad();
-			console.log('🚫 已取消当前加载');
+			debugBookCore('🚫 已取消当前加载');
 		} catch (err) {
 			console.error('❌ 取消加载失败:', err);
 		}
@@ -624,12 +636,30 @@ class BookStore {
 		const currentPath = this.state.currentBook?.path ?? null;
 
 		const activeTab = folderTabActions.getActiveTab();
+		const activeTabPath = activeTab?.currentPath || '';
+		const activeSortField = (activeTab?.sortField || 'name') as
+			| 'name'
+			| 'date'
+			| 'size'
+			| 'type'
+			| 'random'
+			| 'rating'
+			| 'path'
+			| 'collectTagCount';
+		const activeSortOrder = (activeTab?.sortOrder || 'asc') as 'asc' | 'desc';
 
 		// 直接读取 UI 已排好序的缓存列表，不做任何二次排序
-		const cachedMeta = folderTabActions.getCachedSortedMeta();
-		const cachedSorted = folderTabActions.getCachedSortedItems();
+		const cachedMeta = folderTabActions.getCachedSortedMeta(
+			activeTabPath,
+			activeSortField,
+			activeSortOrder
+		);
+		const cachedSorted = folderTabActions.getCachedSortedItems(
+			activeTabPath,
+			activeSortField,
+			activeSortOrder
+		);
 		let targetPath: string | null = null;
-		const activeTabPath = activeTab?.currentPath || '';
 		const canUseCache =
 			cachedSorted.length > 0 &&
 			!!activeTabPath &&
@@ -658,16 +688,8 @@ class BookStore {
 		// 降级：缓存为空或缓存中无 book 候选时，异步加载
 		if (!targetPath) {
 			const sortOptions = {
-				sortField: (activeTab?.sortField || 'name') as
-					| 'name'
-					| 'date'
-					| 'size'
-					| 'type'
-					| 'random'
-					| 'rating'
-					| 'path'
-					| 'collectTagCount',
-				sortOrder: (activeTab?.sortOrder || 'asc') as 'asc' | 'desc'
+				sortField: activeSortField,
+				sortOrder: activeSortOrder
 			};
 			targetPath = await folderPanelActions.findAdjacentBookPathAsync(
 				currentPath,
@@ -1102,7 +1124,7 @@ class BookStore {
 		try {
 			fileBrowserStore.selectPath(path);
 		} catch (error) {
-			console.debug('syncFileBrowserSelection failed:', error);
+			debugBookCore('syncFileBrowserSelection failed:', error);
 		}
 	}
 

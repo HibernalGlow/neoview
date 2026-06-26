@@ -5,7 +5,7 @@ use super::position::PagePosition;
 use serde::{Deserialize, Serialize};
 
 /// 页面范围
-/// 
+///
 /// 表示一个页面帧覆盖的范围，从 min 到 max
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,7 +24,10 @@ impl PageRange {
 
     /// 创建单页范围
     pub fn single(position: PagePosition) -> Self {
-        Self { min: position, max: position }
+        Self {
+            min: position,
+            max: position,
+        }
     }
 
     /// 创建完整单页范围
@@ -163,10 +166,7 @@ mod tests {
 
     #[test]
     fn test_range_contains() {
-        let range = PageRange::new(
-            PagePosition::new(2, 0),
-            PagePosition::new(4, 1),
-        );
+        let range = PageRange::new(PagePosition::new(2, 0), PagePosition::new(4, 1));
 
         assert!(range.contains(PagePosition::new(3, 0)));
         assert!(range.contains(PagePosition::new(2, 0)));
@@ -179,7 +179,7 @@ mod tests {
     fn test_range_merge() {
         let r1 = PageRange::full_page(2);
         let r2 = PageRange::full_page(4);
-        
+
         let merged = PageRange::merge([r1, r2]).unwrap();
         assert_eq!(merged.min.index, 2);
         assert_eq!(merged.max.index, 4);

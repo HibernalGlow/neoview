@@ -1,60 +1,86 @@
 import { invoke } from '@tauri-apps/api/core';
 
 const MAX_CACHE_SIZE = 512;
+const DEFAULT_MAX_DEPTH = 8;
+const DEFAULT_MAX_VISITED_DIRS = 96;
+const DEFAULT_MAX_ENTRIES_PER_DIR = 768;
+const DEFAULT_BUDGET_MS = 120;
 
-const pathCache = new Map<string, string[]>();
-const inFlight = new Map<string, Promise<string[]>>();
+export interface FolderPreviewCandidate {
+	path: string;
+	kind: 'file' | 'directoryCover';
+	representative?: string | null;
+}
+
+const candidateCache = new Map<string, FolderPreviewCandidate[]>();
+const inFlight = new Map<string, Promise<FolderPreviewCandidate[]>>();
 
 function makeCacheKey(folderPath: string, count: number, modified: number): string {
 	return `${folderPath}|${count}|${modified}`;
 }
 
-function remember(cacheKey: string, paths: string[]): void {
-	if (pathCache.size >= MAX_CACHE_SIZE) {
-		const firstKey = pathCache.keys().next().value;
-		if (firstKey) pathCache.delete(firstKey);
+function remember(cacheKey: string, candidates: FolderPreviewCandidate[]): void {
+	if (candidateCache.size >= MAX_CACHE_SIZE) {
+		const firstKey = candidateCache.keys().next().value;
+		if (firstKey) candidateCache.delete(firstKey);
 	}
-	pathCache.set(cacheKey, paths);
+	candidateCache.set(cacheKey, candidates);
 }
 
-function uniquePaths(paths: string[]): string[] {
-	const seen = new Set<string>();
-	const result: string[] = [];
+function normalizeCandidate(candidate: FolderPreviewCandidate): FolderPreviewCandidate | null {
+	if (!candidate?.path) return null;
+	const kind = candidate.kind === 'directoryCover' ? 'directoryCover' : 'file';
+	return {
+		path: candidate.path,
+		kind,
+		representative: candidate.representative ?? null
+	};
+}
 
-	for (const path of paths) {
-		const key = path.replace(/\\/g, '/').toLowerCase();
+function uniqueCandidates(candidates: FolderPreviewCandidate[]): FolderPreviewCandidate[] {
+	const seen = new Set<string>();
+	const result: FolderPreviewCandidate[] = [];
+
+	for (const candidate of candidates) {
+		const normalized = normalizeCandidate(candidate);
+		if (!normalized) continue;
+		const key = `${normalized.kind}:${normalized.path.replace(/\\/g, '/').toLowerCase()}`;
 		if (seen.has(key)) continue;
 		seen.add(key);
-		result.push(path);
+		result.push(normalized);
 	}
 
 	return result;
 }
 
-export async function loadFolderPreviewImagePaths(
+export async function loadFolderPreviewCandidates(
 	folderPath: string,
 	count: number,
 	modified = 0
-): Promise<string[]> {
+): Promise<FolderPreviewCandidate[]> {
 	const safeCount = Math.max(1, Math.min(16, Math.trunc(count || 4)));
 	const cacheKey = makeCacheKey(folderPath, safeCount, modified);
-	const cached = pathCache.get(cacheKey);
+	const cached = candidateCache.get(cacheKey);
 	if (cached) return cached;
 
 	const pending = inFlight.get(cacheKey);
 	if (pending) return pending;
 
-	const promise = invoke<string[]>('get_folder_preview_image_paths', {
+	const promise = invoke<FolderPreviewCandidate[]>('get_folder_preview_candidates_v2', {
 		folderPath,
-		count: safeCount
+		count: safeCount,
+		maxDepth: DEFAULT_MAX_DEPTH,
+		maxVisitedDirs: DEFAULT_MAX_VISITED_DIRS,
+		maxEntriesPerDir: DEFAULT_MAX_ENTRIES_PER_DIR,
+		budgetMs: DEFAULT_BUDGET_MS
 	})
-	.then((paths) => {
-		const unique = uniquePaths(paths).slice(0, safeCount);
-		if (unique.length > 0) {
-			remember(cacheKey, unique);
-		}
-		return unique;
-	})
+		.then((candidates) => {
+			const unique = uniqueCandidates(candidates).slice(0, safeCount);
+			if (unique.length > 0) {
+				remember(cacheKey, unique);
+			}
+			return unique;
+		})
 		.finally(() => {
 			inFlight.delete(cacheKey);
 		});
@@ -63,7 +89,18 @@ export async function loadFolderPreviewImagePaths(
 	return promise;
 }
 
+export async function loadFolderPreviewImagePaths(
+	folderPath: string,
+	count: number,
+	modified = 0
+): Promise<string[]> {
+	const candidates = await loadFolderPreviewCandidates(folderPath, count, modified);
+	return candidates
+		.filter((candidate) => candidate.kind === 'file')
+		.map((candidate) => candidate.path);
+}
+
 export function clearFolderPreviewPathCache(): void {
-	pathCache.clear();
+	candidateCache.clear();
 	inFlight.clear();
 }

@@ -9,6 +9,14 @@ import { invoke } from '@tauri-apps/api/core';
 import * as FileSystemAPI from '$lib/api/filesystem';
 import type { FsItem } from '$lib/types';
 
+const FOLDER_THUMBNAIL_DEBUG = false;
+
+function debugFolderThumbnail(...args: unknown[]): void {
+	if (FOLDER_THUMBNAIL_DEBUG) {
+		console.debug(...args);
+	}
+}
+
 export interface FolderThumbnailConfig {
 	/** 最大并发数 */
 	maxConcurrent: number;
@@ -81,7 +89,7 @@ export class FolderThumbnailLoader {
 	setCurrentDirectory(path: string) {
 		if (this.currentDirectory === path) return;
 
-		console.log(`📂 文件夹缩略图加载器：切换目录 ${this.currentDirectory} → ${path}`);
+		debugFolderThumbnail(`📂 文件夹缩略图加载器：切换目录 ${this.currentDirectory} → ${path}`);
 
 		// 取消旧任务
 		this.abortPendingTasks();
@@ -94,6 +102,7 @@ export class FolderThumbnailLoader {
 	 * 取消所有待处理任务
 	 */
 	private abortPendingTasks() {
+		const abortedCount = this.queue.length;
 		// 标记所有队列中的任务为取消
 		for (const task of this.queue) {
 			task.aborted = true;
@@ -106,7 +115,7 @@ export class FolderThumbnailLoader {
 			this.abortController.abort();
 		}
 
-		console.log(`🛑 已取消 ${this.queue.length} 个待处理的文件夹缩略图任务`);
+		debugFolderThumbnail(`🛑 已取消 ${abortedCount} 个待处理的文件夹缩略图任务`);
 	}
 
 	/**
@@ -124,11 +133,11 @@ export class FolderThumbnailLoader {
 		);
 
 		if (needProcess.length === 0) {
-			console.log('📭 无需处理的文件夹缩略图');
+			debugFolderThumbnail('📭 无需处理的文件夹缩略图');
 			return;
 		}
 
-		console.log(
+		debugFolderThumbnail(
 			`📂 开始加载 ${needProcess.length} 个文件夹缩略图（并发限制: ${this.config.maxConcurrent}）`
 		);
 
@@ -259,7 +268,7 @@ export class FolderThumbnailLoader {
 
 			resolve(result);
 		} catch (error) {
-			console.debug(`⚠️ 文件夹缩略图生成失败: ${folderPath}`, error);
+			debugFolderThumbnail(`⚠️ 文件夹缩略图生成失败: ${folderPath}`, error);
 			this.cache.set(folderPath, null); // 标记为失败
 			resolve(null);
 		}
@@ -320,7 +329,7 @@ export class FolderThumbnailLoader {
 
 			return null;
 		} catch (error) {
-			console.debug(`文件夹缩略图生成错误: ${folderPath}`, error);
+			debugFolderThumbnail(`文件夹缩略图生成错误: ${folderPath}`, error);
 			return null;
 		}
 	}
@@ -361,7 +370,7 @@ export class FolderThumbnailLoader {
 			const blob = new Blob([new Uint8Array(blobData)], { type: 'image/webp' });
 			return URL.createObjectURL(blob);
 		} catch (error) {
-			console.debug(`从文件生成缩略图失败: ${filePath}`, error);
+			debugFolderThumbnail(`从文件生成缩略图失败: ${filePath}`, error);
 			return null;
 		}
 	}
@@ -438,7 +447,7 @@ export class FolderThumbnailLoader {
 
 		if (needProcess.length === 0) return;
 
-		console.log(`📂 可见范围加载 [${start}-${end}]：${needProcess.length} 个文件夹`);
+		debugFolderThumbnail(`📂 可见范围加载 [${start}-${end}]：${needProcess.length} 个文件夹`);
 
 		// 按距离可见中心排序（中心优先）
 		const center = (visibleStart + visibleEnd) / 2;
@@ -480,12 +489,14 @@ export class FolderThumbnailLoader {
 		this.warmupProgress.total = allPaths.length;
 		onProgress?.(this.warmupProgress);
 
-		console.log(`🔥 开始递归预热：${rootPath}（共 ${allPaths.length} 项，深度 ${maxDepth}）`);
+		debugFolderThumbnail(
+			`🔥 开始递归预热：${rootPath}（共 ${allPaths.length} 项，深度 ${maxDepth}）`
+		);
 
 		// 分批处理
 		for (let i = 0; i < allPaths.length; i += this.config.batchSize) {
 			if (this.warmupAborted) {
-				console.log('🛑 预热已取消');
+				debugFolderThumbnail('🛑 预热已取消');
 				break;
 			}
 
@@ -521,7 +532,7 @@ export class FolderThumbnailLoader {
 			}
 		}
 
-		console.log(
+		debugFolderThumbnail(
 			`✅ 预热完成：${this.warmupProgress.completed}/${this.warmupProgress.total}（失败 ${this.warmupProgress.failed}）`
 		);
 
@@ -554,7 +565,7 @@ export class FolderThumbnailLoader {
 				}
 			}
 		} catch (error) {
-			console.debug(`收集路径失败: ${path}`, error);
+			debugFolderThumbnail(`收集路径失败: ${path}`, error);
 		}
 	}
 
@@ -563,7 +574,7 @@ export class FolderThumbnailLoader {
 	 */
 	cancelWarmup() {
 		this.warmupAborted = true;
-		console.log('🛑 预热取消请求已发送');
+		debugFolderThumbnail('🛑 预热取消请求已发送');
 	}
 
 	/**

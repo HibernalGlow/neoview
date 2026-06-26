@@ -4,7 +4,10 @@
 //! NOTE: PageFrame 命令已迁移到前端本地计算 (2024-01)
 //! 请使用前端的 pageFrameStore 进行布局计算
 
-use crate::core::page_frame::{FrameSnapshot, FrameLayoutType, FrameImageInfo, SplitHalf, ReaderWindow, PageMode, ReadOrder, PageFrame, PagePosition};
+use crate::core::page_frame::{
+    FrameImageInfo, FrameLayoutType, FrameSnapshot, PageFrame, PageMode, PagePosition, ReadOrder,
+    ReaderWindow, SplitHalf,
+};
 use crate::core::page_manager::{
     BookInfo, MemoryPoolStats, PageContentManager, PageInfo, PageManagerStats, ThumbnailItem,
     ThumbnailReadyEvent,
@@ -669,17 +672,20 @@ impl From<&PageFrame> for PageFrameInfo {
 /// 这是新的阅读热路径入口，替代前端自己拼 frame 的旧模式
 #[tauri::command]
 pub async fn pm_get_frame_snapshot(
-    page_mode: String,       // "single" | "double"
-    read_order: String,      // "ltr" | "rtl"
-    split_horizontal: bool,  // 是否分割横向页
-    wide_page: bool,         // 横向页是否独占
-    single_first: bool,      // 首页单独显示
-    single_last: bool,       // 尾页单独显示
-    divide_rate: f64,        // 分割阈值
+    page_mode: String,          // "single" | "double"
+    read_order: String,         // "ltr" | "rtl"
+    split_horizontal: bool,     // 是否分割横向页
+    wide_page: bool,            // 横向页是否独占
+    single_first: bool,         // 首页单独显示
+    single_last: bool,          // 尾页单独显示
+    divide_rate: f64,           // 分割阈值
     split_half: Option<String>, // "left" | "right" | null
     state: State<'_, PageManagerState>,
 ) -> Result<FrameSnapshot, String> {
-    log::debug!("🖼️ [PageCommand] get_frame_snapshot: page_mode={}", page_mode);
+    log::debug!(
+        "🖼️ [PageCommand] get_frame_snapshot: page_mode={}",
+        page_mode
+    );
 
     let mode = match page_mode.as_str() {
         "double" => PageMode::Double,
@@ -698,7 +704,17 @@ pub async fn pm_get_frame_snapshot(
     };
 
     let mut manager = state.manager.write().await;
-    manager.get_frame_snapshot(mode, order, split_horizontal, wide_page, single_first, single_last, divide_rate, half)
+    manager
+        .get_frame_snapshot(
+            mode,
+            order,
+            split_horizontal,
+            wide_page,
+            single_first,
+            single_last,
+            divide_rate,
+            half,
+        )
         .ok_or_else(|| "无法获取帧快照：书籍未打开或帧构建器未初始化".to_string())
 }
 
@@ -719,7 +735,11 @@ pub async fn pm_get_reader_window(
     split_half: Option<String>,
     state: State<'_, PageManagerState>,
 ) -> Result<ReaderWindow, String> {
-    log::debug!("🖼️ [PageCommand] get_reader_window: center={}, radius={}", center_page, radius);
+    log::debug!(
+        "🖼️ [PageCommand] get_reader_window: center={}, radius={}",
+        center_page,
+        radius
+    );
 
     let mode = match page_mode.as_str() {
         "double" => PageMode::Double,
@@ -738,7 +758,19 @@ pub async fn pm_get_reader_window(
     };
 
     let mut manager = state.manager.write().await;
-    manager.get_reader_window(center_page, radius, mode, order, split_horizontal, wide_page, single_first, single_last, divide_rate, half)
+    manager
+        .get_reader_window(
+            center_page,
+            radius,
+            mode,
+            order,
+            split_horizontal,
+            wide_page,
+            single_first,
+            single_last,
+            divide_rate,
+            half,
+        )
         .ok_or_else(|| "无法获取阅读窗口：书籍未打开或帧构建器未初始化".to_string())
 }
 
@@ -750,12 +782,18 @@ pub async fn pm_report_viewport(
     width: f64,
     height: f64,
     dpr: f64,
-    view_mode: String,  // "single" | "double" | "panorama"
+    view_mode: String, // "single" | "double" | "panorama"
     state: State<'_, PageManagerState>,
 ) -> Result<(), String> {
     let width = width.max(0.0).round() as u32;
     let height = height.max(0.0).round() as u32;
-    log::debug!("📐 [PageCommand] report_viewport: {}x{} @ {}x ({})", width, height, dpr, view_mode);
+    log::debug!(
+        "📐 [PageCommand] report_viewport: {}x{} @ {}x ({})",
+        width,
+        height,
+        dpr,
+        view_mode
+    );
     // TODO: 后端根据 viewport 调整预加载策略和图片尺寸
     // 目前先记录，后续实现
     Ok(())

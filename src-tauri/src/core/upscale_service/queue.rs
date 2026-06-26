@@ -1,12 +1,12 @@
 //! 超分服务任务队列管理模块
-//! 
+//!
 //! 包含任务队列管理、优先级排序、跳页重规划等功能
 
-use std::collections::VecDeque;
-use std::cmp::Ordering;
-use std::sync::Mutex;
-use super::types::UpscaleTask;
 use super::log_debug;
+use super::types::UpscaleTask;
+use std::cmp::Ordering;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 fn compare_task_order(a: &UpscaleTask, b: &UpscaleTask) -> Ordering {
     a.score
@@ -26,20 +26,18 @@ pub fn replan_queue_for_jump(
 ) {
     // 只保留后方页（即将翻到的）+ 当前页，前方页不保留
     let valid_end = new_page + preload_range;
-    
+
     if let Ok(mut queue) = task_queue.lock() {
         let before = queue.len();
-        
+
         // 只保留当前页和后方页的任务（前方页任务取消）
-        queue.retain(|task| {
-            task.page_index >= new_page && task.page_index <= valid_end
-        });
-        
+        queue.retain(|task| task.page_index >= new_page && task.page_index <= valid_end);
+
         let removed = before - queue.len();
         if removed > 0 {
             log_debug!("🔄 跳页清理: 移除 {} 个已翻过/超出范围的任务", removed);
         }
-        
+
         // 重新计算分数并排序
         let mut tasks: Vec<_> = queue.drain(..).collect();
         for task in &mut tasks {
@@ -57,10 +55,9 @@ pub fn reprioritize_existing_task(
     task: UpscaleTask,
 ) -> bool {
     if let Ok(mut queue) = task_queue.lock() {
-        if let Some(idx) = queue
-            .iter()
-            .position(|existing| existing.book_path == task.book_path && existing.page_index == task.page_index)
-        {
+        if let Some(idx) = queue.iter().position(|existing| {
+            existing.book_path == task.book_path && existing.page_index == task.page_index
+        }) {
             queue[idx] = task;
 
             let mut tasks: Vec<_> = queue.drain(..).collect();
@@ -89,7 +86,9 @@ pub fn is_task_in_queue(
     page_index: usize,
 ) -> bool {
     if let Ok(queue) = task_queue.lock() {
-        queue.iter().any(|t| t.book_path == book_path && t.page_index == page_index)
+        queue
+            .iter()
+            .any(|t| t.book_path == book_path && t.page_index == page_index)
     } else {
         false
     }
@@ -109,7 +108,11 @@ pub fn add_task_to_queue(task_queue: &Mutex<VecDeque<UpscaleTask>>, task: Upscal
 }
 
 /// 取消指定页面的任务
-pub fn cancel_page_task(task_queue: &Mutex<VecDeque<UpscaleTask>>, book_path: &str, page_index: usize) {
+pub fn cancel_page_task(
+    task_queue: &Mutex<VecDeque<UpscaleTask>>,
+    book_path: &str,
+    page_index: usize,
+) {
     if let Ok(mut queue) = task_queue.lock() {
         queue.retain(|t| !(t.book_path == book_path && t.page_index == page_index));
     }
@@ -211,6 +214,9 @@ mod tests {
 
         let queue = queue.lock().unwrap();
         assert_eq!(queue.front().map(|task| task.page_index), Some(8));
-        assert_eq!(queue.front().map(|task| task.score.priority), Some(TaskPriority::Current));
+        assert_eq!(
+            queue.front().map(|task| task.score.priority),
+            Some(TaskPriority::Current)
+        );
     }
 }

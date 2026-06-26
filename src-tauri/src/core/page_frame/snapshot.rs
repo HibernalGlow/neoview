@@ -1,12 +1,12 @@
 //! FrameSnapshot - 后端输出给前端的最小阅读协议
-//! 
+//!
 //! 前端拿到 FrameSnapshot 后可以直接渲染，不再自己推导 second page / split / wide page 逻辑
 
-use serde::{Deserialize, Serialize};
 use super::{CropRect, ReadOrder};
+use serde::{Deserialize, Serialize};
 
 /// 帧快照 - 后端输出给前端的完整帧描述
-/// 
+///
 /// 前端拿到后直接渲染，不再自己做 frame 组合
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +48,7 @@ pub enum FrameLayoutType {
 }
 
 /// 帧中的图片信息
-/// 
+///
 /// 包含前端渲染所需的全部信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

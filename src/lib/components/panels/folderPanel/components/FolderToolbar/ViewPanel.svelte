@@ -54,14 +54,16 @@
 
 	{#if viewStyle === 'thumbnail'}
 		<div class="flex items-center gap-1.5 pr-1">
-			<label class="flex items-center gap-1.5 cursor-pointer text-xs select-none">
+			<label class="flex cursor-pointer items-center gap-1.5 text-xs select-none">
 				<input
 					type="checkbox"
 					checked={$fileBrowserStore.compactGridMode}
 					onchange={(e) => fileBrowserStore.setCompactGridMode(e.currentTarget.checked)}
-					class="rounded border-muted-foreground/30 text-primary focus:ring-primary h-3.5 w-3.5"
+					class="border-muted-foreground/30 text-primary focus:ring-primary h-3.5 w-3.5 rounded"
 				/>
-				<span class="text-muted-foreground hover:text-foreground transition-colors font-medium">紧凑模式</span>
+				<span class="text-muted-foreground hover:text-foreground font-medium transition-colors"
+					>紧凑模式</span
+				>
 			</label>
 		</div>
 	{/if}

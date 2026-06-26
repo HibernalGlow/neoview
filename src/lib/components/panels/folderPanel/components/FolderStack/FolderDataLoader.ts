@@ -4,7 +4,7 @@
  */
 
 import type { FsItem } from '$lib/types';
-import type { FolderLayer } from './FolderStackState.svelte';
+import type { FolderLayer, LayerCreateOptions } from './FolderStackState.svelte';
 import * as FileSystemAPI from '$lib/api/filesystem';
 import {
 	unifiedThumbnailStore,
@@ -19,6 +19,8 @@ import { directoryTreeCache } from '../../utils/directoryTreeCache';
 
 const BACKGROUND_THUMBNAIL_WARMUP_LIMIT = 48;
 const BACKGROUND_THUMBNAIL_WARMUP_DELAY_MS = 700;
+const STREAM_FIRST_BATCH_TIMEOUT_MS = 140;
+const STREAM_UPDATE_THROTTLE_MS = 96;
 
 /**
  * 加载目录缩略图 (V3 优化版)
@@ -41,17 +43,20 @@ export function loadThumbnailsForLayer(items: FsItem[], path: string): void {
 		});
 	if (thumbRequests.length > 0) {
 		setTimeout(() => {
+			if (!directoryTreeCache.isActivePath(path)) return;
 			void unifiedThumbnailStore.requestThumbnails(thumbRequests, path, 'background');
 		}, BACKGROUND_THUMBNAIL_WARMUP_DELAY_MS);
 	}
 
 	// 2. 预热压缩包（如果是压缩包内的列表，前端已处理；这里处理文件列表中的压缩包）
 	const topItems = items.slice(0, 20);
-	topItems.forEach((item) => {
-		if (!item.isDir && isArchiveFile(item.name)) {
-			void FileSystemAPI.preheatArchiveList(item.path);
-		}
-	});
+	if (directoryTreeCache.isActivePath(path)) {
+		topItems.forEach((item) => {
+			if (!item.isDir && isArchiveFile(item.name)) {
+				void FileSystemAPI.preheatArchiveList(item.path);
+			}
+		});
+	}
 }
 
 /**
@@ -60,12 +65,28 @@ export function loadThumbnailsForLayer(items: FsItem[], path: string): void {
  */
 export class FolderDataLoader {
 	private virtualPathUnsubscribe: (() => void) | null = null;
+	private activeStreamPath: string | null = null;
+	private streamUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+	private loadSeq = 0;
 
 	/** 清理虚拟路径订阅 */
 	cleanup(): void {
+		const hasPendingWork =
+			!!this.virtualPathUnsubscribe || !!this.activeStreamPath || !!this.streamUpdateTimer;
+		if (hasPendingWork) {
+			this.loadSeq++;
+		}
 		if (this.virtualPathUnsubscribe) {
 			this.virtualPathUnsubscribe();
 			this.virtualPathUnsubscribe = null;
+		}
+		if (this.activeStreamPath) {
+			void directoryTreeCache.cancelStream(this.activeStreamPath);
+			this.activeStreamPath = null;
+		}
+		if (this.streamUpdateTimer) {
+			clearTimeout(this.streamUpdateTimer);
+			this.streamUpdateTimer = null;
 		}
 	}
 
@@ -78,13 +99,14 @@ export class FolderDataLoader {
 	async loadDirectory(
 		path: string,
 		layerId: string,
-		onUpdate?: (items: FsItem[]) => void
+		onUpdate?: (items: FsItem[]) => void,
+		options: LayerCreateOptions = {}
 	): Promise<{ items: FsItem[]; error: string | null }> {
 		try {
 			if (isVirtualPath(path)) {
-				return this.loadVirtualPath(path, layerId, onUpdate);
+				return this.loadVirtualPath(path, layerId, onUpdate, options);
 			} else {
-				return await this.loadFileSystemPath(path);
+				return await this.loadFileSystemPath(path, onUpdate, options);
 			}
 		} catch (err) {
 			return {
@@ -97,9 +119,11 @@ export class FolderDataLoader {
 	private loadVirtualPath(
 		path: string,
 		layerId: string,
-		onUpdate?: (items: FsItem[]) => void
+		onUpdate?: (items: FsItem[]) => void,
+		options: LayerCreateOptions = {}
 	): { items: FsItem[]; error: null } {
 		const items = loadVirtualPathData(path);
+		this.cleanup();
 
 		// 清理之前的订阅
 		this.cleanup();
@@ -108,23 +132,136 @@ export class FolderDataLoader {
 		if (onUpdate) {
 			this.virtualPathUnsubscribe = subscribeVirtualPathData(path, (newItems) => {
 				onUpdate(newItems);
-				loadThumbnailsForLayer(newItems, path);
+				if (options.warmupThumbnails !== false) {
+					loadThumbnailsForLayer(newItems, path);
+				}
 			});
 		}
 
-		loadThumbnailsForLayer(items, path);
+		if (options.warmupThumbnails !== false) {
+			loadThumbnailsForLayer(items, path);
+		}
 
 		return { items, error: null };
 	}
 
-	private async loadFileSystemPath(path: string): Promise<{ items: FsItem[]; error: null }> {
+	private async loadFileSystemPath(
+		path: string,
+		onUpdate?: (items: FsItem[]) => void,
+		options: LayerCreateOptions = {}
+	): Promise<{ items: FsItem[]; error: null }> {
 		// 清理虚拟路径订阅
 		this.cleanup();
 
-		const items = await directoryTreeCache.getDirectory(path);
-		loadThumbnailsForLayer(items, path);
+		if (options.progressive) {
+			return this.loadFileSystemPathProgressive(path, onUpdate, options);
+		}
+
+		const items = await directoryTreeCache.getDirectory(path, {
+			preloadChildren: options.preloadChildren ?? true
+		});
+		if (options.warmupThumbnails !== false) {
+			loadThumbnailsForLayer(items, path);
+		}
 
 		return { items, error: null };
+	}
+
+	private async loadFileSystemPathProgressive(
+		path: string,
+		onUpdate?: (items: FsItem[]) => void,
+		options: LayerCreateOptions = {}
+	): Promise<{ items: FsItem[]; error: null }> {
+		const cached = directoryTreeCache.getCached(path);
+		if (cached) {
+			if (options.warmupThumbnails !== false) {
+				loadThumbnailsForLayer(cached, path);
+			}
+			return { items: cached, error: null };
+		}
+
+		const seq = ++this.loadSeq;
+		this.activeStreamPath = path;
+		let latestItems: FsItem[] = [];
+		let firstBatchResolved = false;
+		let resolveFirstBatch: (() => void) | null = null;
+		let streamError: unknown = null;
+
+		const isCurrent = () => seq === this.loadSeq && this.activeStreamPath === path;
+		const flushUpdate = () => {
+			if (!isCurrent() || !onUpdate) return;
+			onUpdate([...latestItems]);
+		};
+		const scheduleUpdate = () => {
+			if (!onUpdate || this.streamUpdateTimer || !isCurrent()) return;
+			this.streamUpdateTimer = setTimeout(() => {
+				this.streamUpdateTimer = null;
+				flushUpdate();
+			}, STREAM_UPDATE_THROTTLE_MS);
+		};
+		const resolveFirst = () => {
+			if (firstBatchResolved) return;
+			firstBatchResolved = true;
+			resolveFirstBatch?.();
+		};
+
+		const firstBatchPromise = new Promise<void>((resolve) => {
+			resolveFirstBatch = resolve;
+			setTimeout(resolveFirst, STREAM_FIRST_BATCH_TIMEOUT_MS);
+		});
+
+		const streamCompletePromise = directoryTreeCache
+			.getDirectoryStreaming(
+				path,
+				(batchItems) => {
+					if (!isCurrent()) return;
+					latestItems = [...latestItems, ...batchItems];
+					if (!firstBatchResolved) {
+						flushUpdate();
+						resolveFirst();
+					} else {
+						scheduleUpdate();
+					}
+				},
+				{
+					batchSize: options.streamBatchSize,
+					notifyMode: 'none',
+					lane: options.streamLane ?? 'active'
+				}
+			)
+			.then(() => {
+				if (!isCurrent()) return;
+				const finalItems = directoryTreeCache.getCached(path);
+				if (finalItems) {
+					latestItems = finalItems;
+				}
+				if (this.streamUpdateTimer) {
+					clearTimeout(this.streamUpdateTimer);
+					this.streamUpdateTimer = null;
+				}
+				flushUpdate();
+				if (options.warmupThumbnails !== false) {
+					loadThumbnailsForLayer(latestItems, path);
+				}
+				if (this.activeStreamPath === path) {
+					this.activeStreamPath = null;
+				}
+			})
+			.catch((err) => {
+				streamError = err;
+				resolveFirst();
+				if (isCurrent()) {
+					this.activeStreamPath = null;
+				}
+			});
+
+		await Promise.race([firstBatchPromise, streamCompletePromise]);
+		if (streamError && latestItems.length === 0) {
+			throw streamError;
+		}
+
+		void streamCompletePromise;
+		return { items: latestItems, error: null };
 	}
 }
 
@@ -135,13 +272,17 @@ export function createLayerFactory(
 	dataLoader: FolderDataLoader,
 	onLayerUpdate?: (layerId: string, items: FsItem[]) => void
 ) {
-	return async function createLayer(path: string): Promise<FolderLayer> {
+	return async function createLayer(
+		path: string,
+		options: LayerCreateOptions = {}
+	): Promise<FolderLayer> {
 		const layerId = crypto.randomUUID();
 
 		const { items, error } = await dataLoader.loadDirectory(
 			path,
 			layerId,
-			onLayerUpdate ? (newItems) => onLayerUpdate(layerId, newItems) : undefined
+			onLayerUpdate ? (newItems) => onLayerUpdate(layerId, newItems) : undefined,
+			options
 		);
 
 		return {

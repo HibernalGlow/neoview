@@ -9,6 +9,18 @@ import { invoke } from '@tauri-apps/api/core';
 /** 协议名称 */
 const PROTOCOL_NAME = 'neoview';
 
+export interface ScaledProtocolStats {
+	requests: number;
+	hits: number;
+	generated: number;
+	generationFailures: number;
+	bypasses: number;
+	bypassHits: number;
+	bypassGenerated: number;
+	cacheLimit: number;
+	cacheTtlSecs: number;
+}
+
 let resolvedBaseUrl: string | null = null;
 
 function isWindowsRuntime(): boolean {
@@ -185,4 +197,8 @@ export function preloadArchiveImages(bookHash: string, entryIndices: number[]): 
 export async function isProtocolAvailable(): Promise<boolean> {
 	const resolved = await resolveProtocolBaseUrl();
 	return resolved !== null;
+}
+
+export async function getScaledProtocolStats(): Promise<ScaledProtocolStats> {
+	return invoke<ScaledProtocolStats>('get_scaled_protocol_stats');
 }

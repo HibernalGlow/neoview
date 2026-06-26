@@ -40,11 +40,14 @@ impl ThumbnailDb {
                     if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
                         if rating > 0.0 {
                             let now = chrono::Local::now().timestamp_millis();
-                            return Ok(Some(serde_json::json!({
-                                "value": rating,
-                                "source": "emm",
-                                "timestamp": now
-                            }).to_string()));
+                            return Ok(Some(
+                                serde_json::json!({
+                                    "value": rating,
+                                    "source": "emm",
+                                    "timestamp": now
+                                })
+                                .to_string(),
+                            ));
                         }
                     }
                 }
@@ -55,7 +58,10 @@ impl ThumbnailDb {
     }
 
     /// 批量获取 rating_data
-    pub fn batch_get_rating_data(&self, keys: &[String]) -> SqliteResult<HashMap<String, Option<String>>> {
+    pub fn batch_get_rating_data(
+        &self,
+        keys: &[String],
+    ) -> SqliteResult<HashMap<String, Option<String>>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -65,7 +71,10 @@ impl ThumbnailDb {
             return Ok(results);
         }
 
-        println!("[ThumbnailDB] batch_get_rating_data: 查询 {} 个路径", keys.len());
+        println!(
+            "[ThumbnailDB] batch_get_rating_data: 查询 {} 个路径",
+            keys.len()
+        );
 
         let placeholders: String = keys.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!(
@@ -74,28 +83,32 @@ impl ThumbnailDb {
         );
 
         let mut stmt = conn.prepare(&query)?;
-        let params: Vec<&dyn rusqlite::ToSql> = keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            keys.iter().map(|k| k as &dyn rusqlite::ToSql).collect();
         let mut rows = stmt.query(params.as_slice())?;
 
         let mut count_with_rating = 0;
         let now = chrono::Local::now().timestamp_millis();
-        
+
         while let Some(row) = rows.next()? {
             let key: String = row.get(0)?;
             let rating_data: Option<String> = row.get(1)?;
             let emm_json: Option<String> = row.get(2)?;
-            
+
             let effective_rating = if rating_data.is_some() {
                 rating_data
             } else if let Some(ref json_str) = emm_json {
                 if let Ok(json) = serde_json::from_str::<Value>(json_str) {
                     if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
                         if rating > 0.0 {
-                            Some(serde_json::json!({
-                                "value": rating,
-                                "source": "emm",
-                                "timestamp": now
-                            }).to_string())
+                            Some(
+                                serde_json::json!({
+                                    "value": rating,
+                                    "source": "emm",
+                                    "timestamp": now
+                                })
+                                .to_string(),
+                            )
                         } else {
                             None
                         }
@@ -108,19 +121,26 @@ impl ThumbnailDb {
             } else {
                 None
             };
-            
+
             if effective_rating.is_some() {
                 count_with_rating += 1;
             }
             results.insert(key, effective_rating);
         }
 
-        println!("[ThumbnailDB] 查询结果: 找到 {} 条记录, 其中 {} 条有评分", results.len(), count_with_rating);
+        println!(
+            "[ThumbnailDB] 查询结果: 找到 {} 条记录, 其中 {} 条有评分",
+            results.len(),
+            count_with_rating
+        );
         Ok(results)
     }
 
     /// 获取指定目录下所有条目的 rating_data
-    pub fn get_rating_data_by_prefix(&self, prefix: &str) -> SqliteResult<Vec<(String, Option<String>)>> {
+    pub fn get_rating_data_by_prefix(
+        &self,
+        prefix: &str,
+    ) -> SqliteResult<Vec<(String, Option<String>)>> {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
@@ -132,9 +152,13 @@ impl ThumbnailDb {
 
         let now = chrono::Local::now().timestamp_millis();
         let mut results: Vec<(String, Option<String>)> = Vec::new();
-        
+
         let rows = stmt.query_map(params![pattern], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?, row.get::<_, Option<String>>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
         })?;
 
         for row_result in rows {
@@ -145,11 +169,14 @@ impl ThumbnailDb {
                     if let Ok(json) = serde_json::from_str::<Value>(json_str) {
                         if let Some(rating) = json.get("rating").and_then(|r| r.as_f64()) {
                             if rating > 0.0 {
-                                Some(serde_json::json!({
-                                    "value": rating,
-                                    "source": "emm",
-                                    "timestamp": now
-                                }).to_string())
+                                Some(
+                                    serde_json::json!({
+                                        "value": rating,
+                                        "source": "emm",
+                                        "timestamp": now
+                                    })
+                                    .to_string(),
+                                )
                             } else {
                                 None
                             }
@@ -162,7 +189,7 @@ impl ThumbnailDb {
                 } else {
                     None
                 };
-                
+
                 if effective_rating.is_some() {
                     results.push((key, effective_rating));
                 }
@@ -210,7 +237,10 @@ impl ThumbnailDb {
             count += affected;
         }
 
-        println!("[ThumbnailDB] batch_save_emm_with_rating_data: 保存 {} 条记录", count);
+        println!(
+            "[ThumbnailDB] batch_save_emm_with_rating_data: 保存 {} 条记录",
+            count
+        );
         Ok(count)
     }
 
@@ -220,9 +250,8 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let mut stmt = conn.prepare(
-            "SELECT key, rating_data FROM thumbs WHERE rating_data IS NOT NULL"
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT key, rating_data FROM thumbs WHERE rating_data IS NOT NULL")?;
 
         let rows: Vec<(String, String)> = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?

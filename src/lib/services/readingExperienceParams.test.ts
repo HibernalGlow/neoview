@@ -1,20 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const preloadCalls: Array<{ keys: string[]; priority: string }> = [];
 const invokeMock = vi.fn();
 const adaptiveConfigMock = vi.fn(async () => ({
 	preloadAhead: 3,
 	preloadBehind: 1,
 	maxConcurrentLoads: 2
-}));
-
-vi.mock('./imagePool', () => ({
-	imagePool: {
-		preload: (keys: string[], priority: string) => {
-			preloadCalls.push({ keys, priority });
-		},
-		cancelPreload: vi.fn()
-	}
 }));
 
 vi.mock('$lib/utils/systemCapabilities', () => ({
@@ -100,7 +90,6 @@ function percentile(values: number[], p: number): number {
 
 async function runPreloaderScenario(ahead: number, behind: number): Promise<PreloaderSweepResult> {
 	vi.resetModules();
-	preloadCalls.length = 0;
 
 	adaptiveConfigMock.mockResolvedValueOnce({
 		preloadAhead: ahead,
@@ -122,7 +111,6 @@ async function runPreloaderScenario(ahead: number, behind: number): Promise<Prel
 	let hitCount = 0;
 	let totalPredictions = 0;
 	let totalKeys = 0;
-	let callCursor = 0;
 
 	for (let i = 0; i < NAV_SEQUENCE.length - 1; i++) {
 		now += NAV_SEQUENCE[i].dtMs;
@@ -130,13 +118,17 @@ async function runPreloaderScenario(ahead: number, behind: number): Promise<Prel
 
 		preloader.updateQueue(NAV_SEQUENCE[i].page);
 
-		const stepCalls = preloadCalls.slice(callCursor);
-		callCursor = preloadCalls.length;
-		const preloaded = new Set(stepCalls.flatMap((item) => item.keys));
-		totalKeys += preloaded.size;
+		const status = preloader.getStatus();
+		const predictedPages = preloader.calculatePreloadPages(
+			NAV_SEQUENCE[i].page,
+			5000,
+			status.direction
+		);
+		const predictedKeys = new Set(predictedPages.map((page) => `p-${page}`));
+		totalKeys += predictedKeys.size;
 
 		const expectedNextKey = `p-${NAV_SEQUENCE[i + 1].page}`;
-		if (preloaded.has(expectedNextKey)) {
+		if (predictedKeys.has(expectedNextKey)) {
 			hitCount += 1;
 		}
 		totalPredictions += 1;
@@ -228,7 +220,6 @@ describe('reading experience parameter sweep', () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-03-27T00:00:00.000Z'));
-		preloadCalls.length = 0;
 		invokeMock.mockReset();
 		adaptiveConfigMock.mockReset();
 	});

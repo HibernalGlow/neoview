@@ -10,9 +10,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
+use crate::core::request_dedup::RequestDeduplicator;
 use crate::core::thumbnail_db::ThumbnailDb;
 use crate::core::thumbnail_generator::ThumbnailGenerator;
-use crate::core::request_dedup::RequestDeduplicator;
 
 use super::config::{LaneQuota, ThumbnailServiceConfig};
 use super::generators::{
@@ -352,11 +352,8 @@ fn create_worker_thread(
             // 解决多 worker 场景下：Worker A 有 1 个 batch item，Worker B 拿走最后一个
             // 任务后 Worker A 进入 idle 等待，batch 永远不被发射的问题。
             if !emit_batch.is_empty() {
-                let queue_is_empty = backlog_is_empty(
-                    &queued_visible,
-                    &queued_prefetch,
-                    &queued_background,
-                );
+                let queue_is_empty =
+                    backlog_is_empty(&queued_visible, &queued_prefetch, &queued_background);
                 if queue_is_empty {
                     flush_worker_emit_batch(&app, &mut emit_batch, true, EMIT_BATCH_SIZE);
                 }
@@ -532,13 +529,8 @@ fn create_worker_thread(
 
                 let started = Instant::now();
                 let mut task_succeeded = false;
-                let generated = generate_task_blob(
-                    &task,
-                    &generator,
-                    &db,
-                    folder_depth,
-                    &failed_index,
-                );
+                let generated =
+                    generate_task_blob(&task, &generator, &db, folder_depth, &failed_index);
 
                 if decode_token_held {
                     decode_inflight.fetch_sub(1, Ordering::SeqCst);
@@ -579,11 +571,8 @@ fn create_worker_thread(
                         &save_queue,
                     );
                     emit_batch.push(payload);
-                    let queue_is_empty = backlog_is_empty(
-                        &queued_visible,
-                        &queued_prefetch,
-                        &queued_background,
-                    );
+                    let queue_is_empty =
+                        backlog_is_empty(&queued_visible, &queued_prefetch, &queued_background);
                     flush_worker_emit_batch(&app, &mut emit_batch, queue_is_empty, EMIT_BATCH_SIZE);
                     task_succeeded = true;
 
@@ -658,7 +647,6 @@ fn generate_task_blob(
     folder_depth: u32,
     failed_index: &Arc<RwLock<HashSet<String>>>,
 ) -> Option<(Vec<u8>, Option<(String, i64, i32)>)> {
-
     let gen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| match task.file_type {
         ThumbnailFileType::Folder => {
             generate_folder_thumbnail_static(generator, db, &task.path, folder_depth)
@@ -795,7 +783,10 @@ pub fn start_flush_thread(
 
             if elapsed_ms > target_ms && write_window > write_min {
                 write_window = write_window.saturating_sub(8).max(write_min);
-            } else if elapsed_ms < target_ms / 2 && dynamic_target == write_window && write_window < write_max {
+            } else if elapsed_ms < target_ms / 2
+                && dynamic_target == write_window
+                && write_window < write_max
+            {
                 write_window = (write_window + 8).min(write_max);
             }
             db_write_window.store(write_window, Ordering::Relaxed);
@@ -811,7 +802,10 @@ pub fn start_flush_thread(
             let remaining_len = remaining.len();
             log_debug!("💾 退出前批量保存 {} 个缩略图", remaining_len);
             save_items_to_db(&db, remaining);
-            db_write_last_ms.store(chunk_started.elapsed().as_millis() as u64, Ordering::Relaxed);
+            db_write_last_ms.store(
+                chunk_started.elapsed().as_millis() as u64,
+                Ordering::Relaxed,
+            );
             db_write_last_items.store(remaining_len, Ordering::Relaxed);
         }
         log_debug!("🔧 SaveQueue flush thread stopped");

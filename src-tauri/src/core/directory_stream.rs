@@ -93,6 +93,14 @@ pub struct StreamComplete {
 }
 
 /// 流配置选项
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamLane {
+    #[default]
+    Active,
+    Background,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamOptions {
@@ -104,6 +112,7 @@ pub struct StreamOptions {
     pub sort_by: Option<String>,
     /// 排序顺序
     pub sort_order: Option<String>,
+    pub lane: Option<StreamLane>,
 }
 
 // ============================================================================

@@ -56,7 +56,7 @@ impl ThumbnailDb {
         let conn = conn_guard.as_ref().unwrap();
 
         let mut stmt = conn.prepare(
-            "SELECT reason, retry_count, last_attempt FROM failed_thumbnails WHERE key = ?1"
+            "SELECT reason, retry_count, last_attempt FROM failed_thumbnails WHERE key = ?1",
         )?;
 
         let result = stmt.query_row(params![key], |row| {
@@ -188,13 +188,13 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         let mut stmt = conn.prepare("SELECT key FROM thumbs")?;
         let keys: Vec<String> = stmt
             .query_map([], |row| row.get(0))?
             .filter_map(|r| r.ok())
             .collect();
-        
+
         let mut invalid_keys = Vec::new();
         for key in keys {
             let actual_path = if key.contains("::") {
@@ -202,18 +202,18 @@ impl ThumbnailDb {
             } else {
                 &key
             };
-            
+
             if !std::path::Path::new(actual_path).exists() {
                 invalid_keys.push(key);
             }
         }
-        
+
         let count = invalid_keys.len();
         for key in &invalid_keys {
             conn.execute("DELETE FROM thumbs WHERE key = ?1", params![key])?;
             let _ = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]);
         }
-        
+
         Ok(count)
     }
 
@@ -222,22 +222,19 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         let cutoff_date = chrono::Utc::now() - chrono::Duration::days(days);
         let cutoff_str = cutoff_date.format("%Y-%m-%d %H:%M:%S").to_string();
-        
+
         let count = if exclude_folders {
             conn.execute(
                 "DELETE FROM thumbs WHERE date < ?1 AND category != 'folder'",
                 params![cutoff_str],
             )?
         } else {
-            conn.execute(
-                "DELETE FROM thumbs WHERE date < ?1",
-                params![cutoff_str],
-            )?
+            conn.execute("DELETE FROM thumbs WHERE date < ?1", params![cutoff_str])?
         };
-        
+
         Ok(count)
     }
 
@@ -246,18 +243,15 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
+
         let pattern = format!("{}%", path_prefix);
-        let count = conn.execute(
-            "DELETE FROM thumbs WHERE key LIKE ?1",
-            params![pattern],
-        )?;
-        
+        let count = conn.execute("DELETE FROM thumbs WHERE key LIKE ?1", params![pattern])?;
+
         let _ = conn.execute(
             "DELETE FROM failed_thumbnails WHERE key LIKE ?1",
             params![pattern],
         );
-        
+
         Ok(count)
     }
 
@@ -266,15 +260,26 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
-        let rows_updated = conn.execute("UPDATE thumbs SET value = NULL WHERE key = ?1", params![key])?;
-        eprintln!("[DEBUG] 🗑️ 清空缩略图 blob: key={}, 更新行数={}", key, rows_updated);
-        
-        let failed_deleted = conn.execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key]).unwrap_or(0);
+
+        let rows_updated = conn.execute(
+            "UPDATE thumbs SET value = NULL WHERE key = ?1",
+            params![key],
+        )?;
+        eprintln!(
+            "[DEBUG] 🗑️ 清空缩略图 blob: key={}, 更新行数={}",
+            key, rows_updated
+        );
+
+        let failed_deleted = conn
+            .execute("DELETE FROM failed_thumbnails WHERE key = ?1", params![key])
+            .unwrap_or(0);
         if failed_deleted > 0 {
-            eprintln!("[DEBUG] 🗑️ 删除失败记录: key={}, 删除行数={}", key, failed_deleted);
+            eprintln!(
+                "[DEBUG] 🗑️ 删除失败记录: key={}, 删除行数={}",
+                key, failed_deleted
+            );
         }
-        
+
         Ok(())
     }
 
@@ -283,23 +288,19 @@ impl ThumbnailDb {
         self.open()?;
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
-        
-        let total: usize = conn.query_row(
-            "SELECT COUNT(*) FROM thumbs",
-            [],
-            |row| row.get(0),
-        )?;
-        
+
+        let total: usize = conn.query_row("SELECT COUNT(*) FROM thumbs", [], |row| row.get(0))?;
+
         let folders: usize = conn.query_row(
             "SELECT COUNT(*) FROM thumbs WHERE category = 'folder'",
             [],
             |row| row.get(0),
         )?;
-        
+
         let db_size = std::fs::metadata(&self.db_path)
             .map(|m| m.len() as i64)
             .unwrap_or(0);
-        
+
         Ok((total, folders, db_size))
     }
 
@@ -334,11 +335,9 @@ impl ThumbnailDb {
         let conn_guard = self.connection.lock().unwrap();
         let conn = conn_guard.as_ref().unwrap();
 
-        let count: usize = conn.query_row(
-            "SELECT COUNT(*) FROM failed_thumbnails",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: usize = conn.query_row("SELECT COUNT(*) FROM failed_thumbnails", [], |row| {
+            row.get(0)
+        })?;
         Ok(count)
     }
 }

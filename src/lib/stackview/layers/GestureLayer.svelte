@@ -77,6 +77,40 @@
 	let layerRef: HTMLDivElement | null = $state(null);
 	let isPanning = $state(false);
 	let lastPoint: Point | null = null;
+	let lastNavigationActionAt = 0;
+
+	const KEYBOARD_NAVIGATION_COOLDOWN_MS = 170;
+	const WHEEL_NAVIGATION_COOLDOWN_MS = 260;
+	const NAVIGATION_ACTIONS = new Set([
+		'nextPage',
+		'prevPage',
+		'pageLeft',
+		'pageRight',
+		'nextBook',
+		'prevBook'
+	]);
+
+	function nowMs(): number {
+		return typeof performance !== 'undefined' ? performance.now() : Date.now();
+	}
+
+	function shouldSuppressNavigationAction(
+		action: string,
+		sourceKind: 'keyboard' | 'wheel'
+	): boolean {
+		if (!NAVIGATION_ACTIONS.has(action)) {
+			return false;
+		}
+
+		const cooldown =
+			sourceKind === 'wheel' ? WHEEL_NAVIGATION_COOLDOWN_MS : KEYBOARD_NAVIGATION_COOLDOWN_MS;
+		const now = nowMs();
+		if (now - lastNavigationActionAt < cooldown) {
+			return true;
+		}
+		lastNavigationActionAt = now;
+		return false;
+	}
 
 	// 检查鼠标位置是否在视频控件区域
 	function isOverVideoControls(x: number, y: number): boolean {
@@ -187,7 +221,11 @@
 	// 滚轮处理
 	// ============================================================================
 
-	function executeAction(action: string, source: string) {
+	function executeAction(action: string, source: string, sourceKind: 'keyboard' | 'wheel') {
+		if (shouldSuppressNavigationAction(action, sourceKind)) {
+			return;
+		}
+
 		const settings = settingsManager.getSettings();
 		const readingDirection = settings.book.readingDirection;
 
@@ -273,7 +311,7 @@
 		if (action) {
 			e.preventDefault();
 			e.stopPropagation();
-			executeAction(action, '滚轮');
+			executeAction(action, '滚轮', 'wheel');
 		}
 	}
 
@@ -295,7 +333,7 @@
 		if (action) {
 			e.preventDefault();
 			e.stopPropagation();
-			executeAction(action, '键盘');
+			executeAction(action, '键盘', 'keyboard');
 		}
 	}
 

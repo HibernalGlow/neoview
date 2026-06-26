@@ -2,8 +2,8 @@
 //!
 //! 支持增量返回页面列表，让 UI 可以先响应
 
-use crate::core::streaming_archive::{StreamingOpenResult, StreamingScanner, StreamingEntry};
 use crate::core::archive_manager::open_archive;
+use crate::core::streaming_archive::{StreamingEntry, StreamingOpenResult, StreamingScanner};
 use crate::core::BookManager;
 use crate::models::BookInfo;
 use std::path::Path;
@@ -59,16 +59,19 @@ pub async fn open_book_fast(
             let mut manager = book_state.lock().map_err(|e| e.to_string())?;
             manager.open_book(&path)?
         };
-        
-        let initial_pages: Vec<StreamingEntry> = book.pages.iter().take(initial_count).map(|p| {
-            StreamingEntry {
+
+        let initial_pages: Vec<StreamingEntry> = book
+            .pages
+            .iter()
+            .take(initial_count)
+            .map(|p| StreamingEntry {
                 name: p.name.clone(),
                 is_directory: false,
                 size: Some(p.size),
                 index: p.index,
                 is_image: true,
-            }
-        }).collect();
+            })
+            .collect();
 
         return Ok(StreamingOpenResult {
             path: path.clone(),
@@ -85,7 +88,8 @@ pub async fn open_book_fast(
     scanner.reset();
 
     let first_images = scanner.scan_first_images(&path_buf, initial_count)?;
-    let initial_pages: Vec<StreamingEntry> = first_images.iter().map(StreamingEntry::from).collect();
+    let initial_pages: Vec<StreamingEntry> =
+        first_images.iter().map(StreamingEntry::from).collect();
 
     // 启动后台完整扫描
     let path_clone = path.clone();
@@ -103,7 +107,7 @@ pub async fn open_book_fast(
         name,
         book_type,
         initial_pages,
-        has_more: true, // 假设还有更多
+        has_more: true,        // 假设还有更多
         estimated_total: None, // 完整扫描后才知道
     })
 }

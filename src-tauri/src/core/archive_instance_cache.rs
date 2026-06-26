@@ -40,12 +40,12 @@ impl InstanceCache {
     }
 
     /// 获取或创建压缩包实例
-    /// 
+    ///
     /// 如果缓存中存在有效实例，返回缓存的实例；
     /// 否则创建新实例并缓存。
     pub fn get_or_create(&self, path: &Path) -> Result<Arc<Mutex<ZipArchive<File>>>, String> {
         let key = Self::path_to_key(path);
-        
+
         // 获取当前文件信息
         let (mtime, size) = Self::get_file_info(path)?;
 
@@ -73,7 +73,7 @@ impl InstanceCache {
         // 存入缓存
         {
             let mut cache = self.cache.lock();
-            
+
             // 清理失效条目
             if cache.len() >= self.max_entries {
                 self.cleanup_impl(&mut cache);
@@ -202,13 +202,13 @@ mod tests {
     fn test_get_or_create() {
         let temp_dir = TempDir::new().unwrap();
         let zip_path = create_test_zip(temp_dir.path(), "test.zip");
-        
+
         let cache = InstanceCache::new(10);
-        
+
         // 第一次获取
         let instance1 = cache.get_or_create(&zip_path).unwrap();
         assert_eq!(cache.len(), 1);
-        
+
         // 第二次获取应该返回相同实例
         let instance2 = cache.get_or_create(&zip_path).unwrap();
         assert!(Arc::ptr_eq(&instance1, &instance2));
@@ -218,11 +218,11 @@ mod tests {
     fn test_invalidate() {
         let temp_dir = TempDir::new().unwrap();
         let zip_path = create_test_zip(temp_dir.path(), "test.zip");
-        
+
         let cache = InstanceCache::new(10);
         let _ = cache.get_or_create(&zip_path).unwrap();
         assert_eq!(cache.len(), 1);
-        
+
         cache.invalidate(&zip_path);
         assert_eq!(cache.len(), 0);
     }
@@ -231,14 +231,14 @@ mod tests {
     fn test_cleanup() {
         let temp_dir = TempDir::new().unwrap();
         let zip_path = create_test_zip(temp_dir.path(), "test.zip");
-        
+
         let cache = InstanceCache::new(10);
-        
+
         // 创建实例并立即丢弃强引用
         {
             let _ = cache.get_or_create(&zip_path).unwrap();
         }
-        
+
         // 清理后应该移除失效条目
         cache.cleanup();
         assert_eq!(cache.active_count(), 0);
@@ -282,15 +282,15 @@ mod property_tests {
                 "test.zip",
                 &content,
             );
-            
+
             let cache = InstanceCache::new(10);
-            
+
             // 第一次获取
             let instance1 = cache.get_or_create(&zip_path).unwrap();
-            
+
             // 第二次获取
             let instance2 = cache.get_or_create(&zip_path).unwrap();
-            
+
             // 应该是同一个实例
             prop_assert!(Arc::ptr_eq(&instance1, &instance2));
         }
@@ -303,7 +303,7 @@ mod property_tests {
             let temp_dir = TempDir::new().unwrap();
             let max_entries = 5;
             let cache = InstanceCache::new(max_entries);
-            
+
             // 创建多个 ZIP 文件
             let mut instances = Vec::new();
             for i in 0..file_count {
@@ -315,7 +315,7 @@ mod property_tests {
                 let instance = cache.get_or_create(&zip_path).unwrap();
                 instances.push(instance);
             }
-            
+
             // 缓存条目数不应超过最大值（考虑清理）
             prop_assert!(cache.len() <= max_entries + file_count);
         }

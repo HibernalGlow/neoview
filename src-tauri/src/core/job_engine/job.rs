@@ -57,15 +57,9 @@ pub enum JobOutput {
         mime_type: String,
     },
     /// 缩略图加载完成
-    ThumbnailLoaded {
-        path: String,
-        data: Vec<u8>,
-    },
+    ThumbnailLoaded { path: String, data: Vec<u8> },
     /// 压缩包扫描完成
-    ArchiveScanned {
-        path: String,
-        entries: Vec<String>,
-    },
+    ArchiveScanned { path: String, entries: Vec<String> },
     /// 空结果（用于取消等情况）
     Empty,
 }
@@ -124,7 +118,12 @@ pub struct Job {
 
 impl Job {
     /// 创建新任务
-    pub fn new<F, Fut>(key: String, priority: JobPriority, category: JobCategory, executor: F) -> Self
+    pub fn new<F, Fut>(
+        key: String,
+        priority: JobPriority,
+        category: JobCategory,
+        executor: F,
+    ) -> Self
     where
         F: FnOnce(CancellationToken) -> Fut + Send + 'static,
         Fut: Future<Output = JobResult> + Send + 'static,
@@ -160,7 +159,12 @@ impl Job {
         Fut: Future<Output = JobResult> + Send + 'static,
     {
         let key = format!("thumb:{}", path);
-        Self::new(key, JobPriority::Thumbnail, JobCategory::Thumbnail, executor)
+        Self::new(
+            key,
+            JobPriority::Thumbnail,
+            JobCategory::Thumbnail,
+            executor,
+        )
     }
 }
 

@@ -1,5 +1,5 @@
 //! 缓存管理模块
-//! 
+//!
 //! 包含 LRU 内存缓存管理、缓存获取、内存压力检查等功能
 
 use lru::LruCache;
@@ -28,14 +28,14 @@ pub fn get_from_memory_cache(
             return Some(blob.clone());
         }
     }
-    
+
     // 再检查保存队列（可能刚生成还未持久化）
     if let Ok(queue) = save_queue.lock() {
         if let Some((blob, _, _, _)) = queue.get(path) {
             return Some(blob.clone());
         }
     }
-    
+
     None
 }
 
@@ -52,13 +52,13 @@ pub fn peek_from_memory_cache(
             return Some(blob.clone());
         }
     }
-    
+
     if let Ok(queue) = save_queue.lock() {
         if let Some((blob, _, _, _)) = queue.get(path) {
             return Some(blob.clone());
         }
     }
-    
+
     None
 }
 
@@ -73,13 +73,13 @@ pub fn has_in_memory_cache(
             return true;
         }
     }
-    
+
     if let Ok(queue) = save_queue.lock() {
         if queue.contains_key(path) {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -90,10 +90,14 @@ pub fn check_memory_pressure(
     max_bytes: usize,
 ) {
     let current_bytes = memory_cache_bytes.load(Ordering::SeqCst);
-    
+
     if current_bytes > max_bytes {
-        log_debug!("⚠️ 内存压力检测: {} bytes > {} bytes，清理一半缓存", current_bytes, max_bytes);
-        
+        log_debug!(
+            "⚠️ 内存压力检测: {} bytes > {} bytes，清理一半缓存",
+            current_bytes,
+            max_bytes
+        );
+
         if let Ok(mut cache) = memory_cache.write() {
             let target_size = cache.len() / 2;
             while cache.len() > target_size {
@@ -101,21 +105,21 @@ pub fn check_memory_pressure(
                     break;
                 }
             }
-            
+
             // 重新计算内存使用
             let new_bytes: usize = cache.iter().map(|(_, v)| v.len()).sum();
             memory_cache_bytes.store(new_bytes, Ordering::SeqCst);
-            
+
             log_debug!("✅ 清理后缓存大小: {} 条, {} bytes", cache.len(), new_bytes);
         }
     }
 }
 
 /// 两阶段智能缓存清理（参考 NeeView ThumbnailPool 策略）
-/// 
+///
 /// 阶段1（150%阈值）：仅清理无效引用（已被释放的条目）
 /// 阶段2（120%阈值）：清理最老的条目直到回到限制
-/// 
+///
 /// max_bytes: 缓存大小限制（字节）
 pub fn two_phase_cache_cleanup(
     memory_cache: &Arc<RwLock<LruCache<String, Arc<[u8]>>>>,
@@ -125,7 +129,8 @@ pub fn two_phase_cache_cleanup(
 ) -> CacheCleanupStats {
     let budget = config.memory_cache_byte_budget.min(max_bytes);
     let current_bytes = memory_cache_bytes.load(Ordering::SeqCst);
-    let decay_threshold = budget.saturating_mul(config.memory_cache_decay_threshold_percent.max(1)) / 100;
+    let decay_threshold =
+        budget.saturating_mul(config.memory_cache_decay_threshold_percent.max(1)) / 100;
 
     let mut stats = CacheCleanupStats::default();
 

@@ -34,12 +34,23 @@ import { settingsManager } from '$lib/settings/settingsManager';
 import { loadModeStore } from '$lib/stores/loadModeStore.svelte';
 import type { Frame, FrameImage, FrameLayout } from '../types/frame';
 import { emptyFrame } from '../types/frame';
-import { clearBitmapCache, enqueueBitmapPreload } from '../utils/bitmapPreloader';
 import {
+	clearBitmapCache,
+	enqueueBitmapPreload,
+	getBitmapCacheEntry,
+	preloadBitmap
+} from '../utils/bitmapPreloader';
+import {
+	clearQueuedImagePredecodes,
 	clearImageDecodeCache,
 	enqueueImagePredecode,
+	getDecodedImageEntry,
+	prependImagePredecodes,
+	predecodeImage,
+	setHotImageDecodeUrls,
 	type ImageFetchPriority
 } from '../utils/imageDecodePreloader';
+import { getDisplayProxyCandidate } from '../utils/displayProxyUrl';
 
 // ============================================================================
 // URL 平台适配（Windows 需要 http://neoview.localhost）
@@ -62,8 +73,29 @@ function fixUrl(url: string): string {
 
 const PRELOAD_WINDOW_CACHE_LIMIT = 96;
 const PRELOAD_WINDOW_REFRESH_MS = 5_000;
+const FRAME_READY_WAIT_BASE_TIMEOUT_MS = 900;
+const FRAME_READY_WAIT_EXTRA_PER_IMAGE_MS = 300;
+const FRAME_READY_WAIT_MAX_TIMEOUT_MS = 1_600;
+const IMG_READY_WAIT_BASE_TIMEOUT_MS = 220;
+const IMG_READY_WAIT_EXTRA_PER_IMAGE_MS = 120;
+const IMG_READY_WAIT_MAX_TIMEOUT_MS = 520;
+const FRAME_PERF_SAMPLE_LIMIT = 160;
+const IMG_PREDECODE_MAX_PIXELS = 6_000_000;
+const IMG_HOT_PREDECODE_DISTANCE = 2;
+const READER_PERF_DEBUG = false;
 const preloadedWindowTimestamps = new Map<string, number>();
 const preloadedWindowQueue: string[] = [];
+
+interface DisplayPreloadContext {
+	scale: number;
+	dpr: number;
+}
+
+function debugReaderPerf(getMessage: () => string): void {
+	if (READER_PERF_DEBUG) {
+		console.debug(getMessage());
+	}
+}
 
 function rememberWindowPreload(value: string): boolean {
 	const timestamp = Date.now();
@@ -89,12 +121,15 @@ function makeWindowPreloadKey(
 	bookPath: string,
 	centerPage: number,
 	radius: number,
-	params: GetFrameSnapshotParams
+	params: GetFrameSnapshotParams,
+	direction: PreloadDirection,
+	displayContext: DisplayPreloadContext
 ): string {
 	return JSON.stringify({
 		bookPath,
 		centerPage,
 		radius,
+		direction,
 		pageMode: params.pageMode,
 		readOrder: params.readOrder,
 		splitHorizontal: params.splitHorizontal,
@@ -102,7 +137,9 @@ function makeWindowPreloadKey(
 		singleFirst: params.singleFirst,
 		singleLast: params.singleLast,
 		divideRate: params.divideRate,
-		splitHalf: params.splitHalf ?? null
+		splitHalf: params.splitHalf ?? null,
+		displayScale: Math.round(displayContext.scale * 1000),
+		dpr: Math.round(displayContext.dpr * 100)
 	});
 }
 
@@ -115,35 +152,226 @@ interface PreloadUrlEntry {
 	url: string;
 	priority: ImageFetchPriority;
 	distance: number;
+	rank: number;
+	pixels: number;
+	scaledProxy: boolean;
 }
 
-function collectPreloadUrls(window: ReaderWindow, currentFrameId: string): PreloadUrlEntry[] {
+type PreloadDirection = 'forward' | 'backward' | 'neutral';
+
+export interface ReaderPreloadStats {
+	windowRequests: number;
+	queuedScaledProxy: number;
+	queuedOriginal: number;
+	lastEntryCount: number;
+	lastScaledProxyCount: number;
+	lastOriginalCount: number;
+	lastDirection: PreloadDirection;
+	lastDisplayScale: number;
+	lastDpr: number;
+	lastUpdatedAt: number | null;
+}
+
+export interface FramePerformanceSample {
+	id: number;
+	bookPath: string;
+	pageIndex: number;
+	layout: FrameSnapshot['layout'];
+	imageCount: number;
+	direction: PreloadDirection;
+	resourceReadyMs: number;
+	decodeWaitMs: number;
+	commitMs: number;
+	totalBeforeCommitMs: number;
+	paintAfterCommitMs?: number;
+	decodeTotal: number;
+	decodeFailed: number;
+	decodeTimedOut: boolean;
+	decodeSkipped: boolean;
+}
+
+export interface FramePerformanceStats {
+	count: number;
+	resourceReadyP50: number;
+	resourceReadyP95: number;
+	decodeWaitP50: number;
+	decodeWaitP95: number;
+	totalBeforeCommitP50: number;
+	totalBeforeCommitP95: number;
+	paintAfterCommitP95: number;
+	timeoutCount: number;
+	decodeSkippedCount: number;
+	preload: ReaderPreloadStats;
+	last?: FramePerformanceSample;
+}
+
+function getPreloadRank(
+	pageIndex: number,
+	centerPage: number,
+	direction: PreloadDirection
+): number {
+	const delta = pageIndex - centerPage;
+	const distance = Math.abs(delta);
+	if (direction === 'neutral' || delta === 0 || distance <= IMG_HOT_PREDECODE_DISTANCE) {
+		return distance;
+	}
+	const isPreferredDirection = direction === 'forward' ? delta > 0 : delta < 0;
+	return distance + (isPreferredDirection ? 0 : 1000);
+}
+
+function getImagePreloadEntry(
+	img: FrameImageInfo,
+	displayContext: DisplayPreloadContext,
+	priority: ImageFetchPriority,
+	distance: number,
+	rank: number
+): PreloadUrlEntry | null {
+	if (img.isDummy || !img.url) return null;
+	const url = fixUrl(img.url);
+	const sourceWidth =
+		typeof img.width === 'number' && Number.isFinite(img.width) && img.width > 0 ? img.width : 0;
+	const sourceHeight =
+		typeof img.height === 'number' && Number.isFinite(img.height) && img.height > 0
+			? img.height
+			: 0;
+	const pixels = sourceWidth > 0 && sourceHeight > 0 ? sourceWidth * sourceHeight : 0;
+	const frameScale = typeof img.scale === 'number' && Number.isFinite(img.scale) ? img.scale : 1;
+	const splitFactor = img.splitHalf ? 2 : 1;
+	const cssWidth = sourceWidth * frameScale * displayContext.scale * splitFactor;
+	const cssHeight = sourceHeight * frameScale * displayContext.scale;
+	const displayProxy = loadModeStore.isCanvasMode
+		? null
+		: getDisplayProxyCandidate({
+				url,
+				sourceWidth,
+				sourceHeight,
+				cssWidth,
+				cssHeight,
+				dpr: displayContext.dpr
+			});
+
+	return {
+		url: displayProxy?.url ?? url,
+		priority,
+		distance,
+		rank,
+		pixels: displayProxy?.pixels ?? pixels,
+		scaledProxy: !!displayProxy
+	};
+}
+
+function rememberPreloadEntry(byUrl: Map<string, PreloadUrlEntry>, entry: PreloadUrlEntry): void {
+	const existing = byUrl.get(entry.url);
+	if (!existing || entry.rank < existing.rank || entry.distance < existing.distance) {
+		byUrl.set(entry.url, entry);
+	}
+}
+
+function collectPreloadUrls(
+	window: ReaderWindow,
+	currentFrameId: string,
+	direction: PreloadDirection,
+	displayContext: DisplayPreloadContext
+): PreloadUrlEntry[] {
 	const byUrl = new Map<string, PreloadUrlEntry>();
 
 	for (const frame of window.frames) {
 		if (frame.frameId === currentFrameId) continue;
 		const distance = Math.abs(frame.pageIndex - window.centerPage);
-		const priority: ImageFetchPriority = distance <= 2 ? 'high' : 'low';
+		const rank = getPreloadRank(frame.pageIndex, window.centerPage, direction);
+		const priority: ImageFetchPriority = rank <= 3 ? 'high' : 'low';
 
 		for (const img of frame.images) {
-			if (img.isDummy || !img.url) continue;
-			const url = fixUrl(img.url);
-			const existing = byUrl.get(url);
-			if (!existing || distance < existing.distance || existing.priority === 'low') {
-				byUrl.set(url, { url, priority, distance });
-			}
+			const entry = getImagePreloadEntry(img, displayContext, priority, distance, rank);
+			if (entry) rememberPreloadEntry(byUrl, entry);
 		}
 	}
 
-	return [...byUrl.values()].sort((a, b) => a.distance - b.distance);
+	return [...byUrl.values()].sort((a, b) => a.rank - b.rank || a.distance - b.distance);
 }
 
-function preloadImageUrl(url: string, priority: ImageFetchPriority): void {
+function collectHotPreloadUrls(
+	window: ReaderWindow,
+	displayContext: DisplayPreloadContext
+): PreloadUrlEntry[] {
+	const byUrl = new Map<string, PreloadUrlEntry>();
+
+	for (const frame of window.frames) {
+		const distance = Math.abs(frame.pageIndex - window.centerPage);
+		if (distance > IMG_HOT_PREDECODE_DISTANCE) continue;
+
+		for (const img of frame.images) {
+			const entry = getImagePreloadEntry(img, displayContext, 'high', distance, distance);
+			if (entry) rememberPreloadEntry(byUrl, entry);
+		}
+	}
+
+	return [...byUrl.values()].sort((a, b) => a.distance - b.distance || a.rank - b.rank);
+}
+
+function collectSnapshotPreloadUrls(
+	snapshot: FrameSnapshot,
+	displayContext: DisplayPreloadContext
+): PreloadUrlEntry[] {
+	const byUrl = new Map<string, PreloadUrlEntry>();
+	for (const img of snapshot.images) {
+		const entry = getImagePreloadEntry(img, displayContext, 'high', 0, 0);
+		if (entry) rememberPreloadEntry(byUrl, entry);
+	}
+	return [...byUrl.values()];
+}
+
+function usableImgPredecodeUrls(entries: PreloadUrlEntry[]): string[] {
+	if (loadModeStore.isCanvasMode) return [];
+	return entries
+		.filter((entry) => entry.pixels <= IMG_PREDECODE_MAX_PIXELS)
+		.map((entry) => entry.url);
+}
+
+function warmHotImageUrls(entries: PreloadUrlEntry[]): void {
+	const urls = usableImgPredecodeUrls(entries);
+	clearQueuedImagePredecodes();
+	setHotImageDecodeUrls(urls);
+	prependImagePredecodes(urls, 'high');
+}
+
+function preloadImageUrl(url: string, priority: ImageFetchPriority, pixels = 0): void {
 	if (loadModeStore.isCanvasMode) {
 		enqueueBitmapPreload(url);
 	} else {
+		if (pixels > IMG_PREDECODE_MAX_PIXELS) return;
 		enqueueImagePredecode(url, priority);
 	}
+}
+
+function getFrameReadyWaitTimeout(
+	totalImages: number,
+	canvasMode = loadModeStore.isCanvasMode
+): number {
+	if (!canvasMode) {
+		return Math.min(
+			IMG_READY_WAIT_MAX_TIMEOUT_MS,
+			IMG_READY_WAIT_BASE_TIMEOUT_MS +
+				Math.max(0, totalImages - 1) * IMG_READY_WAIT_EXTRA_PER_IMAGE_MS
+		);
+	}
+
+	return Math.min(
+		FRAME_READY_WAIT_MAX_TIMEOUT_MS,
+		FRAME_READY_WAIT_BASE_TIMEOUT_MS +
+			Math.max(0, totalImages - 1) * FRAME_READY_WAIT_EXTRA_PER_IMAGE_MS
+	);
+}
+
+function percentile(values: number[], p: number): number {
+	if (values.length === 0) return 0;
+	const sorted = [...values].sort((a, b) => a - b);
+	const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1));
+	return sorted[index];
+}
+
+function roundMs(value: number): number {
+	return Number(value.toFixed(1));
 }
 
 // ============================================================================
@@ -175,6 +403,90 @@ export function createImageStore() {
 
 	let lastBookPath: string | null = null;
 	let pendingRequestToken = 0;
+	let framePerformanceSequence = 0;
+	let displayPreloadContext: DisplayPreloadContext = { scale: 1, dpr: 1 };
+	let lastPreloadQueueDirection: PreloadDirection = 'neutral';
+	const framePerformanceSamples: FramePerformanceSample[] = [];
+	const preloadStats: ReaderPreloadStats = {
+		windowRequests: 0,
+		queuedScaledProxy: 0,
+		queuedOriginal: 0,
+		lastEntryCount: 0,
+		lastScaledProxyCount: 0,
+		lastOriginalCount: 0,
+		lastDirection: 'neutral',
+		lastDisplayScale: 1,
+		lastDpr: 1,
+		lastUpdatedAt: null
+	};
+
+	function setDisplayPreloadContext(context: Partial<DisplayPreloadContext>): void {
+		const scale =
+			Number.isFinite(context.scale) && context.scale && context.scale > 0
+				? context.scale
+				: displayPreloadContext.scale;
+		const dpr =
+			Number.isFinite(context.dpr) && context.dpr && context.dpr > 0
+				? context.dpr
+				: displayPreloadContext.dpr;
+		displayPreloadContext = {
+			scale: Math.max(0.01, scale),
+			dpr: Math.max(1, dpr)
+		};
+	}
+
+	function recordFramePerformance(sample: Omit<FramePerformanceSample, 'id'>): void {
+		const entry: FramePerformanceSample = {
+			...sample,
+			id: ++framePerformanceSequence
+		};
+		framePerformanceSamples.push(entry);
+		if (framePerformanceSamples.length > FRAME_PERF_SAMPLE_LIMIT) {
+			framePerformanceSamples.shift();
+		}
+
+		const commitEndTime = performance.now();
+		const updatePaintMetric = (paintTime: number) => {
+			entry.paintAfterCommitMs = paintTime - commitEndTime;
+		};
+
+		if (typeof requestAnimationFrame === 'function') {
+			requestAnimationFrame(() => updatePaintMetric(performance.now()));
+		}
+
+		const shouldLogSlowFrame =
+			entry.decodeTimedOut || entry.totalBeforeCommitMs > 500 || entry.decodeWaitMs > 300;
+		if (shouldLogSlowFrame) {
+			debugReaderPerf(
+				() =>
+					`[imageStore][perf] page=${entry.pageIndex} dir=${entry.direction} resource=${entry.resourceReadyMs.toFixed(1)} decode=${entry.decodeWaitMs.toFixed(1)} total=${entry.totalBeforeCommitMs.toFixed(1)}${entry.decodeTimedOut ? ' timedOut=true' : ''}`
+			);
+		}
+	}
+
+	function getPerformanceStats(): FramePerformanceStats {
+		const resourceReady = framePerformanceSamples.map((sample) => sample.resourceReadyMs);
+		const decodeWait = framePerformanceSamples.map((sample) => sample.decodeWaitMs);
+		const totalBeforeCommit = framePerformanceSamples.map((sample) => sample.totalBeforeCommitMs);
+		const paintAfterCommit = framePerformanceSamples
+			.map((sample) => sample.paintAfterCommitMs)
+			.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+
+		return {
+			count: framePerformanceSamples.length,
+			resourceReadyP50: roundMs(percentile(resourceReady, 0.5)),
+			resourceReadyP95: roundMs(percentile(resourceReady, 0.95)),
+			decodeWaitP50: roundMs(percentile(decodeWait, 0.5)),
+			decodeWaitP95: roundMs(percentile(decodeWait, 0.95)),
+			totalBeforeCommitP50: roundMs(percentile(totalBeforeCommit, 0.5)),
+			totalBeforeCommitP95: roundMs(percentile(totalBeforeCommit, 0.95)),
+			paintAfterCommitP95: roundMs(percentile(paintAfterCommit, 0.95)),
+			timeoutCount: framePerformanceSamples.filter((sample) => sample.decodeTimedOut).length,
+			decodeSkippedCount: framePerformanceSamples.filter((sample) => sample.decodeSkipped).length,
+			preload: { ...preloadStats },
+			last: framePerformanceSamples.at(-1)
+		};
+	}
 
 	function resolvePageDimensions(pageIndex: number): { width: number; height: number } | null {
 		const page = bookStore.currentBook?.pages?.[pageIndex];
@@ -230,16 +542,73 @@ export function createImageStore() {
 		return snapshot.images.some((img) => !img.isDummy && !resolveImageDimensions(img));
 	}
 
+	async function waitForSnapshotImagesReady(snapshot: FrameSnapshot): Promise<{
+		total: number;
+		failed: number;
+		timedOut: boolean;
+		skipped: boolean;
+	}> {
+		const canvasMode = loadModeStore.isCanvasMode;
+		const hasImages = snapshot.images.some((img) => !img.isDummy && img.url);
+		const urls = canvasMode
+			? [
+					...new Set(
+						snapshot.images.filter((img) => !img.isDummy && img.url).map((img) => fixUrl(img.url))
+					)
+				]
+			: usableImgPredecodeUrls(collectSnapshotPreloadUrls(snapshot, displayPreloadContext));
+
+		if (urls.length === 0) {
+			return { total: 0, failed: 0, timedOut: false, skipped: hasImages && !canvasMode };
+		}
+
+		let failed = 0;
+		const readyPromise = Promise.all(
+			urls.map(async (url) => {
+				try {
+					if (canvasMode) {
+						if (getBitmapCacheEntry(url)) return;
+						await preloadBitmap(url);
+						return;
+					}
+
+					if (getDecodedImageEntry(url)) return;
+					await predecodeImage(url, { priority: 'high' });
+				} catch (err) {
+					failed++;
+					console.warn('[imageStore] frame image predecode failed:', err);
+				}
+			})
+		).then(() => 'ready' as const);
+
+		const timeoutMs = getFrameReadyWaitTimeout(urls.length, canvasMode);
+		const timeoutPromise = new Promise<'timeout'>((resolve) => {
+			setTimeout(() => resolve('timeout'), timeoutMs);
+		});
+
+		const result = await Promise.race([readyPromise, timeoutPromise]);
+
+		return { total: urls.length, failed, timedOut: result === 'timeout', skipped: false };
+	}
+
 	async function preloadReaderWindow(
 		params: GetFrameSnapshotParams,
 		snapshot: FrameSnapshot,
-		token: number
+		token: number,
+		direction: PreloadDirection
 	): Promise<void> {
 		const book = bookStore.currentBook;
 		if (!book) return;
 
 		const radius = getPreloadRadius();
-		const preloadKey = makeWindowPreloadKey(book.path, snapshot.pageIndex, radius, params);
+		const preloadKey = makeWindowPreloadKey(
+			book.path,
+			snapshot.pageIndex,
+			radius,
+			params,
+			direction,
+			displayPreloadContext
+		);
 		if (!rememberWindowPreload(preloadKey)) {
 			return;
 		}
@@ -250,8 +619,27 @@ export function createImageStore() {
 				return;
 			}
 
-			for (const entry of collectPreloadUrls(window, snapshot.frameId)) {
-				preloadImageUrl(entry.url, entry.priority);
+			const entries = collectPreloadUrls(
+				window,
+				snapshot.frameId,
+				direction,
+				displayPreloadContext
+			);
+			warmHotImageUrls(collectHotPreloadUrls(window, displayPreloadContext));
+			const scaledProxyCount = entries.filter((entry) => entry.scaledProxy).length;
+			preloadStats.windowRequests++;
+			preloadStats.queuedScaledProxy += scaledProxyCount;
+			preloadStats.queuedOriginal += entries.length - scaledProxyCount;
+			preloadStats.lastEntryCount = entries.length;
+			preloadStats.lastScaledProxyCount = scaledProxyCount;
+			preloadStats.lastOriginalCount = entries.length - scaledProxyCount;
+			preloadStats.lastDirection = direction;
+			preloadStats.lastDisplayScale = displayPreloadContext.scale;
+			preloadStats.lastDpr = displayPreloadContext.dpr;
+			preloadStats.lastUpdatedAt = Date.now();
+
+			for (const entry of entries) {
+				preloadImageUrl(entry.url, entry.priority, entry.pixels);
 			}
 		} catch (err) {
 			console.warn('[imageStore] preload reader window failed:', err);
@@ -261,13 +649,18 @@ export function createImageStore() {
 	function schedulePreload(
 		params: GetFrameSnapshotParams,
 		snapshot: FrameSnapshot,
-		token: number
+		token: number,
+		direction: PreloadDirection
 	): void {
 		const run = () => {
+			if (!loadModeStore.isCanvasMode && direction !== lastPreloadQueueDirection) {
+				clearQueuedImagePredecodes();
+			}
+			lastPreloadQueueDirection = direction;
 			void triggerPreload().catch((err) => {
 				console.warn('[imageStore] backend preload failed:', err);
 			});
-			void preloadReaderWindow(params, snapshot, token);
+			void preloadReaderWindow(params, snapshot, token, direction);
 		};
 
 		if (typeof queueMicrotask === 'function') {
@@ -326,8 +719,9 @@ export function createImageStore() {
 			const resourceReadyMs = performance.now() - flipStartTime;
 
 			if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== rawSnapshot.pageIndex) {
-				console.log(
-					`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`
+				debugReaderPerf(
+					() =>
+						`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`
 				);
 				return;
 			}
@@ -341,8 +735,9 @@ export function createImageStore() {
 
 			// 【关键】只有 token 匹配且页码未变时才提交新帧
 			if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== snapshot.pageIndex) {
-				console.log(
-					`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`
+				debugReaderPerf(
+					() =>
+						`[imageStore] page=${params.pageMode} DROPPED (stale) resourceReadyMs=${resourceReadyMs.toFixed(1)}`
 				);
 				return;
 			}
@@ -353,17 +748,72 @@ export function createImageStore() {
 				return;
 			}
 
-			console.log(
-				`[imageStore] page=${snapshot.pageIndex} layout=${snapshot.layout} images=${snapshot.images.length} resourceReadyMs=${resourceReadyMs.toFixed(1)}`
+			debugReaderPerf(
+				() =>
+					`[imageStore] page=${snapshot.pageIndex} layout=${snapshot.layout} images=${snapshot.images.length} resourceReadyMs=${resourceReadyMs.toFixed(1)}`
 			);
+
+			const previousPageIndex = state.currentFrame?.pageIndex ?? snapshot.pageIndex;
+			const preloadDirection: PreloadDirection =
+				snapshot.pageIndex > previousPageIndex
+					? 'forward'
+					: snapshot.pageIndex < previousPageIndex
+						? 'backward'
+						: 'neutral';
+			warmHotImageUrls(collectSnapshotPreloadUrls(snapshot, displayPreloadContext));
+			let decodeWaitMs = 0;
+			let decodeResult: Awaited<ReturnType<typeof waitForSnapshotImagesReady>> = {
+				total: 0,
+				failed: 0,
+				timedOut: false,
+				skipped: false
+			};
+
+			if (state.currentFrame) {
+				const decodeStartTime = performance.now();
+				decodeResult = await waitForSnapshotImagesReady(snapshot);
+				decodeWaitMs = performance.now() - decodeStartTime;
+
+				if (myToken !== pendingRequestToken || bookStore.currentPageIndex !== snapshot.pageIndex) {
+					debugReaderPerf(
+						() =>
+							`[imageStore] page=${params.pageMode} DROPPED (stale after decode) decodeWaitMs=${decodeWaitMs.toFixed(1)}`
+					);
+					return;
+				}
+
+				if (decodeResult.total > 0 && !decodeResult.skipped) {
+					debugReaderPerf(
+						() =>
+							`[imageStore] page=${snapshot.pageIndex} decodeWaitMs=${decodeWaitMs.toFixed(1)} decoded=${decodeResult.total - decodeResult.failed}/${decodeResult.total}${decodeResult.timedOut ? ' timedOut=true' : ''}`
+					);
+				}
+			}
 
 			// 双缓冲：旧帧移到 previousFrame，新帧设为 currentFrame
 			if (state.currentFrame && state.currentFrame.frameId !== snapshot.frameId) {
 				state.previousFrame = state.currentFrame;
 			}
+			const commitStartTime = performance.now();
 			state.currentFrame = snapshot;
 			state.loading = false;
-			schedulePreload(params, snapshot, myToken);
+			const commitMs = performance.now() - commitStartTime;
+			recordFramePerformance({
+				bookPath: snapshot.bookPath,
+				pageIndex: snapshot.pageIndex,
+				layout: snapshot.layout,
+				imageCount: snapshot.images.length,
+				direction: preloadDirection,
+				resourceReadyMs,
+				decodeWaitMs,
+				commitMs,
+				totalBeforeCommitMs: performance.now() - flipStartTime,
+				decodeTotal: decodeResult.total,
+				decodeFailed: decodeResult.failed,
+				decodeTimedOut: decodeResult.timedOut,
+				decodeSkipped: decodeResult.skipped
+			});
+			schedulePreload(params, snapshot, myToken, preloadDirection);
 		} catch (err) {
 			if (myToken === pendingRequestToken) {
 				state.error = String(err);
@@ -479,6 +929,18 @@ export function createImageStore() {
 		pendingRequestToken++;
 		preloadedWindowTimestamps.clear();
 		preloadedWindowQueue.length = 0;
+		framePerformanceSamples.length = 0;
+		lastPreloadQueueDirection = 'neutral';
+		preloadStats.windowRequests = 0;
+		preloadStats.queuedScaledProxy = 0;
+		preloadStats.queuedOriginal = 0;
+		preloadStats.lastEntryCount = 0;
+		preloadStats.lastScaledProxyCount = 0;
+		preloadStats.lastOriginalCount = 0;
+		preloadStats.lastDirection = 'neutral';
+		preloadStats.lastDisplayScale = displayPreloadContext.scale;
+		preloadStats.lastDpr = displayPreloadContext.dpr;
+		preloadStats.lastUpdatedAt = null;
 		clearImageDecodeCache();
 		clearBitmapCache();
 	}
@@ -489,9 +951,11 @@ export function createImageStore() {
 		},
 		loadCurrentPage,
 		reportViewportSize,
+		setDisplayPreloadContext,
 		getCurrentFrame,
 		getPreviousFrame,
 		getMainImageSize,
+		getPerformanceStats,
 		snapshotToFrame,
 		reset
 	};

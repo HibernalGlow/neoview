@@ -21,6 +21,7 @@ pub struct UnifiedThumbnailService {
     queue: Arc<RwLock<ThumbnailQueue>>,
     url_version: Arc<std::sync::atomic::AtomicU32>,
     memory_cache: Arc<parking_lot::RwLock<HashMap<String, Arc<[u8]>>>>,
+    context_generations: Arc<RwLock<HashMap<String, u32>>>,
 }
 
 impl UnifiedThumbnailService {
@@ -31,6 +32,7 @@ impl UnifiedThumbnailService {
             queue: Arc::new(RwLock::new(ThumbnailQueue::new())),
             url_version: Arc::new(std::sync::atomic::AtomicU32::new(1)),
             memory_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
+            context_generations: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -38,18 +40,32 @@ impl UnifiedThumbnailService {
     pub async fn request_thumbnails(&self, params: RequestThumbnailsParams) {
         let mut queue = self.queue.write().await;
         for item in params.items {
-            queue.enqueue(item, params.lane, params.center_index, params.generation);
+            queue.enqueue(
+                params.context_id.clone(),
+                item,
+                params.lane,
+                params.center_index,
+                params.generation,
+            );
         }
     }
 
     /// 取消上下文
-    pub async fn cancel_context(&self, context_id: &str) {
+    pub async fn cancel_context(&self, context_id: &str, generation: u32) {
+        self.context_generations
+            .write()
+            .await
+            .insert(context_id.to_string(), generation);
         let mut queue = self.queue.write().await;
-        let new_gen = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u32;
-        queue.cancel_context(context_id, new_gen);
+        queue.cancel_context(context_id, generation);
+    }
+
+    pub async fn is_context_stale(&self, context_id: &str, generation: u32) -> bool {
+        self.context_generations
+            .read()
+            .await
+            .get(context_id)
+            .is_some_and(|current| generation < *current)
     }
 
     /// 处理队列中的下一个任务
@@ -93,16 +109,111 @@ impl UnifiedThumbnailService {
         }
     }
 
+    pub async fn process_next_queued(&self) -> Option<Vec<ThumbnailReadyItem>> {
+        loop {
+            let task = {
+                let mut queue = self.queue.write().await;
+                queue.dequeue()
+            }?;
+
+            let key = task.request.key.clone();
+
+            if self
+                .is_context_stale(&task.context_id, task.generation)
+                .await
+            {
+                self.finish_queue_task(&key).await;
+                continue;
+            }
+
+            let cached_data = { self.memory_cache.read().get(&key).cloned() };
+            if let Some(data) = cached_data {
+                self.finish_queue_task(&key).await;
+                let version = self
+                    .url_version
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+                let (width, height) = image_dimensions(data.as_ref());
+                return Some(vec![ThumbnailReadyItem {
+                    key,
+                    url_version: version,
+                    width,
+                    height,
+                }]);
+            }
+
+            let generator = Arc::clone(&self.generator);
+            let db = Arc::clone(&self.db);
+            let source = task.request.source;
+            let started = std::time::Instant::now();
+
+            let blob = tokio::task::spawn_blocking(move || {
+                generate_thumbnail_blob(&generator, &db, &source)
+            })
+            .await
+            .ok()
+            .flatten();
+
+            let Some(blob) = blob else {
+                self.finish_queue_task(&key).await;
+                continue;
+            };
+
+            if self
+                .is_context_stale(&task.context_id, task.generation)
+                .await
+            {
+                self.finish_queue_task(&key).await;
+                continue;
+            }
+
+            let elapsed_ms = started.elapsed().as_millis();
+            if elapsed_ms > 250 {
+                log::debug!(
+                    "馃柤锔?[ThumbV4] slow queue generate: key={}, lane={}, {}ms",
+                    key,
+                    task.lane,
+                    elapsed_ms
+                );
+            }
+
+            let (width, height) = image_dimensions(&blob);
+            self.memory_cache
+                .write()
+                .insert(key.clone(), Arc::<[u8]>::from(blob.into_boxed_slice()));
+            self.finish_queue_task(&key).await;
+
+            let version = self
+                .url_version
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
+            return Some(vec![ThumbnailReadyItem {
+                key,
+                url_version: version,
+                width,
+                height,
+            }]);
+        }
+    }
+
+    async fn finish_queue_task(&self, key: &str) {
+        let mut queue = self.queue.write().await;
+        queue.finish(key);
+    }
+
     pub async fn generate_thumbnails(
         &self,
         items: Vec<ThumbnailRequest>,
         lane: ThumbnailLane,
+        context_id: String,
+        generation: u32,
     ) -> Vec<ThumbnailReadyItem> {
         let concurrency = generation_concurrency(lane);
         let generator = Arc::clone(&self.generator);
         let db = Arc::clone(&self.db);
         let memory_cache = Arc::clone(&self.memory_cache);
         let url_version = Arc::clone(&self.url_version);
+        let context_generations = Arc::clone(&self.context_generations);
 
         stream::iter(items.into_iter())
             .map(move |item| {
@@ -110,9 +221,27 @@ impl UnifiedThumbnailService {
                 let db = Arc::clone(&db);
                 let memory_cache = Arc::clone(&memory_cache);
                 let url_version = Arc::clone(&url_version);
+                let context_generations = Arc::clone(&context_generations);
+                let context_id = context_id.clone();
 
                 async move {
-                    if let Some(data) = { memory_cache.read().get(&item.key).cloned() } {
+                    if context_generation_is_stale(&context_generations, &context_id, generation)
+                        .await
+                    {
+                        return None;
+                    }
+
+                    let cached_data = { memory_cache.read().get(&item.key).cloned() };
+                    if let Some(data) = cached_data {
+                        if context_generation_is_stale(
+                            &context_generations,
+                            &context_id,
+                            generation,
+                        )
+                        .await
+                        {
+                            return None;
+                        }
                         let version =
                             url_version.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                         let (width, height) = image_dimensions(data.as_ref());
@@ -137,6 +266,12 @@ impl UnifiedThumbnailService {
                     let Some(blob) = blob else {
                         return None;
                     };
+
+                    if context_generation_is_stale(&context_generations, &context_id, generation)
+                        .await
+                    {
+                        return None;
+                    }
 
                     let elapsed_ms = started.elapsed().as_millis();
                     if elapsed_ms > 250 {
@@ -194,6 +329,18 @@ fn generation_concurrency(lane: ThumbnailLane) -> usize {
         ThumbnailLane::Prefetch => 3,
         ThumbnailLane::Background => 1,
     }
+}
+
+async fn context_generation_is_stale(
+    context_generations: &Arc<RwLock<HashMap<String, u32>>>,
+    context_id: &str,
+    generation: u32,
+) -> bool {
+    context_generations
+        .read()
+        .await
+        .get(context_id)
+        .is_some_and(|current| generation < *current)
 }
 
 fn generate_thumbnail_blob(

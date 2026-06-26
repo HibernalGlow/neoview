@@ -8,6 +8,14 @@ import * as bookApi from '$lib/api/book';
 import type { ContentRef } from './types';
 import { pageFlipMonitor } from '$lib/utils/pageFlipMonitor';
 
+const BOOK_NAVIGATION_DEBUG = false;
+
+function debugBookNavigation(getMessage: () => string): void {
+	if (BOOK_NAVIGATION_DEBUG) {
+		console.debug(getMessage());
+	}
+}
+
 /** 页面导航状态 */
 export interface PageNavigationState {
 	currentPageIndex: number;
@@ -86,7 +94,7 @@ export class PageNavigationManager {
 			// 【性能监控】记录翻页开始
 			pageFlipMonitor.startFlip();
 
-			console.log(`📄 Navigating to page ${index + 1}/${book.totalPages}`);
+			debugBookNavigation(() => `Navigating to page ${index + 1}/${book.totalPages}`);
 			await bookApi.navigateToPage(index);
 			this.callbacks.updateCurrentPage(index);
 			this.callbacks.syncAppState('user');
@@ -139,7 +147,7 @@ export class PageNavigationManager {
 	/** 下一页 - 使用本地 PageFrameBuilder 计算 */
 	async nextPage(): Promise<number | undefined> {
 		if (!this.canGoNext()) {
-			console.log('📘 Already on last page');
+			debugBookNavigation(() => 'Already on last page');
 			return;
 		}
 
@@ -175,7 +183,7 @@ export class PageNavigationManager {
 	/** 上一页 - 使用本地 PageFrameBuilder 计算 */
 	async previousPage(): Promise<number | undefined> {
 		if (!this.canGoPrevious()) {
-			console.log('📘 Already on first page');
+			debugBookNavigation(() => 'Already on first page');
 			return;
 		}
 

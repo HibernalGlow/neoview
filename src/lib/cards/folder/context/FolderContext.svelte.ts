@@ -6,6 +6,10 @@ import { getContext, setContext } from 'svelte';
 import { writable, get } from 'svelte/store';
 import type { FsItem } from '$lib/types';
 import type { NavigationCommand, ContextMenuState, ClipboardState, LocalTabState } from '../types';
+import type {
+	FolderSortField,
+	FolderSortOrder
+} from '$lib/components/panels/folderPanel/stores/folderTabStore';
 import {
 	tabCurrentPath,
 	tabFolderTreeConfig,
@@ -88,7 +92,7 @@ export interface FolderContextValue {
 	readonly effectiveDeleteMode: boolean;
 	readonly effectiveInlineTreeMode: boolean;
 	readonly effectiveViewStyle: 'list' | 'content' | 'banner' | 'thumbnail' | undefined;
-	readonly effectiveSortConfig: { field: string; order: 'asc' | 'desc' } | undefined;
+	readonly effectiveSortConfig: { field: FolderSortField; order: FolderSortOrder } | undefined;
 	readonly effectiveFolderTreeConfig: { visible: boolean; layout: string; size: number } | null;
 
 	// ============ UI 状态 ============
@@ -293,16 +297,18 @@ export function createFolderContext(initialPath?: string): FolderContextValue {
 				: undefined
 	);
 
-	const effectiveSortConfig = $derived<{ field: string; order: 'asc' | 'desc' } | undefined>(
+	const effectiveSortConfig = $derived<
+		{ field: FolderSortField; order: FolderSortOrder } | undefined
+	>(
 		panelMode === 'history'
 			? {
-					field: virtualPanelSettingsStore.historySortField,
-					order: virtualPanelSettingsStore.historySortOrder as 'asc' | 'desc'
+					field: virtualPanelSettingsStore.historySortField as FolderSortField,
+					order: virtualPanelSettingsStore.historySortOrder as FolderSortOrder
 				}
 			: panelMode === 'bookmark'
 				? {
-						field: virtualPanelSettingsStore.bookmarkSortField,
-						order: virtualPanelSettingsStore.bookmarkSortOrder as 'asc' | 'desc'
+						field: virtualPanelSettingsStore.bookmarkSortField as FolderSortField,
+						order: virtualPanelSettingsStore.bookmarkSortOrder as FolderSortOrder
 					}
 				: undefined
 	);

@@ -13,16 +13,16 @@
 //! - rating_ops: 评分数据操作
 //! - maintenance: 数据库维护
 
-mod types;
-mod compression;
-mod schema;
-mod crud;
-mod batch_ops;
-mod emm_ops;
-mod rating_ops;
-mod maintenance;
-mod tags_ops;
 mod ai_translation;
+mod batch_ops;
+mod compression;
+mod crud;
+mod emm_ops;
+mod maintenance;
+mod rating_ops;
+mod schema;
+mod tags_ops;
+mod types;
 
 pub use types::*;
 
@@ -89,7 +89,7 @@ impl ThumbnailDb {
         } else {
             1.0
         };
-        
+
         CompressionStats {
             total_entries: 0,
             compressed_size_bytes: compressed,

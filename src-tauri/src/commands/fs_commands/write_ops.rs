@@ -23,7 +23,8 @@ where
             let _ = tx.send(result);
         })
         .map_err(|e| format!("Failed to spawn trash thread: {e}"))?;
-    rx.await.map_err(|_| "trash thread channel closed".to_string())?
+    rx.await
+        .map_err(|_| "trash thread channel closed".to_string())?
 }
 
 /// 创建目录
@@ -141,7 +142,9 @@ pub async fn move_to_trash_async(
                 }
             }
 
-            Err(format!("异步移动到回收站失败 (已重试{max_retries}次): {last_error}"))
+            Err(format!(
+                "异步移动到回收站失败 (已重试{max_retries}次): {last_error}"
+            ))
         })
         .await;
 
@@ -401,7 +404,8 @@ pub async fn undo_last_delete() -> Result<Option<String>, String> {
 
         let original_path = latest_item.original_path().to_string_lossy().to_string();
 
-        trash::os_limited::restore_all(vec![latest_item]).map_err(|e| format!("恢复失败: {}", e))?;
+        trash::os_limited::restore_all(vec![latest_item])
+            .map_err(|e| format!("恢复失败: {}", e))?;
 
         Ok(Some(original_path))
     })
@@ -491,29 +495,31 @@ pub async fn restore_from_trash(original_path: String) -> Result<(), String> {
 /// 在删除文件/文件夹前调用，确保释放文件句柄
 #[tauri::command]
 pub async fn release_path_resources(
-    path: String, 
+    path: String,
     state: State<'_, FsState>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     log::info!("🔓 [ReleaseResources] 释放路径资源: {}", path);
-    
+
     let path_buf = PathBuf::from(&path);
-    
+
     // 清除 ArchiveManager 中与该路径相关的缓存
     if let Ok(archive_manager) = state.archive_manager.lock() {
         // 清除所有缓存（确保释放所有文件句柄）
         archive_manager.clear_cache();
         log::info!("🔓 [ReleaseResources] 已清除 ArchiveManager 缓存");
     }
-    
+
     // 清除 ProtocolState 的缓存
-    if let Some(protocol_state) = app_handle.try_state::<crate::core::custom_protocol::ProtocolState>() {
+    if let Some(protocol_state) =
+        app_handle.try_state::<crate::core::custom_protocol::ProtocolState>()
+    {
         protocol_state.clear_cache();
         protocol_state.mmap_cache.clear();
         protocol_state.path_registry.clear();
         log::info!("🔓 [ReleaseResources] 已清除 ProtocolState 缓存");
     }
-    
+
     // 如果是文件夹，遍历清除所有子文件的缓存
     if path_buf.is_dir() {
         if let Ok(archive_manager) = state.archive_manager.lock() {
@@ -529,13 +535,13 @@ pub async fn release_path_resources(
             log::info!("🔓 [ReleaseResources] 已清除文件夹内所有压缩包缓存");
         }
     }
-    
+
     // 强制触发 Rust 的 drop（通过重新获取锁来确保之前的引用被释放）
     drop(state.archive_manager.lock());
-    
+
     // 等待更长时间确保文件句柄完全释放
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
-    
+
     log::info!("✅ [ReleaseResources] 资源释放完成: {}", path);
     Ok(())
 }

@@ -122,18 +122,28 @@
 	const MAX_MOUNTED_FOLDER_TABS = 3;
 	let mountedFolderTabIds = $state<string[]>([]);
 
+	function areStringArraysEqual(left: string[], right: string[]): boolean {
+		return left.length === right.length && left.every((value, index) => value === right[index]);
+	}
+
 	$effect(() => {
 		const activeId = ctx.displayActiveTabId;
 		const availableIds = new Set(ctx.displayTabs.map((tab) => tab.id));
 		if (!activeId) {
-			mountedFolderTabIds = [];
+			if (mountedFolderTabIds.length > 0) {
+				mountedFolderTabIds = [];
+			}
 			return;
 		}
 
-		mountedFolderTabIds = [
+		const nextMountedFolderTabIds = [
 			activeId,
 			...mountedFolderTabIds.filter((id) => id !== activeId && availableIds.has(id))
 		].slice(0, Math.min(MAX_MOUNTED_FOLDER_TABS, ctx.displayTabs.length));
+
+		if (!areStringArraysEqual(mountedFolderTabIds, nextMountedFolderTabIds)) {
+			mountedFolderTabIds = nextMountedFolderTabIds;
+		}
 	});
 
 	let renderedFolderTabs = $derived.by(() => {

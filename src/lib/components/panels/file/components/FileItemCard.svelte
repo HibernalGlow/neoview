@@ -46,7 +46,7 @@
 		genderCategories,
 		normalizeTagKey
 	} from './fileItemUtils';
-	import { loadFolderPreviewImagePaths } from './folderPreviewLoader';
+	import { loadFolderPreviewCandidates, type FolderPreviewCandidate } from './folderPreviewLoader';
 
 	const namespaceDisplayCache = new Map<string, string>();
 	const tagTranslationCache = new Map<string, string>();
@@ -211,7 +211,7 @@
 	let penetratePureMediaFolderOpen = $state(true);
 	// 文件夹预览缩略图 URL 数组
 	let folderThumbnails = $state<string[]>([]);
-	let folderPreviewImagePaths = $state<string[]>([]);
+	let folderPreviewCandidates = $state<FolderPreviewCandidate[]>([]);
 	let folderPreviewLoading = $state(false);
 	let folderPreviewRequestId = 0;
 	// 文件夹预览网格模式和预览数量
@@ -247,13 +247,27 @@
 		return unsubscribe;
 	});
 
-	function getFolderPreviewThumbKey(path: string): string {
-		const source: ThumbnailSource = { kind: 'file', path, fileSize: 0, modified: 0 };
+	function toFolderPreviewSource(candidate: FolderPreviewCandidate): ThumbnailSource {
+		if (candidate.kind === 'directoryCover') {
+			return {
+				kind: 'directoryCover',
+				dirPath: candidate.path,
+				representative: candidate.representative ?? candidate.path,
+				fileSize: 0,
+				modified: 0
+			};
+		}
+
+		return { kind: 'file', path: candidate.path, fileSize: 0, modified: 0 };
+	}
+
+	function getFolderPreviewThumbKey(candidate: FolderPreviewCandidate): string {
+		const source = toFolderPreviewSource(candidate);
 		return generateThumbKey(source, 256);
 	}
 
-	function toFolderPreviewRequest(path: string): ThumbnailRequest {
-		const source: ThumbnailSource = { kind: 'file', path, fileSize: 0, modified: 0 };
+	function toFolderPreviewRequest(candidate: FolderPreviewCandidate): ThumbnailRequest {
+		const source = toFolderPreviewSource(candidate);
 		return { key: generateThumbKey(source, 256), source, maxSize: 256 };
 	}
 
@@ -267,7 +281,7 @@
 
 		if (!isDir || !enabled) {
 			folderThumbnails = [];
-			folderPreviewImagePaths = [];
+			folderPreviewCandidates = [];
 			folderPreviewLoading = false;
 			folderPreviewRequestId += 1;
 			return;
@@ -275,19 +289,19 @@
 
 		const requestId = ++folderPreviewRequestId;
 		folderThumbnails = [];
-		folderPreviewImagePaths = [];
+		folderPreviewCandidates = [];
 		folderPreviewLoading = true;
 
 		const timeoutId = setTimeout(() => {
-			loadFolderPreviewImagePaths(itemPath, count, modified)
-				.then((paths) => {
+			loadFolderPreviewCandidates(itemPath, count, modified)
+				.then((candidates) => {
 					if (requestId !== folderPreviewRequestId) return;
-					folderPreviewImagePaths = paths;
+					folderPreviewCandidates = candidates;
 				})
 				.catch((error) => {
 					if (requestId !== folderPreviewRequestId) return;
 					console.debug('加载文件夹预览路径失败:', error);
-					folderPreviewImagePaths = [];
+					folderPreviewCandidates = [];
 				})
 				.finally(() => {
 					if (requestId === folderPreviewRequestId) {
@@ -307,12 +321,12 @@
 		const isDir = item.isDir;
 		const enabled = folderPreviewGridEnabled;
 		const itemPath = item.path;
-		const paths = folderPreviewImagePaths;
+		const candidates = folderPreviewCandidates;
 
-		if (!isDir || !enabled || paths.length === 0) return;
+		if (!isDir || !enabled || candidates.length === 0) return;
 
 		void unifiedThumbnailStore.requestThumbnails(
-			paths.map(toFolderPreviewRequest),
+			candidates.map(toFolderPreviewRequest),
 			`folder-preview:${itemPath}`,
 			'visible'
 		);
@@ -322,8 +336,8 @@
 		const urls: string[] = [];
 		let hasPending = false;
 
-		for (const path of folderPreviewImagePaths) {
-			const entry = unifiedThumbnailStore.getEntry(getFolderPreviewThumbKey(path));
+		for (const candidate of folderPreviewCandidates) {
+			const entry = unifiedThumbnailStore.getEntry(getFolderPreviewThumbKey(candidate));
 			if (entry?.status === 'ready' && entry.url) {
 				urls.push(entry.url);
 			} else if (!entry || entry.status === 'pending' || entry.status === 'loading') {
@@ -339,13 +353,13 @@
 	});
 
 	const folderPreviewExpectedCount = $derived(
-		folderPreviewImagePaths.length > 0
-			? folderPreviewImagePaths.length
+		folderPreviewCandidates.length > 0
+			? folderPreviewCandidates.length
 			: Math.max(1, Math.min(16, folderPreviewCount))
 	);
 	const folderPreviewIsLoading = $derived(
 		folderPreviewLoading ||
-			(folderPreviewImagePaths.length > 0 &&
+			(folderPreviewCandidates.length > 0 &&
 				folderPreviewStatus.urls.length === 0 &&
 				folderPreviewStatus.hasPending)
 	);

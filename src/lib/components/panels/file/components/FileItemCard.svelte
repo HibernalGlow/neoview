@@ -881,6 +881,10 @@
 	<FileItemListView
 		{item}
 		{thumbnail}
+		{folderThumbnails}
+		{folderPreviewGridEnabled}
+		folderPreviewLoading={folderPreviewIsLoading}
+		{folderPreviewExpectedCount}
 		{isSelected}
 		{isChecked}
 		{isCheckMode}

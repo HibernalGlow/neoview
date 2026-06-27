@@ -32,6 +32,7 @@
 		hoverPreviewDelayMs
 	} from '$lib/stores/hoverPreviewSettings.svelte';
 	import FileTypeIcon from '$lib/components/ui/FileTypeIcon.svelte';
+	import FolderPreviewGrid from './FolderPreviewGrid.svelte';
 	import {
 		formatDuration,
 		formatRelativeTime,
@@ -43,6 +44,10 @@
 	interface Props {
 		item: FsItem;
 		thumbnail?: string;
+		folderThumbnails?: string[];
+		folderPreviewGridEnabled?: boolean;
+		folderPreviewLoading?: boolean;
+		folderPreviewExpectedCount?: number;
 		/** 视图模式: list=列表, content=内容, banner=横幅, thumbnail=缩略图 */
 		viewMode?: 'list' | 'content' | 'banner' | 'thumbnail';
 		isSelected?: boolean;
@@ -109,6 +114,10 @@
 	let {
 		item,
 		thumbnail,
+		folderThumbnails = [],
+		folderPreviewGridEnabled = false,
+		folderPreviewLoading = false,
+		folderPreviewExpectedCount = 0,
 		viewMode = 'list',
 		isSelected = false,
 		isChecked = false,
@@ -152,6 +161,9 @@
 
 	// 是否为网格布局（banner/thumbnail）
 	const isGridLayout = $derived(viewMode === 'banner' || viewMode === 'thumbnail');
+	const showFolderPreviewGrid = $derived(
+		item.isDir && folderPreviewGridEnabled && (folderPreviewLoading || folderThumbnails.length > 0)
+	);
 
 	// 容器样式类
 	const containerClass = $derived(
@@ -229,7 +241,14 @@
 				class="relative flex shrink-0 items-center justify-center self-stretch overflow-hidden rounded"
 				style="width: {thumbnailSize}px; min-width: {thumbnailSize}px;"
 			>
-				{#if thumbnail}
+				{#if showFolderPreviewGrid}
+					<FolderPreviewGrid
+						thumbnails={folderThumbnails}
+						folderName={item.name}
+						loading={folderPreviewLoading}
+						expectedCount={folderPreviewExpectedCount}
+					/>
+				{:else if thumbnail}
 					<img
 						src={thumbnail}
 						alt={item.name}

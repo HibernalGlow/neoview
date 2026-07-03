@@ -6,7 +6,9 @@
 	import * as Separator from '$lib/components/ui/separator';
 	import * as Table from '$lib/components/ui/table';
 	import * as Switch from '$lib/components/ui/switch';
+	import { Button } from '$lib/components/ui/button';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { showToast } from '$lib/utils/toast';
 
 	let switchToastEnableBook = $state(false);
 	let switchToastEnablePage = $state(false);
@@ -16,6 +18,22 @@
 	let switchToastBookDescriptionTemplate = $state('');
 	let switchToastPageTitleTemplate = $state('');
 	let switchToastPageDescriptionTemplate = $state('');
+	let switchToastPositionX = $state(20);
+	let switchToastPositionY = $state(20);
+	let switchToastOpacity = $state(0.92);
+	let switchToastLiquidGlass = $state(false);
+
+	function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			return fallback;
+		}
+		return Math.min(max, Math.max(min, value));
+	}
+
+	function parseNumberInput(value: string, min: number, max: number, fallback: number): number {
+		const parsed = Number(value);
+		return clampNumber(parsed, min, max, fallback);
+	}
 
 	function loadSwitchToastFromSettings() {
 		const s = settingsManager.getSettings();
@@ -28,7 +46,11 @@
 				'已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
 			bookDescriptionTemplate: '路径：{{book.path}}',
 			pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
-			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
+			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}',
+			positionX: 20,
+			positionY: 20,
+			opacity: 0.92,
+			liquidGlass: false
 		};
 		switchToastEnableBook = base.enableBook;
 		switchToastEnablePage = base.enablePage;
@@ -39,6 +61,10 @@
 		switchToastBookDescriptionTemplate = base.bookDescriptionTemplate ?? '';
 		switchToastPageTitleTemplate = base.pageTitleTemplate ?? '';
 		switchToastPageDescriptionTemplate = base.pageDescriptionTemplate ?? '';
+		switchToastPositionX = clampNumber(base.positionX, 0, 4096, 20);
+		switchToastPositionY = clampNumber(base.positionY, 0, 4096, 20);
+		switchToastOpacity = clampNumber(base.opacity, 0.1, 1, 0.92);
+		switchToastLiquidGlass = base.liquidGlass ?? false;
 	}
 
 	$effect(() => {
@@ -54,13 +80,21 @@
 		bookDescriptionTemplate?: string;
 		pageTitleTemplate?: string;
 		pageDescriptionTemplate?: string;
+		positionX?: number;
+		positionY?: number;
+		opacity?: number;
+		liquidGlass?: boolean;
 	}) {
 		const current = settingsManager.getSettings();
 		const prev = current.view?.switchToast ?? {
 			enableBook: current.view?.showBookSwitchToast ?? false,
 			enablePage: false,
 			enableAction: false,
-			enableBoundaryToast: true
+			enableBoundaryToast: true,
+			positionX: 20,
+			positionY: 20,
+			opacity: 0.92,
+			liquidGlass: false
 		};
 		const next = { ...prev, ...partial };
 		switchToastEnableBook = next.enableBook ?? false;
@@ -72,14 +106,97 @@
 		switchToastBookDescriptionTemplate = next.bookDescriptionTemplate ?? '';
 		switchToastPageTitleTemplate = next.pageTitleTemplate ?? '';
 		switchToastPageDescriptionTemplate = next.pageDescriptionTemplate ?? '';
+		switchToastPositionX = clampNumber(next.positionX, 0, 4096, 20);
+		switchToastPositionY = clampNumber(next.positionY, 0, 4096, 20);
+		switchToastOpacity = clampNumber(next.opacity, 0.1, 1, 0.92);
+		switchToastLiquidGlass = next.liquidGlass ?? false;
 		settingsManager.updateNestedSettings('view', {
 			switchToast: next as typeof current.view.switchToast,
 			showBookSwitchToast: next.enableBook
 		});
 	}
+
+	function showTestSwitchToast() {
+		showToast({
+			title: '切换提示测试',
+			description: `X ${switchToastPositionX}px / Y ${switchToastPositionY}px / 透明度 ${Math.round(switchToastOpacity * 100)}%`,
+			variant: 'info',
+			duration: 2600,
+			scope: 'switch'
+		});
+	}
 </script>
 
 <div class="text-muted-foreground space-y-3 text-xs">
+	<div class="space-y-2">
+		<div class="flex items-center justify-between gap-2">
+			<div>
+				<div class="text-foreground text-[11px] font-semibold">提示悬浮窗</div>
+				<div class="text-muted-foreground/60 text-[10px]">位置以窗口左上角为原点</div>
+			</div>
+			<Button variant="outline" size="sm" class="h-7 px-2 text-[10px]" onclick={showTestSwitchToast}>
+				显示测试提示
+			</Button>
+		</div>
+		<div class="grid grid-cols-2 gap-2">
+			<label class="space-y-1">
+				<span class="text-[10px]">X 轴</span>
+				<input
+					class="bg-background h-7 w-full rounded-md border px-2 text-[11px]"
+					type="number"
+					min="0"
+					max="4096"
+					value={switchToastPositionX}
+					oninput={(e) =>
+						updateSwitchToast({
+							positionX: parseNumberInput((e.currentTarget as HTMLInputElement).value, 0, 4096, 20)
+						})}
+				/>
+			</label>
+			<label class="space-y-1">
+				<span class="text-[10px]">Y 轴</span>
+				<input
+					class="bg-background h-7 w-full rounded-md border px-2 text-[11px]"
+					type="number"
+					min="0"
+					max="4096"
+					value={switchToastPositionY}
+					oninput={(e) =>
+						updateSwitchToast({
+							positionY: parseNumberInput((e.currentTarget as HTMLInputElement).value, 0, 4096, 20)
+						})}
+				/>
+			</label>
+		</div>
+		<label class="space-y-1">
+			<div class="flex items-center justify-between">
+				<span class="text-[10px]">透明度</span>
+				<span class="font-mono text-[10px]">{Math.round(switchToastOpacity * 100)}%</span>
+			</div>
+			<input
+				class="w-full accent-[var(--primary)]"
+				type="range"
+				min="0.1"
+				max="1"
+				step="0.01"
+				value={switchToastOpacity}
+				oninput={(e) =>
+					updateSwitchToast({
+						opacity: parseNumberInput((e.currentTarget as HTMLInputElement).value, 0.1, 1, 0.92)
+					})}
+			/>
+		</label>
+		<div class="flex items-center justify-between gap-2">
+			<span>液态玻璃效果</span>
+			<Switch.Root
+				checked={switchToastLiquidGlass}
+				onCheckedChange={(v) => updateSwitchToast({ liquidGlass: v })}
+				class="scale-75"
+			/>
+		</div>
+	</div>
+	<Separator.Root class="my-1" />
+
 	<div class="space-y-1">
 		<div class="flex items-center justify-between gap-2">
 			<span>切换书籍时显示提示</span>

@@ -526,7 +526,7 @@ class BookStore {
 			const settings = settingsManager.getSettings();
 			const enableBoundaryToast = settings.view?.switchToast?.enableBoundaryToast ?? true;
 			if (enableBoundaryToast) {
-				showToast({ title: '已是最后一页', variant: 'info' });
+				showToast({ title: '已是最后一页', variant: 'info', scope: 'switch' });
 			}
 			return;
 		}
@@ -560,7 +560,7 @@ class BookStore {
 			const settings = settingsManager.getSettings();
 			const enableBoundaryToast = settings.view?.switchToast?.enableBoundaryToast ?? true;
 			if (enableBoundaryToast) {
-				showToast({ title: '已是第一页', variant: 'info' });
+				showToast({ title: '已是第一页', variant: 'info', scope: 'switch' });
 			}
 			return;
 		}
@@ -1049,7 +1049,8 @@ class BookStore {
 			showToast({
 				title: titleFromTemplate || (context.book?.displayName ?? book.name),
 				description: descriptionFromTemplate || undefined,
-				variant: 'info'
+				variant: 'info',
+				scope: 'switch'
 			});
 			return;
 		}
@@ -1067,7 +1068,12 @@ class BookStore {
 			parts.push(book.path);
 		}
 
-		showToast({ title: book.name, description: parts.join(' • ') || undefined, variant: 'info' });
+		showToast({
+			title: book.name,
+			description: parts.join(' • ') || undefined,
+			variant: 'info',
+			scope: 'switch'
+		});
 	}
 
 	private showPageSwitchToastIfEnabled() {
@@ -1094,7 +1100,8 @@ class BookStore {
 					page.name ||
 					`第 ${book.currentPage + 1} 页`,
 				description: descriptionFromTemplate || undefined,
-				variant: 'info'
+				variant: 'info',
+				scope: 'switch'
 			});
 			return;
 		}
@@ -1114,7 +1121,8 @@ class BookStore {
 		showToast({
 			title: page.name || `第 ${book.currentPage + 1} 页`,
 			description: parts.join(' • ') || undefined,
-			variant: 'info'
+			variant: 'info',
+			scope: 'switch'
 		});
 	}
 

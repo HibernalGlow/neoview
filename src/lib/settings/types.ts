@@ -180,6 +180,10 @@ export interface NeoViewSettings {
 			bookDescriptionTemplate?: string;
 			pageTitleTemplate?: string;
 			pageDescriptionTemplate?: string;
+			positionX?: number;
+			positionY?: number;
+			opacity?: number;
+			liquidGlass?: boolean;
 		};
 		/** 渲染器设置 */
 		renderer?: {

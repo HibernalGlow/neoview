@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { AlertCircle, Check, Info, X } from '@lucide/svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import LiquidGlass from '$lib/vendor/liquid-glass/LiquidGlass.svelte';
+	import type { ToastScope } from '$lib/utils/toast';
 
 	type NotificationMessageStyle = 'none' | 'normal' | 'normalIconOnly' | 'tiny' | 'tinyIconOnly';
 	type ToastStyle = Exclude<NotificationMessageStyle, 'none'>;
@@ -12,9 +14,10 @@
 		description?: string;
 		duration?: number;
 		style: ToastStyle;
+		scope: ToastScope;
 	}
 
-	type ToastEventDetail = Omit<ToastItem, 'id' | 'style'>;
+	type ToastEventDetail = Omit<ToastItem, 'id' | 'style' | 'scope'> & { scope?: ToastScope };
 
 	interface NotificationConfig {
 		messageStyle: NotificationMessageStyle;
@@ -42,12 +45,39 @@
 	}
 
 	let toasts = $state<ToastItem[]>([]);
+	let settings = $state(settingsManager.getSettings());
 	let toastIdCounter = 0;
+	const normalToasts = $derived(toasts.filter((toast) => toast.scope !== 'switch'));
+	const switchToasts = $derived(toasts.filter((toast) => toast.scope === 'switch'));
+	const switchToastStyle = $derived.by(() => {
+		const cfg = settings.view.switchToast;
+		const x = clampNumber(cfg?.positionX, 0, 4096, 20);
+		const y = clampNumber(cfg?.positionY, 0, 4096, 20);
+		const opacity = clampNumber(cfg?.opacity, 0.1, 1, 0.92);
+		return [
+			`--switch-toast-x:${x}px`,
+			`--switch-toast-y:${y}px`,
+			`--switch-toast-opacity:${opacity}`,
+			`--switch-toast-opacity-percent:${opacity * 100}%`
+		].join(';');
+	});
+	const switchToastLiquidGlass = $derived(settings.view.switchToast?.liquidGlass ?? false);
+	const switchToastOpacity = $derived(clampNumber(settings.view.switchToast?.opacity, 0.1, 1, 0.92));
+	const liquidGlassContrast = $derived(
+		settings.theme.theme === 'light' ? 'light-contrast' : 'dark-contrast'
+	);
 
 	// 去重机制
 	let lastToastKey = '';
 	let lastToastTime = 0;
 	const TOAST_DEBOUNCE_MS = 500;
+
+	function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			return fallback;
+		}
+		return Math.min(max, Math.max(min, value));
+	}
 
 	function addToast(toast: ToastEventDetail) {
 		const cfg = getNotificationConfig();
@@ -67,8 +97,9 @@
 		const id = `toast-${toastIdCounter++}`;
 		const style: ToastStyle = (cfg.messageStyle as ToastStyle) ?? 'normal';
 		const duration = toast.duration ?? cfg.durationMs ?? 3000;
+		const scope = toast.scope ?? 'normal';
 
-		const next: ToastItem[] = [...toasts, { ...toast, id, style }];
+		const next: ToastItem[] = [...toasts, { ...toast, id, style, scope }];
 		const maxVisible = cfg.maxVisible ?? 3;
 		const overflow = Math.max(0, next.length - maxVisible);
 		toasts = overflow > 0 ? next.slice(overflow) : next;
@@ -81,19 +112,25 @@
 	}
 
 	function handleShowToast(event: CustomEvent<ToastEventDetail>) {
-		const { type, title, description, duration } = event.detail;
-		addToast({ type, title, description, duration });
+		const { type, title, description, duration, scope } = event.detail;
+		addToast({ type, title, description, duration, scope });
 	}
 
 	$effect(() => {
 		window.addEventListener('show-toast', handleShowToast as EventListener);
-		return () => window.removeEventListener('show-toast', handleShowToast as EventListener);
+		const unsubscribe = settingsManager.addListener((next) => {
+			settings = next;
+		});
+		return () => {
+			window.removeEventListener('show-toast', handleShowToast as EventListener);
+			unsubscribe();
+		};
 	});
 </script>
 
-{#if toasts.length > 0}
+{#if normalToasts.length > 0}
 	<div class="toast-container">
-		{#each toasts as toast (toast.id)}
+		{#each normalToasts as toast (toast.id)}
 			<div class="toast-item" data-type={toast.type} data-style={toast.style}>
 				<div class="toast-icon" aria-hidden="true">
 					{#if toast.type === 'success'}
@@ -123,6 +160,86 @@
 	</div>
 {/if}
 
+{#if switchToasts.length > 0}
+	<div class="toast-container switch-toast-container" style={switchToastStyle}>
+		{#each switchToasts as toast (toast.id)}
+			{#if switchToastLiquidGlass}
+				<LiquidGlass
+					class="switch-toast-glass"
+					contrast={liquidGlassContrast}
+					accent="var(--accent)"
+					roundness={8}
+					opacity={switchToastOpacity}
+				>
+					<div
+						class="toast-item"
+						data-type={toast.type}
+						data-style={toast.style}
+						data-scope="switch"
+						data-liquid-glass="true"
+					>
+						<div class="toast-icon" aria-hidden="true">
+							{#if toast.type === 'success'}
+								<Check style="width: 1rem; height: 1rem" />
+							{:else if toast.type === 'error'}
+								<AlertCircle style="width: 1rem; height: 1rem" />
+							{:else}
+								<Info style="width: 1rem; height: 1rem" />
+							{/if}
+						</div>
+						{#if toast.style === 'normalIconOnly' || toast.style === 'tinyIconOnly'}
+							<!-- icon-only style: no text body -->
+						{:else}
+							<div class="toast-body">
+								<p class="toast-title">{toast.title}</p>
+								{#if toast.description}
+									<p class="toast-description">{toast.description}</p>
+								{/if}
+							</div>
+						{/if}
+						<button type="button" class="toast-close" onclick={() => removeToast(toast.id)}>
+							<span class="sr-only">关闭</span>
+							<X style="width: 1rem; height: 1rem" />
+						</button>
+					</div>
+				</LiquidGlass>
+			{:else}
+				<div
+					class="toast-item"
+					data-type={toast.type}
+					data-style={toast.style}
+					data-scope="switch"
+					data-liquid-glass="false"
+				>
+					<div class="toast-icon" aria-hidden="true">
+						{#if toast.type === 'success'}
+							<Check style="width: 1rem; height: 1rem" />
+						{:else if toast.type === 'error'}
+							<AlertCircle style="width: 1rem; height: 1rem" />
+						{:else}
+							<Info style="width: 1rem; height: 1rem" />
+						{/if}
+					</div>
+					{#if toast.style === 'normalIconOnly' || toast.style === 'tinyIconOnly'}
+						<!-- icon-only style: no text body -->
+					{:else}
+						<div class="toast-body">
+							<p class="toast-title">{toast.title}</p>
+							{#if toast.description}
+								<p class="toast-description">{toast.description}</p>
+							{/if}
+						</div>
+					{/if}
+					<button type="button" class="toast-close" onclick={() => removeToast(toast.id)}>
+						<span class="sr-only">关闭</span>
+						<X style="width: 1rem; height: 1rem" />
+					</button>
+				</div>
+			{/if}
+		{/each}
+	</div>
+{/if}
+
 <style>
 	@keyframes toast-enter {
 		from {
@@ -146,6 +263,12 @@
 		pointer-events: none;
 	}
 
+	.switch-toast-container {
+		top: var(--switch-toast-y);
+		right: auto;
+		left: var(--switch-toast-x);
+	}
+
 	.toast-item {
 		pointer-events: auto;
 		display: flex;
@@ -160,6 +283,21 @@
 		box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
 		backdrop-filter: blur(20px);
 		animation: toast-enter 220ms ease forwards;
+	}
+
+	.toast-item[data-scope='switch'] {
+		background: color-mix(in srgb, var(--card) var(--switch-toast-opacity-percent), transparent);
+	}
+
+	.toast-item[data-liquid-glass='true'] {
+		border-color: transparent;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	:global(.switch-toast-glass) {
+		min-width: 16rem;
+		max-width: 22rem;
 	}
 
 	.toast-item[data-style='tiny'],

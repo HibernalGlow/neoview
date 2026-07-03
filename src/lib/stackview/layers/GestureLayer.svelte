@@ -34,7 +34,7 @@
 	// 操作提示（短暂显示，根据设置决定是否显示）
 	function showActionToast(message: string) {
 		if (!enableActionToast) return;
-		showToast({ title: message, variant: 'info' });
+		showToast({ title: message, variant: 'info', scope: 'switch' });
 	}
 
 	// 调试模式

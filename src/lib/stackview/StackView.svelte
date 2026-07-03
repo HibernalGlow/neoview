@@ -59,7 +59,7 @@
 	import { upscaleStore } from './stores/upscaleStore.svelte';
 	import SlideshowControl from '$lib/components/viewer/SlideshowControl.svelte';
 	import { slideshowStore } from '$lib/stores/slideshow.svelte';
-	import { showInfoToast } from '$lib/utils/toast';
+	import { showToast } from '$lib/utils/toast';
 	import Magnifier from '$lib/components/viewer/Magnifier.svelte';
 	import { appState } from '$lib/core/state/appState';
 	import { readable } from 'svelte/store';
@@ -784,7 +784,7 @@
 	function showBoundaryToast(message: string) {
 		const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
 		if (enableBoundaryToast) {
-			showInfoToast(message);
+			showToast({ title: message, variant: 'info', scope: 'switch' });
 		}
 	}
 

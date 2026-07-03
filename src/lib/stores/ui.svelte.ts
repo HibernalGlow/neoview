@@ -15,7 +15,7 @@ import {
 	type PersistedState
 } from './utils/createPersistedState.svelte';
 import { readerStore } from './readerStore.svelte';
-import { showInfoToast } from '$lib/utils/toast';
+import { showToast } from '$lib/utils/toast';
 import {
 	getPanoramaStore,
 	type PanoramaLoadOptions
@@ -707,7 +707,7 @@ export async function pageLeft() {
 			const settings = settingsManager.getSettings();
 			const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
 			if (enableBoundaryToast) {
-				showInfoToast('已是第一页');
+				showToast({ title: '已是第一页', variant: 'info', scope: 'switch' });
 			}
 			return;
 		}
@@ -757,7 +757,7 @@ export async function pageRight() {
 			const settings = settingsManager.getSettings();
 			const enableBoundaryToast = settings.view.switchToast?.enableBoundaryToast ?? true;
 			if (enableBoundaryToast) {
-				showInfoToast('已是最后一页');
+				showToast({ title: '已是最后一页', variant: 'info', scope: 'switch' });
 			}
 			return;
 		}
@@ -821,7 +821,11 @@ async function navigatePanoramaGlobal(dir: 'prev' | 'next') {
 		const fallbackIndex =
 			dir === 'next' ? Math.min(currentIndex + 1, maxIndex) : Math.max(currentIndex - 1, 0);
 		if (fallbackIndex === currentIndex) {
-			showInfoToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+			showToast({
+				title: dir === 'next' ? '已经是最后一页' : '已经是第一页',
+				variant: 'info',
+				scope: 'switch'
+			});
 			return;
 		}
 		await bookStore.navigateToPage(fallbackIndex);
@@ -848,7 +852,11 @@ async function navigatePanoramaGlobal(dir: 'prev' | 'next') {
 		return;
 	}
 
-	showInfoToast(dir === 'next' ? '已经是最后一页' : '已经是第一页');
+	showToast({
+		title: dir === 'next' ? '已经是最后一页' : '已经是第一页',
+		variant: 'info',
+		scope: 'switch'
+	});
 }
 
 function findPanoramaUnitIndex(

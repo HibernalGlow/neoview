@@ -133,7 +133,11 @@ export const defaultSettings: NeoViewSettings = {
 				'已切换到 {{book.displayName}}（第 {{book.currentPageDisplay}} / {{book.totalPages}} 页）',
 			bookDescriptionTemplate: '路径：{{book.path}}',
 			pageTitleTemplate: '第 {{page.indexDisplay}} / {{book.totalPages}} 页',
-			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}'
+			pageDescriptionTemplate: '{{page.dimensionsFormatted}}  {{page.sizeFormatted}}',
+			positionX: 20,
+			positionY: 20,
+			opacity: 0.92,
+			liquidGlass: false
 		},
 		renderer: {
 			mode: 'standard', // 默认使用标准模式（CurrentFrameLayer）

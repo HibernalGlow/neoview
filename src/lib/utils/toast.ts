@@ -8,6 +8,8 @@ let lastToastKey = '';
 let lastToastTime = 0;
 const TOAST_DEBOUNCE_MS = 500; // 500ms内相同toast不重复显示
 
+export type ToastScope = 'normal' | 'switch';
+
 function shouldShowToast(key: string): boolean {
 	const now = Date.now();
 	if (key === lastToastKey && now - lastToastTime < TOAST_DEBOUNCE_MS) {
@@ -68,8 +70,9 @@ export function showToast(options: {
 	description?: string;
 	variant?: 'success' | 'error' | 'info';
 	duration?: number;
+	scope?: ToastScope;
 }) {
-	const key = `${options.variant || 'info'}:${options.title}:${options.description || ''}`;
+	const key = `${options.scope || 'normal'}:${options.variant || 'info'}:${options.title}:${options.description || ''}`;
 	if (!shouldShowToast(key)) return;
 
 	window.dispatchEvent(
@@ -78,7 +81,8 @@ export function showToast(options: {
 				type: options.variant || 'info',
 				title: options.title,
 				description: options.description,
-				duration: options.duration
+				duration: options.duration,
+				scope: options.scope
 			}
 		})
 	);

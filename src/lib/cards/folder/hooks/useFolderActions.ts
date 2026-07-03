@@ -152,20 +152,12 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		// 删除前释放相关资源（解决文件占用问题）
 		await FileSystemAPI.releaseResourcesForPaths(paths);
 
-		let successCount = 0;
-		for (const path of paths) {
-			try {
-				if (strategy === 'trash') {
-					// 使用异步删除，绕开 IPC 协议问题
-					await FileSystemAPI.moveToTrashAsync(path);
-				} else {
-					await FileSystemAPI.deletePath(path);
-				}
-				successCount++;
-			} catch (err) {
-				console.error('删除失败:', path, err);
-			}
-		}
+		const results =
+			strategy === 'trash'
+				? await FileSystemAPI.batchMoveToTrash(paths)
+				: await FileSystemAPI.batchDeletePaths(paths);
+		const successCount = results.filter((result) => result.success).length;
+		const firstError = results.find((result) => !result.success)?.error;
 
 		folderTabActions.deselectAll();
 		handleRefresh();
@@ -173,7 +165,10 @@ export function createFolderActions(state: FolderState, initialPath?: string) {
 		if (successCount === paths.length) {
 			showSuccessToast(`${actionText}成功`, `已${actionText} ${successCount} 个文件`);
 		} else {
-			showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
+			showErrorToast(
+				`部分${actionText}失败`,
+				firstError ? `成功 ${successCount}/${paths.length}：${firstError}` : `成功 ${successCount}/${paths.length}`
+			);
 		}
 	}
 

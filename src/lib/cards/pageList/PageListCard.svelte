@@ -18,6 +18,9 @@
 
 	import { upscaleStore } from '$lib/stackview/stores/upscaleStore.svelte';
 	import { settingsManager } from '$lib/settings/settingsManager';
+	import { FileSystemAPI } from '$lib/api';
+	import { deleteArchiveEntry } from '$lib/api/archive';
+	import { showErrorToast, showSuccessToast } from '$lib/utils/toast';
 	import type { Page } from '$lib/types';
 
 	import PageContextMenu from './PageContextMenu.svelte';
@@ -181,6 +184,40 @@
 
 	function goToPage(index: number) {
 		bookStore.goToPage(index);
+	}
+
+	async function handleDeletePage(item: PageItem) {
+		const book = bookStore.currentBook;
+		const page = book?.pages?.[item.index];
+		if (!book || !page) return;
+
+		try {
+			const nextIndex = Math.max(0, Math.min(item.index, book.pages.length - 2));
+
+			if (book.type === 'archive') {
+				const innerPath = page.innerPath ?? item.innerPath ?? page.path ?? item.path;
+				if (!innerPath) {
+					throw new Error('压缩包内路径为空');
+				}
+
+				await FileSystemAPI.releaseResourcesForPath(book.path);
+				await deleteArchiveEntry(book.path, innerPath);
+				await bookStore.openBook(book.path, { initialPage: nextIndex });
+				showSuccessToast('删除成功', item.name);
+				return;
+			}
+
+			const targetPath = page.path || item.path;
+			await FileSystemAPI.releaseResourcesForPath(targetPath);
+			await FileSystemAPI.moveToTrashAsync(targetPath);
+			FileSystemAPI.recordTrashDeletion([targetPath]);
+			if (book.path && book.path !== targetPath) {
+				await bookStore.openBook(book.path, { initialPage: nextIndex });
+			}
+			showSuccessToast('删除成功', item.name);
+		} catch (err) {
+			showErrorToast('删除失败', err instanceof Error ? err.message : String(err));
+		}
 	}
 
 	async function requestThumbnail(pageIndex: number) {
@@ -494,6 +531,7 @@
 	visible={contextMenu.visible}
 	onClose={closeContextMenu}
 	onGoToPage={goToPage}
+	onDelete={handleDeletePage}
 />
 
 <style>

@@ -49,10 +49,13 @@ export {
 	pathExists,
 	createDirectory,
 	deletePath,
+	batchDeletePaths,
 	renamePath,
 	moveToTrash,
 	copyPath,
+	batchCopyPaths,
 	movePath,
+	batchMovePaths,
 	openWithSystem,
 	showInFileManager,
 	searchFiles
@@ -61,6 +64,7 @@ export {
 // ===== 回收站操作导出 =====
 export {
 	moveToTrashAsync,
+	batchMoveToTrash,
 	recordTrashDeletion,
 	undoRecordedTrashDelete,
 	getLastDeletedItem,

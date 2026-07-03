@@ -15,6 +15,13 @@ import type {
 	TrashItem
 } from './types';
 
+export interface FileOperationResult {
+	path: string;
+	targetPath?: string;
+	success: boolean;
+	error?: string;
+}
+
 // ===== 文件夹选择 =====
 
 /**
@@ -165,6 +172,14 @@ export async function deletePath(path: string): Promise<void> {
 }
 
 /**
+ * 批量删除文件或目录
+ */
+export async function batchDeletePaths(paths: string[]): Promise<FileOperationResult[]> {
+	if (paths.length === 0) return [];
+	return await invoke<FileOperationResult[]>('batch_delete_paths', { paths });
+}
+
+/**
  * 重命名文件或目录
  */
 export async function renamePath(from: string, to: string): Promise<void> {
@@ -188,10 +203,32 @@ export async function copyPath(from: string, to: string): Promise<void> {
 }
 
 /**
+ * 批量复制到同一个目标目录
+ */
+export async function batchCopyPaths(
+	sources: string[],
+	target: string
+): Promise<FileOperationResult[]> {
+	if (sources.length === 0) return [];
+	return await invoke<FileOperationResult[]>('batch_copy_paths', { sources, target });
+}
+
+/**
  * 移动文件或文件夹
  */
 export async function movePath(from: string, to: string): Promise<void> {
 	await invoke('move_path', { from, to });
+}
+
+/**
+ * 批量移动到同一个目标目录
+ */
+export async function batchMovePaths(
+	sources: string[],
+	target: string
+): Promise<FileOperationResult[]> {
+	if (sources.length === 0) return [];
+	return await invoke<FileOperationResult[]>('batch_move_paths', { sources, target });
 }
 
 // ===== 系统集成 =====

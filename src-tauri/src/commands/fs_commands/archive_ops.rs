@@ -281,8 +281,6 @@ pub async fn extract_for_clipboard(
     let result = spawn_blocking(move || {
         let manager = archive_manager.lock().unwrap_or_else(|e| e.into_inner());
 
-        let bytes = manager.load_image_from_archive_binary(&archive_path_buf, &inner_path)?;
-
         let ext = Path::new(&inner_path)
             .extension()
             .and_then(|e| e.to_str())
@@ -290,6 +288,13 @@ pub async fn extract_for_clipboard(
 
         let temp_dir = std::env::temp_dir().join("neoview_clipboard");
         std::fs::create_dir_all(&temp_dir).map_err(|e| format!("创建临时目录失败: {}", e))?;
+
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        archive_path_buf.hash(&mut hasher);
+        inner_path.hash(&mut hasher);
+        let hash = hasher.finish();
 
         let archive_stem = archive_path_buf
             .file_stem()
@@ -301,9 +306,13 @@ pub async fn extract_for_clipboard(
             .and_then(|s| s.to_str())
             .unwrap_or("file");
 
-        let temp_path = temp_dir.join(format!("{}_{}.{}", archive_stem, inner_name, ext));
+        let temp_path = temp_dir.join(format!("{}_{}_{:x}.{}", archive_stem, inner_name, hash, ext));
 
-        std::fs::write(&temp_path, &bytes).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        if temp_path.exists() {
+            return Ok(temp_path.to_string_lossy().to_string());
+        }
+
+        manager.extract_file_to_path(&archive_path_buf, &inner_path, &temp_path)?;
 
         Ok(temp_path.to_string_lossy().to_string())
     })

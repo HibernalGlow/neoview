@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { FileOperationResult } from './fileOperations';
 import type { TrashItem } from './types';
 
 // 异步删除的回调映射
@@ -101,6 +102,14 @@ export async function moveToTrashAsync(path: string): Promise<void> {
 			reject(err);
 		});
 	});
+}
+
+/**
+ * 批量移动到回收站
+ */
+export async function batchMoveToTrash(paths: string[]): Promise<FileOperationResult[]> {
+	if (paths.length === 0) return [];
+	return await invoke<FileOperationResult[]>('batch_move_to_trash', { paths });
 }
 
 /**

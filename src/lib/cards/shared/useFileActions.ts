@@ -297,30 +297,17 @@ export function createDeleteActions(
 			return;
 		}
 		const strategy = get(ctx.deleteStrategy);
-		let successCount = 0;
-		let failCount = 0;
-		const successPaths: string[] = [];
-		let firstError: string | null = null;
 
 		// 删除前释放相关资源（解决文件占用问题）
 		await FileSystemAPI.releaseResourcesForPaths(paths);
 
-		for (const p of paths) {
-			try {
-				if (strategy === 'trash') {
-					await FileSystemAPI.moveToTrashAsync(p);
-				} else {
-					await FileSystemAPI.deletePath(p);
-				}
-				successCount++;
-				successPaths.push(p);
-			} catch (err) {
-				failCount++;
-				if (!firstError) {
-					firstError = err instanceof Error ? err.message : String(err);
-				}
-			}
-		}
+		const results =
+			strategy === 'trash'
+				? await FileSystemAPI.batchMoveToTrash(paths)
+				: await FileSystemAPI.batchDeletePaths(paths);
+		const successPaths = results.filter((result) => result.success).map((result) => result.path);
+		const failCount = results.length - successPaths.length;
+		const firstError = results.find((result) => !result.success)?.error ?? null;
 
 		if (successPaths.length > 0) {
 			directoryTreeCache.removeItemsFromCache(successPaths);
@@ -336,11 +323,11 @@ export function createDeleteActions(
 			showErrorToast(
 				'部分删除失败',
 				firstError
-					? `成功 ${successCount} 个，失败 ${failCount} 个：${firstError}`
-					: `成功 ${successCount} 个，失败 ${failCount} 个`
+					? `成功 ${successPaths.length} 个，失败 ${failCount} 个：${firstError}`
+					: `成功 ${successPaths.length} 个，失败 ${failCount} 个`
 			);
 		} else {
-			showSuccessToast('删除成功', `已删除 ${successCount} 个文件`);
+			showSuccessToast('删除成功', `已删除 ${successPaths.length} 个文件`);
 		}
 	};
 
@@ -510,20 +497,11 @@ export function createClipboardActions(
 
 			if (clipboardState && clipboardState.files.length > 0) {
 				const { files, isCut } = clipboardState;
-				let successCount = 0;
-
-				for (const src of files) {
-					try {
-						if (isCut) {
-							await FileSystemAPI.movePath(src, target);
-						} else {
-							await FileSystemAPI.copyPath(src, target);
-						}
-						successCount++;
-					} catch (err) {
-						console.error('[Clipboard] Paste failed for:', src, err);
-					}
-				}
+				const results = isCut
+					? await FileSystemAPI.batchMovePaths(files, target)
+					: await FileSystemAPI.batchCopyPaths(files, target);
+				const successCount = results.filter((result) => result.success).length;
+				const firstError = results.find((result) => !result.success)?.error;
 
 				if (isCut) {
 					ClipboardAPI.clearCutState();
@@ -535,27 +513,22 @@ export function createClipboardActions(
 				if (successCount === files.length) {
 					showSuccessToast(`${actionText}成功`, `${successCount} 个文件`);
 				} else {
-					showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${files.length}`);
+					showErrorToast(
+						`部分${actionText}失败`,
+						firstError ? `成功 ${successCount}/${files.length}：${firstError}` : `成功 ${successCount}/${files.length}`
+					);
 				}
 				return;
 			}
 
 			if (ctx.clipboardItem) {
 				const { paths, operation } = ctx.clipboardItem;
-				let successCount = 0;
-
-				for (const src of paths) {
-					try {
-						if (operation === 'cut') {
-							await FileSystemAPI.movePath(src, target);
-						} else {
-							await FileSystemAPI.copyPath(src, target);
-						}
-						successCount++;
-					} catch (err) {
-						console.error('[Clipboard] Paste failed for:', src, err);
-					}
-				}
+				const results =
+					operation === 'cut'
+						? await FileSystemAPI.batchMovePaths(paths, target)
+						: await FileSystemAPI.batchCopyPaths(paths, target);
+				const successCount = results.filter((result) => result.success).length;
+				const firstError = results.find((result) => !result.success)?.error;
 
 				if (operation === 'cut') {
 					ctx.clipboardItem = null;
@@ -566,7 +539,10 @@ export function createClipboardActions(
 				if (successCount === paths.length) {
 					showSuccessToast(`${actionText}成功`, `${successCount} 个文件`);
 				} else {
-					showErrorToast(`部分${actionText}失败`, `成功 ${successCount}/${paths.length}`);
+					showErrorToast(
+						`部分${actionText}失败`,
+						firstError ? `成功 ${successCount}/${paths.length}：${firstError}` : `成功 ${successCount}/${paths.length}`
+					);
 				}
 				return;
 			}

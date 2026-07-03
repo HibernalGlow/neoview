@@ -2,10 +2,53 @@
 
 use super::types::{BackupFileInfo, TrashItem};
 use super::FsState;
+use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 use tauri::{Emitter, Manager, State};
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileOperationResult {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_path: Option<String>,
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+fn ok_result(path: &str, target_path: Option<&Path>) -> FileOperationResult {
+    FileOperationResult {
+        path: path.to_string(),
+        target_path: target_path.map(|p| p.to_string_lossy().to_string()),
+        success: true,
+        error: None,
+    }
+}
+
+fn err_result(path: &str, target_path: Option<&Path>, error: String) -> FileOperationResult {
+    FileOperationResult {
+        path: path.to_string(),
+        target_path: target_path.map(|p| p.to_string_lossy().to_string()),
+        success: false,
+        error: Some(error),
+    }
+}
+
+fn resolve_destination_path(from: &Path, to: &Path) -> PathBuf {
+    let to_str = to.to_string_lossy();
+    let looks_like_dir = to.is_dir() || to_str.ends_with('\\') || to_str.ends_with('/');
+
+    if looks_like_dir {
+        if let Some(name) = from.file_name() {
+            return to.join(name);
+        }
+    }
+
+    to.to_path_buf()
+}
 
 /// 在全新的独立线程上执行闭包，
 /// 确保 COM 状态干净（不受 Tokio/Tauri 线程池已有 COM 初始化影响）。
@@ -43,6 +86,26 @@ pub async fn delete_path(path: String, state: State<'_, FsState>) -> Result<(), 
 
     let path = PathBuf::from(path);
     fs_manager.delete(&path)
+}
+
+/// 批量删除文件或目录，减少前端多选删除时的 IPC 次数
+#[tauri::command]
+pub async fn batch_delete_paths(
+    paths: Vec<String>,
+    state: State<'_, FsState>,
+) -> Result<Vec<FileOperationResult>, String> {
+    let fs_manager = &state.fs_manager;
+    let mut results = Vec::with_capacity(paths.len());
+
+    for path in paths {
+        let path_buf = PathBuf::from(&path);
+        match fs_manager.delete(&path_buf) {
+            Ok(()) => results.push(ok_result(&path, None)),
+            Err(error) => results.push(err_result(&path, None, error)),
+        }
+    }
+
+    Ok(results)
 }
 
 /// 重命名文件或目录
@@ -99,6 +162,60 @@ pub async fn move_to_trash(path: String) -> Result<(), String> {
         Err(format!(
             "移动到回收站失败 (已重试{max_retries}次): {last_error}"
         ))
+    })
+    .await
+}
+
+fn move_path_to_trash_with_retry(path_buf: &Path) -> Result<(), String> {
+    if !path_buf.exists() {
+        return Err(format!("文件不存在: {}", path_buf.display()));
+    }
+
+    let max_retries = 3;
+    let mut last_error = String::new();
+
+    for attempt in 0..max_retries {
+        match trash::delete(path_buf) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_error = e.to_string();
+                log::warn!(
+                    "移动到回收站失败 (尝试 {}/{}): {} - {}",
+                    attempt + 1,
+                    max_retries,
+                    path_buf.display(),
+                    last_error
+                );
+
+                if attempt < max_retries - 1 {
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        100 * (attempt as u64 + 1),
+                    ));
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "移动到回收站失败 (已重试{max_retries}次): {last_error}"
+    ))
+}
+
+/// 批量移动到回收站，减少多选删除时的 IPC 和线程开销
+#[tauri::command]
+pub async fn batch_move_to_trash(paths: Vec<String>) -> Result<Vec<FileOperationResult>, String> {
+    run_on_trash_thread(move || {
+        let mut results = Vec::with_capacity(paths.len());
+
+        for path in paths {
+            let path_buf = PathBuf::from(&path);
+            match move_path_to_trash_with_retry(&path_buf) {
+                Ok(()) => results.push(ok_result(&path, None)),
+                Err(error) => results.push(err_result(&path, None, error)),
+            }
+        }
+
+        Ok(results)
     })
     .await
 }
@@ -173,7 +290,31 @@ pub async fn copy_path(from: String, to: String, state: State<'_, FsState>) -> R
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
-    fs_manager.copy(&from_path, &to_path)
+    let resolved_to = resolve_destination_path(&from_path, &to_path);
+    fs_manager.copy(&from_path, &resolved_to)
+}
+
+/// 批量复制到同一个目标目录/路径，减少粘贴多文件时的 IPC 次数
+#[tauri::command]
+pub async fn batch_copy_paths(
+    sources: Vec<String>,
+    target: String,
+    state: State<'_, FsState>,
+) -> Result<Vec<FileOperationResult>, String> {
+    let fs_manager = &state.fs_manager;
+    let target_path = PathBuf::from(&target);
+    let mut results = Vec::with_capacity(sources.len());
+
+    for source in sources {
+        let from_path = PathBuf::from(&source);
+        let resolved_to = resolve_destination_path(&from_path, &target_path);
+        match fs_manager.copy(&from_path, &resolved_to) {
+            Ok(()) => results.push(ok_result(&source, Some(&resolved_to))),
+            Err(error) => results.push(err_result(&source, Some(&resolved_to), error)),
+        }
+    }
+
+    Ok(results)
 }
 
 /// 移动文件或文件夹
@@ -183,7 +324,31 @@ pub async fn move_path(from: String, to: String, state: State<'_, FsState>) -> R
 
     let from_path = PathBuf::from(from);
     let to_path = PathBuf::from(to);
-    fs_manager.move_item(&from_path, &to_path)
+    let resolved_to = resolve_destination_path(&from_path, &to_path);
+    fs_manager.move_item(&from_path, &resolved_to)
+}
+
+/// 批量移动到同一个目标目录/路径，减少粘贴剪切项时的 IPC 次数
+#[tauri::command]
+pub async fn batch_move_paths(
+    sources: Vec<String>,
+    target: String,
+    state: State<'_, FsState>,
+) -> Result<Vec<FileOperationResult>, String> {
+    let fs_manager = &state.fs_manager;
+    let target_path = PathBuf::from(&target);
+    let mut results = Vec::with_capacity(sources.len());
+
+    for source in sources {
+        let from_path = PathBuf::from(&source);
+        let resolved_to = resolve_destination_path(&from_path, &target_path);
+        match fs_manager.move_item(&from_path, &resolved_to) {
+            Ok(()) => results.push(ok_result(&source, Some(&resolved_to))),
+            Err(error) => results.push(err_result(&source, Some(&resolved_to), error)),
+        }
+    }
+
+    Ok(results)
 }
 
 /// 在系统默认程序中打开文件

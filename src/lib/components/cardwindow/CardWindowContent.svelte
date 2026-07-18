@@ -34,6 +34,7 @@
 		time: () => import('$lib/cards/info/TimeCard.svelte'),
 		sidebarControl: () => import('$lib/cards/info/SidebarControlCard.svelte'),
 		preloadStatus: () => import('$lib/cards/info/PreloadStatusCard.svelte'),
+		colorFilter: () => import('$lib/cards/info/ColorFilterCard.svelte'),
 		// Properties
 		emmTags: () => import('$lib/cards/properties/EmmTagsCard.svelte'),
 		aiTags: () => import('$lib/cards/properties/AiTagsCard.svelte'),

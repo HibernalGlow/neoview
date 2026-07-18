@@ -35,6 +35,8 @@
 		sidebarControl: () => import('$lib/cards/info/SidebarControlCard.svelte'),
 		preloadStatus: () => import('$lib/cards/info/PreloadStatusCard.svelte'),
 		colorFilter: () => import('$lib/cards/info/ColorFilterCard.svelte'),
+		pageTransition: () => import('$lib/cards/info/PageTransitionCard.svelte'),
+		sidebarHeight: () => import('$lib/cards/info/SidebarHeightCard.svelte'),
 		// Properties
 		emmTags: () => import('$lib/cards/properties/EmmTagsCard.svelte'),
 		aiTags: () => import('$lib/cards/properties/AiTagsCard.svelte'),

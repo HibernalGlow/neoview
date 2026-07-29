@@ -37,6 +37,7 @@
 		colorFilter: () => import('$lib/cards/info/ColorFilterCard.svelte'),
 		pageTransition: () => import('$lib/cards/info/PageTransitionCard.svelte'),
 		sidebarHeight: () => import('$lib/cards/info/SidebarHeightCard.svelte'),
+		imageTrim: () => import('$lib/cards/info/ImageTrimCard.svelte'),
 		// Properties
 		emmTags: () => import('$lib/cards/properties/EmmTagsCard.svelte'),
 		aiTags: () => import('$lib/cards/properties/AiTagsCard.svelte'),

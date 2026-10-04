@@ -1,13 +1,17 @@
-# NeoView (Tauri + Svelte 5)
+# NeoView
 
-![NeoView 图标](./src-tauri/icons/128x128.png)
+<p align="center">
+  <img src="./src-tauri/icons/128x128.png" width="96" alt="NeoView 图标" />
+</p>
 
-[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/HibernalGlow/neoview)
+<p align="center">简体中文 · <a href="./readme_en.md">English</a></p>
 
-[English README](./readme_en.md)
+本地优先的桌面图片 / 漫画查看器：**Tauri 2 + Svelte 5 + Rust**，规划中的超分链路走 **PyO3** 调 Python 模型。
+目标是把 [NeeView](https://github.com/neelabo/NeeView) 的阅读体验搬到现代技术栈上，并针对**大体积本地图库**重做缩略图与目录缓存。
 
-NeoView 是一个桌面端图片 / 漫画查看器应用。
-本目录基于 **Tauri 2 + Svelte 5 + Rust + PyO3**，目标是在现代技术栈上复刻 [NeeView](https://github.com/neelabo/NeeView)阅读器的核心体验，同时针对大体积本地图库做了大量性能优化（缩略图缓存、批量加载、后台任务调度等）。
+- **下载**：Windows 安装包（`.msi` / `setup.exe`）在 [releases](https://github.com/HibernalGlow/neoview/releases) 提供；开发与打包都主要在 Windows 上。
+- **包管理器是 pnpm**：仓库里是 `pnpm-lock.yaml` + `pnpm-workspace.yaml`，CI 跑 `pnpm install --frozen-lockfile`。
+- **代码位置**：前端在仓库根的 `src/`，Rust 侧在 `src-tauri/`，没有嵌套的子工程目录。
 
 ## 功能概览
 
@@ -16,8 +20,7 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
   - 历史记录、书签、文件浏览器面板
 - **多视图模式（进行中）**
   - 单页、双页、纵向滚动、全景模式等
-  - 随机跳页窗口、预加载窗口等体验
-  - 随机跳页窗口、预加载窗口等体验对齐 NeeView（详见 `docs/neeview_revamp_plan.md`）
+  - 随机跳页窗口、预加载窗口等体验对齐 NeeView
 - **缩略图系统**
   - Rust + SQLite 持久化索引（`directory_cache` / `thumbnail_cache`）
   - 批量查询、虚拟列表优先加载、预测性加载、LRU 内存缓存
@@ -35,7 +38,7 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
   - 支持自然语言控制翻页、缩放、视图切换、文件导航等
   - 可视化语音状态悬浮窗与指令反馈
 
-更多架构与规划请参考：`docs/neeview_revamp_plan.md`。
+更多设计背景见文末「进阶文档」。
 
 ## 技术栈
 
@@ -53,31 +56,23 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
 
 ## 目录结构（简要）
 
-位于 `neoview/neoview-tauri` 目录下：
+都在仓库根目录：
 
 - `src/`  
   Svelte 5 前端代码（面板、查看器、状态管理、缩略图管理、主题系统等）。
 - `src-tauri/`  
-  Tauri 2 + Rust 后端：命令定义、缩略图与目录缓存、后台调度器等。
+  Tauri 2 + Rust 后端：命令定义（`commands/thumbnail_commands`、`commands/benchmark_commands` 等）、缩略图与目录缓存、后台调度器。
 - `docs/`  
-  面向开发者的设计文档：
-  - `neeview_revamp_plan.md`：NeeView 功能复刻总体规划与阶段进度
-  - `thumbnail-optimization.md` / `THUMBNAIL_OPTIMIZATION_FEATURES.md`：缩略图加载与缓存优化
-  - `THEME_SYSTEM.md` / `THEME_SETTINGS.md`：主题系统与外观设置说明
-- `docs/THUMBNAIL_BATCH_CLI.md`  
-  缩略图批量 CLI 工具说明。
+  面向开发者的设计文档，清单见文末「进阶文档」。
 - `scripts/`  
-  辅助脚本（例如 `thumbnail_batch_cli.py`）。
-- `ref/`  
-  参考实现与历史项目快照（如早期 Tauri 模板、Rust 版本 demo 等）。
+  辅助脚本：`thumbnail_batch_cli.py`（缩略图批量预生成）、`bump_version.py`、`batch_model_benchmark.py`。
 
 ## 环境要求
 
 请先确保本机满足 Tauri 2 的官方先决条件。
 
 - **Node.js**：建议 20+（推荐通过 nvm / nvm-windows 安装）
-- **Yarn**：作为前端包管理器
-  - Node 16+ 可直接使用 `corepack enable` 启用 Yarn
+- **pnpm**：前端包管理器（仓库里是 `pnpm-lock.yaml` + `pnpm-workspace.yaml`）
 - **Rust**：通过 [rustup](https://www.rust-lang.org/) 安装最新版 Rust
 - **Windows 额外依赖**（推荐，因为本项目主要在 Windows 上开发调试）
   - 安装 Visual Studio / Build Tools，并勾选「Desktop development with C++」
@@ -87,16 +82,12 @@ NeoView 是一个桌面端图片 / 漫画查看器应用。
 
 ## 快速开始
 
-在 `neoview/neoview-tauri` 目录中执行以下步骤。
+在仓库根目录执行以下步骤。
 
 ### 1. 安装依赖
 
 ```bash
-## 推荐
-yarn
-
-## 或显式
-yarn install
+pnpm install
 ```
 
 首次安装会拉取前端依赖与 Tauri CLI。
@@ -106,13 +97,13 @@ yarn install
 仅启动前端 Vite 开发服务器：
 
 ```bash
-yarn dev
+pnpm dev
 ```
 
-启动完整的 Tauri 桌面应用（会自动调用 `yarn dev` 并挂载到 Tauri 窗口）：
+启动完整的 Tauri 桌面应用（会自动调用 `pnpm dev` 并挂载到 Tauri 窗口）：
 
 ```bash
-yarn tauri dev
+pnpm tauri dev
 ```
 
 默认开发地址为 `http://localhost:1420`（见 `src-tauri/tauri.conf.json`）。
@@ -122,34 +113,34 @@ yarn tauri dev
 仅构建前端静态资源（输出到 `dist/`）：
 
 ```bash
-yarn build
+pnpm build
 ```
 
 构建桌面应用安装包 / 可执行文件：
 
 ```bash
-yarn tauri build
+pnpm tauri build
 ```
 
 Tauri 会针对当前平台生成安装包与可执行程序。
 
 ## 常用脚本
 
-`package.json` 中提供了以下脚本（全部通过 **Yarn** 调用）：
+`package.json` 中提供了以下脚本（用 **pnpm** 调用）：
 
-- `yarn dev`  
+- `pnpm dev`  
   启动 Vite 开发服务器。
-- `yarn build`  
+- `pnpm build`  
   构建前端静态资源。
-- `yarn preview`  
+- `pnpm preview`  
   本地预览已构建的前端。
-- `yarn check`  
+- `pnpm check`  
   使用 `svelte-check` 与 `tsc` 做类型检查。
-- `yarn format`  
+- `pnpm format`  
   使用 Prettier 格式化项目。
-- `yarn lint`  
+- `pnpm lint`  
   使用 Prettier + ESLint 检查代码风格。
-- `yarn tauri dev` / `yarn tauri build`  
+- `pnpm tauri dev` / `pnpm tauri build`  
   通过 Tauri CLI 启动开发桌面应用 / 打包发行版。
 - `pnpm run test:rust:stream`  
   运行目录流自动测试（包含临时数据集性能 smoke 测试 + 真实数据集测试）。
@@ -254,7 +245,7 @@ pnpm run test:rust:stream:real
 ## 缩略图批量 CLI（可选）
 
 为了在首次打开大型图库时避免卡顿，可以使用独立 CLI 预先生成缩略图并写入数据库。  
-详细说明见 `docs/THUMBNAIL_BATCH_CLI.md`，这里仅给出简要概览。
+脚本是 `scripts/thumbnail_batch_cli.py`，这里仅给出简要概览。
 
 ### 依赖
 
@@ -283,20 +274,19 @@ uv run python scripts/thumbnail_batch_cli.py D:/Comics/Series1 \
 
 ## 进阶文档与架构
 
-如果你希望深入理解 NeoView 的内部结构与 NeeView 复刻计划，可以阅读：
+仓库内的设计文档（`docs/`）：
 
-- `docs/neeview_revamp_plan.md`  
-  完整的阶段规划、架构设计与当前完成度说明。
-- `docs/thumbnail-optimization.md` / `docs/THUMBNAIL_OPTIMIZATION_FEATURES.md`  
-  缩略图批量加载、虚拟列表、预测性加载、LRU 缓存等实现细节。
-- `docs/THEME_SYSTEM.md` / `docs/THEME_SETTINGS.md`  
-  主题系统设计、颜色变量与 tweakcn 集成。
+- `NeeView 架构与功能综合分析报告.md` —— NeeView 的功能拆解，即本项目的复刻基准。
+- `NeoView-Tauri 项目综合研究报告.md` —— 当前实现的整体研究：模块划分与完成度。
+- `TAURI_PERFORMANCE_OPTIMIZATION_PLAN.md` —— 缩略图批量加载、虚拟列表、预测性加载、LRU 缓存的性能路线。
+- `IMAGE_TRIM_SYSTEM_DESIGN.md` —— 图像裁剪子系统设计。
+- `READER_BACKEND_MIGRATION_EXECUTION_BRIEF.md` —— 阅读后端迁移的执行说明。
 
 这些文档主要面向参与开发 / 重构的贡献者。
 
 ## 当前状态
 
-本项目仍处于快速迭代阶段，部分 NeeView 特性仍在实现或打磨中，例如：
+本项目仍处于快速迭代阶段，最新版本 `6.1.6`（Windows 安装包见 releases）。部分 NeeView 特性仍在实现或打磨中，例如：
 
 - 双页 / 全景模式的完整交互与性能优化
 - Library / 书架视图与更多格式支持（7z / rar / epub / pdf 等）
@@ -304,4 +294,4 @@ uv run python scripts/thumbnail_batch_cli.py D:/Comics/Series1 \
 - 超分模型管理与比较模式
 
 如果你只作为用户体验图片/漫画浏览功能，当前版本已经可以日常使用；  
-如果你希望参与开发，建议从 `docs/neeview_revamp_plan.md` 与缩略图 / 主题相关文档开始阅读。
+如果你希望参与开发，建议从 `docs/NeoView-Tauri 项目综合研究报告.md` 与 `docs/TAURI_PERFORMANCE_OPTIMIZATION_PLAN.md` 开始读。

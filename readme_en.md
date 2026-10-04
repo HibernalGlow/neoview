@@ -1,11 +1,17 @@
-# NeoView (Tauri + Svelte 5)
+# NeoView
 
-![NeoView Icon](./src-tauri/icons/128x128.png)
+<p align="center">
+  <img src="./src-tauri/icons/128x128.png" width="96" alt="NeoView icon" />
+</p>
 
-[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/HibernalGlow/neoview)
+<p align="center"><a href="./README.md">简体中文</a> &middot; English</p>
 
-NeoView is a desktop image / manga viewer.
-This directory is built with **Tauri 2 + Svelte 5 + Rust + PyO3**. The goal is to recreate the core experience of the [NeeView](https://github.com/neelabo/NeeView) reader on a modern stack, with heavy optimizations for large local libraries (thumbnail cache, batch loading, background task scheduler, etc.).
+A local-first desktop image / manga viewer on **Tauri 2 + Svelte 5 + Rust**, with super-resolution planned through **PyO3**.
+The goal is NeeView's reading feel on a modern stack, with the thumbnail and directory cache rebuilt for **large local libraries**.
+
+- **Download**: Windows installers (`.msi` / `setup.exe`) on [releases](https://github.com/HibernalGlow/neoview/releases); development and packaging are Windows-first.
+- **Package manager is pnpm**: `pnpm-lock.yaml` + `pnpm-workspace.yaml`, and CI runs `pnpm install --frozen-lockfile`.
+- **Layout**: frontend in `src/`, Rust in `src-tauri/`, both at the repository root. There is no nested project directory.
 
 ## Feature Overview
 
@@ -14,7 +20,7 @@ This directory is built with **Tauri 2 + Svelte 5 + Rust + PyO3**. The goal is t
   - History, bookmarks, file browser panel
 - **Multiple view modes (in progress)**
   - Single page, two-page spread, vertical scroll, panorama
-  - Random jump window, preload window (aligned with NeeView, see `docs/neeview_revamp_plan.md`)
+  - Random jump window and preload window, matched to NeeView
 - **Thumbnail system**
   - Rust + SQLite persistent index (`directory_cache` / `thumbnail_cache`)
   - Batch queries, virtual list priority loading, predictive loading, LRU memory cache
@@ -43,31 +49,23 @@ This directory is built with **Tauri 2 + Svelte 5 + Rust + PyO3**. The goal is t
 
 ## Directory Structure (brief)
 
-Under `neoview/neoview-tauri`:
+Both at the repository root:
 
 - `src/`  
   Svelte 5 frontend code (panels, viewer, state management, thumbnails, theme system, etc.).
 - `src-tauri/`  
-  Tauri 2 + Rust backend: commands, thumbnail and directory cache, background scheduler, etc.
+  Tauri 2 + Rust backend: commands (e.g. `commands/thumbnail_commands`, `commands/benchmark_commands`), thumbnail and directory cache, background scheduler.
 - `docs/`  
-  Developer-facing design docs:
-  - `neeview_revamp_plan.md`: NeoView x NeeView revamp roadmap and progress
-  - `thumbnail-optimization.md` / `THUMBNAIL_OPTIMIZATION_FEATURES.md`: thumbnail loading and cache optimizations
-  - `THEME_SYSTEM.md` / `THEME_SETTINGS.md`: theme system and appearance settings
-- `docs/THUMBNAIL_BATCH_CLI.md`  
-  Thumbnail batch CLI usage.
+  Developer-facing design docs, listed under "Status / further reading" below.
 - `scripts/`  
-  Helper scripts (e.g. `thumbnail_batch_cli.py`).
-- `ref/`  
-  Reference implementations and historical snapshots.
+  Helper scripts: `thumbnail_batch_cli.py`, `bump_version.py`, `batch_model_benchmark.py`.
 
 ## Requirements
 
 Please make sure your system satisfies the official Tauri 2 prerequisites.
 
 - **Node.js**: 20+ (recommended via nvm / nvm-windows)
-- **Yarn**: used as the frontend package manager
-  - On Node 16+, run `corepack enable` to enable Yarn
+- **pnpm**: the frontend package manager (`pnpm-lock.yaml` + `pnpm-workspace.yaml`)
 - **Rust**: latest via [rustup](https://www.rust-lang.org/)
 - **Windows extra dependencies** (recommended, main development platform)
   - Install Visual Studio / Build Tools with "Desktop development with C++"
@@ -77,16 +75,12 @@ Please make sure your system satisfies the official Tauri 2 prerequisites.
 
 ## Quick Start
 
-In `neoview/neoview-tauri`:
+From the repository root:
 
 ### 1. Install dependencies
 
 ```bash
-# Recommended
-yarn
-
-# Or explicitly
-yarn install
+pnpm install
 ```
 
 This installs frontend dependencies and the Tauri CLI.
@@ -95,10 +89,10 @@ This installs frontend dependencies and the Tauri CLI.
 
 ```bash
 # Vite dev server only
-yarn dev
+pnpm dev
 
-# Full Tauri desktop app (will run `yarn dev` inside)
-yarn tauri dev
+# Full Tauri desktop app (runs `pnpm dev` internally)
+pnpm tauri dev
 ```
 
 Default dev URL: `http://localhost:1420` (see `src-tauri/tauri.conf.json`).
@@ -107,37 +101,31 @@ Default dev URL: `http://localhost:1420` (see `src-tauri/tauri.conf.json`).
 
 ```bash
 # Frontend build only (outputs to `dist/`)
-yarn build
+pnpm build
 
 # Desktop app bundles / executables
-yarn tauri build
+pnpm tauri build
 ```
 
 Tauri will create platform-specific installers / executables.
 
 ## Common Scripts
 
-All scripts in `package.json` are run via **Yarn**:
+All scripts in `package.json` are run via **pnpm**:
 
-- `yarn dev`  
-  Start the Vite dev server.
-- `yarn build`  
-  Build frontend assets.
-- `yarn preview`  
-  Preview the built frontend.
-- `yarn check`  
-  Type checking via `svelte-check` and `tsc`.
-- `yarn format`  
-  Format using Prettier.
-- `yarn lint`  
-  Lint with Prettier + ESLint.
-- `yarn tauri dev` / `yarn tauri build`  
-  Use the Tauri CLI to start the desktop app in dev / build installers.
+- `pnpm dev` — start the Vite dev server.
+- `pnpm build` — build frontend assets.
+- `pnpm preview` — preview the built frontend.
+- `pnpm check` — type checking via `svelte-check` and `tsc`.
+- `pnpm format` — format using Prettier.
+- `pnpm lint` — lint with Prettier + ESLint.
+- `pnpm tauri dev` / `pnpm tauri build` — use the Tauri CLI to run or package the desktop app.
+- `pnpm run test:rust:stream` / `test:rust:stream:sweep` / `test:reading:sweep` / `test:perf:balanced` — Rust and frontend performance suites; see the Chinese README for the environment variables they read.
 
 ## Thumbnail Batch CLI (optional)
 
 To avoid stutter when opening a large library for the first time, you can pre-generate thumbnails and write them to the database.  
-See `docs/THUMBNAIL_BATCH_CLI.md` for full details.
+The script is `scripts/thumbnail_batch_cli.py`.
 
 Basic usage example:
 
@@ -160,12 +148,13 @@ Key parameters:
 
 ## Status
 
-The project is under active development. Some NeeView features are still being implemented or refined, for example:
+The latest release is `6.1.6`. Some NeeView features are still being implemented or refined, for example:
 
 - Full two-page / panorama interaction and performance optimization
 - Library / bookshelf view and more formats (7z / rar / epub / pdf, etc.)
 - Multi-window and multi-tab mode
 - Super-resolution model management and comparison
 
-For everyday image / manga viewing, the current version is already usable.  
-If you want to contribute, start with `docs/neeview_revamp_plan.md` and the thumbnail / theme docs.
+For everyday image / manga viewing, the current version is already usable.
+
+Design docs in `docs/`: `NeeView 架构与功能综合分析报告.md` (the NeeView feature breakdown this project targets), `NeoView-Tauri 项目综合研究报告.md` (current implementation survey), `TAURI_PERFORMANCE_OPTIMIZATION_PLAN.md`, `IMAGE_TRIM_SYSTEM_DESIGN.md`, `READER_BACKEND_MIGRATION_EXECUTION_BRIEF.md`.
